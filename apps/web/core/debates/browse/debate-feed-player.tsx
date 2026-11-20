@@ -514,8 +514,9 @@ function PairedDebateFeedPlayer({
     }
     pendingTapReportRef.current = false;
     if (playing) return;
-    if (playbackEnded) playFromStart();
-    else togglePlayback();
+    // An ended debate too: `togglePlayback` replays it, and unlike `playFromStart` it lets the sound
+    // on inside this tap.
+    togglePlayback();
   };
   // After `usePlaybackAnalytics` in this component, so its effect has bound to the attached
   // elements by the time this one reports to it. Only `playFromTap` arms it, and it re-arms or

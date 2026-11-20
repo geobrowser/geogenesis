@@ -6,14 +6,14 @@ import * as React from 'react';
 import { Provider, createStore } from 'jotai';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { DebateFeedAutoplay, tappedDebateAtom, useDebatePlaybackAllowed, useDebateTap } from './debate-playback-gate';
+import { DebateFeedAutoplay, tappedDebateAtom, useDebateCardPlayback } from './debate-playback-gate';
 
 /** A card's view of the gate: whether it may play, and its own tap. */
 function Probe({ id, owner }: { id: string; owner: string }) {
-  const allowed = useDebatePlaybackAllowed(id, owner);
-  const { tap } = useDebateTap(id, owner);
+  const { tapToPlay, allowed, tap, reclaim } = useDebateCardPlayback(id, owner);
+  // A feed card's click takes playback back; any other card's takes the tap.
   return (
-    <button type="button" data-testid={owner} onClick={tap}>
+    <button type="button" data-testid={owner} onClick={tapToPlay ? tap : reclaim}>
       {allowed ? 'allowed' : 'held'}
     </button>
   );
@@ -80,6 +80,24 @@ describe('debate playback gate', () => {
 
     act(() => store.set(tappedDebateAtom, null));
     expect(screen.getByTestId('feed')).toHaveTextContent('allowed');
+  });
+
+  it('lets a feed card take playback back from a debate tapped outside the feed', () => {
+    const { store } = renderWith(
+      <>
+        <DebateFeedAutoplay>
+          <Probe id={A} owner="feed" />
+        </DebateFeedAutoplay>
+        <Probe id={B} owner="side-panel" />
+      </>
+    );
+    fireEvent.click(screen.getByTestId('side-panel'));
+    expect(screen.getByTestId('feed')).toHaveTextContent('held');
+
+    fireEvent.click(screen.getByTestId('feed'));
+    expect(screen.getByTestId('feed')).toHaveTextContent('allowed');
+    expect(screen.getByTestId('side-panel')).toHaveTextContent('held');
+    expect(store.get(tappedDebateAtom)).toBeNull();
   });
 
   it('gives the tap up when the card that took it unmounts, so a remount there does not play', () => {

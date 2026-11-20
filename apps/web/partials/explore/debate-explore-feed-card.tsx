@@ -14,7 +14,7 @@ import { DebateInteractionBar } from '~/core/debates/browse/debate-interaction-b
 import { DEBATE_FEED_HOLDS_FULL_PLAYBACK } from '~/core/debates/browse/feed-full-playback';
 import { DebateShareDialog } from '~/core/debates/browse/lazy-share-dialog';
 import { useDebateShareAction } from '~/core/debates/browse/use-debate-share-action';
-import { useDebateFeedAutoplay, useDebatePlaybackAllowed, useDebateTap } from '~/core/debates/debate-playback-gate';
+import { clickAsksToPlay, useDebateCardPlayback } from '~/core/debates/debate-playback-gate';
 import { useDebate, useDebateMedia } from '~/core/debates/hooks';
 import { hasProcessedVideo, isWatchableDebate } from '~/core/debates/playback-utils';
 import { fallBackToDurableStill, speakerStillContentUrl } from '~/core/debates/speaker-still';
@@ -252,13 +252,18 @@ export function DebateExploreFeedCard({
   // Only a feed's cards start themselves (GEO-3812). Anywhere else — a profile's record, a claim's
   // debates, a gallery, a table block — the card shows its stills and Play until it is tapped, and
   // then it is the one debate playing in the app. See `debate-playback-gate.tsx`.
-  const tapToPlay = !useDebateFeedAutoplay();
   // This card, not just this debate: the same debate can be on two surfaces at once.
   const owner = React.useId();
   // A veto, not a replacement: a feed card still plays only while it is in view, and yields while a
   // debate tapped elsewhere plays; a tap-to-play card plays only once it is tapped.
-  const playbackAllowed = useDebatePlaybackAllowed(debateId, owner);
-  const debateTap = useDebateTap(debateId, owner);
+  const {
+    tapToPlay,
+    allowed: playbackAllowed,
+    isTapped,
+    tap,
+    release: releaseTap,
+    reclaim: reclaimPlayback,
+  } = useDebateCardPlayback(debateId, owner);
   // A card nobody can see stops playing and lets go of its media: behind a mobile sheet (the side
   // panel, the Debates hub), or off screen on the mobile layout. Paused video still holds its
   // decoders and buffered frames, and on a phone that adds up to a reloaded tab. The card keeps its
@@ -292,7 +297,6 @@ export function DebateExploreFeedCard({
   // the screen, goes behind a sheet, or scrolls back out of the active range it reached — so it
   // neither resumes when the card comes back nor lets anything else start in its place.
   const wasActiveRef = React.useRef(active);
-  const { isTapped, tap, release: releaseTap } = debateTap;
   React.useEffect(() => {
     const wasActive = wasActiveRef.current;
     wasActiveRef.current = active;
@@ -330,17 +334,10 @@ export function DebateExploreFeedCard({
   // Feed cards only: a click on a card that is not playing yet scrolls it into view. A tap-to-play
   // card does the same from `tapToPlayNow`, which only the player's own play controls call.
   const requestPlayback = (event: React.MouseEvent<HTMLDivElement>) => {
-    // Clicks that are not asks to play pass straight through. A finished debate's end card is drawn
-    // inside this wrapper, and its vote, its voter list and its way into the claims panel are not
-    // media controls. Only its replay asks to play. The voter list is portalled out of this DOM but
-    // its clicks still bubble through React's tree, so a target outside the wrapper is let go too.
-    const target = event.target;
-    if (target instanceof Node && !event.currentTarget.contains(target)) return;
-    const onEndCard = target instanceof Element && target.closest('[data-debate-end-card]') !== null;
-    const isReplay = target instanceof Element && target.closest('[data-end-card-replay]') !== null;
-    if (onEndCard && !isReplay) return;
-    // The combined player opens the native full-screen player, so it cannot play over another card.
-    if (target instanceof Element && target.closest('[data-debate-combined-player]') !== null) return;
+    if (!clickAsksToPlay(event)) return;
+    // A feed card yielding to a debate tapped outside the feed takes playback back in this same
+    // click, so the press reaches a player that may run rather than one held a render later.
+    if (!playbackAllowed) reclaimPlayback();
     // Let the player's handler keep the play request, but leave activation to visibility. Forcing
     // this card active in place could play it over the previous card, and a toolbar resize would
     // immediately undo that activation while it was still below the lower threshold.

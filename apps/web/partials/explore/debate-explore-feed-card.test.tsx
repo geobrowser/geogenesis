@@ -1429,6 +1429,18 @@ describe('DebateExploreFeedCard outside a feed (GEO-3812)', () => {
     expect(feedPlayer).toHaveAttribute('data-active', 'true');
   });
 
+  it('lets a click on a yielding feed card take playback back from the tapped one', () => {
+    ready();
+    renderTwo({ feed: true, entityId: 'debate-two' });
+    const [tapPlayer, feedPlayer] = screen.getAllByTestId('player');
+    fireEvent.click(screen.getByTestId('player-play'));
+    expect(feedPlayer).toHaveAttribute('data-active', 'false');
+
+    fireEvent.click(feedPlayer);
+    expect(feedPlayer).toHaveAttribute('data-active', 'true');
+    expect(tapPlayer).toHaveAttribute('data-active', 'false');
+  });
+
   it('gives the tap up on unmount, so the card remounted on the way back does not play', () => {
     ready();
     const store = createStore();

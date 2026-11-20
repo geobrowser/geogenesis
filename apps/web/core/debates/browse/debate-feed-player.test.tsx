@@ -3658,8 +3658,10 @@ describe('tap to play, outside a feed (GEO-3812)', () => {
 
     fireEvent.click(getByRole('button', { name: 'Play debate' }));
 
-    expect(controller.playFromStart).toHaveBeenCalledOnce();
-    expect(mocks.control.mock.calls).toEqual([['replay']]);
+    // The controller's toggle replays an ended debate; going through it is what lets the sound on.
+    expect(controller.togglePlayback).toHaveBeenCalledOnce();
+    expect(controller.setMutedByUser).toHaveBeenCalledWith(false, 'inferred');
+    expect(mocks.control.mock.calls).toEqual([['replay'], ['unmute', { source: 'play' }]]);
   });
 });
 

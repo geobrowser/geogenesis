@@ -40,27 +40,30 @@ export type TappedDebate = { debateId: string; owner: string };
 export const tappedDebateAtom = atom<TappedDebate | null>(null);
 
 /**
- * Whether this debate, drawn by this card, may play.
- *
- * In a feed: unless a debate has been tapped somewhere else, which a feed card yields to, so there is
- * one player in the app — a profile opened in the side panel over Explore, or a topic's coverage
- * beside its feed. Outside one: only the card that was tapped.
+ * A feed's side of the tap: whether a debate tapped outside the feed is playing, which a feed's own
+ * player yields to so there is one player in the app (a profile opened in the side panel over
+ * Explore or `/debates`, a topic's coverage beside its feed), and how to take playback back. A
+ * click that asks a yielding feed player to play calls `reclaim`, in the same click, so the press
+ * is not swallowed while the tapped card goes on playing.
  */
-export function useDebatePlaybackAllowed(debateId: string, owner: string): boolean {
-  const inFeed = useDebateFeedAutoplay();
+export function useFeedPlaybackYield() {
   const tapped = useAtomValue(tappedDebateAtom);
-
-  if (inFeed) return tapped === null;
-  return isTappedBy(tapped, debateId, owner);
+  const setTapped = useSetAtom(tappedDebateAtom);
+  const reclaim = React.useCallback(() => setTapped(null), [setTapped]);
+  return { yielding: tapped !== null, reclaim };
 }
 
 /**
- * The tap for one card outside a feed: whether it holds it, and how to take and give it up.
+ * Playback for one debate card, drawn by one card instance (`owner`, its `useId`).
  *
- * It is given up when the card unmounts, so a card remounted at the same place — navigating back,
- * which hands it the same `useId` — does not find a stale tap and start by itself.
+ * In a feed (`tapToPlay` false) it may play unless a debate tapped elsewhere is playing, and
+ * `reclaim` takes playback back from that one. Outside a feed (`tapToPlay`) only the card that was
+ * tapped may: `tap` takes it, `release` gives it up. It is also given up when the card unmounts, so
+ * a card remounted at the same place — navigating back, which hands it the same `useId` — does not
+ * find a stale tap and start by itself.
  */
-export function useDebateTap(debateId: string, owner: string) {
+export function useDebateCardPlayback(debateId: string, owner: string) {
+  const tapToPlay = !useDebateFeedAutoplay();
   const tapped = useAtomValue(tappedDebateAtom);
   const setTapped = useSetAtom(tappedDebateAtom);
   const isTapped = isTappedBy(tapped, debateId, owner);
@@ -70,9 +73,29 @@ export function useDebateTap(debateId: string, owner: string) {
     () => setTapped(current => (current?.owner === owner ? null : current)),
     [owner, setTapped]
   );
+  const reclaim = React.useCallback(() => setTapped(null), [setTapped]);
   React.useEffect(() => release, [release]);
 
-  return { isTapped, tap, release };
+  return { tapToPlay, allowed: tapToPlay ? isTapped : tapped === null, isTapped, tap, release, reclaim };
+}
+
+/**
+ * Whether a click captured on the wrapper around a debate's player asks it to play.
+ *
+ * A finished debate's end card is drawn inside the player, and its vote, its voter list and its way
+ * into the claims panel are not media controls: only its replay asks to play. The voter list is
+ * portalled out of this DOM but its clicks still bubble through React's tree, so a target outside
+ * the wrapper is let go too. And the combined player opens the native full-screen player, so it
+ * cannot play over another card.
+ */
+export function clickAsksToPlay(event: React.MouseEvent<HTMLElement>): boolean {
+  const target = event.target;
+  if (target instanceof Node && !event.currentTarget.contains(target)) return false;
+  if (!(target instanceof Element)) return true;
+  if (target.closest('[data-debate-end-card]') !== null && target.closest('[data-end-card-replay]') === null) {
+    return false;
+  }
+  return target.closest('[data-debate-combined-player]') === null;
 }
 
 function isTappedBy(tapped: TappedDebate | null, debateId: string, owner: string) {
