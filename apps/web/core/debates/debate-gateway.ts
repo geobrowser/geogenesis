@@ -670,6 +670,7 @@ export class DebateGatewayClient {
           this.queueAccountQuery('rematch', identifiers.rematch_session_id);
         }
         this.queueAccountActivity();
+        this.queueAccountQuery('lobby-claims');
         break;
       case 'debate.media_changed':
         if (identifiers.debate_id) {

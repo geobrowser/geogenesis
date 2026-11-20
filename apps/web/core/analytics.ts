@@ -141,7 +141,7 @@ declare global {
 }
 
 const appName = 'genesis';
-const analyticsScriptSrc = '/geo-analytics-ecc4321fdd27.js';
+const analyticsScriptSrc = '/geo-analytics-f285e81af1ba.js';
 
 /**
  * Amplitude autocapture, as `true` would enable it, minus "[Amplitude] Viewport Content Updated".
@@ -305,7 +305,7 @@ function loadAnalyticsScript() {
 
   const script = document.createElement('script');
   script.src = analyticsScriptSrc;
-  script.integrity = 'sha256-7MQyH90nHmkg+uoZoVAgFQOqcFX/iQCNBDEh0hirQVU=';
+  script.integrity = 'sha256-8oXoGvG6cAksTOaR6CROOT9AUXweis7L/bKFVxkNmO0=';
   script.crossOrigin = 'anonymous';
   script.defer = true;
   script.async = true;
