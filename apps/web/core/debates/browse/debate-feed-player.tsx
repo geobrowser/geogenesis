@@ -521,11 +521,21 @@ function PairedDebateFeedPlayer({
   // After `usePlaybackAnalytics` in this component, so its effect has bound to the attached
   // elements by the time this one reports to it. Only `playFromTap` arms it, and it re-arms or
   // disarms on every tap, so a tap whose card never became active cannot be reported twice.
-  const reportTapPlay = React.useEffectEvent(() => measurement.control('play'));
+  //
+  // The autoplay effect starts only a debate that is neither ended nor paused, so a tap that waited
+  // on one of those — an ended debate whose URLs lapsed while it was off screen, or one the viewer
+  // paused before scrolling away — is carried out here instead, or the card would land on its end
+  // card or its paused glyph and need a second tap. Through `togglePlayback`, which replays an ended
+  // one and reports `replay` or `play` itself; without sound, since this is no longer inside the tap.
+  // (A browser that refused autoplay refuses this too, so that case keeps its "Watch the debate".)
+  const landPendingTap = React.useEffectEvent(() => {
+    if (playbackEnded || userPaused) togglePlayback(null);
+    else measurement.control('play');
+  });
   React.useEffect(() => {
     if (!active || detached || !ready || !pendingTapReportRef.current) return;
     pendingTapReportRef.current = false;
-    reportTapPlay();
+    landPendingTap();
   }, [active, detached, ready]);
   /*
    * Let both recordings make sound later, from inside the Unmute tap (GEO-3115).

@@ -3663,6 +3663,32 @@ describe('tap to play, outside a feed (GEO-3812)', () => {
     expect(controller.setMutedByUser).toHaveBeenCalledWith(false, 'inferred');
     expect(mocks.control.mock.calls).toEqual([['replay'], ['unmute', { source: 'play' }]]);
   });
+
+  // The autoplay effect starts neither an ended debate nor a paused one, so a tap that had to wait
+  // for its media (URLs re-signing after a while off screen) would land on the end card or the
+  // paused glyph and need a second tap.
+  it.each([
+    ['an ended debate', { playbackEnded: true }, 'replay'],
+    ['a debate the viewer paused', { userPaused: true }, 'play'],
+  ] as const)('carries out a tap that waited on its media, on %s', (_label, state, reported) => {
+    const controller = { ...pausedController(), ...state, urlsLapsed: true };
+    mocks.controller = controller;
+    const onPlaybackRequest = vi.fn();
+    const props = { debate, preload: true, tapToPlay: true, onPlaybackRequest };
+    const { getByRole, rerender } = render(<DebateFeedPlayer {...props} active={false} />);
+
+    fireEvent.click(getByRole('button', { name: 'Play debate' }));
+    expect(onPlaybackRequest).toHaveBeenCalledOnce();
+    expect(controller.togglePlayback).not.toHaveBeenCalled();
+
+    mocks.controller = { ...controller, urlsLapsed: false };
+    rerender(<DebateFeedPlayer {...props} active />);
+
+    expect(controller.togglePlayback).toHaveBeenCalledOnce();
+    // Reported once, as what it was, and with no sound inferred: the tap is long over.
+    expect(mocks.control.mock.calls).toEqual([[reported]]);
+    expect(controller.setMutedByUser).not.toHaveBeenCalled();
+  });
 });
 
 describe('Cloudflare Stream previews and full playback (NEXT_PUBLIC_DEBATE_STREAM_PLAYBACK)', () => {
