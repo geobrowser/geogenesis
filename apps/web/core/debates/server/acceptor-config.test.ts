@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { getDebateAcceptorConfig } from './acceptor-config';
+import { getDebateAcceptorConfig, getPublisherSpaceId } from './acceptor-config';
 
 const KEY_BODY = '4c0883a69102937d6231471b5dbb6204fe5129617082792ae468d01a3f362318';
 const SPACE_ID = '88883e1ec8261b8ac323f564e272b5be';
@@ -104,3 +104,25 @@ function getThrownMessage(): string {
   }
   throw new Error('expected getDebateAcceptorConfig to throw');
 }
+
+describe('getPublisherSpaceId', () => {
+  it('reads the space id without the signing key', () => {
+    setEnv({ privateKey: undefined });
+    expect(getDebateAcceptorConfig()).toBeNull();
+    expect(getPublisherSpaceId()).toBe(SPACE_ID);
+  });
+
+  it('ignores a malformed key, which the signing config throws on', () => {
+    setEnv({ privateKey: 'nope' });
+    expect(getPublisherSpaceId()).toBe(SPACE_ID);
+  });
+
+  it('unquotes and normalizes, and is null when unset or malformed', () => {
+    setEnv({ spaceId: '"88883E1E-C826-1B8A-C323-F564E272B5BE"' });
+    expect(getPublisherSpaceId()).toBe(SPACE_ID);
+    for (const spaceId of ['', '""', 'not-a-space', '88883e1e']) {
+      setEnv({ spaceId });
+      expect(getPublisherSpaceId()).toBeNull();
+    }
+  });
+});

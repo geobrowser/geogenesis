@@ -19,6 +19,10 @@ const DAO_SPACE_FACTORY_ADDRESS = process.env.NEXT_PUBLIC_DAO_SPACE_FACTORY_ADDR
 // (or endpoint change) can be routed around without waiting on a geo-sdk release.
 const SPONSORSHIP_RPC_URL = process.env.NEXT_PUBLIC_SPONSORSHIP_RPC_URL;
 
+// OPTIONAL public web origin for URLs written on chain. Testnet defaults to the live site; mainnet
+// has none until set.
+const WEB_ORIGIN = process.env.NEXT_PUBLIC_GEO_WEB_ORIGIN;
+
 const PRIVY_APP_ID = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
 
 if (!PRIVY_APP_ID) {
@@ -60,6 +64,7 @@ export {
   SPACE_REGISTRY_ADDRESS,
   DAO_SPACE_FACTORY_ADDRESS,
   SPONSORSHIP_RPC_URL,
+  WEB_ORIGIN,
   PRIVY_APP_ID,
   RPC_ENDPOINT,
   API_ENDPOINT,

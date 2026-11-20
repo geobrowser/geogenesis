@@ -19,6 +19,11 @@ vi.mock('~/core/space-calls/hooks', () => ({
 }));
 vi.mock('~/core/debates/lobbies/lobby-people', () => ({ LobbyAvatarStack: () => null }));
 vi.mock('./past-calls-section', () => ({ PastCallsSection: () => <section aria-label="Past" /> }));
+vi.mock('./geo-publisher-notice', () => ({
+  GeoPublisherNotice: ({ viewerIsEditor }: { viewerIsEditor: boolean }) => (
+    <div data-testid="geo-publisher-notice" data-editor={String(viewerIsEditor)} />
+  ),
+}));
 vi.mock('./call-remind', () => ({ CallRemind: () => <button type="button">Remind me</button> }));
 
 const { SpaceCallsTab } = await import('./space-calls-tab');
@@ -80,6 +85,13 @@ describe('SpaceCallsTab', () => {
       '/space/space1/community/new'
     );
     expect(screen.getByText('No call is live right now.')).toBeInTheDocument();
+    expect(screen.getByTestId('geo-publisher-notice')).toHaveAttribute('data-editor', 'true');
+  });
+
+  it('tells the Geo publisher notice a non-editor is not one', () => {
+    mocks.calls = { space_id: 'space1', supported: true, viewer_can_start: null, calls: [] };
+    render(<SpaceCallsTab spaceId="space1" />);
+    expect(screen.getByTestId('geo-publisher-notice')).toHaveAttribute('data-editor', 'false');
   });
 
   it('says a proposal is waiting on governance rather than scheduled', () => {

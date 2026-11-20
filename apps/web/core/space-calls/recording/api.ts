@@ -100,6 +100,8 @@ export type PastCall = {
   started_by: DebateLobbyPerson | null;
   /** The series that scheduled it; `null` for a call started on the spot. Absent from older geo-chat. */
   series?: { series_id: string; name: string } | null;
+  /** The call's Call Event entity once written (GEO-3593); absent from older geo-chat. */
+  entity_id?: string | null;
   /** Set only when published and ready. */
   recording: {
     duration_seconds: number | null;

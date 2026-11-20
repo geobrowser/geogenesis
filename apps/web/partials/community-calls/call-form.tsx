@@ -43,6 +43,8 @@ import {
 import { Button } from '~/design-system/button';
 import { Select } from '~/design-system/select';
 
+import { GeoPublisherNotice } from '~/partials/space-calls/geo-publisher-notice';
+
 const REPEAT_OPTIONS = [
   { value: 'none', label: 'No repeat' },
   { value: 'DAILY', label: 'Daily' },
@@ -249,6 +251,8 @@ export function CallForm(props: Props) {
   return (
     <div className="mx-auto flex max-w-[820px] flex-col gap-4 px-4 py-8">
       <div className="h-[120px] w-full rounded-lg bg-grey-01" />
+
+      {spaceCalls ? <GeoPublisherNotice spaceId={spaceId} viewerIsEditor={isEditor} /> : null}
 
       <input
         value={name}

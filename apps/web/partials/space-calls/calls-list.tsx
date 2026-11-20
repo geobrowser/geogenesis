@@ -6,6 +6,7 @@ import Link from 'next/link';
 
 import { LobbyAvatarStack } from '~/core/debates/lobbies/lobby-people';
 import { hubPillClassName } from '~/core/debates/matchmaking/hub-pill-button';
+import { CallEntityLink } from '~/core/space-calls/call-entity-link';
 import { spaceCallPath } from '~/core/space-calls/routes';
 import type { CallListItem } from '~/core/space-calls/series/call-list';
 import { callDateLabel, callTimeLabel } from '~/core/space-calls/series/format';
@@ -78,6 +79,11 @@ export function CallRow({ spaceId, call, action }: { spaceId: string; call: Call
             {subtitle}
           </Text>
         ) : null}
+        <CallEntityLink
+          spaceId={spaceId}
+          entityId={call.entityId}
+          className="w-fit text-footnote text-ctaPrimary hover:underline"
+        />
       </div>
       {live ? (
         <div className="flex shrink-0 items-center gap-2">

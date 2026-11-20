@@ -19,6 +19,8 @@ export type CallListItem = {
   status: 'live' | 'scheduled';
   headcount: number;
   avatars: DebateLobbyPerson[];
+  /** The Call Event entity once written (GEO-3593). */
+  entityId: string | null;
 };
 
 /** A list row as the Calls tab draws it; `null` for a status it does not show. */
@@ -36,6 +38,7 @@ export function callListItem(call: SpaceCallSummary): CallListItem | null {
     status,
     headcount: call.headcount,
     avatars: call.avatars,
+    entityId: call.entity_id ? dashlessId(call.entity_id) : null,
   };
 }
 

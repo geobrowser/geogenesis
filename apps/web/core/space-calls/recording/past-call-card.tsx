@@ -11,6 +11,7 @@ import { Text } from '~/design-system/text';
 
 import { EXPLORE_CARD_CLASS } from '~/partials/explore/explore-card-chrome';
 
+import { CallEntityLink } from '../call-entity-link';
 import { spaceCallPath } from '../routes';
 import type { PastCall } from './api';
 import { CallRecordingPlayer } from './call-recording-player';
@@ -52,6 +53,7 @@ export function PastCallCard({ call }: { call: PastCall }) {
         </Link>
         <span aria-hidden>·</span>
         <span>{meta}</span>
+        <CallEntityLink spaceId={call.space_id} entityId={call.entity_id} className="text-text hover:underline" />
       </Text>
       <Link href={spaceCallPath(call.space_id, call.call_id)} className="hover:underline">
         <Text as="h2" variant="mediumTitle">

@@ -14,6 +14,7 @@ import {
 import { PUBLIC_BEST_FEED_PATH } from '~/core/explore/explore-feed-params';
 
 import { EntityFeed, FEED_REQUEST_TIMEOUT_MS, buildFeedQuery, leadFirst } from './entity-feed';
+import { feedEditionKey } from './feed-edition-key';
 
 const mocks = vi.hoisted(() => ({
   entryItem: null as Record<string, unknown> | null,
@@ -1095,8 +1096,9 @@ describe('EntityFeed interleave', () => {
     isMemberOrEditor: true,
     hasPendingMembershipRequest: false,
   });
-  const interleave = (feedLength: number) =>
+  const cards = (feedLength: number) =>
     new Map<number, React.ReactNode>([[1, <p key="extra">{`extra after 2 of ${feedLength}`}</p>]]);
+  const interleave = (feedLength: number) => ({ cards: cards(feedLength), replaces: new Set<string>() });
 
   it('draws the extra cards where asked, without touching the request', async () => {
     mocks.pages = [{ items: [item('a'), item('b'), item('c')] }];
@@ -1105,6 +1107,40 @@ describe('EntityFeed interleave', () => {
     expect(screen.getByText('extra after 2 of 3')).toBeTruthy();
     expect(Object.keys(mocks.itemAt)).toEqual(['1', '2', '3']);
     expect(await requestedUrl()).not.toContain('interleave');
+  });
+
+  it('leaves out the feed cards a placed card stands for, slotting by the unfiltered length', () => {
+    const b = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+    // The same entity in another space is another edition and stays.
+    mocks.pages = [{ items: [item('a'), item(b), { ...item(b), spaceId: 'space-2' }, item('c')] }];
+    render(
+      <EntityFeed
+        apiEndpoint="/api/explore/feed"
+        initialSort="best"
+        interleave={feedLength => ({ cards: cards(feedLength), replaces: new Set([feedEditionKey('space-1', b)]) })}
+      />
+    );
+
+    expect(screen.getByText('extra after 2 of 4')).toBeTruthy();
+    expect(
+      Object.values(mocks.itemAt).map(entry => {
+        const { entityId, spaceId } = entry as { entityId: string; spaceId: string };
+        return `${spaceId}/${entityId.slice(0, 1)}`;
+      })
+    ).toEqual(['space-1/a', 'space-2/b', 'space-1/c']);
+  });
+
+  it('keeps every feed card on a narrowed feed, where no extra cards are drawn', () => {
+    mocks.pages = [{ items: [item('a'), item('b'), item('c')] }];
+    render(
+      <EntityFeed
+        apiEndpoint="/api/activity/feed"
+        lockedSpaceId="space-1"
+        interleave={feedLength => ({ cards: cards(feedLength), replaces: new Set([feedEditionKey('space-1', 'b')]) })}
+      />
+    );
+
+    expect(Object.keys(mocks.itemAt)).toEqual(['1', '2', '3']);
   });
 
   it('draws none on a feed narrowed to a space', () => {
