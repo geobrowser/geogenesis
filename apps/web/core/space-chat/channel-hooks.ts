@@ -17,21 +17,32 @@ import {
   updateSpaceChannel,
 } from './api';
 import { useSpaceChatAuth } from './hooks';
-import { type SpaceChatRoomsData, sameMessageId, spaceChatQueryKeys } from './state';
+import { type SpaceChatRoomsData, sameMessageId, spaceChatQueryKeys, withChannelUpdate } from './state';
 
 function signInError() {
   return new GeoChatRequestError('Sign in to chat', 'authentication_required', 401);
 }
 
-/** A written room laid into every cached list of its space: replaced, added, or dropped once archived. */
-function withWrittenRoom(current: SpaceChatRoomsData, room: SpaceChatRoom, listsArchived: boolean): SpaceChatRoomsData {
-  const rest = current.rooms.filter(held => !sameMessageId(held.id, room.id));
-  if (room.archived && !listsArchived) return { ...current, rooms: rest };
-  const index = current.rooms.findIndex(held => sameMessageId(held.id, room.id));
-  if (index === -1) return { ...current, rooms: [...rest, room] };
-  const rooms = [...current.rooms];
-  rooms[index] = room;
-  return { ...current, rooms };
+/** A write's response carries no viewer fields; the editor who created a channel can post and moderate it. */
+const CREATOR_VIEW = {
+  can_post: true,
+  can_reply: true,
+  can_moderate: true,
+  unread_count: 0,
+} satisfies Partial<SpaceChatRoom>;
+
+/** A written room laid into a cached list: merged over its row, added, or dropped once archived. */
+export function withWrittenRoom(
+  current: SpaceChatRoomsData,
+  room: SpaceChatRoom,
+  listsArchived: boolean
+): SpaceChatRoomsData {
+  const held = current.rooms.some(row => sameMessageId(row.id, room.id));
+  const next = held
+    ? withChannelUpdate(current, room)
+    : { ...current, rooms: [...current.rooms, { ...CREATOR_VIEW, ...room }] };
+  if (listsArchived) return next;
+  return { ...next, rooms: next.rooms.filter(row => !(sameMessageId(row.id, room.id) && row.archived)) };
 }
 
 /** Editors' channel writes (GEO-3818). Each rejects with geo-chat's error. */

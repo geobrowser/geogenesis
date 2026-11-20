@@ -6,7 +6,7 @@ import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { SpaceChatRoom } from './api';
-import { READ_CURSOR_DELAY_MS, useMarkChannelRead } from './channel-hooks';
+import { READ_CURSOR_DELAY_MS, useMarkChannelRead, withWrittenRoom } from './channel-hooks';
 
 const mocks = vi.hoisted(() => ({ markRead: vi.fn() }));
 vi.mock('./api', async importOriginal => ({
@@ -92,5 +92,43 @@ describe('useMarkChannelRead', () => {
     unmount();
     expect(mocks.markRead).toHaveBeenCalledTimes(2);
     expect(mocks.markRead).toHaveBeenLastCalledWith('r1', '02', expect.anything());
+  });
+});
+
+describe('withWrittenRoom', () => {
+  const held: SpaceChatRoom = {
+    ...room,
+    name: 'markets',
+    version: 1,
+    can_post: true,
+    can_reply: true,
+    can_moderate: true,
+    unread_count: 4,
+    last_read_message_id: '01',
+  };
+  const list = (rooms: SpaceChatRoom[]) => ({ supported: true, rooms, channelsEnabled: true, canManageChannels: true });
+
+  it('merges an update over the held row and keeps the viewer fields', () => {
+    const written = { ...room, name: 'prices', slow_mode: true, version: 2 };
+    expect(withWrittenRoom(list([held]), written, true).rooms).toEqual([
+      { ...held, name: 'prices', slow_mode: true, version: 2 },
+    ]);
+  });
+
+  it('drops an archived row only from a list without archived channels', () => {
+    const written = { ...room, archived: true, version: 2 };
+    expect(withWrittenRoom(list([held]), written, false).rooms).toEqual([]);
+    expect(withWrittenRoom(list([held]), written, true).rooms[0]).toMatchObject({ archived: true, unread_count: 4 });
+  });
+
+  it('adds a created channel the editor can post in and moderate', () => {
+    const created = { ...room, id: 'r2', name: 'desk', version: 1 };
+    expect(withWrittenRoom(list([held]), created, true).rooms[1]).toEqual({
+      ...created,
+      can_post: true,
+      can_reply: true,
+      can_moderate: true,
+      unread_count: 0,
+    });
   });
 });
