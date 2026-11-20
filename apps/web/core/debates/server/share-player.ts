@@ -280,6 +280,16 @@ const SHARE_TEST_BUTTON_CSS = `
   }
   .btn.watch { top: 3.6cqh; right: 2.6cqw; height: 6.2cqh; font-size: 1.9cqw; padding-left: 1.4cqw; }
   .btn.watch .go { width: 3.6cqw; height: 3.6cqw; }
+  /* The end screen's geobrowser.io, drawn in the video, as a link: a tint on hover, deeper on press,
+     and the same purple acknowledgement as the buttons when clicked. */
+  .textlink {
+    position: absolute; z-index: 2; border-radius: 0.6cqw; cursor: pointer; opacity: 0; pointer-events: none;
+    transition: background-color 140ms ease, opacity 220ms ease;
+  }
+  .textlink.on { opacity: 1; pointer-events: auto; }
+  .textlink.on:hover { background: rgba(154, 78, 255, 0.14); }
+  .textlink.on:active, .textlink.on.clicked { background: rgba(154, 78, 255, 0.28); }
+  .textlink:focus-visible { outline: 0.25cqw solid #9a4eff; outline-offset: 0.2cqw; }
   @media (prefers-reduced-motion: reduce) {
     .btn, .btn .go { transition: none; }
     .btn.on::after, .btn.on .go svg.arrow { animation: none; }
@@ -321,16 +331,17 @@ function experienceOverlay(experience: ShareTestExperience, debateUrl: string): 
 ${button('claim', 'light pulse', link('agree'), 'Agree', at(claim.agree))}
 ${button('claim', 'light', link('disagree'), 'Disagree', at(claim.disagree))}
 ${button('reel', 'light watch', link(), `${GEO_MARK}Watch on Geo`)}
-${button('end', 'dark', link('agree'), 'Agree', at(end.agree))}
+${button('end', 'dark pulse', link('agree'), 'Agree', at(end.agree))}
 ${button('end', 'dark', link('disagree'), 'Disagree', at(end.disagree))}
-${button('end', 'dark pulse', link(), 'Watch the full debate on Geo', at(end.full))}
+<a class="textlink" data-group="end" href="${link()}" target="_blank" rel="noopener" aria-label="Watch the full debate on Geo" style="${at(end.url)}"></a>
 <script>
   (function () {
     var video = document.querySelector('video');
     var spans = { claim: [${claim.start}, ${claim.end}], reel: [${reel.start}, ${reel.end}], end: [${end.start}, Infinity] };
-    var buttons = document.querySelectorAll('.btn');
+    var buttons = document.querySelectorAll('.btn, .textlink');
     function sync() {
-      var t = video.ended ? Infinity : video.currentTime;
+      // Ended counts as the last moment, which only the end screen's open-ended span contains.
+      var t = video.ended ? Number.MAX_VALUE : video.currentTime;
       buttons.forEach(function (a, i) {
         var span = spans[a.dataset.group];
         var on = t >= span[0] && t < span[1];
@@ -343,6 +354,11 @@ ${button('end', 'dark pulse', link(), 'Watch the full debate on Geo', at(end.ful
       });
     }
     ['timeupdate', 'seeked', 'ended', 'play'].forEach(function (e) { video.addEventListener(e, sync); });
+    // At the end the browser's own controls dim the frame and sit over the end screen's buttons; hide
+    // them until the viewer plays again, which a tap anywhere off the buttons does.
+    video.addEventListener('ended', function () { video.controls = false; });
+    video.addEventListener('play', function () { video.controls = true; });
+    video.addEventListener('click', function () { if (video.ended) video.play(); });
     // iOS Safari only shows :active on a touch when the page listens for touches.
     document.addEventListener('touchstart', function () {}, { passive: true });
     buttons.forEach(function (a) {

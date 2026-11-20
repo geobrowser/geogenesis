@@ -17,8 +17,8 @@ export type ShareTestExperience = {
   claim: { start: number; end: number; agree: ShareTestRect; disagree: ShareTestRect };
   /** While the reel plays after the claim screen: Watch on Geo, top right. */
   reel: { start: number; end: number };
-  /** The white end screen, kept up once the video ends: Agree, Disagree and the full debate. */
-  end: { start: number; agree: ShareTestRect; disagree: ShareTestRect; full: ShareTestRect };
+  /** The white end screen, kept up once the video ends: Agree, Disagree, and its geobrowser.io as a link. */
+  end: { start: number; agree: ShareTestRect; disagree: ShareTestRect; url: ShareTestRect };
 };
 
 const GATEWAY = 'https://mature-tomato-basilisk.myfilebase.com/ipfs/';
@@ -26,7 +26,7 @@ const GATEWAY = 'https://mature-tomato-basilisk.myfilebase.com/ipfs/';
 export const SHARE_TEST_EXPERIENCES: Record<string, ShareTestExperience> = {
   // Dovile Sv vs. Preston Mantel: "Bitcoin is a better store of value than gold".
   '01a039bdac2c7ec097758284ce61200d': {
-    videoUrl: `${GATEWAY}QmUaPiHovLu4VqDGFpLgph2MPrSqE9uSiaULHoYav1ptg6`,
+    videoUrl: `${GATEWAY}QmY33LGvUFKGMiHdxwdEt3Ycj3B1Y1QukASnD4y1H6kAjV`,
     cardUrl: `${GATEWAY}QmYete26HwcqHro3pFjs6kKUN4s6Yd5KU7FocZiXmF5rND`,
     video: { width: 1280, height: 720 },
     claim: {
@@ -38,9 +38,9 @@ export const SHARE_TEST_EXPERIENCES: Record<string, ShareTestExperience> = {
     reel: { start: 12.5, end: 77.37 },
     end: {
       start: 77.37,
-      agree: { x: 0.3094, y: 0.6944, w: 0.1719, h: 0.0889 },
-      disagree: { x: 0.4953, y: 0.6944, w: 0.1953, h: 0.0889 },
-      full: { x: 0.273, y: 0.5694, w: 0.4539, h: 0.0889 },
+      agree: { x: 0.3094, y: 0.675, w: 0.1719, h: 0.0889 },
+      disagree: { x: 0.4953, y: 0.675, w: 0.1953, h: 0.0889 },
+      url: { x: 0.5475, y: 0.3667, w: 0.1279, h: 0.0583 },
     },
   },
 };

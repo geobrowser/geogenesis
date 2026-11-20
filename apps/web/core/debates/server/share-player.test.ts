@@ -283,7 +283,8 @@ describe('the made-for-it share video', () => {
     expect(html).toContain(`href="${debateUrl}&#38;side=agree"`);
     expect(html.match(/side=agree/g)).toHaveLength(2);
     expect(html.match(/side=disagree/g)).toHaveLength(2);
-    expect(html).toContain('Watch the full debate on Geo<span class="go">');
+    expect(html).toContain('class="textlink" data-group="end"');
+    expect(html).toContain('aria-label="Watch the full debate on Geo"');
     expect(html).toContain('Watch on Geo<span class="go">');
     expect(html).not.toContain('Open on Geo</a>');
   });
