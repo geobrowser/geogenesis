@@ -95,17 +95,17 @@ describe('useOnboarding', () => {
     await waitFor(() => expect(result.current.isOnboardingVisible).toBe(true));
   });
 
-  it('stays closed for a space with a profile, even if a later refetch fails', async () => {
-    getSpaceByAddress.mockReturnValueOnce(
-      Effect.succeed({ id: SPACE_ID, type: 'PERSONAL', hasProfile: true, topicId: null, entity: { id: 'p' } })
-    );
+  it('keeps the answer it has when a later poll fails', async () => {
+    getSpaceByAddress.mockReturnValueOnce(Effect.succeed(null));
     getSpaceByAddress.mockImplementation(outage);
 
     const { result, seen } = renderOnboarding();
-    await waitFor(() => expect(getSpaceByAddress).toHaveBeenCalled());
+    await waitFor(() => expect(result.current.isOnboardingVisible).toBe(true));
+    const opened = seen.indexOf(true);
+
+    await waitFor(() => expect(getSpaceByAddress.mock.calls.length).toBeGreaterThanOrEqual(2), { timeout: 10_000 });
     await act(async () => {});
 
-    expect(result.current.isOnboardingVisible).toBe(false);
-    expect(seen).not.toContain(true);
-  });
+    expect(seen.slice(opened)).not.toContain(false);
+  }, 20_000);
 });
