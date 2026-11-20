@@ -255,6 +255,15 @@ describe('a claim named in another of the feed’s spaces', () => {
     expect(normId(rowFor(hiddenInCrypto, [ROOT]).spaceId)).toBe(PERSONAL_NAMED);
   });
 
+  it('stays put when every space that names the claim hides it', () => {
+    const hiddenEverywhere = {
+      ...claimEntity,
+      placement: { ...claimEntity.placement!, hiddenSpaceIds: [CRYPTO, PERSONAL_NAMED] },
+    } as ExploreCardEntity;
+
+    expect(normId(rowFor(hiddenEverywhere, [ROOT]).spaceId)).toBe(ROOT);
+  });
+
   it('skips a feed space that marks the claim Hidden for one that does not', () => {
     const hiddenInPersonal = {
       ...claimEntity,

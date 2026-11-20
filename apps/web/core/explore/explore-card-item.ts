@@ -303,6 +303,8 @@ function claimSpaceId(entity: ExploreCardEntity, picked: string, allowedSpaceIds
     ...entity.values.filter(value => isVisible(value.spaceId)),
     ...names.map(name => ({ property: { id: NAME_PROPERTY }, spaceId: name.spaceId, value: name.text })),
   ];
+  // Hidden everywhere it is named: stay put, rather than land on a link-only space that hides nothing.
+  if (hidden.size > 0 && placingSpaceIds({ values }).length === 0) return picked;
   const isAllowed = (spaceId: string) => allowedSpaceIds.has(normId(spaceId)) && isVisible(spaceId);
   const inAllowed = values.filter(value => isAllowed(value.spaceId));
   const scoped =
