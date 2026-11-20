@@ -185,6 +185,9 @@ describe('fetchOriginalProfileEdit', () => {
 
     const offline = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
     await expect(fetchOriginalProfileEdit(EDIT_URI, offline)).rejects.toMatchObject({ reason: 'unreachable' });
+
+    const refused = vi.fn().mockResolvedValue(new Response('Forbidden', { status: 403 }));
+    await expect(fetchOriginalProfileEdit(EDIT_URI, refused)).rejects.toMatchObject({ reason: 'unreachable' });
   });
 
   it('throws a recovery error when no gateway serves it', async () => {

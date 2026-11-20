@@ -132,7 +132,7 @@ export function parseOriginalProfileEdit(bytes: Uint8Array, spaceId: string, top
 
 /**
  * Fetches an `ipfs://` edit through the app's gateways in fallback order. It counts as missing only
- * when every gateway answered with a failure; a network error or a 429 leaves it unreachable.
+ * when every gateway answered with a failure; a network error, 401, 403 or 429 leaves it unreachable.
  */
 export async function fetchOriginalProfileEdit(uri: string, fetchFn: typeof fetch = fetch): Promise<Uint8Array> {
   let lastError: unknown = null;
@@ -141,7 +141,8 @@ export async function fetchOriginalProfileEdit(uri: string, fetchFn: typeof fetc
     try {
       const response = await fetchFn(getImagePathAtLevel(uri, level));
       if (response.ok) return new Uint8Array(await response.arrayBuffer());
-      if (response.status === 429) reachedEveryGateway = false;
+      // A refusal says nothing about the content; 404s and the 5xx an unpinned CID gets do.
+      if ([401, 403, 429].includes(response.status)) reachedEveryGateway = false;
       lastError = new Error(`IPFS gateway answered ${response.status}`);
     } catch (error) {
       reachedEveryGateway = false;
