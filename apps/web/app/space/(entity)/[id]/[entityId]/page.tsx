@@ -20,7 +20,7 @@ import { BountyDetailSections } from '~/partials/bounties/bounty-detail-sections
 import { CommunityCallRecording } from '~/partials/community-calls/community-call-recording';
 
 import { cachedFetchDebatePageMedia, cachedFetchEntityPage, cachedReadDebateVisibility } from './cached-fetch-entity';
-import { claimCanonicalMetadata, redirectClaimToHomeSpace } from './claim-home-space-redirect';
+import { claimCanonicalMetadata } from './claim-canonical';
 import DefaultEntityPage from './default-entity-page';
 import PostEntityPage from './post-entity-page';
 import { ProfileEntityServerContainer } from './profile-entity-server-container';
@@ -52,9 +52,6 @@ export default async function EntityTemplateStrategy(props: Props) {
   if (isHiddenEntity(result?.entity)) {
     notFound();
   }
-
-  // Before anything renders, so the wrong-space URL never reaches history (GEO-3802).
-  await redirectClaimToHomeSpace({ routeEntity: result?.entity, spaceId: params.id, searchParams });
 
   if (result?.entity && entityBrowseViewFromTypes(result.entity.types) === 'person') {
     return <ProfileEntityServerContainer params={params} searchParams={searchParams} />;

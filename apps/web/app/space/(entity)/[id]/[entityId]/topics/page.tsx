@@ -1,4 +1,4 @@
-import { claimCanonicalMetadata } from '../claim-home-space-redirect';
+import { claimCanonicalMetadata } from '../claim-canonical';
 import { ClaimRecordPage, type ClaimRecordPageProps } from '../claim-record-page';
 import { claimTopicsSeed } from '../claim-record-seed';
 
@@ -7,5 +7,5 @@ export function generateMetadata(props: ClaimRecordPageProps) {
 }
 
 export default function ClaimTopicsPage(props: ClaimRecordPageProps) {
-  return <ClaimRecordPage {...props} subPath="topics" seed={claimTopicsSeed} />;
+  return <ClaimRecordPage {...props} seed={claimTopicsSeed} />;
 }

@@ -8,7 +8,6 @@ import { QuerySeed, type QuerySeedEntry } from '~/core/query-seed';
 import type { Entity } from '~/core/types';
 
 import { cachedFetchEntityPage } from './cached-fetch-entity';
-import { type ClaimRecordSubPath, redirectClaimToHomeSpace } from './claim-home-space-redirect';
 import DefaultEntityPage from './default-entity-page';
 
 export type EntityRecordSeed = (entity: Entity, spaceId: string) => Promise<QuerySeedEntry[]>;
@@ -24,11 +23,8 @@ export async function EntityRecordPage({
   searchParams: searchParamsPromise,
   requiredTypeId,
   seed,
-  claimSubPath,
 }: EntityRecordPageProps & {
   requiredTypeId: string;
-  /** Set on a claim's record tabs, so a link-only space redirects to the same tab in the claim's home space. */
-  claimSubPath?: ClaimRecordSubPath;
   /**
    * What this tab would otherwise fetch on the client, fetched here instead so the list is in the
    * server HTML. A failed seed is dropped: the tab fetches for itself, exactly as it did before.
@@ -43,15 +39,6 @@ export async function EntityRecordPage({
   const result = await cachedFetchEntityPage(params.entityId, params.id);
   if (isHiddenEntity(result?.entity) || !result?.entity?.types.some(type => ID.equals(type.id, requiredTypeId))) {
     notFound();
-  }
-
-  if (claimSubPath) {
-    await redirectClaimToHomeSpace({
-      routeEntity: result.entity,
-      spaceId: params.id,
-      searchParams,
-      subPath: claimSubPath,
-    });
   }
 
   const entries = await seed?.(result.entity, params.id).catch(() => []);

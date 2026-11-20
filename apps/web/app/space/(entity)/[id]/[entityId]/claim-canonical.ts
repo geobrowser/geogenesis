@@ -2,20 +2,16 @@ import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 
 import type { Metadata } from 'next';
 
-import { redirect } from 'next/navigation';
-
 import { CANONICAL_SITE } from '~/core/canonical-site';
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { ID } from '~/core/id';
 import { isHiddenEntity } from '~/core/moderation/hidden';
 import type { Entity } from '~/core/types';
 import { normId } from '~/core/utils/norm-id';
-import { entityHomeSpaceId, placingSpaceIds, resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
+import { entityHomeSpaceId, placingSpaceIds } from '~/core/utils/space/entity-home-space';
 import { NavUtils } from '~/core/utils/utils';
 
 import { cachedFetchEntity, cachedFetchEntityPage } from './cached-fetch-entity';
-
-type SearchParams = { [key: string]: string | string[] | undefined };
 
 function isClaim(entity: Pick<Entity, 'types'>): boolean {
   return entity.types.some(type => ID.equals(type.id, CLAIM_TYPE_ID));
@@ -36,63 +32,6 @@ function withoutHiddenSpaces<T extends Pick<Entity, 'spaces' | 'values'>>(entity
 
 /** A claim record tab, or the overview when absent. */
 export type ClaimRecordSubPath = 'debates' | 'claims' | 'topics' | 'sources';
-
-function queryString(searchParams: SearchParams): string {
-  const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(searchParams)) {
-    if (value === undefined) continue;
-    for (const item of Array.isArray(value) ? value : [value]) params.append(key, item);
-  }
-  const qs = params.toString();
-  return qs ? `?${qs}` : '';
-}
-
-/**
- * The claim's home-space URL when `spaceId` holds none of its content, else null (GEO-3802).
- * The target always places the claim, so it cannot loop. `entity` needs values from every space.
- */
-export function claimHomeSpaceRedirectTarget({
-  entity,
-  spaceId,
-  searchParams,
-  subPath,
-}: {
-  entity: Pick<Entity, 'id' | 'spaces' | 'values'> | null;
-  spaceId: string;
-  searchParams: SearchParams;
-  subPath?: ClaimRecordSubPath;
-}): string | null {
-  if (!entity || searchParams.edit === 'true') return null;
-
-  const home = resolveEntitySpaceId(withoutHiddenSpaces(entity), spaceId);
-  if (ID.equals(home, spaceId)) return null;
-
-  return `${NavUtils.toEntity(home, entity.id)}${subPath ? `/${subPath}` : ''}${queryString(searchParams)}`;
-}
-
-/**
- * 307s a claim page to its home space when the route's space only links to it. `routeEntity` is the
- * page's space-scoped read; the unscoped fetch runs only when that read doesn't place the claim.
- */
-export async function redirectClaimToHomeSpace({
-  routeEntity,
-  spaceId,
-  searchParams,
-  subPath,
-}: {
-  routeEntity: Pick<Entity, 'id' | 'types' | 'values'> | null | undefined;
-  spaceId: string;
-  searchParams: SearchParams;
-  subPath?: ClaimRecordSubPath;
-}): Promise<void> {
-  if (!routeEntity || searchParams.edit === 'true') return;
-  if (!isClaim(routeEntity)) return;
-  if (placingSpaceIds(routeEntity).some(placing => ID.equals(placing, spaceId))) return;
-
-  const entity = await cachedFetchEntity(routeEntity.id).catch(() => null);
-  const target = claimHomeSpaceRedirectTarget({ entity, spaceId, searchParams, subPath });
-  if (target) redirect(target);
-}
 
 /**
  * A claim page's canonical URL: the same tab in the claim's home space, one URL for every space that
