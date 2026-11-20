@@ -48,14 +48,18 @@ export function findChannel(rooms: readonly SpaceChatRoom[], name: string): Spac
   return named.find(room => !room.archived) ?? named[0] ?? null;
 }
 
-/** #general and #editors: their name and read policy are fixed. */
-export function isFixedChannel(room: Pick<SpaceChatRoom, 'kind'>) {
-  return room.kind === 'member' || room.kind === 'editor';
+/** #general and #editors stay; any other channel can be archived. */
+export function canArchiveChannel(room: Pick<SpaceChatRoom, 'kind'>) {
+  return room.kind === 'channel';
 }
 
-/** Every channel but #general can be archived. */
-export function canArchiveChannel(room: Pick<SpaceChatRoom, 'kind'>) {
-  return room.kind !== 'member';
+export type LockedChannelSetting = 'name' | 'read_policy' | 'post_policy' | 'slow_mode';
+
+/** Settings geo-chat refuses to change (`channel_setting_locked`). */
+export function lockedChannelSettings(room: Pick<SpaceChatRoom, 'kind'>): ReadonlySet<LockedChannelSetting> {
+  if (room.kind === 'member') return new Set(['name', 'read_policy', 'post_policy', 'slow_mode']);
+  if (room.kind === 'editor') return new Set(['name', 'read_policy']);
+  return new Set();
 }
 
 export function isPrivateChannel(room: SpaceChatRoom) {

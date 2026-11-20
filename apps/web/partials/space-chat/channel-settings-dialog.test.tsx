@@ -41,16 +41,20 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('changedSettings', () => {
-  it('sends only what changed, and never the locked fields of #general', () => {
-    expect(
-      changedSettings(general, {
-        name: 'renamed',
-        description: 'Hi',
-        read_policy: 'editors_only',
-        post_policy: 'members_and_editors',
-        slow_mode: true,
-      })
-    ).toEqual({ description: 'Hi', slow_mode: true });
+  it('sends only what changed, and never the locked fields of #general and #editors', () => {
+    const everything = {
+      name: 'renamed',
+      description: 'Hi',
+      read_policy: 'invited',
+      post_policy: 'editors_only',
+      slow_mode: true,
+    } as const;
+    expect(changedSettings(general, everything)).toEqual({ description: 'Hi' });
+    expect(changedSettings({ ...general, kind: 'editor', name: 'editors' }, everything)).toEqual({
+      description: 'Hi',
+      post_policy: 'editors_only',
+      slow_mode: true,
+    });
     expect(
       changedSettings(markets, {
         name: 'prices',
@@ -104,7 +108,16 @@ describe('ChannelSettingsDialog', () => {
     render(<ChannelSettingsDialog spaceId="s" open onOpenChange={() => {}} room={general} candidates={[]} />);
     expect(screen.getByText('# general settings')).toBeInTheDocument();
     expect(screen.getByDisplayValue('general')).toBeDisabled();
+    expect(screen.getByRole('switch', { name: /Slow mode/ })).toBeDisabled();
+    expect(screen.getByText(CHANNEL_SETTINGS_COPY.locked('general', true))).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: CHANNEL_SETTINGS_COPY.archive })).not.toBeInTheDocument();
+  });
+
+  it('offers no Archive for #editors, and leaves its posting and slow mode open', () => {
+    const editors: SpaceChatRoom = { ...general, kind: 'editor', name: 'editors' };
+    render(<ChannelSettingsDialog spaceId="s" open onOpenChange={() => {}} room={editors} candidates={[]} />);
+    expect(screen.queryByRole('button', { name: CHANNEL_SETTINGS_COPY.archive })).not.toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: /Slow mode/ })).toBeEnabled();
   });
 
   it('archives another channel after a confirm, and shows a refusal', async () => {

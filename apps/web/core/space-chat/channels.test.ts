@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import type { SpaceChatRoom } from './api';
 import {
+  canArchiveChannel,
   channelName,
   findChannel,
   isValidChannelName,
+  lockedChannelSettings,
   normalizeChannelName,
   permissionsLine,
   sortChannels,
@@ -79,5 +81,20 @@ describe('permissionsLine', () => {
     expect(permissionsLine('everyone', 'editors_only')).toBe('Everyone can read. Editors post, members reply.');
     expect(permissionsLine('editors_only', 'editors_only')).toBe('Only editors can read and post.');
     expect(permissionsLine('invited', 'members_and_editors')).toBe('Only invited people can read and post.');
+  });
+});
+
+describe('channel locks', () => {
+  it('locks #general but its description, and #editors name, read and archive', () => {
+    expect([...lockedChannelSettings({ kind: 'member' })].sort()).toEqual([
+      'name',
+      'post_policy',
+      'read_policy',
+      'slow_mode',
+    ]);
+    expect([...lockedChannelSettings({ kind: 'editor' })].sort()).toEqual(['name', 'read_policy']);
+    expect(lockedChannelSettings({ kind: 'channel' }).size).toBe(0);
+    expect([canArchiveChannel({ kind: 'member' }), canArchiveChannel({ kind: 'editor' })]).toEqual([false, false]);
+    expect(canArchiveChannel({ kind: 'channel' })).toBe(true);
   });
 });

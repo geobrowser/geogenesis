@@ -21,7 +21,6 @@ import { mentionedIds } from '~/core/space-chat/mentions';
 import { type ChatPerson, unknownPerson, useChatPeople, useSpaceChatParticipants } from '~/core/space-chat/people';
 import { spaceChatTabPath } from '~/core/space-chat/routes';
 import { type SpaceChatState, shownReactions } from '~/core/space-chat/state';
-import { useFeatureFlag } from '~/core/state/feature-flags';
 import { normId } from '~/core/utils/norm-id';
 
 import { SpaceChatView } from './space-chat-view';
@@ -80,13 +79,11 @@ export function SpaceChatPanel({
   const { ready: authReady, authenticated } = useGeoChatAuth();
   const { settingUp } = useSpaceChatAuth();
   const viewerId = useCurrentGeoChatUserId();
-  // With a channel, the same list the channel view reads.
-  const rooms = useSpaceChatRooms(spaceId, true, { includeArchived: channel !== null });
+  const rooms = useSpaceChatRooms(spaceId, true);
   const listed = channel ?? rooms.memberRoom;
-  // Channel rules (replies-only, slow mode, archived) apply on the Chat tab and, with the flag, in
-  // calls; with the flag off a call's chat behaves as before channels.
-  const channelsFlag = useFeatureFlag('spaceChannels');
-  const rules = channel !== null || channelsFlag ? listed : null;
+  // The room's own rules (replies-only, slow mode, archived), on the Chat tab and in calls alike. A
+  // geo-chat without channels sends none of them, and `can_reply` falls back to `can_post`.
+  const rules = listed;
   const mayWrite = listed?.can_post === true || rules?.can_reply === true;
   const membership = useChatMembership(spaceId, mayWrite, settingUp, rooms.refetch);
   const room = React.useMemo(
@@ -147,7 +144,7 @@ export function SpaceChatPanel({
   const writer = authenticated && !settingUp && !archived;
   const canPost = writer && listed?.can_post === true;
   // Replying and reacting: `can_reply` from a geo-chat with channels, else the same as posting.
-  const canReply = writer && (rules ? (rules.can_reply ?? rules.can_post) : listed?.can_post) === true;
+  const canReply = writer && (rules?.can_reply ?? rules?.can_post) === true;
   // Named copy (placeholder, empty line) is the Chat tab's; the in-call chat keeps its own.
   const name = channel ? channelName(channel) : null;
   const ruleName = rules ? channelName(rules) : null;

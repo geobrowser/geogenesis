@@ -13,10 +13,11 @@ import { useSpaceChannelWrites } from '~/core/space-chat/channel-hooks';
 import {
   CHANNEL_DESCRIPTION_MAX,
   CHANNEL_POLICY_COPY,
+  type LockedChannelSetting,
   canArchiveChannel,
   channelName,
-  isFixedChannel,
   isValidChannelName,
+  lockedChannelSettings,
   normalizeChannelName,
   postPolicy,
   readPolicy,
@@ -45,7 +46,10 @@ export const CHANNEL_SETTINGS_COPY = {
   managePeople: 'Manage people',
   slowMode: 'Slow mode',
   slowModeDetail: 'One message every 10 seconds per person',
-  locked: (name: string) => `The name and who can read # ${name} can’t change.`,
+  locked: (name: string, all: boolean) =>
+    all
+      ? `Only the description of # ${name} can change.`
+      : `The name and who can read # ${name} can’t change, and it can’t be archived.`,
   archive: 'Archive',
   confirmArchive: (name: string) => `Archive # ${name}? It disappears from the list and no one can post.`,
   restore: 'Restore',
@@ -128,13 +132,13 @@ function initialSettings(room: SpaceChatRoom | null): SpaceChannelSettings {
 /** Only the fields that changed, never the locked ones of #general and #editors. */
 export function changedSettings(room: SpaceChatRoom, next: SpaceChannelSettings): Partial<SpaceChannelSettings> {
   const before = initialSettings(room);
-  const fixed = isFixedChannel(room);
+  const locked = lockedChannelSettings(room);
   const patch: Partial<SpaceChannelSettings> = {};
-  if (!fixed && next.name !== before.name) patch.name = next.name;
+  if (!locked.has('name') && next.name !== before.name) patch.name = next.name;
   if (next.description !== before.description) patch.description = next.description;
-  if (!fixed && next.read_policy !== before.read_policy) patch.read_policy = next.read_policy;
-  if (next.post_policy !== before.post_policy) patch.post_policy = next.post_policy;
-  if (next.slow_mode !== before.slow_mode) patch.slow_mode = next.slow_mode;
+  if (!locked.has('read_policy') && next.read_policy !== before.read_policy) patch.read_policy = next.read_policy;
+  if (!locked.has('post_policy') && next.post_policy !== before.post_policy) patch.post_policy = next.post_policy;
+  if (!locked.has('slow_mode') && next.slow_mode !== before.slow_mode) patch.slow_mode = next.slow_mode;
   return patch;
 }
 
@@ -185,7 +189,7 @@ function ChannelSettingsForm({
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [confirmArchive, setConfirmArchive] = React.useState(false);
-  const fixed = room !== null && isFixedChannel(room);
+  const locked = room ? lockedChannelSettings(room) : new Set<LockedChannelSetting>();
   const archived = room?.archived === true;
   const set = <K extends keyof SpaceChannelSettings>(key: K, value: SpaceChannelSettings[K]) =>
     setSettings(current => ({ ...current, [key]: value }));
@@ -237,7 +241,7 @@ function ChannelSettingsForm({
             value={settings.name}
             onChange={event => set('name', normalizeChannelName(event.target.value))}
             placeholder={CHANNEL_SETTINGS_COPY.namePlaceholder}
-            disabled={fixed || archived}
+            disabled={locked.has('name') || archived}
             maxLength={32}
             autoFocus={!room}
           />
@@ -259,7 +263,7 @@ function ChannelSettingsForm({
             value={settings.read_policy}
             onChange={value => set('read_policy', value as SpaceChannelReadPolicy)}
             options={READ_POLICIES.map(value => ({ value, label: CHANNEL_POLICY_COPY.read[value] }))}
-            disabled={fixed || archived}
+            disabled={locked.has('read_policy') || archived}
           />
         </div>
         <div className="flex flex-col gap-1.5">
@@ -268,12 +272,14 @@ function ChannelSettingsForm({
             value={settings.post_policy}
             onChange={value => set('post_policy', value as SpaceChannelPostPolicy)}
             options={POST_POLICIES.map(value => ({ value, label: CHANNEL_POLICY_COPY.post[value] }))}
-            disabled={archived}
+            disabled={locked.has('post_policy') || archived}
           />
         </div>
       </div>
-      {fixed && room ? (
-        <p className="text-footnote text-grey-04">{CHANNEL_SETTINGS_COPY.locked(channelName(room))}</p>
+      {room && locked.size > 0 ? (
+        <p className="text-footnote text-grey-04">
+          {CHANNEL_SETTINGS_COPY.locked(channelName(room), locked.has('post_policy'))}
+        </p>
       ) : null}
       {settings.read_policy === 'invited' ? (
         <div className="flex flex-col gap-2">
@@ -297,7 +303,7 @@ function ChannelSettingsForm({
         type="button"
         role="switch"
         aria-checked={settings.slow_mode}
-        disabled={archived}
+        disabled={locked.has('slow_mode') || archived}
         onClick={() => set('slow_mode', !settings.slow_mode)}
         className="flex items-center justify-between gap-4 border-t border-grey-02 pt-3 text-left disabled:opacity-50"
       >
