@@ -40,6 +40,17 @@ const DAO_SPACE_TYPES: SpaceType[] = [
   'protocol',
 ];
 
+/** The image entity for `avatarUri` and the `entityId` → Avatar relation pointing at it. */
+export async function generateAvatarOps(entityId: string, avatarUri: string): Promise<Op[]> {
+  const { id: imageId, ops: imageOps } = await createGeoImage({ url: avatarUri });
+  const { ops: relationOps } = Graph.createRelation({
+    fromEntity: entityId,
+    toEntity: imageId,
+    type: ContentIds.AVATAR_PROPERTY,
+  });
+  return [...imageOps, ...relationOps];
+}
+
 export const generateOpsForSpaceType = async ({
   type,
   spaceName,
@@ -206,16 +217,7 @@ export const generateOpsForSpaceType = async ({
   }
 
   if (spaceAvatarUri) {
-    const { id: imageId, ops: imageOps } = await createGeoImage({ url: spaceAvatarUri });
-    ops.push(...imageOps);
-
-    const { ops: imageRelationOps } = Graph.createRelation({
-      fromEntity: resolvedTopicId,
-      toEntity: imageId,
-      type: ContentIds.AVATAR_PROPERTY,
-    });
-
-    ops.push(...imageRelationOps);
+    ops.push(...(await generateAvatarOps(resolvedTopicId, spaceAvatarUri)));
   }
 
   if (spaceCoverUri) {

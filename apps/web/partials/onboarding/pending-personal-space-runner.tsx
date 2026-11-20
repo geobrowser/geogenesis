@@ -28,6 +28,7 @@ import {
 import { useReportError } from '~/core/state/status-bar-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { readRegisteredSpaceId } from '~/core/utils/contracts/create-personal-space-on-chain';
+import { ProfileRecoveryError, ProfileStillProcessingError } from '~/core/utils/contracts/personal-profile-recovery';
 import { devLog } from '~/core/utils/dev-log';
 import { describeError } from '~/core/utils/error-diagnostics';
 
@@ -127,7 +128,9 @@ export function PendingPersonalSpaceRunner() {
     // unset so onboarding doesn't pop over that retry — once the cache goes stale, or on
     // a reload or another browser, the index reports the missing profile and onboarding
     // reopens to finish it.
-    const resolve = (spaceId: string, profilePublished = true) => {
+    // `profileEntityId` is the person entity the profile was published under, or null when none is
+    // known. Never this job's `topicId` by default: a recovered profile keeps its declared one.
+    const resolve = (spaceId: string, profilePublished: boolean, profileEntityId: string | null) => {
       if (resolved) return;
       resolved = true;
 
@@ -139,7 +142,7 @@ export function PendingPersonalSpaceRunner() {
       queryClient.setQueryData<PersonalSpaceIdData>(personalSpaceIdQueryKey(address), {
         isRegistered: true,
         personalSpaceId: spaceId,
-        personalEntityId: topicId,
+        personalEntityId: profileEntityId,
       });
       if (profilePublished) trackAuthOnboarding('personal_space', 'completed');
       setResolvedSpaceId(spaceId);
@@ -272,11 +275,11 @@ export function PendingPersonalSpaceRunner() {
           spaceName: name,
           spaceImage: avatar || undefined,
           topicId,
-          onRegistered: registeredSpaceId => {
-            // Fires once the profile + topic userOp is sent, so the profile is on its way.
+          onRegistered: (registeredSpaceId, profileEntityId) => {
+            // Fires once the profile userOp is sent, so the profile is on its way.
             profileSent = true;
             markPersonalProfilePublished(address);
-            resolve(registeredSpaceId);
+            resolve(registeredSpaceId, true, profileEntityId ?? null);
             settleMembership(registeredSpaceId);
           },
         });
@@ -302,18 +305,18 @@ export function PendingPersonalSpaceRunner() {
           const registered = await readRegisteredSpaceId(address);
           if (registered && profileSent) {
             console.warn('[PendingPersonalSpace] creation reported an error after the profile was sent', error);
-            resolve(registered);
+            resolve(registered, true, null);
             settleMembership(registered);
             return;
           }
           if (registered) {
             console.warn('[PendingPersonalSpace] space is registered but the profile publish failed', error);
-            resolve(registered, false);
+            resolve(registered, false, error instanceof ProfileStillProcessingError ? error.topicId : null);
             settleMembership(registered);
             // The interest picks were just settled; don't request them again on retry.
             setSelectedTopicIds([]);
-            trackAuthOnboarding('personal_space', 'failed');
-            reportError(`Profile setup didn't finish: ${describeError(error)}`, () => {
+            if (!(error instanceof ProfileStillProcessingError)) trackAuthOnboarding('personal_space', 'failed');
+            reportError(profileRetryMessage(error), () => {
               setPending({ topicId, address, status: 'pending' });
             });
             return;
@@ -352,4 +355,14 @@ export function PendingPersonalSpaceRunner() {
   ]);
 
   return null;
+}
+
+/**
+ * The status bar message for a profile publish that didn't go out. A profile the chain shows but
+ * the index doesn't yet, or one that can't be read back to republish, is not an account failure.
+ */
+function profileRetryMessage(error: unknown) {
+  if (error instanceof ProfileStillProcessingError) return error.message;
+  if (error instanceof ProfileRecoveryError) return "We couldn't restore your profile yet. Try again in a few minutes.";
+  return `Profile setup didn't finish: ${describeError(error)}`;
 }

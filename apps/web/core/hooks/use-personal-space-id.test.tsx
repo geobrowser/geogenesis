@@ -6,10 +6,11 @@ import * as React from 'react';
 import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { markPersonalProfilePublished, usePersonalSpaceId } from './use-personal-space-id';
+import { markPersonalProfilePublished, personalSpacePollInterval, usePersonalSpaceId } from './use-personal-space-id';
 
 const ADDRESS = '0x5D6d0E45D76D360AB4F94941CE9a005b0AEa2ebD';
 const SPACE_ID = 'd4bee0928fb5405baba3b1513f085835';
+const TOPIC_ID = '5cc83bb5b39540b3922f9a8664bf6831';
 
 const getSpaceByAddress = vi.fn();
 
@@ -57,12 +58,39 @@ describe('usePersonalSpaceId', () => {
   });
 
   it('does not ask for a profile the space already has', async () => {
-    getSpaceByAddress.mockReturnValue(Effect.succeed({ id: SPACE_ID, type: 'PERSONAL', hasProfile: true }));
+    getSpaceByAddress.mockReturnValue(
+      Effect.succeed({ id: SPACE_ID, type: 'PERSONAL', topicId: TOPIC_ID, hasProfile: true, entity: { id: TOPIC_ID } })
+    );
 
     const { result } = renderHook(() => usePersonalSpaceId(), { wrapper });
 
     await waitFor(() => expect(result.current.isRegistered).toBe(true));
     expect(result.current.needsProfile).toBe(false);
+    expect(result.current.personalEntityId).toBe(TOPIC_ID);
+  });
+
+  it('finds the person entity from the page while the index has no topic for the space', async () => {
+    // The indexer ignores the web's TOPIC_DECLARED, so `topicId` is null on most personal spaces
+    // and the profile is only served as the page (GEO-3803).
+    getSpaceByAddress.mockReturnValue(
+      Effect.succeed({ id: SPACE_ID, type: 'PERSONAL', topicId: null, hasProfile: true, entity: { id: TOPIC_ID } })
+    );
+
+    const { result } = renderHook(() => usePersonalSpaceId(), { wrapper });
+
+    await waitFor(() => expect(result.current.isRegistered).toBe(true));
+    expect(result.current.personalEntityId).toBe(TOPIC_ID);
+  });
+
+  it('reports no person entity for a space with no profile', async () => {
+    getSpaceByAddress.mockReturnValue(
+      Effect.succeed({ id: SPACE_ID, type: 'PERSONAL', topicId: null, hasProfile: false, entity: { id: '' } })
+    );
+
+    const { result } = renderHook(() => usePersonalSpaceId(), { wrapper });
+
+    await waitFor(() => expect(result.current.isRegistered).toBe(true));
+    expect(result.current.personalEntityId).toBeNull();
   });
 
   it('trusts a profile this browser just published over an index that has not caught up', async () => {
@@ -108,4 +136,55 @@ describe('usePersonalSpaceId', () => {
     // than keep a request running for every signed-in user forever.
     expect(getSpaceByAddress.mock.calls.length).toBe(callsWhenResolved);
   }, 10_000);
+});
+
+describe('personalSpacePollInterval', () => {
+  it('stops polling once registered', () => {
+    expect(
+      personalSpacePollInterval({
+        data: { isRegistered: true, personalSpaceId: SPACE_ID, personalEntityId: null },
+        status: 'success',
+        errorUpdateCount: 0,
+      })
+    ).toBe(false);
+  });
+
+  it('polls steadily for an account the index answered is unregistered', () => {
+    expect(
+      personalSpacePollInterval({
+        data: { isRegistered: false, personalSpaceId: null, personalEntityId: null },
+        status: 'success',
+        errorUpdateCount: 3,
+      })
+    ).toBe(3_000);
+  });
+
+  it('backs off while the index keeps failing, up to a minute', () => {
+    const failing = (errorUpdateCount: number) =>
+      personalSpacePollInterval({ data: undefined, status: 'error', errorUpdateCount });
+    expect(failing(1)).toBe(6_000);
+    expect(failing(2)).toBe(12_000);
+    expect(failing(10)).toBe(60_000);
+  });
+});
+
+describe('usePersonalSpaceId answers', () => {
+  it('reports no answer, rather than an unregistered account, while the index fails', async () => {
+    getSpaceByAddress.mockReturnValue(Effect.fail(new Error('503')));
+
+    const { result } = renderHook(() => usePersonalSpaceId(), { wrapper });
+
+    await waitFor(() => expect(result.current.isFetched).toBe(true));
+    expect(result.current.hasAnswer).toBe(false);
+    expect(result.current.isRegistered).toBe(false);
+  });
+
+  it('reports an answer for an account the index shows as unregistered', async () => {
+    getSpaceByAddress.mockReturnValue(Effect.succeed(null));
+
+    const { result } = renderHook(() => usePersonalSpaceId(), { wrapper });
+
+    await waitFor(() => expect(result.current.hasAnswer).toBe(true));
+    expect(result.current.isRegistered).toBe(false);
+  });
 });
