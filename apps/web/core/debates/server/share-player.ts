@@ -8,6 +8,7 @@ import type { Entity } from '~/core/types';
 
 import { isGeoChatDebateId } from '../debate-removal';
 import { debateArtifactContentUrl } from '../speaker-still';
+import { fetchDebatePageMedia } from './debate-page-media';
 import { type DebateVisibility, fetchDebateVisibility } from './debate-visibility';
 import {
   type DebateEntity,
@@ -114,7 +115,15 @@ function escapeHtml(value: string): string {
  * shows all of it. A route handler rather than a page, because every page sits under the app's
  * client-only Privy provider and would paint nothing until the whole app bundle had loaded.
  */
-export function sharePlayerHtml({ debateId, title }: { debateId: string; title: string }): string {
+export function sharePlayerHtml({
+  debateId,
+  title,
+  headTags = '',
+}: {
+  debateId: string;
+  title: string;
+  headTags?: string;
+}): string {
   const src = escapeHtml(debateArtifactContentUrl(debateId, 'social_video'));
   const poster = escapeHtml(debateArtifactContentUrl(debateId, 'social_preview_image'));
   return `<!doctype html>
@@ -123,7 +132,7 @@ export function sharePlayerHtml({ debateId, title }: { debateId: string; title: 
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>${escapeHtml(title)}</title>
+<title>${escapeHtml(title)}</title>${headTags ? `\n${headTags}` : ''}
 <style>
   html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
   video { display: block; width: 100%; height: 100%; object-fit: contain; background: #000; }
@@ -135,6 +144,55 @@ export function sharePlayerHtml({ debateId, title }: { debateId: string; title: 
 </html>`;
 }
 
+/** Social previews size an image they're told the size of; the poster still is 540×960. */
+const POSTER_SIZE = { width: 540, height: 960 };
+
+/**
+ * The player page's own unfurl tags, so the page itself can be shared (GEO-3817). iMessage sized the
+ * debate page's card from its landscape share image and cropped the vertical video into it, and the
+ * debate page can't swap that image: Next's file-based `opengraph-image` always wins over metadata.
+ * Here the poster is the video's own vertical first frame. Same tags as `sharePlayerMetadata` builds.
+ */
+export function sharePlayerHeadTags(input: Parameters<typeof sharePlayerMetadata>[0]): string {
+  const metadata = sharePlayerMetadata(input);
+  if (!metadata) return '';
+  const og = metadata.openGraph as { videos: Array<Record<string, string | number>> };
+  const twitter = metadata.twitter as {
+    players: Array<{ playerUrl: string; streamUrl: string; width: number; height: number }>;
+    images?: string[];
+  };
+  const video = og.videos[0];
+  const player = twitter.players[0];
+  const poster = twitter.images?.[0];
+  const tags: Array<[attribute: 'property' | 'name', key: string, value: string | number | undefined]> = [
+    ['property', 'og:title', input.title],
+    ['property', 'og:description', input.description],
+    ['property', 'og:type', 'video.other'],
+    ['property', 'og:url', player.playerUrl],
+    ['property', 'og:image', poster],
+    ['property', 'og:image:width', poster && POSTER_SIZE.width],
+    ['property', 'og:image:height', poster && POSTER_SIZE.height],
+    ['property', 'og:video', video.url],
+    ['property', 'og:video:secure_url', video.secureUrl],
+    ['property', 'og:video:type', video.type],
+    ['property', 'og:video:width', video.width],
+    ['property', 'og:video:height', video.height],
+    ['name', 'twitter:card', 'player'],
+    ['name', 'twitter:site', '@geobrowser'],
+    ['name', 'twitter:title', input.title],
+    ['name', 'twitter:description', input.description],
+    ['name', 'twitter:image', poster],
+    ['name', 'twitter:player', player.playerUrl],
+    ['name', 'twitter:player:stream', player.streamUrl],
+    ['name', 'twitter:player:width', player.width],
+    ['name', 'twitter:player:height', player.height],
+  ];
+  return tags
+    .filter(([, , value]) => value !== undefined && value !== '')
+    .map(([attribute, key, value]) => `<meta ${attribute}="${key}" content="${escapeHtml(String(value))}">`)
+    .join('\n');
+}
+
 type SharePlayerDeps = {
   enabled?: boolean;
   fetchEntity?: (
@@ -143,6 +201,7 @@ type SharePlayerDeps = {
     signal: AbortSignal
   ) => Promise<(DebateEntity & Pick<Entity, 'name'>) | null>;
   fetchVisibility?: (entityId: string) => Promise<DebateVisibility>;
+  fetchMedia?: (entityId: string) => Promise<DebateMediaResponse | null>;
 };
 
 /**
@@ -153,23 +212,27 @@ type SharePlayerDeps = {
  * own content route refuses a removed debate's video anyway.
  */
 export async function sharePlayerResponse(
-  { spaceId, debateId }: { spaceId: string; debateId: string },
+  { spaceId, debateId, origin }: { spaceId: string; debateId: string; origin: string },
   {
     enabled = sharePlayerEnabled(),
     fetchEntity = fetchEntityFromGraph,
     fetchVisibility = id => fetchDebateVisibility(id),
+    fetchMedia = id => fetchDebatePageMedia(id),
   }: SharePlayerDeps = {}
 ): Promise<Response> {
   const notFound = () => new Response('Not found', { status: 404 });
   if (!enabled || !IdUtils.isValid(spaceId) || !isGeoChatDebateId(debateId)) return notFound();
 
-  const [entity, visibility] = await Promise.all([
+  const [entity, visibility, media] = await Promise.all([
     fetchEntity(debateId, spaceId, AbortSignal.timeout(PUBLISHED_DEBATE_LOOKUP_TIMEOUT_MS)).catch(() => null),
     fetchVisibility(debateId),
+    fetchMedia(debateId).catch(() => null),
   ]);
   if (!isVisibleDebate(entity) || visibility === 'removed') return notFound();
 
-  return new Response(sharePlayerHtml({ debateId, title: entity?.name || 'Geo debate' }), {
+  const title = entity?.name || 'Geo debate';
+  const headTags = sharePlayerHeadTags({ origin, spaceId, debateId, media, title });
+  return new Response(sharePlayerHtml({ debateId, title, headTags }), {
     headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=300' },
   });
 }

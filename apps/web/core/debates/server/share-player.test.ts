@@ -126,12 +126,17 @@ describe('sharePlayerHtml', () => {
 // X keeps a card for days, so the player must stop playing a debate hidden or removed after it was
 // shared, the way the page, its metadata and its share image already do.
 describe('sharePlayerResponse', () => {
-  const ids = { spaceId: SPACE_HEX, debateId: DEBATE_HEX };
+  const ids = { spaceId: SPACE_HEX, debateId: DEBATE_HEX, origin: ORIGIN };
   const debate = (values: unknown[] = []) => ({ name: 'Claim | A vs. B', types: [{ id: DEBATE_TYPE_ID }], values });
   const deps = (entity: unknown, visibility: 'visible' | 'removed' | 'unknown' = 'visible') => ({
     enabled: true,
     fetchEntity: vi.fn().mockResolvedValue(entity),
     fetchVisibility: vi.fn().mockResolvedValue(visibility),
+    fetchMedia: vi
+      .fn()
+      .mockResolvedValue(
+        media([artifact('social_video', { width: 1080, height: 1920 }), artifact('social_preview_image')])
+      ),
   });
 
   it("plays a visible debate, titled with its name, reading the hidden flag in the link's space", async () => {
@@ -140,6 +145,27 @@ describe('sharePlayerResponse', () => {
     expect(response.status).toBe(200);
     expect(await response.text()).toContain('<title>Claim | A vs. B</title>');
     expect(d.fetchEntity).toHaveBeenCalledWith(DEBATE_HEX, SPACE_HEX, expect.any(AbortSignal));
+  });
+
+  // iMessage sized the debate page's card from its landscape share image and cropped the video into
+  // it; shared directly, the player page unfurls with the vertical first frame instead.
+  it('unfurls as itself, with the vertical poster as og:image and the video as og:video', async () => {
+    const html = await (await sharePlayerResponse(ids, deps(debate()))).text();
+    expect(html).toContain(`<meta property="og:image" content="${posterUrl}">`);
+    expect(html).toContain('<meta property="og:image:width" content="540">');
+    expect(html).toContain('<meta property="og:image:height" content="960">');
+    expect(html).toContain(`<meta property="og:video" content="${videoUrl}">`);
+    expect(html).toContain(
+      `<meta name="twitter:player" content="${ORIGIN}/share-player/debate/${SPACE_HEX}/${DEBATE_HEX}">`
+    );
+    expect(html).toContain('<meta property="og:title" content="Claim | A vs. B">');
+  });
+
+  it('plays without unfurl tags when geo-chat has no share video', async () => {
+    const d = { ...deps(debate()), fetchMedia: vi.fn().mockResolvedValue(null) };
+    const response = await sharePlayerResponse(ids, d);
+    expect(response.status).toBe(200);
+    expect(await response.text()).not.toContain('og:video');
   });
 
   it('404s a debate hidden in that space', async () => {
