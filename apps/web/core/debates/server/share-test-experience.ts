@@ -26,8 +26,8 @@ const GATEWAY = 'https://mature-tomato-basilisk.myfilebase.com/ipfs/';
 export const SHARE_TEST_EXPERIENCES: Record<string, ShareTestExperience> = {
   // Dovile Sv vs. Preston Mantel: "Bitcoin is a better store of value than gold".
   '01a039bdac2c7ec097758284ce61200d': {
-    videoUrl: `${GATEWAY}QmUx8d7sZBfho5gL67vb8zLKD1dLm63xxq2M8CWxQEM1EJ`,
-    cardUrl: `${GATEWAY}QmYFLLcuaqk5mF7s8oGkERw9Bgvazx41W1oXqsZXovHRb5`,
+    videoUrl: `${GATEWAY}Qmf53vyQQH5T3K7ugRowHRYJFsw6y8M5zoFuMXUVi1Mwoz`,
+    cardUrl: `${GATEWAY}QmQL3PbqaNShmLzQ74GDopYa6YXxoPifMxzVBCNm6ALTEe`,
     video: { width: 1280, height: 720 },
     claim: {
       start: 6.5,
