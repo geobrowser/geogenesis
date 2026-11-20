@@ -325,6 +325,8 @@ export type SearchResult = {
   namesBySpace?: Record<string, string | null>;
   /** Types keyed by spaceId, so the UI can show only the types relevant to the displayed space */
   typesBySpace?: Record<string, { id: string; name: string | null }[]>;
+  /** Spaces that mark the entity Hidden, whose page for it 404s. */
+  hiddenSpaceIds?: string[];
 };
 
 // ==============================================================================

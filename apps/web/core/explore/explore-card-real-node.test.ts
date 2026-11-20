@@ -108,12 +108,14 @@ describe('the real card node, scoped to a space that only links to it', () => {
     relationsList: [],
     placementNames: [{ spaceId: RELATIONSHIPS, text: NODE.name }],
     placementTypes: [{ spaceId: RELATIONSHIPS, toEntity: { id: '96f859efa1ca4b229372c86ad58b694b', name: 'Claim' } }],
+    placementHidden: [{ spaceId: PERSONAL }],
   };
 
   it('decodes the placement projection', () => {
     expect(decodeExploreCardEntity(SCOPED)?.placement).toEqual({
       names: [{ spaceId: RELATIONSHIPS, text: NODE.name }],
       types: [{ spaceId: RELATIONSHIPS, id: '96f859efa1ca4b229372c86ad58b694b', name: 'Claim' }],
+      hiddenSpaceIds: [PERSONAL],
     });
   });
 

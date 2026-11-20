@@ -50,6 +50,24 @@ describe('withClaimHomeSpaceFirst', () => {
     expect(moved.spaces[0].spaceId).toBe(US_POLITICS);
   });
 
+  it('never moves a space that marks the claim Hidden to the front', () => {
+    const named = { [US_POLITICS]: 'Billionaires should not exist', [DEBATES]: 'b' };
+    // US Politics wins the tie-break, but hides the claim; Debates came first and stays first.
+    const hidden = result({ namesBySpace: named, hiddenSpaceIds: [US_POLITICS] });
+
+    expect(withClaimHomeSpaceFirst(hidden)).toBe(hidden);
+  });
+
+  it('moves a visible naming space ahead of a hidden first space', () => {
+    const hidden = result({
+      namesBySpace: { [US_POLITICS]: 'Billionaires should not exist', [DEBATES]: 'b' },
+      spaces: [space(US_POLITICS), space(DEBATES)],
+      hiddenSpaceIds: ['4582fbbe-e28a-1658-9154-f7e36f1ee3c5'],
+    });
+
+    expect(withClaimHomeSpaceFirst(hidden).spaces[0].spaceId).toBe(DEBATES);
+  });
+
   it('leaves other entities, and claims with no naming space, as they came', () => {
     const topic = result({ types: [{ id: 'aaaabbbbccccddddeeeeffff00001111', name: 'Topic' }] });
     const unnamed = result({ namesBySpace: {} });

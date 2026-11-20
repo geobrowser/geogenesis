@@ -130,6 +130,8 @@ export function toExploreFeedItem(row: ExploreFeedRow, label: { name: string; im
 export type ExploreCardPlacement = {
   names: { spaceId: string; text: string }[];
   types: { spaceId: string; id: string; name: string | null }[];
+  /** Spaces that mark the entity Hidden: their page 404s, so a card never moves there. */
+  hiddenSpaceIds: string[];
 };
 
 /** A decoded entity plus the fields the card needs that aren't part of `Entity`. */
@@ -142,9 +144,10 @@ export type ExploreCardEntity = Entity & {
 };
 
 function decodePlacement(raw: Record<string, unknown>): ExploreCardPlacement | undefined {
-  const { placementNames, placementTypes } = raw as {
+  const { placementNames, placementTypes, placementHidden } = raw as {
     placementNames?: unknown;
     placementTypes?: unknown;
+    placementHidden?: unknown;
   };
   if (!Array.isArray(placementNames) && !Array.isArray(placementTypes)) return undefined;
 
@@ -163,7 +166,11 @@ function decodePlacement(raw: Record<string, unknown>): ExploreCardPlacement | u
       ? [{ spaceId, id: toEntity.id, name: typeof toEntity.name === 'string' ? toEntity.name : null }]
       : [];
   });
-  return { names, types };
+  const hiddenSpaceIds = (Array.isArray(placementHidden) ? placementHidden : []).flatMap(value => {
+    const { spaceId } = (value ?? {}) as { spaceId?: unknown };
+    return typeof spaceId === 'string' ? [spaceId] : [];
+  });
+  return { names, types, hiddenSpaceIds };
 }
 
 /** The comment relation type — `backlinks` through it is how a card gets its comment count. */
@@ -289,17 +296,19 @@ const NAME_PROPERTY = normId(EXPLORE_ENTITY_NAME_PROPERTY_ID);
 function claimSpaceId(entity: ExploreCardEntity, picked: string, allowedSpaceIds: Set<string>): string {
   if (!entity.types.some(type => normId(type.id) === CLAIM_TYPE)) return picked;
 
-  const names = entity.placement?.names ?? [];
+  const hidden = new Set((entity.placement?.hiddenSpaceIds ?? []).map(normId));
+  const isVisible = (spaceId: string) => !hidden.has(normId(spaceId));
+  const names = (entity.placement?.names ?? []).filter(name => isVisible(name.spaceId));
   const values = [
-    ...entity.values,
+    ...entity.values.filter(value => isVisible(value.spaceId)),
     ...names.map(name => ({ property: { id: NAME_PROPERTY }, spaceId: name.spaceId, value: name.text })),
   ];
-  const isAllowed = (spaceId: string) => allowedSpaceIds.has(normId(spaceId));
+  const isAllowed = (spaceId: string) => allowedSpaceIds.has(normId(spaceId)) && isVisible(spaceId);
   const inAllowed = values.filter(value => isAllowed(value.spaceId));
   const scoped =
     placingSpaceIds({ values: inAllowed }).length > 0
       ? { spaces: entity.spaces.filter(isAllowed), values: inAllowed }
-      : { spaces: entity.spaces, values };
+      : { spaces: entity.spaces.filter(isVisible), values };
   return resolveEntitySpaceId(scoped, picked);
 }
 

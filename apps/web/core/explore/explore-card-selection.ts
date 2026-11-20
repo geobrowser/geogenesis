@@ -3,6 +3,7 @@ import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { CLAIM_ACTIVITY_COUNT_FIELDS } from '~/core/claims/browse/claim-activity-fields';
 import { EVENT_SCHEMA } from '~/core/community-calls/constants';
 import { DEBATE_CLAIMS_PROPERTY_ID, DEBATE_VIDEOS_PROPERTY_ID } from '~/core/debates/ontology';
+import { HIDDEN_PROPERTY_ID } from '~/core/moderation/hidden';
 
 import { COMMENT_RELATION_TYPE_ID } from './explore-card-item';
 import {
@@ -120,6 +121,10 @@ export function exploreCardNodeFields(fragmentName: string, options: ExploreCard
     placementNames: valuesList(filter: { propertyId: { is: "${EXPLORE_ENTITY_NAME_PROPERTY_ID}" } }) {
       spaceId
       text
+    }
+
+    placementHidden: valuesList(filter: { propertyId: { is: "${HIDDEN_PROPERTY_ID}" }, boolean: { is: true } }) {
+      spaceId
     }
 
     placementTypes: relationsList(filter: { typeId: { is: "${SystemIds.TYPES_PROPERTY}" } }) {

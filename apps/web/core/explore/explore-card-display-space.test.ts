@@ -245,4 +245,22 @@ describe('a claim named in another of the feed’s spaces', () => {
 
     expect(normId(row.spaceId)).toBe(CRYPTO);
   });
+
+  it('never moves to a space that marks the claim Hidden', () => {
+    const hiddenInCrypto = {
+      ...claimEntity,
+      placement: { ...claimEntity.placement!, hiddenSpaceIds: [CRYPTO] },
+    } as ExploreCardEntity;
+
+    expect(normId(rowFor(hiddenInCrypto, [ROOT]).spaceId)).toBe(PERSONAL_NAMED);
+  });
+
+  it('skips a feed space that marks the claim Hidden for one that does not', () => {
+    const hiddenInPersonal = {
+      ...claimEntity,
+      placement: { ...claimEntity.placement!, hiddenSpaceIds: [PERSONAL_NAMED] },
+    } as ExploreCardEntity;
+
+    expect(normId(rowFor(hiddenInPersonal, [ROOT, PERSONAL_NAMED]).spaceId)).toBe(CRYPTO);
+  });
 });
