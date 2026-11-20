@@ -1,6 +1,7 @@
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { countActivityForNode } from '~/core/claims/browse/claim-activity-fields';
+import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { getRecordingUrls } from '~/core/community-calls/recordings';
 import { isDebateEntity } from '~/core/debates/is-debate-entity';
 import { DEBATE_CLAIMS_PROPERTY_ID, DEBATE_VIDEOS_PROPERTY_ID } from '~/core/debates/ontology';
@@ -8,6 +9,7 @@ import { EntityDecoder } from '~/core/io/decoders/entity';
 import type { Entity } from '~/core/types';
 import { normId } from '~/core/utils/norm-id';
 import { getRelationVideoUrls } from '~/core/utils/relation-video';
+import { placingSpaceIds, resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
 import { getSpaceRank, getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
 
 import {
@@ -121,13 +123,55 @@ export function toExploreFeedItem(row: ExploreFeedRow, label: { name: string; im
   } satisfies ExploreFeedItem;
 }
 
+/**
+ * The entity's names and types in every space, read past whatever space scoping the card's own
+ * value and relation lists had. Optional because only the card selection asks for it.
+ */
+export type ExploreCardPlacement = {
+  names: { spaceId: string; text: string }[];
+  types: { spaceId: string; id: string; name: string | null }[];
+  /** Spaces that mark the entity Hidden: their page 404s, so a card never moves there. */
+  hiddenSpaceIds: string[];
+};
+
 /** A decoded entity plus the fields the card needs that aren't part of `Entity`. */
 export type ExploreCardEntity = Entity & {
   commentCount: number;
   activityCount: number;
   activityCommentCount: number;
   createdAt?: string;
+  placement?: ExploreCardPlacement;
 };
+
+function decodePlacement(raw: Record<string, unknown>): ExploreCardPlacement | undefined {
+  const { placementNames, placementTypes, placementHidden } = raw as {
+    placementNames?: unknown;
+    placementTypes?: unknown;
+    placementHidden?: unknown;
+  };
+  if (!Array.isArray(placementNames) && !Array.isArray(placementTypes)) return undefined;
+
+  const names = (Array.isArray(placementNames) ? placementNames : []).flatMap(value => {
+    const { spaceId, text } = (value ?? {}) as { spaceId?: unknown; text?: unknown };
+    return typeof spaceId === 'string' && typeof text === 'string' && text.trim().length > 0
+      ? [{ spaceId, text: text.trim() }]
+      : [];
+  });
+  const types = (Array.isArray(placementTypes) ? placementTypes : []).flatMap(relation => {
+    const { spaceId, toEntity } = (relation ?? {}) as {
+      spaceId?: unknown;
+      toEntity?: { id?: unknown; name?: unknown } | null;
+    };
+    return typeof spaceId === 'string' && typeof toEntity?.id === 'string'
+      ? [{ spaceId, id: toEntity.id, name: typeof toEntity.name === 'string' ? toEntity.name : null }]
+      : [];
+  });
+  const hiddenSpaceIds = (Array.isArray(placementHidden) ? placementHidden : []).flatMap(value => {
+    const { spaceId } = (value ?? {}) as { spaceId?: unknown };
+    return typeof spaceId === 'string' ? [spaceId] : [];
+  });
+  return { names, types, hiddenSpaceIds };
+}
 
 /** The comment relation type — `backlinks` through it is how a card gets its comment count. */
 export const COMMENT_RELATION_TYPE_ID = '310d4a240e5b451cb2151bfce40d0fe6';
@@ -154,6 +198,7 @@ export function decodeExploreCardEntity(node: unknown): ExploreCardEntity | null
     activityCount: activity.total,
     activityCommentCount: activity.comments,
     createdAt: raw.createdAt,
+    placement: decodePlacement(raw),
   };
 }
 
@@ -241,6 +286,45 @@ function pickDisplaySpaceId(entity: Entity, allowed: Set<string>): string | null
   return getTopRankedSpaceId(typed.length > 0 ? typed : bestRanked);
 }
 
+const CLAIM_TYPE = normId(CLAIM_TYPE_ID);
+const NAME_PROPERTY = normId(EXPLORE_ENTITY_NAME_PROPERTY_ID);
+
+/**
+ * A claim card's link and vote space: the pick, else where the claim lives, preferring the caller's
+ * spaces (GEO-3802). Claims only: four card properties test residency only for always-named entities.
+ */
+function claimSpaceId(entity: ExploreCardEntity, picked: string, allowedSpaceIds: Set<string>): string {
+  if (!entity.types.some(type => normId(type.id) === CLAIM_TYPE)) return picked;
+
+  const hidden = new Set((entity.placement?.hiddenSpaceIds ?? []).map(normId));
+  const isVisible = (spaceId: string) => !hidden.has(normId(spaceId));
+  const names = (entity.placement?.names ?? []).filter(name => isVisible(name.spaceId));
+  const values = [
+    ...entity.values.filter(value => isVisible(value.spaceId)),
+    ...names.map(name => ({ property: { id: NAME_PROPERTY }, spaceId: name.spaceId, value: name.text })),
+  ];
+  // Hidden everywhere it is named: stay put, rather than land on a link-only space that hides nothing.
+  if (hidden.size > 0 && placingSpaceIds({ values }).length === 0) return picked;
+  const isAllowed = (spaceId: string) => allowedSpaceIds.has(normId(spaceId)) && isVisible(spaceId);
+  const inAllowed = values.filter(value => isAllowed(value.spaceId));
+  const scoped =
+    placingSpaceIds({ values: inAllowed }).length > 0
+      ? { spaces: entity.spaces.filter(isAllowed), values: inAllowed }
+      : { spaces: entity.spaces.filter(isVisible), values };
+  return resolveEntitySpaceId(scoped, picked);
+}
+
+function movedClaimTypes(entity: ExploreCardEntity, spaceIdNorm: string): { id: string; name: string | null }[] {
+  const placed = (entity.placement?.types ?? [])
+    .filter(type => normId(type.spaceId) === spaceIdNorm)
+    .map(type => ({ id: type.id, name: type.name }));
+  if (placed.some(type => normId(type.id) === CLAIM_TYPE)) return placed;
+  const claim = entity.types
+    .filter(type => normId(type.id) === CLAIM_TYPE)
+    .map(type => ({ id: type.id, name: type.name }));
+  return [...placed, ...claim];
+}
+
 function textValueForProperty(entity: Entity, propertyId: string, spaceId: string): string | null {
   const pid = normId(propertyId);
   const sid = normId(spaceId);
@@ -298,22 +382,30 @@ export function buildExploreFeedRows(
   const typesRelationIdNorm = normId(SystemIds.TYPES_PROPERTY);
 
   for (const e of entities) {
-    const spaceId = pickDisplaySpaceId(e, allowedSpaceIds);
-    if (!spaceId) continue;
+    const picked = pickDisplaySpaceId(e, allowedSpaceIds);
+    if (!picked) continue;
+    const spaceId = claimSpaceId(e, picked, allowedSpaceIds);
+    const displaySpaceIdNorm = normId(spaceId);
 
     // Prefer space-scoped values so a card rendered for space A doesn't leak values
     // from space C. Fall back to the top-level aggregated name/description when the
     // entity has no value in the display space — avoids "Untitled" cards purely
     // because of the space boundary.
-    const title = textValueForProperty(e, EXPLORE_ENTITY_NAME_PROPERTY_ID, spaceId) ?? e.name?.trim() ?? 'Untitled';
+    const title =
+      textValueForProperty(e, EXPLORE_ENTITY_NAME_PROPERTY_ID, spaceId) ??
+      e.placement?.names.find(name => normId(name.spaceId) === displaySpaceIdNorm)?.text ??
+      e.name?.trim() ??
+      'Untitled';
     const description =
       textValueForProperty(e, EXPLORE_ENTITY_DESCRIPTION_PROPERTY_ID, spaceId) ?? e.description ?? null;
 
-    const displaySpaceIdNorm = normId(spaceId);
     const relationsInDisplaySpace = e.relations.filter(r => normId(r.spaceId) === displaySpaceIdNorm);
-    const types = relationsInDisplaySpace
+    const listedTypes = relationsInDisplaySpace
       .filter(r => normId(r.type.id) === typesRelationIdNorm)
       .map(r => ({ id: r.toEntity.id, name: r.toEntity.name }));
+    // A claim moved by `claimSpaceId` has nothing in the scoped lists there: its types come from the
+    // unscoped projection, else its known Claim type, so a name-only home still draws a claim card.
+    const types = listedTypes.length > 0 || spaceId === picked ? listedTypes : movedClaimTypes(e, displaySpaceIdNorm);
 
     items.push({
       entityId: e.id,

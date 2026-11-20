@@ -124,3 +124,152 @@ describe('the space a card renders in', () => {
     expect(normId(row.spaceId)).toBe(normId(CRYPTO));
   });
 });
+
+/* GEO-3802: a claim named and typed in US Politics, listed by a Debates-scoped feed. */
+describe('a claim the feed’s space only links to', () => {
+  const US_POLITICS = '4582fbbee28a16589154f7e36f1ee3c5';
+  const DEBATES = '9284477c8fe746368698994e2e517b32';
+  const NAME = 'a126ca530c8e48d5b88882c734c38935';
+  const CLAIM_TYPE_ID = '96f859efa1ca4b229372c86ad58b694b';
+  const TITLE = 'Billionaires should not exist';
+
+  function scopedClaim({
+    valuesIn = [],
+    types = [{ id: CLAIM_TYPE_ID, name: 'Claim' }],
+  }: {
+    valuesIn?: string[];
+    types?: { id: string; name: string }[];
+  } = {}): ExploreCardEntity {
+    return {
+      id: '0af30a95f81e4632a452ecd6aefdfc65',
+      name: TITLE,
+      description: null,
+      spaces: [DEBATES, US_POLITICS],
+      types,
+      // What a Debates-scoped feed query returns: only the lists' values in the feed's space.
+      values: valuesIn.map(spaceId => ({ property: { id: NAME, name: 'Name' }, spaceId, value: TITLE })),
+      relations: [],
+      commentCount: 0,
+      placement: {
+        names: [US_POLITICS, ...valuesIn].map(spaceId => ({ spaceId, text: TITLE })),
+        types: [US_POLITICS, ...valuesIn].map(spaceId => ({ spaceId, id: CLAIM_TYPE_ID, name: 'Claim' })),
+      },
+    } as unknown as ExploreCardEntity;
+  }
+
+  it('links and votes in the claim’s home space', () => {
+    const row = rowFor(scopedClaim(), [DEBATES]);
+
+    expect(normId(row.spaceId)).toBe(US_POLITICS);
+  });
+
+  it('renders as a claim, with its home space’s types and name', () => {
+    const row = rowFor(scopedClaim(), [DEBATES]);
+
+    expect(row.types).toEqual([{ id: CLAIM_TYPE_ID, name: 'Claim' }]);
+    expect(row.title).toBe(TITLE);
+  });
+
+  it('stays in the feed’s space when the claim also lives there', () => {
+    const row = rowFor(scopedClaim({ valuesIn: [DEBATES] }), [DEBATES]);
+
+    expect(normId(row.spaceId)).toBe(DEBATES);
+  });
+
+  it('leaves entities that are not claims where the feed put them', () => {
+    const row = rowFor(scopedClaim({ types: [{ id: 'aaaabbbbccccddddeeeeffff00001111', name: 'Topic' }] }), [DEBATES]);
+
+    expect(normId(row.spaceId)).toBe(DEBATES);
+  });
+
+  it('still draws a claim card when its home names it but holds no Types relation', () => {
+    const entity = scopedClaim();
+    const nameOnlyHome = { ...entity, placement: { ...entity.placement!, types: [] } } as ExploreCardEntity;
+
+    const row = rowFor(nameOnlyHome, [DEBATES]);
+
+    expect(normId(row.spaceId)).toBe(US_POLITICS);
+    expect(row.types).toEqual([{ id: CLAIM_TYPE_ID, name: 'Claim' }]);
+  });
+
+  it('keeps the Claim type when its home types it as something else too', () => {
+    const entity = scopedClaim();
+    const otherType = { spaceId: US_POLITICS, id: 'aaaabbbbccccddddeeeeffff00001111', name: 'Topic' };
+    const row = rowFor({ ...entity, placement: { ...entity.placement!, types: [otherType] } } as ExploreCardEntity, [
+      DEBATES,
+    ]);
+
+    expect(row.types.map(type => type.name)).toEqual(['Topic', 'Claim']);
+  });
+
+  it('stays put without the placement projection, rather than guessing', () => {
+    const row = rowFor({ ...scopedClaim(), placement: undefined }, [DEBATES]);
+
+    expect(normId(row.spaceId)).toBe(DEBATES);
+  });
+});
+
+/* A feed space that names the claim beats a higher-ranked home outside the feed, which it could not label. */
+describe('a claim named in another of the feed’s spaces', () => {
+  const ROOT = 'a19c345ab9866679b001d7d2138d88a1';
+  const CRYPTO = 'c9f267dcb0d270718c2a3c45a64afd32';
+  const PERSONAL_NAMED = 'cc31e40f74231d530f1b5d0fc1cd94d8';
+  const NAME = 'a126ca530c8e48d5b88882c734c38935';
+  const CLAIM_TYPE_ID = '96f859efa1ca4b229372c86ad58b694b';
+
+  // Linked from Root (ranked first), named in a personal space the feed covers and in Crypto, which
+  // outranks it but is outside the feed.
+  const claimEntity = {
+    id: '0af30a95f81e4632a452ecd6aefdfc65',
+    name: 'A claim',
+    description: null,
+    spaces: [ROOT, CRYPTO, PERSONAL_NAMED],
+    types: [{ id: CLAIM_TYPE_ID, name: 'Claim' }],
+    values: [{ property: { id: NAME, name: 'Name' }, spaceId: PERSONAL_NAMED, value: 'A claim' }],
+    relations: [],
+    commentCount: 0,
+    placement: {
+      names: [CRYPTO, PERSONAL_NAMED].map(spaceId => ({ spaceId, text: 'A claim' })),
+      types: [CRYPTO, PERSONAL_NAMED].map(spaceId => ({ spaceId, id: CLAIM_TYPE_ID, name: 'Claim' })),
+    },
+  } as unknown as ExploreCardEntity;
+
+  it('moves to the feed space that names it, not the higher-ranked one outside the feed', () => {
+    const row = rowFor(claimEntity, [ROOT, PERSONAL_NAMED]);
+
+    expect(normId(row.spaceId)).toBe(PERSONAL_NAMED);
+  });
+
+  it('falls back to the claim’s own home when no feed space names it', () => {
+    const row = rowFor(claimEntity, [ROOT]);
+
+    expect(normId(row.spaceId)).toBe(CRYPTO);
+  });
+
+  it('never moves to a space that marks the claim Hidden', () => {
+    const hiddenInCrypto = {
+      ...claimEntity,
+      placement: { ...claimEntity.placement!, hiddenSpaceIds: [CRYPTO] },
+    } as ExploreCardEntity;
+
+    expect(normId(rowFor(hiddenInCrypto, [ROOT]).spaceId)).toBe(PERSONAL_NAMED);
+  });
+
+  it('stays put when every space that names the claim hides it', () => {
+    const hiddenEverywhere = {
+      ...claimEntity,
+      placement: { ...claimEntity.placement!, hiddenSpaceIds: [CRYPTO, PERSONAL_NAMED] },
+    } as ExploreCardEntity;
+
+    expect(normId(rowFor(hiddenEverywhere, [ROOT]).spaceId)).toBe(ROOT);
+  });
+
+  it('skips a feed space that marks the claim Hidden for one that does not', () => {
+    const hiddenInPersonal = {
+      ...claimEntity,
+      placement: { ...claimEntity.placement!, hiddenSpaceIds: [PERSONAL_NAMED] },
+    } as ExploreCardEntity;
+
+    expect(normId(rowFor(hiddenInPersonal, [ROOT, PERSONAL_NAMED]).spaceId)).toBe(CRYPTO);
+  });
+});

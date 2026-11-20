@@ -176,6 +176,7 @@ export function getBatchEntitySpaces(entityIds: string[], signal?: AbortControll
             values: entity.allValuesList,
             relations: entity.allRelationsList,
           }),
+          hiddenSpaceIds: (entity.hiddenValuesList ?? []).map(value => value.spaceId as string),
         })),
     variables: { filter: { id: { in: entityIds } } },
     signal,

@@ -220,6 +220,13 @@ export const entitySpacesBatchQuery = graphql(/* GraphQL */ `
       allRelationsList: relationsList(first: 1000) {
         spaceId
       }
+
+      # Hidden (core/moderation/hidden.ts): spaces whose copy of the entity 404s.
+      hiddenValuesList: valuesList(
+        filter: { propertyId: { is: "6ed78f16da324392b1c5376cd06ee0ca" }, boolean: { is: true } }
+      ) {
+        spaceId
+      }
     }
   }
 `);

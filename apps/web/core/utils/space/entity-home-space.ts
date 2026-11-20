@@ -30,6 +30,11 @@ function placesEntity(value: { isDeleted?: boolean; property: { id: string } }):
   return true;
 }
 
+/** Spaces where the entity holds live, non-hidden values: the residency test {@link resolveEntitySpaceId} uses. */
+export function placingSpaceIds(entity: Pick<SpaceScopedEntity, 'values'>): string[] {
+  return (entity.values ?? []).filter(placesEntity).map(value => value.spaceId);
+}
+
 /**
  * The space an entity actually lives in.
  *
@@ -89,10 +94,10 @@ export function entityHomeSpaceId(entity: SpaceScopedEntity): string | null {
 export function resolveEntitySpaceId(entity: SpaceScopedEntity | null | undefined, requestedSpaceId: string): string {
   if (!entity) return requestedSpaceId;
 
-  const placingSpaceIds = (entity.values ?? []).filter(placesEntity).map(value => value.spaceId);
+  const placing = placingSpaceIds(entity);
   // An entity carrying no values at all — a picker row decoded without them — has nothing to place
   // it, so fall back to the coarser list rather than diverting on no evidence.
-  const candidates = placingSpaceIds.length > 0 ? placingSpaceIds : (entity.spaces ?? []);
+  const candidates = placing.length > 0 ? placing : (entity.spaces ?? []);
 
   if (candidates.length === 0) return requestedSpaceId;
   if (candidates.some(spaceId => equals(spaceId, requestedSpaceId))) return requestedSpaceId;

@@ -90,13 +90,14 @@ export function getSearchResultNameForTopSpace(
 
 export function applyKnownEntitySpaces(
   result: SearchResult,
-  knownEntity: Pick<Entity, 'spaces'> | null | undefined
+  knownEntity: (Pick<Entity, 'spaces'> & { hiddenSpaceIds?: string[] }) | null | undefined
 ): SearchResultWithResolvableSpaces {
   if (!knownEntity) return result;
 
   return {
     ...result,
     spaces: knownEntity.spaces,
+    hiddenSpaceIds: knownEntity.hiddenSpaceIds,
   };
 }
 
@@ -754,6 +755,7 @@ function mergeSearchResult({
     types,
     namesBySpace,
     typesBySpace: remoteEntity.typesBySpace,
+    hiddenSpaceIds: remoteEntity.hiddenSpaceIds,
     spaces: mergeResolvableSpaces(remoteEntity.spaces, getLocalSearchResultSpaces(values, relations)),
   };
 }

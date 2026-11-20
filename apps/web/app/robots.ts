@@ -1,5 +1,7 @@
 import type { MetadataRoute } from 'next';
 
+import { CANONICAL_SITE } from '~/core/canonical-site';
+
 /**
  * There was no robots.txt at all — the URL returned 404 — so crawlers had no
  * guidance on a site whose `/space/...` space is effectively unbounded.
@@ -33,6 +35,6 @@ export default function robots(): MetadataRoute.Robots {
       ],
     },
     // Fixed to the canonical host, like sitemap.ts.
-    sitemap: 'https://www.geobrowser.io/sitemap.xml',
+    sitemap: `${CANONICAL_SITE}/sitemap.xml`,
   };
 }
