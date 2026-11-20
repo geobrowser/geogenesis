@@ -21,6 +21,29 @@ export type RankingComposeAccessStatus =
   'loading' | 'needs-login' | 'needs-onboarding' | 'needs-membership' | 'not-found' | 'ready';
 
 /**
+ * Where the viewer stands. Waits on an answer from the index: a failed personal-space fetch reads
+ * as unregistered, and treating it as "needs onboarding" opened the profile prompt during outages.
+ */
+export function rankingComposeAccessStatus(input: {
+  isLoadingSmartAccount: boolean;
+  address: string | null | undefined;
+  isLoading: boolean;
+  hasAnswer: boolean;
+  isRegistered: boolean;
+  personalSpaceId: string | null;
+  space: { type: string } | null | undefined;
+  canEdit: boolean;
+}): RankingComposeAccessStatus {
+  if (input.isLoadingSmartAccount) return 'loading';
+  if (!input.address) return 'needs-login';
+  if (input.isLoading || !input.hasAnswer) return 'loading';
+  if (!input.isRegistered || !input.personalSpaceId) return 'needs-onboarding';
+  if (!input.space) return 'not-found';
+  if (input.space.type === 'DAO' && !input.canEdit) return 'needs-membership';
+  return 'ready';
+}
+
+/**
  * Whether this status sends the viewer through sign-in or onboarding — and so needs a return address
  * to come back to compose.
  *
@@ -37,7 +60,7 @@ export function useRankingComposeAccess(spaceId: string, rankingId?: string) {
   const queryClient = useQueryClient();
   const { state: accountState, address } = useAccountReadiness();
   const isLoadingSmartAccount = accountState === 'restoring';
-  const { personalSpaceId, isRegistered, isLoading: isLoadingPersonalSpace, isFetched } = usePersonalSpaceId();
+  const { personalSpaceId, isRegistered, isLoading: isLoadingPersonalSpace, hasAnswer } = usePersonalSpaceId();
   const { space, isLoading: isLoadingSpace } = useSpace(spaceId);
   const { canEdit, isLoading: isLoadingAccess } = useAccessControl(spaceId);
   const tx = useSmartAccountTransaction();
@@ -47,15 +70,16 @@ export function useRankingComposeAccess(spaceId: string, rankingId?: string) {
 
   const isLoading = isLoadingPersonalSpace || isLoadingSpace || isLoadingAccess;
 
-  const status: RankingComposeAccessStatus = (() => {
-    if (isLoadingSmartAccount) return 'loading';
-    if (!address) return 'needs-login';
-    if (isLoading || !isFetched) return 'loading';
-    if (!isRegistered || !personalSpaceId) return 'needs-onboarding';
-    if (!space) return 'not-found';
-    if (space.type === 'DAO' && !canEdit) return 'needs-membership';
-    return 'ready';
-  })();
+  const status = rankingComposeAccessStatus({
+    isLoadingSmartAccount,
+    address,
+    isLoading,
+    hasAnswer,
+    isRegistered,
+    personalSpaceId,
+    space,
+    canEdit,
+  });
 
   const promptLogin = useCallback(
     (postLoginRedirect?: string) => {

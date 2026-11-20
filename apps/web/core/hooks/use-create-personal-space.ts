@@ -12,6 +12,7 @@ import {
   recentlyPublishedProfile,
 } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import type { Space } from '~/core/io/dto/spaces';
 import { getSpace } from '~/core/io/queries';
 import {
   createPersonalSpaceOnChain,
@@ -35,7 +36,12 @@ import {
  * the chain may already have.
  */
 async function profileRetryDecision(spaceId: string, walletAddress: string) {
-  const space = await Effect.runPromise(getSpace(spaceId));
+  let space: Space | null;
+  try {
+    space = await Effect.runPromise(getSpace(spaceId));
+  } catch (error) {
+    throw new ProfileRecoveryError('The profile could not be read from the index.', { cause: error });
+  }
   if (!indexLacksPersonalProfile(space)) return { done: true as const, space };
   let decision: ProfileRetryDecision;
   try {

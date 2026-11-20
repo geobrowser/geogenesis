@@ -246,11 +246,13 @@ describe('useCreatePersonalSpace', () => {
 
   it('fails rather than guessing when the profile check cannot be read', async () => {
     readRegisteredSpaceId.mockResolvedValue(SPACE_ID);
-    getSpace.mockReturnValue(Effect.fail(new Error('index unavailable')));
+    getSpace.mockReturnValue(Effect.fail(new Error('503 Service temporarily unavailable')));
     const onRegistered = vi.fn();
 
-    await expect(create(onRegistered)).rejects.toThrow();
+    await expect(create(onRegistered)).rejects.toBeInstanceOf(ProfileRecoveryError);
 
+    expect(findPersonalProfileDeclaration).not.toHaveBeenCalled();
+    expect(republishPersonalProfile).not.toHaveBeenCalled();
     expect(createPersonalSpaceOnChain).not.toHaveBeenCalled();
     expect(onRegistered).not.toHaveBeenCalled();
   });

@@ -14,6 +14,22 @@ import { useAccountReadiness } from '~/core/wallet/account-readiness';
  */
 const UNREGISTERED_POLL_INTERVAL_MS = 3_000;
 
+/** The longest wait between polls while the index keeps failing, so an outage isn't hammered. */
+const ERROR_POLL_MAX_INTERVAL_MS = 60_000;
+
+/** The next poll: none once registered, backing off while the index fails, else the steady interval. */
+export function personalSpacePollInterval(state: {
+  data: PersonalSpaceIdData | null | undefined;
+  status: 'pending' | 'error' | 'success';
+  errorUpdateCount: number;
+}) {
+  if (state.data?.isRegistered) return false;
+  if (state.status === 'error') {
+    return Math.min(UNREGISTERED_POLL_INTERVAL_MS * 2 ** state.errorUpdateCount, ERROR_POLL_MAX_INTERVAL_MS);
+  }
+  return UNREGISTERED_POLL_INTERVAL_MS;
+}
+
 /**
  * How long after this browser sends a profile publish we keep trusting it over an index
  * that still shows no profile. The indexer runs seconds to a minute behind the chain;
@@ -96,7 +112,7 @@ export function personalSpaceIdQueryKey(address: string | null | undefined) {
 export function usePersonalSpaceId() {
   const { state, address } = useAccountReadiness();
 
-  const { data, isLoading, isFetched } = useQuery({
+  const { data, isLoading, isFetched, isSuccess } = useQuery({
     queryKey: personalSpaceIdQueryKey(address),
     queryFn: async (): Promise<PersonalSpaceIdData | null> => {
       if (!address) return null;
@@ -129,7 +145,7 @@ export function usePersonalSpaceId() {
     //
     // Registered is terminal — a space is never un-created — so returning false here
     // ends the polling permanently rather than just skipping a tick.
-    refetchInterval: query => (query.state.data?.isRegistered ? false : UNREGISTERED_POLL_INTERVAL_MS),
+    refetchInterval: query => personalSpacePollInterval(query.state),
     // Don't burn requests for a tab nobody is looking at; it resumes on focus.
     refetchIntervalInBackground: false,
   });
@@ -144,5 +160,11 @@ export function usePersonalSpaceId() {
     // doesn't lag: it stays false until a fetch for this queryKey actually completes.
     isLoading: state === 'restoring' || (!!address && !isFetched) || isLoading,
     isFetched,
+    /**
+     * Whether the index has answered for this account. A failed fetch settles as `isFetched` with
+     * no data, which reads as unregistered; "not registered" and "needs a profile" mean something
+     * only when this is true. A failed refetch keeps the last answer.
+     */
+    hasAnswer: isSuccess || data != null,
   };
 }
