@@ -14,6 +14,8 @@ const mocks = vi.hoisted(() => ({
   replace: vi.fn(),
   push: vi.fn(),
   revoked: false,
+  readmit: vi.fn(),
+  listedAt: 1,
   rooms: [] as SpaceChatRoom[],
   canManage: false,
   panel: vi.fn(),
@@ -25,7 +27,7 @@ vi.mock('next/navigation', () => ({
 }));
 vi.mock('~/core/debates/debate-gateway', () => ({
   useDebateGatewayScope: () => undefined,
-  useSpaceChatRoomRevoked: () => mocks.revoked,
+  useSpaceChatRoomRevoked: () => ({ revoked: mocks.revoked, readmit: mocks.readmit }),
 }));
 vi.mock('~/core/debates/hooks', () => ({ useGeoChatAuth: () => ({ ready: true, authenticated: true }) }));
 vi.mock('~/core/debates/use-current-geo-chat-user-id', () => ({ useCurrentGeoChatUserId: () => 'viewer' }));
@@ -36,6 +38,7 @@ vi.mock('~/core/space-chat/hooks', () => ({
     isSuccess: true,
     isFetching: false,
     isError: false,
+    dataUpdatedAt: mocks.listedAt,
     refetch: vi.fn(),
   }),
 }));
@@ -75,6 +78,8 @@ const OLD = room({ name: 'old', position: 3, archived: true });
 beforeEach(() => {
   mocks.channel = undefined;
   mocks.revoked = false;
+  mocks.readmit.mockReset();
+  mocks.listedAt = 1;
   mocks.rooms = [GENERAL, EDITORS, MARKETS, OLD];
   mocks.canManage = false;
   mocks.replace.mockReset();
@@ -118,11 +123,26 @@ describe('SpaceChannels', () => {
     expect(mocks.replace).not.toHaveBeenCalled();
   });
 
-  it('goes to #general with a notice once access to the open channel is revoked', () => {
+  it('stays and subscribes again when a revoked channel is still in the next list read', () => {
     mocks.channel = 'markets';
     const { rerender } = render(<SpaceChannels spaceId={SPACE} />);
     mocks.revoked = true;
     rerender(<SpaceChannels spaceId={SPACE} />);
+    expect(mocks.replace).not.toHaveBeenCalled();
+    mocks.listedAt = Date.now() + 1;
+    rerender(<SpaceChannels spaceId={SPACE} />);
+    expect(mocks.readmit).toHaveBeenCalled();
+    expect(mocks.replace).not.toHaveBeenCalled();
+  });
+
+  it('goes to #general with a notice when a revoked channel is gone from the next list read', () => {
+    mocks.channel = 'markets';
+    const { rerender } = render(<SpaceChannels spaceId={SPACE} />);
+    mocks.revoked = true;
+    mocks.rooms = [GENERAL];
+    mocks.listedAt = Date.now() + 1;
+    rerender(<SpaceChannels spaceId={SPACE} />);
+    expect(mocks.readmit).not.toHaveBeenCalled();
     expect(mocks.replace).toHaveBeenCalledWith(`/space/${SPACE}/chat`);
     expect(screen.getByRole('status')).toHaveTextContent(SPACE_CHANNELS_COPY.lostAccess('markets'));
   });

@@ -9,6 +9,8 @@ import { useDebateVisibility } from '~/core/debates/debate-attention';
 import { useSpaceChatRoomScope } from '~/core/debates/debate-gateway';
 import { useGeoChatAuth } from '~/core/debates/hooks';
 import { useGeoChatAccountStatus } from '~/core/debates/use-geo-chat-account-status';
+import { useHydrated } from '~/core/hooks/use-hydrated';
+import { useFeatureFlag } from '~/core/state/feature-flags';
 import { normId } from '~/core/utils/norm-id';
 
 import {
@@ -69,12 +71,12 @@ export function useSpaceChatAuth(): { ready: boolean; auth: SpaceChatAuth | null
  * The space's chat rooms. `supported: false` for a space with no chat (geo-chat's 404 for a space
  * that is not a public DAO space), so the tab hides.
  */
-export function useSpaceChatRooms(
-  spaceId: string,
-  enabled: boolean,
-  { includeArchived = false, pollSignedOut = false } = {}
-) {
+export function useSpaceChatRooms(spaceId: string, enabled: boolean, { pollSignedOut = false } = {}) {
   const { ready, auth } = useSpaceChatAuth();
+  // One list per viewer: with channels, archived ones too, which the channel view filters out.
+  const includeArchived = useFeatureFlag('spaceChannels');
+  // The flag reads its default until hydrated; waiting keeps the first read on the right list.
+  const hydrated = useHydrated();
   const query = useQuery({
     queryKey: spaceChatQueryKeys.rooms(spaceId, auth?.accountKey ?? null, includeArchived),
     queryFn: async ({ signal }): Promise<SpaceChatRoomsData> => {
@@ -93,7 +95,7 @@ export function useSpaceChatRooms(
         throw error;
       }
     },
-    enabled: enabled && ready,
+    enabled: enabled && ready && hydrated,
     staleTime: 60_000,
     // Signed out there is no space scope for `space.channels_changed`, so the channel list polls.
     refetchInterval: pollSignedOut && ready && auth === null ? ROOM_LIST_POLL_MS : false,
@@ -102,7 +104,7 @@ export function useSpaceChatRooms(
     // Rights change outside this tab (joining, removal), so a focus past the stale time re-reads.
     refetchOnWindowFocus: true,
   });
-  const memberRoom = query.data?.rooms.find(room => room.kind === 'member') ?? null;
+  const memberRoom = query.data?.rooms.find(room => room.kind === 'member' && !room.archived) ?? null;
   return { ...query, memberRoom };
 }
 

@@ -12,7 +12,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SpaceChatState } from '~/core/space-chat/state';
 
 import { GeoChatRequestError, getStoredGeoChatAccessToken, resetGeoChatSession } from './api';
-import { BROADCAST_INVALIDATION_SPREAD_MS, DebateGatewayClient, type DebateGatewaySession } from './debate-gateway';
+import {
+  BROADCAST_INVALIDATION_SPREAD_MS,
+  CHANNEL_LIST_SPREAD_MS,
+  DebateGatewayClient,
+  type DebateGatewaySession,
+} from './debate-gateway';
 import { type LobbyHighlightsState, settleFetchedLobbyHighlights } from './lobbies/lobby-highlights-state';
 import { type RemoteClaimResponse, subscribeRemoteClaimResponses } from './remote-claim-responses';
 
@@ -1728,6 +1733,19 @@ describe('DebateGatewayClient', () => {
       release();
       expect(client.isRoomRevoked(roomId)).toBe(false);
     });
+
+    it('subscribes a revoked channel again when readmitted', async () => {
+      await connected();
+      sockets[0]!.receive('ERROR', { code: 'subscription_revoked', subscription: echo });
+      sockets[0]!.sent.length = 0;
+      client.readmitRoom(dashless);
+      expect(client.isRoomRevoked(roomId)).toBe(false);
+      expect(sockets[0]!.sent).toContainEqual(
+        expect.objectContaining({ op: 'SUBSCRIBE', payload: { ...echo, room_id: roomId } })
+      );
+      sockets[0]!.receive('READY', readyPayload([echo]));
+      expect(client.isScopeLive(scope)).toBe(true);
+    });
   });
 
   it('resubscribes a chat room on the new token’s socket after a refresh closes the old one, and refetches it', async () => {
@@ -1860,6 +1878,39 @@ describe('DebateGatewayClient', () => {
       release();
       expect(sockets[0]!.readyState).toBe(FakeWebSocket.CLOSED);
       expect(anonymous.getSnapshot().status).toBe('idle');
+    });
+
+    it('patches a channel.updated into the public room list without re-reading it', async () => {
+      const channelEcho = { ...echo, room_kind: 'channel' };
+      const listKey = ['space-chat-rooms', 'space-1'];
+      const row = { id: dashless, space_id: 'space-1', kind: 'channel', name: 'markets', version: 1 };
+      queryClient.setQueryData(listKey, {
+        supported: true,
+        rooms: [row],
+        channelsEnabled: true,
+        canManageChannels: false,
+      });
+      const release = anonymous.retainScope({ ...roomScope, room_kind: 'channel' });
+      sockets[0]!.open();
+      sockets[0]!.receive('READY', readyPayload([channelEcho]));
+      await flushInvalidations();
+      invalidateQueries.mockClear();
+
+      sockets[0]!.receiveRaw(
+        JSON.stringify({
+          v: 1,
+          op: 'EVENT',
+          seq: 4,
+          space_id: 'space-1',
+          room_id: dashless,
+          room_kind: 'channel',
+          payload: { event_type: 'channel.updated', payload: { room: { ...row, name: 'prices', version: 2 } } },
+        })
+      );
+      await flushInvalidations();
+      expect(queryClient.getQueryData<{ rooms: { name: string }[] }>(listKey)?.rooms[0]?.name).toBe('prices');
+      expect(invalidateQueries).not.toHaveBeenCalled();
+      release();
     });
 
     it('never carries anything but a member room', () => {
@@ -3756,6 +3807,15 @@ describe('invalidation spread', () => {
     event('event-1', type, payload);
     await vi.advanceTimersByTimeAsync(50);
     expect(invalidatedKeys()).toContainEqual(key);
+  });
+
+  it('spreads space.channels_changed over up to two seconds', async () => {
+    await connect();
+    event('event-1', 'space.channels_changed', { space_id: 'space-1' });
+    await vi.advanceTimersByTimeAsync(50 + CHANNEL_LIST_SPREAD_MS - 1);
+    expect(invalidateQueries).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(invalidatedKeys()).toContainEqual(['debates', 'account', 'user-a', 'space-chat-rooms', 'space-1']);
   });
 
   it('brings pending broadcast reads along with a participant event', async () => {

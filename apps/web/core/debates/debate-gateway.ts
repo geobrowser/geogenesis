@@ -208,6 +208,8 @@ const INVALIDATION_COALESCE_MS = 50;
  * reconciles), so their reads don't land together.
  */
 export const BROADCAST_INVALIDATION_SPREAD_MS = 500;
+/** `space.channels_changed` re-reads the room list within this (GEO-3818). */
+export const CHANNEL_LIST_SPREAD_MS = 2_000;
 const INVALIDATION_RETRY_BASE_MS = 250;
 /**
  * How long an unrecognised `ERROR` frame suppresses another reconnect. One recycle repairs a
@@ -316,6 +318,18 @@ export class DebateGatewayClient {
   /** The viewer lost access to this retained room; cleared once nothing retains it. */
   isRoomRevoked(roomId: string) {
     return this.revokedRooms.has(dashlessId(roomId));
+  }
+
+  /** A revoked room the re-read list still has: the revoke was transient, so subscribe again. */
+  readmitRoom(roomId: string) {
+    const id = dashlessId(roomId);
+    if (!this.revokedRooms.delete(id)) return;
+    for (const [key, { scope }] of this.scopes) {
+      if (scope.scope !== 'chat-room' || dashlessId(scope.room_id) !== id) continue;
+      this.refusedScopes.delete(key);
+      this.sendSubscription(scope, 'SUBSCRIBE');
+    }
+    this.scopesChanged();
   }
 
   subscribe = (listener: () => void) => {
@@ -736,21 +750,25 @@ export class DebateGatewayClient {
     this.queryClient.setQueriesData<SpaceChatRoomsData>({ queryKey: root }, current =>
       current ? withChannelUpdate(current, room) : current
     );
-    this.queueQuery(root);
+    // Signed out the patch is all there is; signed in, the viewer's rights may have changed.
+    if (!this.anonymous) this.queueQuery(root);
   }
 
   private handleEvent(payload: unknown) {
     if (!isDebateEvent(payload) || this.recentEventIds.has(payload.event_id)) return;
     this.rememberEvent(payload.event_id);
     const spread = DEBATE_EVENT_AUDIENCE[payload.event_type] === 'broadcast';
-    this.withInvalidationSpread(spread, () => this.applyEvent(payload));
+    // The channel list re-read is heavier and every space viewer makes it, so it spreads wider.
+    const spreadMs =
+      payload.event_type === 'space.channels_changed' ? CHANNEL_LIST_SPREAD_MS : BROADCAST_INVALIDATION_SPREAD_MS;
+    this.withInvalidationSpread(spread, () => this.applyEvent(payload), spreadMs);
   }
 
   /** Spread: one draw for every key `queue` adds, so several keys don't take the earliest of many. */
-  private withInvalidationSpread(spread: boolean, queue: () => void) {
+  private withInvalidationSpread(spread: boolean, queue: () => void, spreadMs = BROADCAST_INVALIDATION_SPREAD_MS) {
     const previous = this.invalidationSpreadDelayMs;
     if (!spread) this.invalidationSpreadDelayMs = 0;
-    else if (previous === 0) this.invalidationSpreadDelayMs = this.random() * BROADCAST_INVALIDATION_SPREAD_MS;
+    else if (previous === 0) this.invalidationSpreadDelayMs = this.random() * spreadMs;
     try {
       queue();
     } finally {
@@ -1772,11 +1790,17 @@ export function useSpaceChatRoomScope(
   return React.useSyncExternalStore(gateway.subscribe, live, live);
 }
 
-/** Whether geo-chat revoked the viewer's subscription to this retained room (GEO-3818). */
+/**
+ * Whether geo-chat revoked the viewer's subscription to this retained room (GEO-3818), and
+ * `readmit` for when the re-read room list still has it.
+ */
 export function useSpaceChatRoomRevoked(roomId: string | null, signedIn: boolean) {
   const gateway = signedIn ? debateGateway : publicChatGateway;
   const revoked = React.useCallback(() => (roomId ? gateway.isRoomRevoked(roomId) : false), [gateway, roomId]);
-  return React.useSyncExternalStore(gateway.subscribe, revoked, () => false);
+  const readmit = React.useCallback(() => {
+    if (roomId) gateway.readmitRoom(roomId);
+  }, [gateway, roomId]);
+  return { revoked: React.useSyncExternalStore(gateway.subscribe, revoked, () => false), readmit };
 }
 
 /**

@@ -70,7 +70,7 @@ export function SpaceChannels({ spaceId }: { spaceId: string }) {
   const router = useRouter();
   const { authenticated } = useGeoChatAuth();
   const viewerId = useCurrentGeoChatUserId();
-  const rooms = useSpaceChatRooms(spaceId, true, { includeArchived: true, pollSignedOut: true });
+  const rooms = useSpaceChatRooms(spaceId, true, { pollSignedOut: true });
   // `space.channels_changed` arrives on the signed-in space scope.
   useDebateGatewayScope({ scope: 'space', space_id: spaceId }, authenticated);
   const participants = useSpaceChatParticipants(spaceId, true);
@@ -88,19 +88,31 @@ export function SpaceChannels({ spaceId }: { spaceId: string }) {
     return () => window.clearTimeout(timer);
   }, [notice]);
 
-  // Access is lost when geo-chat revokes the subscription or the refetched list lacks the channel.
+  // Access is lost when the re-read list lacks the open channel.
   const [shown, setShown] = React.useState<{ id: string; name: string } | null>(null);
   React.useEffect(() => {
     if (current) setShown({ id: current.id, name: channelName(current) });
   }, [current]);
-  const revoked = useSpaceChatRoomRevoked(current?.id ?? shown?.id ?? null, authenticated);
+  // A revoke can be transient (a lag recheck): the gateway re-reads the list, and a channel still
+  // in a list read after the revoke is subscribed again.
+  const { revoked, readmit } = useSpaceChatRoomRevoked(current?.id ?? null, authenticated);
+  const [revokedAt, setRevokedAt] = React.useState<number | null>(null);
+  React.useEffect(() => {
+    if (revoked) setRevokedAt(at => at ?? Date.now());
+  }, [revoked]);
+  const listedAt = rooms.dataUpdatedAt;
+  React.useEffect(() => {
+    if (revokedAt === null || rooms.isFetching || listedAt <= revokedAt) return;
+    if (current) readmit();
+    setRevokedAt(null);
+  }, [current, listedAt, readmit, revokedAt, rooms.isFetching]);
   // Renamed while open: follow it to its new name.
   const renamed = current === null && shown?.name === wanted ? all?.find(room => room.id === shown.id) : undefined;
   React.useEffect(() => {
     if (renamed) router.replace(spaceChannelPath(spaceId, channelName(renamed)));
   }, [renamed, router, spaceId]);
   const vanished = rooms.isSuccess && !rooms.isFetching && current === null && !renamed && shown?.name === wanted;
-  const lost = wanted !== GENERAL_CHANNEL && (revoked || vanished);
+  const lost = wanted !== GENERAL_CHANNEL && vanished;
   React.useEffect(() => {
     if (!lost) return;
     setNotice(SPACE_CHANNELS_COPY.lostAccess(wanted));
