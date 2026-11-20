@@ -39,10 +39,15 @@ export function sharePlayerPath(spaceId: string, debateId: string): string {
 /** Share videos are 1080×1920; an artifact that does not say otherwise is assumed to be one. */
 const DEFAULT_VIDEO_SIZE = { width: 1080, height: 1920 };
 
-/** `?card=wide` frames the same vertical video in a 16:9 player, to compare how X lays out each. */
+/**
+ * The player's frame on X. X draws a portrait player card compact (a small thumbnail beside the text),
+ * so the default is a 16:9 frame with the landscape card as its image, which X draws full width like
+ * a large-image card; the vertical video plays centred on black inside it. `?card=tall` keeps the
+ * frame the video's own 9:16, for comparison.
+ */
 const WIDE_PLAYER_SIZE = { width: 1280, height: 720 };
 
-export type SharePlayerShape = 'video' | 'wide';
+export type SharePlayerShape = 'tall' | 'wide';
 
 function positiveNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
@@ -60,7 +65,7 @@ export function sharePlayerMetadata({
   media,
   title,
   description,
-  shape = 'video',
+  shape = 'wide',
 }: {
   origin: string;
   spaceId: string;
@@ -84,6 +89,15 @@ export function sharePlayerMetadata({
   const absolute = (url: string) => new URL(url, origin).toString();
   const videoUrl = absolute(debateArtifactContentUrl(debateId, 'social_video'));
   const playerUrl = absolute(sharePlayerPath(spaceId, debateId));
+  // The image X shows with the play button, matched to the frame: the landscape card (cut from the
+  // first frame) in the wide one, the vertical first frame itself in the tall one. A render with no
+  // recorded layout can't be cut, so it falls back to the vertical frame; with no frame at all, the
+  // page's share card stays.
+  const posterUrl = !hasPoster
+    ? null
+    : shape === 'wide' && shareVideoLayout(media)
+      ? absolute(sharePlayerCardPath(spaceId, debateId))
+      : absolute(debateArtifactContentUrl(debateId, 'social_preview_image'));
 
   return {
     openGraph: {
@@ -99,9 +113,7 @@ export function sharePlayerMetadata({
       title,
       description,
       players: [{ playerUrl, streamUrl: videoUrl, ...playerSize }],
-      // The poster shown with the play button: the video's own first frame, so the card does not
-      // jump from a landscape share card to a vertical video. Without one, the share card stays.
-      ...(hasPoster ? { images: [absolute(debateArtifactContentUrl(debateId, 'social_preview_image'))] } : {}),
+      ...(posterUrl ? { images: [posterUrl] } : {}),
     },
   };
 }

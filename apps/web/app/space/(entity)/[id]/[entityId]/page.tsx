@@ -41,8 +41,8 @@ interface Props {
 
 /**
  * GEO-3817 experiment, preview deployments only: a debate with a share video unfurls as a playable
- * card (X player card, `og:video`). Here rather than in the layout because `?card=wide` (a 16:9
- * player instead of the video's own 9:16) is a search param, which only a page's metadata can read.
+ * card (X player card, `og:video`). Here rather than in the layout because `?card=tall` (the video's
+ * own 9:16 player instead of 16:9) is a search param, which only a page's metadata can read.
  * Merged over the layout's title and description; the layout's hidden and removed guards are
  * repeated so a withheld debate never gains a playable card.
  */
@@ -67,7 +67,7 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
       media: await cachedFetchDebatePageMedia(params.entityId),
       title: entity.name ?? 'Debate',
       description: firstLine(Entities.description(entity.values ?? [])),
-      shape: searchParams.card === 'wide' ? 'wide' : 'video',
+      shape: searchParams.card === 'tall' ? 'tall' : 'wide',
     }) ?? {}
   );
 }

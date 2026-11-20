@@ -60,9 +60,10 @@ describe('sharePlayerMetadata', () => {
     expect(sharePlayerMetadata({ ...base, media: media([artifact('social_preview_image')]) })).toBeNull();
   });
 
-  it('points the player card and og:video at the durable video route, sized like the video', () => {
+  it('points the tall player card and og:video at the durable video route, sized like the video', () => {
     const result = sharePlayerMetadata({
       ...base,
+      shape: 'tall',
       media: media([artifact('social_video', { width: 1080, height: 1920 }), artifact('social_preview_image')]),
     });
 
@@ -84,13 +85,34 @@ describe('sharePlayerMetadata', () => {
     });
   });
 
-  it('frames the video in a 16:9 player for ?card=wide', () => {
-    const result = sharePlayerMetadata({ ...base, shape: 'wide', media: media([artifact('social_video')]) });
-    expect(result?.twitter).toMatchObject({ players: [{ width: 1280, height: 720 }] });
+  // X draws a portrait player compact, a thumbnail beside the text; a landscape one full width.
+  it('defaults to a 16:9 player with the landscape card as its image', () => {
+    const region = { x: 0, y: 0, width: 10, height: 10 };
+    const layout = { canvas: region, header: region, slot_1_video: region, slot_2_video: region };
+    const result = sharePlayerMetadata({
+      ...base,
+      media: media([artifact('social_video', { layout }), artifact('social_preview_image')]),
+    });
+    expect(result?.twitter).toMatchObject({
+      players: [{ width: 1280, height: 720 }],
+      images: [`${ORIGIN}/share-player/debate/${SPACE_HEX}/${DEBATE_HEX}/card.jpg`],
+    });
+  });
+
+  it('falls back to the vertical frame in the wide player when the render recorded no layout', () => {
+    const result = sharePlayerMetadata({
+      ...base,
+      media: media([artifact('social_video'), artifact('social_preview_image')]),
+    });
+    expect(result?.twitter).toMatchObject({ players: [{ width: 1280, height: 720 }], images: [posterUrl] });
   });
 
   it('falls back to 1080×1920 and leaves the share card as the poster when geo-chat omits them', () => {
-    const result = sharePlayerMetadata({ ...base, media: media([artifact('social_video', { width: 'x' })]) });
+    const result = sharePlayerMetadata({
+      ...base,
+      shape: 'tall',
+      media: media([artifact('social_video', { width: 'x' })]),
+    });
     expect(result?.twitter).toMatchObject({ players: [{ width: 1080, height: 1920 }] });
     expect(result?.twitter).not.toHaveProperty('images');
   });
@@ -190,8 +212,10 @@ describe('sharePlayerResponse', () => {
     );
     expect(html).toContain('<meta property="og:image:width" content="1200">');
     expect(html).toContain('<meta property="og:image:height" content="630">');
-    // X's player keeps the vertical frame, which matches the vertical player.
-    expect(html).toContain(`<meta name="twitter:image" content="${posterUrl}">`);
+    // X's wide player shows the same landscape card, so it draws full width rather than compact.
+    expect(html).toContain(
+      `<meta name="twitter:image" content="${ORIGIN}/share-player/debate/${SPACE_HEX}/${DEBATE_HEX}/card.jpg">`
+    );
   });
 
   it('plays without unfurl tags when geo-chat has no share video', async () => {

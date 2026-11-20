@@ -69,17 +69,17 @@ describe('debate page generateMetadata (GEO-3817)', () => {
       players: [
         {
           playerUrl: `https://preview.example/share-player/debate/${SPACE_ID}/${DEBATE_ID}`,
-          width: 1080,
-          height: 1920,
+          width: 1280,
+          height: 720,
         },
       ],
     });
     expect(fetchEntityPage).toHaveBeenCalledWith(DEBATE_ID, SPACE_ID);
   });
 
-  it('sizes the player 16:9 for ?card=wide', async () => {
-    const metadata = await generateMetadata(props({ card: 'wide' }));
-    expect(metadata.twitter).toMatchObject({ players: [{ width: 1280, height: 720 }] });
+  it("sizes the player as the video's own 9:16 for ?card=tall", async () => {
+    const metadata = await generateMetadata(props({ card: 'tall' }));
+    expect(metadata.twitter).toMatchObject({ players: [{ width: 1080, height: 1920 }] });
   });
 
   it('adds nothing in production, without reading the graph or geo-chat', async () => {
