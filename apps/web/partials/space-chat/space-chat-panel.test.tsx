@@ -3,6 +3,9 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { GeoChatRequestError } from '~/core/debates/api';
+import type { SpaceChatRoom } from '~/core/space-chat/api';
+
 import { MEMBER_RECHECK_MS, SPACE_CHAT_COPY, SpaceChatPanel } from './space-chat-panel';
 import { SPACE_CHAT_VIEW_COPY } from './space-chat-view';
 
@@ -21,6 +24,7 @@ const mocks = vi.hoisted(() => ({
   joinStatus: 'idle' as 'idle' | 'pending' | 'success' | 'error',
   refetchRooms: vi.fn(),
   messages: [] as unknown[],
+  send: vi.fn(),
 }));
 
 vi.mock('~/core/debates/hooks', () => ({
@@ -41,6 +45,7 @@ vi.mock('~/core/space-chat/people', () => ({
   useChatPeople: () => new Map(),
   unknownPerson: (id: string) => ({ id, name: id, avatarUrl: null, avatarSeed: id }),
 }));
+vi.mock('~/core/space-chat/channel-hooks', () => ({ useMarkChannelRead: () => undefined }));
 vi.mock('~/core/space-chat/hooks', () => ({
   useSpaceChatAuth: () => ({ ready: mocks.ready, auth: null, settingUp: mocks.settingUp }),
   useSpaceChatRooms: () => ({
@@ -60,7 +65,7 @@ vi.mock('~/core/space-chat/hooks', () => ({
     status: 'ready',
     refetch: vi.fn(),
     loadingOlder: false,
-    send: vi.fn(),
+    send: mocks.send,
     edit: vi.fn(),
     remove: vi.fn(),
     react: vi.fn(),
@@ -80,6 +85,7 @@ beforeEach(() => {
   mocks.join.mockReset();
   mocks.signIn.mockReset();
   mocks.refetchRooms.mockReset();
+  mocks.send.mockReset();
 });
 afterEach(cleanup);
 
@@ -358,5 +364,66 @@ describe('SpaceChatPanel while geo-chat sets the account up', () => {
     rerender(<SpaceChatPanel spaceId={SPACE} />);
     expect(screen.getByRole('textbox')).toBeInTheDocument();
     expect(screen.queryByText(SPACE_CHAT_COPY.settingUp)).not.toBeInTheDocument();
+  });
+});
+
+describe('SpaceChatPanel in a channel (GEO-3818)', () => {
+  const channel = (overrides: Partial<SpaceChatRoom>): SpaceChatRoom => ({
+    id: 'regulation',
+    public_dao_space_id: 'p',
+    space_id: SPACE,
+    kind: 'channel',
+    key: 'k',
+    name: 'regulation',
+    read_policy: 'everyone',
+    post_policy: 'members_and_editors',
+    can_post: true,
+    can_reply: true,
+    ...overrides,
+  });
+
+  it('says how to take part in a replies-only channel, with no message box', () => {
+    mocks.authenticated = true;
+    render(
+      <SpaceChatPanel
+        spaceId={SPACE}
+        channel={channel({ post_policy: 'editors_only', can_post: false, can_reply: true })}
+      />
+    );
+    expect(screen.getByText('Editors post in # regulation. Members can reply to a message.')).toBeInTheDocument();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
+  it('shows an archived channel read-only', () => {
+    mocks.authenticated = true;
+    render(<SpaceChatPanel spaceId={SPACE} channel={channel({ archived: true })} />);
+    expect(screen.getByText(SPACE_CHAT_COPY.archived)).toBeInTheDocument();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
+  it('names the channel when it is empty', () => {
+    mocks.authenticated = true;
+    render(<SpaceChatPanel spaceId={SPACE} channel={channel({})} />);
+    expect(screen.getByText('No messages in #regulation yet. Say hello.')).toBeInTheDocument();
+    expect(screen.getByRole('textbox')).toHaveAttribute('placeholder', 'Message #regulation');
+  });
+
+  it('counts down after a slow-mode refusal and holds the send', async () => {
+    mocks.authenticated = true;
+    mocks.send.mockRejectedValue(new GeoChatRequestError('slow', 'slow_mode', 429, 7_000));
+    render(<SpaceChatPanel spaceId={SPACE} channel={channel({ slow_mode: true })} />);
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'again' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: SPACE_CHAT_VIEW_COPY.send }));
+    });
+    expect(screen.getByRole('status')).toHaveTextContent('Slow mode is on. You can send again in 7s.');
+    expect(screen.getByRole('button', { name: SPACE_CHAT_VIEW_COPY.send })).toBeDisabled();
+  });
+
+  it('asks a signed-out reader only to log in where everyone signed in posts', () => {
+    render(
+      <SpaceChatPanel spaceId={SPACE} channel={channel({ post_policy: 'everyone_signed_in', can_post: false })} />
+    );
+    expect(screen.getByText(SPACE_CHAT_COPY.signedOutAnyone)).toBeInTheDocument();
   });
 });

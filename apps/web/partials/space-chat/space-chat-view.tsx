@@ -61,6 +61,7 @@ export const SPACE_CHAT_VIEW_COPY = {
   deleteFailed: 'Could not delete. Try again.',
   reactFailed: 'Could not react. Try again.',
   unknownPerson: 'someone',
+  slowMode: (seconds: number) => `Slow mode is on. You can send again in ${seconds}s.`,
 } as const;
 
 /** The reactions offered; others already on a message show and toggle too. */
@@ -275,15 +276,20 @@ function ChatHeader({ header }: { header: ChatViewHeader }) {
         <h2 className="text-metadataMedium text-text">{header.title}</h2>
         <p className="text-footnote text-grey-04">{header.subtitle}</p>
       </div>
-      {people.length > 0 ? (
-        <div className="shrink-0 mobile:hidden">
-          <AvatarGroup>
-            {people.map(person => (
-              <AvatarGroup.Item key={person.id} size={20}>
-                <Avatar avatarUrl={person.avatarUrl} value={person.avatarSeed} size={20} />
-              </AvatarGroup.Item>
-            ))}
-          </AvatarGroup>
+      {people.length > 0 || header.actions ? (
+        <div className="flex shrink-0 items-center gap-2">
+          {people.length > 0 ? (
+            <div className="mobile:hidden">
+              <AvatarGroup>
+                {people.map(person => (
+                  <AvatarGroup.Item key={person.id} size={20}>
+                    <Avatar avatarUrl={person.avatarUrl} value={person.avatarSeed} size={20} />
+                  </AvatarGroup.Item>
+                ))}
+              </AvatarGroup>
+            </div>
+          ) : null}
+          {header.actions}
         </div>
       ) : null}
     </div>
@@ -824,6 +830,7 @@ function ChatComposer({
   const replyRef = React.useRef(replyTo);
   replyRef.current = replyTo;
   const inputRef = mention.inputRef;
+  const cooldownLeft = useSecondsUntil(composer.kind === 'post' ? (composer.cooldownUntil ?? null) : null);
 
   React.useEffect(() => {
     if (replyTo) inputRef.current?.focus();
@@ -862,6 +869,10 @@ function ChatComposer({
   }
 
   const onSend = composer.onSend;
+  if (composer.repliesOnly && !replyTo) {
+    return <p className="border-t border-grey-02 px-3 py-2.5 text-footnote text-grey-04">{composer.repliesOnly}</p>;
+  }
+  const cooling = cooldownLeft > 0;
   // The box clears at once so the next message can be typed. A failed one comes back with its
   // reply target, unchanged, so its retry reuses the same nonce: into an empty box, or under the
   // error until restored.
@@ -873,7 +884,7 @@ function ChatComposer({
   };
   const send = () => {
     const draft = mention.draft.trim();
-    if (draft === '') return;
+    if (draft === '' || cooling) return;
     const sent: UnsentDraft = { draft, mentions: mention.mentions, replyTo };
     mention.reset();
     onCancelReply();
@@ -916,6 +927,11 @@ function ChatComposer({
           <SmallButton onClick={restoreUnsent}>{SPACE_CHAT_VIEW_COPY.restore}</SmallButton>
         </div>
       ) : null}
+      {cooling ? (
+        <p className="px-1 pb-1 text-footnote text-grey-04" role="status">
+          {SPACE_CHAT_VIEW_COPY.slowMode(cooldownLeft)}
+        </p>
+      ) : null}
       {replyTo ? (
         <div className="flex items-center gap-2 px-1 pb-1 text-footnote text-grey-04">
           <span className="min-w-0 flex-1 truncate">{SPACE_CHAT_VIEW_COPY.replyingTo(replyTo.author.name)}</span>
@@ -954,7 +970,7 @@ function ChatComposer({
         />
         <button
           type="submit"
-          disabled={mention.draft.trim() === ''}
+          disabled={mention.draft.trim() === '' || cooling}
           className="shrink-0 rounded-md bg-text px-3 py-1.5 text-metadataMedium text-white disabled:opacity-40"
         >
           {SPACE_CHAT_VIEW_COPY.send}
@@ -962,6 +978,24 @@ function ChatComposer({
       </form>
     </div>
   );
+}
+
+/** Whole seconds left until `until`, ticking each second; 0 once past or without one. */
+function useSecondsUntil(until: number | null) {
+  const left = () => (until === null ? 0 : Math.max(0, Math.ceil((until - Date.now()) / 1000)));
+  const [seconds, setSeconds] = React.useState(left);
+  React.useEffect(() => {
+    const remaining = () => (until === null ? 0 : Math.max(0, Math.ceil((until - Date.now()) / 1000)));
+    setSeconds(remaining());
+    if (remaining() === 0) return;
+    const timer = window.setInterval(() => {
+      const next = remaining();
+      setSeconds(next);
+      if (next === 0) window.clearInterval(timer);
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [until]);
+  return seconds;
 }
 
 /** Why the viewer can't post yet, with the control that changes it. */
