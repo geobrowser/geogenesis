@@ -16,7 +16,8 @@ import { RankingFlowDialog } from './ranking-flow-dialog';
  *   the prompt instead of leaving;
  * - closing or reloading the tab, by `beforeunload`, which can only show the browser's own prompt.
  *
- * Nothing is armed while there is nothing unpublished, so right after a publish nothing fires.
+ * Nothing is armed while there is nothing unpublished, so right after a publish nothing fires. The
+ * spare Back entry can't be removed then without navigating, so a Back that spends it carries on.
  *
  * Once the person has chosen to leave (Leave without publishing, or Publish and leave), every catch
  * stands down until the screen is gone: the leave itself (spending the spare Back entry, a full-page
@@ -48,6 +49,14 @@ export function useUnpublishedLeaveGuard({
   const leavingRef = React.useRef(false);
   /** The spare history entry the browser's Back spends (see below). */
   const sentinelRef = React.useRef(false);
+  const baseTokenRef = React.useRef('');
+  const pushSentinel = React.useCallback((url: string) => {
+    const token = `${Date.now()}-${Math.random()}`;
+    window.history.replaceState({ ...window.history.state, rankingLeaveGuardBase: token }, '');
+    window.history.pushState({ rankingLeaveGuard: true }, '', url);
+    baseTokenRef.current = token;
+    sentinelRef.current = true;
+  }, []);
   React.useEffect(() => {
     if (!active) leavingRef.current = false;
   }, [active]);
@@ -59,11 +68,8 @@ export function useUnpublishedLeaveGuard({
   const rearm = React.useCallback(() => {
     if (!mountedRef.current || !leavingRef.current) return;
     leavingRef.current = false;
-    if (activeRef.current && !sentinelRef.current) {
-      window.history.pushState({ rankingLeaveGuard: true }, '', window.location.href);
-      sentinelRef.current = true;
-    }
-  }, []);
+    if (activeRef.current && !sentinelRef.current) pushSentinel(window.location.href);
+  }, [pushSentinel]);
   React.useEffect(() => {
     mountedRef.current = true;
     const onPageShow = (event: PageTransitionEvent) => {
@@ -128,27 +134,32 @@ export function useUnpublishedLeaveGuard({
     hrefRef.current = window.location.href;
   });
   React.useEffect(() => {
-    if (!active) return;
-    if (!sentinelRef.current) {
-      window.history.pushState({ rankingLeaveGuard: true }, '', window.location.href);
-      sentinelRef.current = true;
-    }
-    const onPopState = () => {
-      if (!activeRef.current || leavingRef.current) return;
+    if (!active || sentinelRef.current) return;
+    pushSentinel(window.location.href);
+  }, [active, pushSentinel]);
+
+  React.useEffect(() => {
+    const onPopState = (event: PopStateEvent) => {
+      if (leavingRef.current) return;
+      if (!activeRef.current) {
+        if (!sentinelRef.current) return;
+        sentinelRef.current = false;
+        if (event.state?.rankingLeaveGuardBase === baseTokenRef.current) window.history.back();
+        return;
+      }
       sentinelRef.current = false;
       leftHrefRef.current = hrefRef.current || null;
       setPending(() => () => window.history.back());
     };
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
-  }, [active]);
+  }, []);
 
   const close = (keepRanking: boolean) => {
     setPending(null);
     // Back spent the spare entry; staying needs it again so the next Back is caught too.
     if (keepRanking && activeRef.current && !leavingRef.current && !sentinelRef.current) {
-      window.history.pushState({ rankingLeaveGuard: true }, '', leftHrefRef.current ?? window.location.href);
-      sentinelRef.current = true;
+      pushSentinel(leftHrefRef.current ?? window.location.href);
     }
     leftHrefRef.current = null;
   };
