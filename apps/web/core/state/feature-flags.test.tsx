@@ -30,6 +30,7 @@ describe('feature flags', () => {
     expect(defaultFeatureFlags.lobbyHosting).toBe(false);
     expect(defaultFeatureFlags.spaceCalls).toBe(false);
     expect(defaultFeatureFlags.spaceChat).toBe(false);
+    expect(defaultFeatureFlags.spaceChannels).toBe(false);
     expect(defaultFeatureFlags.debateDeviceSwitchRecording).toBe(false);
     expect(defaultFeatureFlags.googleSignIn).toBe(false);
     expect(defaultFeatureFlags.bountiesTab).toBe(true);
@@ -45,6 +46,7 @@ describe('feature flags', () => {
       lobbyHosting: false,
       spaceCalls: false,
       spaceChat: false,
+      spaceChannels: false,
       debateDeviceSwitchRecording: false,
       googleSignIn: false,
       bountiesTab: true,
@@ -81,6 +83,7 @@ describe('feature flags', () => {
       lobbyHosting: false,
       spaceCalls: false,
       spaceChat: false,
+      spaceChannels: false,
       debateDeviceSwitchRecording: false,
       googleSignIn: false,
       bountiesTab: true,
@@ -168,6 +171,24 @@ describe('useFeatureFlag hydration', () => {
     // the feature.
     const seen = renderProbeWithStoredFlag();
 
+    await waitFor(() => expect(seen.at(-1)).toBe(true));
+  });
+
+  it('reads a nested flag as off while its parent is off', async () => {
+    const seen: boolean[] = [];
+    const store = createStore();
+    store.set(featureFlagsAtom, { spaceChannels: true });
+    function Probe() {
+      seen.push(useFeatureFlag('spaceChannels'));
+      return null;
+    }
+    const { unmount } = render(createElement(Provider, { store }, createElement(Probe)));
+    await waitFor(() => expect(seen.length).toBeGreaterThan(1));
+    expect(seen.at(-1)).toBe(false);
+    unmount();
+
+    store.set(featureFlagsAtom, { spaceChannels: true, spaceChat: true });
+    render(createElement(Provider, { store }, createElement(Probe)));
     await waitFor(() => expect(seen.at(-1)).toBe(true));
   });
 });

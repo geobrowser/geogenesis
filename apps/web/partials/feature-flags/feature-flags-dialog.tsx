@@ -6,7 +6,7 @@ import * as React from 'react';
 
 import { usePathname, useRouter } from 'next/navigation';
 
-import { featureFlagDefinitions, useFeatureFlags } from '~/core/state/feature-flags';
+import { featureFlagDefinitions, featureFlagParent, useFeatureFlags } from '~/core/state/feature-flags';
 import { NavUtils } from '~/core/utils/utils';
 
 import { SquareButton } from '~/design-system/button';
@@ -64,21 +64,29 @@ export function FeatureFlagsDialog({ defaultShortcutOpen = false }: { defaultSho
             </div>
 
             <div className="-mr-2 flex min-h-0 flex-col divide-y divide-grey-02 overflow-y-auto overscroll-contain pr-2">
-              {featureFlagDefinitions.map(feature => (
-                <div key={feature.id} className="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0">
-                  <div className="flex min-w-0 flex-col gap-1">
-                    <span className="text-button text-text">{feature.label}</span>
-                    <span className="text-footnote text-grey-04">{feature.description}</span>
+              {featureFlagDefinitions.map(feature => {
+                // A nested flag does nothing while its parent is off.
+                const parent = featureFlagParent(feature.id);
+                const inert = parent !== null && !flags[parent];
+                return (
+                  <div
+                    key={feature.id}
+                    className={`flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0 ${parent ? 'pl-4' : ''}`}
+                  >
+                    <div className={`flex min-w-0 flex-col gap-1 ${inert ? 'opacity-50' : ''}`}>
+                      <span className="text-button text-text">{feature.label}</span>
+                      <span className="text-footnote text-grey-04">{feature.description}</span>
+                    </div>
+                    <Checkbox
+                      checked={flags[feature.id]}
+                      onChange={() => setFeatureFlag(feature.id, !flags[feature.id])}
+                      aria-label={feature.label}
+                      aria-pressed={flags[feature.id]}
+                      className="mt-0.5 shrink-0"
+                    />
                   </div>
-                  <Checkbox
-                    checked={flags[feature.id]}
-                    onChange={() => setFeatureFlag(feature.id, !flags[feature.id])}
-                    aria-label={feature.label}
-                    aria-pressed={flags[feature.id]}
-                    className="mt-0.5 shrink-0"
-                  />
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </Content>

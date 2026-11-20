@@ -83,6 +83,14 @@ export const featureFlagDefinitions = [
     enabledByDefault: false,
   },
   {
+    id: 'spaceChannels',
+    label: 'Space chat: channels',
+    description:
+      'Several channels in the Chat tab: editors create them, set who reads and posts, invite people to private ones, and turn on slow mode (GEO-3818). Needs geo-chat with channels switched on.',
+    enabledByDefault: false,
+    parent: 'spaceChat',
+  },
+  {
     id: 'googleSignIn',
     label: 'Google sign-in',
     description:
@@ -105,6 +113,12 @@ export const featureFlagDefinitions = [
 ] as const;
 
 export type FeatureFlagId = (typeof featureFlagDefinitions)[number]['id'];
+
+/** The flag `id` sits under, which must be on too; `null` for a top-level flag. */
+export function featureFlagParent(id: FeatureFlagId): FeatureFlagId | null {
+  const definition = featureFlagDefinitions.find(candidate => candidate.id === id);
+  return definition && 'parent' in definition ? definition.parent : null;
+}
 export type FeatureFlags = Record<FeatureFlagId, boolean>;
 // Claims and debates shipped to everyone, so `questionsTab` (and `debatesTab`, the id it was
 // renamed from) are no longer flags; nor is `peerAvailability`, since scheduling did too, nor
@@ -193,7 +207,9 @@ export const featureFlagsAtom = atomWithStorage<StoredFeatureFlags>(featureFlags
 export function useFeatureFlag(id: FeatureFlagId) {
   const flags = useAtomValue(featureFlagsAtom);
   const hydrated = useHydrated();
-  return hydrated ? normalizeFeatureFlags(flags)[id] : defaultFeatureFlags[id];
+  const values = hydrated ? normalizeFeatureFlags(flags) : defaultFeatureFlags;
+  const parent = featureFlagParent(id);
+  return values[id] && (parent === null || values[parent]);
 }
 
 /**
