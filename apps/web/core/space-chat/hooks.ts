@@ -46,6 +46,8 @@ const POLL_FULL_READ_MS = 30_000;
 const POLL_VISIBLE_MS = 5_000;
 /** Signed in with the gateway up, events keep it current; a remount within this reads the cache. */
 const SIGNED_IN_STALE_MS = 30_000;
+/** Signed out, the channel list re-reads this often while visible (GEO-3818). */
+const ROOM_LIST_POLL_MS = 60_000;
 
 /**
  * The account chat reads and writes as. `null` signed out, and while geo-chat is still setting the
@@ -67,7 +69,11 @@ export function useSpaceChatAuth(): { ready: boolean; auth: SpaceChatAuth | null
  * The space's chat rooms. `supported: false` for a space with no chat (geo-chat's 404 for a space
  * that is not a public DAO space), so the tab hides.
  */
-export function useSpaceChatRooms(spaceId: string, enabled: boolean, { includeArchived = false } = {}) {
+export function useSpaceChatRooms(
+  spaceId: string,
+  enabled: boolean,
+  { includeArchived = false, pollSignedOut = false } = {}
+) {
   const { ready, auth } = useSpaceChatAuth();
   const query = useQuery({
     queryKey: spaceChatQueryKeys.rooms(spaceId, auth?.accountKey ?? null, includeArchived),
@@ -89,6 +95,9 @@ export function useSpaceChatRooms(spaceId: string, enabled: boolean, { includeAr
     },
     enabled: enabled && ready,
     staleTime: 60_000,
+    // Signed out there is no space scope for `space.channels_changed`, so the channel list polls.
+    refetchInterval: pollSignedOut && ready && auth === null ? ROOM_LIST_POLL_MS : false,
+    refetchIntervalInBackground: false,
     retry: false,
     // Rights change outside this tab (joining, removal), so a focus past the stale time re-reads.
     refetchOnWindowFocus: true,

@@ -259,4 +259,14 @@ describe('useSpaceChatRooms', () => {
     await waitFor(() => expect(mocks.listSpaceChatRooms).toHaveBeenCalledTimes(2));
     focusManager.setFocused(undefined);
   });
+
+  it('polls the channel list every 60s signed out, when asked', async () => {
+    mocks.listSpaceChatRooms.mockReset();
+    mocks.listSpaceChatRooms.mockResolvedValue({ rooms: [], channels_enabled: true });
+    const { result } = renderHook(() => useSpaceChatRooms('space-2', true, { pollSignedOut: true }), { wrapper });
+    await waitFor(() => expect(result.current.data?.channelsEnabled).toBe(true));
+    expect(mocks.listSpaceChatRooms).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(60_001);
+    await waitFor(() => expect(mocks.listSpaceChatRooms).toHaveBeenCalledTimes(2));
+  });
 });

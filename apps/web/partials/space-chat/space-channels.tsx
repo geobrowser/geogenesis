@@ -70,7 +70,7 @@ export function SpaceChannels({ spaceId }: { spaceId: string }) {
   const router = useRouter();
   const { authenticated } = useGeoChatAuth();
   const viewerId = useCurrentGeoChatUserId();
-  const rooms = useSpaceChatRooms(spaceId, true, { includeArchived: true });
+  const rooms = useSpaceChatRooms(spaceId, true, { includeArchived: true, pollSignedOut: true });
   // `space.channels_changed` arrives on the signed-in space scope.
   useDebateGatewayScope({ scope: 'space', space_id: spaceId }, authenticated);
   const participants = useSpaceChatParticipants(spaceId, true);
