@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { DebateMediaArtifact, DebateMediaResponse } from '~/core/debates/api';
 import { HIDDEN_PROPERTY_ID } from '~/core/moderation/hidden';
 
+import { debatesAppDebateUrl } from '../debates-app-url';
 import { DEBATE_TYPE_ID } from '../ontology';
 import {
   sharePlayerEnabled,
@@ -276,16 +277,19 @@ describe('the made-for-it share video', () => {
     });
   });
 
-  it('draws live vote and watch buttons over the video, casting the side on the debate page', () => {
-    const debateUrl = `${ORIGIN}/space/${GOLD_SPACE}/${GOLD}?stay=1`;
-    const html = sharePlayerHtml({ debateId: GOLD, title: 't', debateUrl });
+  it('draws live vote and watch buttons that open the debate in the debates app, with the side', () => {
+    const html = sharePlayerHtml({
+      debateId: GOLD,
+      title: 't',
+      debateUrl: `${ORIGIN}/space/${GOLD_SPACE}/${GOLD}?stay=1`,
+    });
+    const app = debatesAppDebateUrl(GOLD);
     expect(html).toContain(`src="${experience.videoUrl}"`);
-    expect(html).toContain(`href="${debateUrl}&#38;side=agree"`);
-    expect(html.match(/side=agree/g)).toHaveLength(2);
-    expect(html.match(/side=disagree/g)).toHaveLength(2);
-    expect(html).toContain('class="textlink" data-group="end"');
-    expect(html).toContain('aria-label="Watch the full debate on Geo"');
-    expect(html).toContain('Watch on Geo<span class="go">');
+    expect(html.match(new RegExp(`href="${app}\\?side=agree"`, 'g'))).toHaveLength(2);
+    expect(html.match(new RegExp(`href="${app}\\?side=disagree"`, 'g'))).toHaveLength(2);
+    expect(html).toContain(`<a class="textlink" data-group="end" href="${app}"`);
+    expect(html).toContain('Watch on Geo');
+    expect(html).not.toContain('stay=1');
     expect(html).not.toContain('Open on Geo</a>');
   });
 });

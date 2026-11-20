@@ -7,6 +7,7 @@ import { ID } from '~/core/id';
 import type { Entity } from '~/core/types';
 
 import { isGeoChatDebateId } from '../debate-removal';
+import { debatesAppDebateUrl } from '../debates-app-url';
 import { debateArtifactContentUrl } from '../speaker-still';
 import { fetchDebatePageMedia } from './debate-page-media';
 import { type DebateVisibility, fetchDebateVisibility } from './debate-visibility';
@@ -154,11 +155,10 @@ export function sharePlayerHtml({
   const src = escapeHtml(experience?.videoUrl ?? debateArtifactContentUrl(debateId, 'social_video'));
   const poster = escapeHtml(experience?.cardUrl ?? debateArtifactContentUrl(debateId, 'social_preview_image'));
   const href = debateUrl ? escapeHtml(debateUrl) : null;
-  const clickThrough =
-    experience && debateUrl
-      ? experienceOverlay(experience, debateUrl)
-      : href
-        ? `
+  const clickThrough = experience
+    ? experienceOverlay(experience, debateId)
+    : href
+      ? `
 <a class="open" href="${href}" target="_blank" rel="noopener">Open on Geo</a>
 <div class="end" hidden>
   <a class="full" href="${href}" target="_blank" rel="noopener">See the full debate on Geo</a>
@@ -177,7 +177,7 @@ export function sharePlayerHtml({
     });
   })();
 </script>`
-        : '';
+      : '';
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -219,138 +219,119 @@ ${SHARE_TEST_BUTTON_CSS}  .full { padding: 12px 20px; border-radius: 999px; back
 </html>`;
 }
 
-/** The Geo Debate Clip's pill (label and a round go button), as the X player's live buttons. */
+/**
+ * The X player's buttons, in Geo's own pill style (the app's `Button` and vote pills): Calibre,
+ * fully rounded, sized to their label. Dark `#151515` on the white end screen, white with Geo's
+ * grey outline on the dark claim card. Hover shades them as the app does, a press sinks them, and a
+ * click flashes Geo purple with a check. Sized in container units, so they scale with the card.
+ */
 const SHARE_TEST_BUTTON_CSS = `
-  @font-face { font-family: Geist; src: url('/fonts/Geist-Medium.ttf'); font-weight: 500; }
+  @font-face { font-family: Calibre; src: url('/fonts/calibre-medium.woff2') format('woff2'); font-weight: 500; }
+  .row {
+    position: absolute; z-index: 2; left: 0; right: 0; display: flex; justify-content: center; gap: 1.2cqw;
+    translate: 0 -50%; pointer-events: none; opacity: 0; transition: opacity 220ms ease;
+  }
+  .row.on { opacity: 1; }
+  .row.on .btn { pointer-events: auto; }
   .btn {
-    position: absolute; z-index: 2; display: flex; align-items: center; justify-content: space-between;
-    gap: 1.1cqw; padding: 0 0.7cqw 0 2cqw; border-radius: 999px; box-sizing: border-box;
-    font-weight: 500; font-size: 2.35cqw; letter-spacing: -0.04em; white-space: nowrap; text-decoration: none;
-    box-shadow: 0 0.6cqw 2cqw rgba(0, 0, 0, 0.28);
-    cursor: pointer; transition: transform 160ms ease, box-shadow 160ms ease, background-color 160ms ease, color 160ms ease, opacity 220ms ease;
-    opacity: 0; transform: translateY(1cqw); pointer-events: none;
+    display: inline-flex; align-items: center; gap: 0.8cqw; height: 6.3cqw; padding: 0 2.7cqw;
+    box-sizing: border-box; border-radius: 999px; border: 0.12cqw solid transparent;
+    font-family: Calibre, -apple-system, BlinkMacSystemFont, sans-serif; font-weight: 500; font-size: 2.6cqw;
+    letter-spacing: -0.02em; line-height: 1; white-space: nowrap; text-decoration: none; cursor: pointer;
+    box-shadow: 0 0.4cqw 1.6cqw rgba(0, 0, 0, 0.22);
+    transform: translateY(0.8cqw);
+    transition: transform 160ms ease, background-color 140ms ease, border-color 140ms ease, color 140ms ease, box-shadow 160ms ease;
   }
-  .btn.on { opacity: 1; transform: none; pointer-events: auto; }
-  /* Hover: lifts and shades, the go circle grows and its arrow nudges on. Press: sinks. */
-  .btn.on:hover { transform: translateY(-0.4cqw); box-shadow: 0 1.2cqw 3cqw rgba(0, 0, 0, 0.38); }
-  .btn.light.on:hover { background: #ececec; }
-  .btn.dark.on:hover { background: #333; }
-  .btn.on:hover .go { transform: scale(1.12); }
-  .btn.on:hover .go svg { transform: translateX(0.2cqw); }
-  .btn .go svg { transition: transform 160ms ease; }
-  .btn.on:active { transform: translateY(0.1cqw) scale(0.95); box-shadow: 0 0.3cqw 1cqw rgba(0, 0, 0, 0.3); transition-duration: 60ms; }
-  .btn.light.on:active { background: #dcdcdc; }
-  .btn.dark.on:active { background: #000; }
-  /* Clicked: Geo purple with a check, for a moment, so the press is plainly acknowledged. */
-  .btn.on.clicked, .btn.on.clicked:hover { background: #9a4eff; color: #fff; }
-  .btn.clicked .go { background: #fff; color: #9a4eff; }
-  .btn .check { display: none; }
-  .btn.clicked .arrow { display: none; }
-  .btn.clicked .check { display: block; }
-  .btn:focus-visible { outline: 0.25cqw solid #9a4eff; outline-offset: 0.3cqw; }
-  .btn .go {
-    flex: none; display: grid; place-items: center; width: 4.4cqw; height: 4.4cqw; border-radius: 50%;
-    transition: transform 160ms ease;
-  }
-  .btn .go svg { width: 2cqw; height: 2cqw; }
-  .btn.light { background: #fff; color: #151515; }
-  .btn.light .go { background: #151515; color: #fff; }
+  .row.on .btn { transform: none; }
+  .btn svg { width: 2.1cqw; height: 2.1cqw; flex: none; }
+  .btn.light { background: #fff; color: #202020; border-color: #dbdbdb; }
   .btn.dark { background: #151515; color: #fff; }
-  .btn.dark .go { background: #fff; color: #151515; }
-  .btn .mark { width: 1.6cqw; height: 1.9cqw; margin-right: -0.4cqw; }
-  /* Read as tappable without hover (phones): every button rings softly, staggered, the main one
-     stronger, and each arrow nudges on. */
-  .btn.on::after {
-    content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
-    animation: ring 2.4s ease-out infinite; animation-delay: var(--delay, 0s); opacity: 0.6;
-  }
-  .btn.on .go svg.arrow { animation: nudge 1.6s ease-in-out infinite; animation-delay: var(--delay, 0s); }
-  @keyframes nudge { 0%, 60%, 100% { transform: translateX(0); } 30% { transform: translateX(0.35cqw); } }
-  .btn.pulse.on::after {
-    animation-duration: 1.8s; opacity: 1;
-  }
-  @keyframes ring {
-    0% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.7); }
-    100% { box-shadow: 0 0 0 1.6cqw rgba(255, 255, 255, 0); }
-  }
-  .btn.dark.on::after { animation-name: ring-dark; }
-  @keyframes ring-dark {
-    0% { box-shadow: 0 0 0 0 rgba(21, 21, 21, 0.45); }
-    100% { box-shadow: 0 0 0 1.6cqw rgba(21, 21, 21, 0); }
-  }
-  .btn.watch { top: 3.6cqh; right: 2.6cqw; height: 6.2cqh; font-size: 1.9cqw; padding-left: 1.4cqw; }
-  .btn.watch .go { width: 3.6cqw; height: 3.6cqw; }
-  /* The end screen's geobrowser.io, drawn in the video, as a link: a tint on hover, deeper on press,
-     and the same purple acknowledgement as the buttons when clicked. */
+  .row.on .btn:hover { transform: translateY(-0.25cqw); box-shadow: 0 0.8cqw 2.2cqw rgba(0, 0, 0, 0.28); }
+  .row.on .btn.light:hover { background: #f6f6f6; border-color: #202020; }
+  .row.on .btn.dark:hover { background: #3a3a3a; }
+  .row.on .btn:active { transform: translateY(0.1cqw) scale(0.97); box-shadow: 0 0.2cqw 0.8cqw rgba(0, 0, 0, 0.2); transition-duration: 60ms; }
+  .row.on .btn.light:active { background: #ececec; }
+  .row.on .btn.dark:active { background: #000; }
+  .btn:focus-visible { outline: 0.25cqw solid #6833ff; outline-offset: 0.3cqw; }
+  .btn .done { display: none; }
+  .btn.clicked, .row.on .btn.clicked:hover { background: #6833ff; border-color: #6833ff; color: #fff; }
+  .btn.clicked .icon { display: none; }
+  .btn.clicked .done { display: block; }
+  /* Watch on Geo, top right while the reel plays: smaller, the Geo mark leading. */
+  .row.watch { left: auto; right: 2.4cqw; top: 6.2cqh; translate: none; }
+  .row.watch .btn { height: 4.9cqw; padding: 0 1.8cqw 0 1.5cqw; gap: 0.7cqw; font-size: 2.05cqw; }
+  .row.watch .btn svg.mark { width: 1.5cqw; height: 1.75cqw; }
+  .row.watch .btn svg.icon { width: 1.5cqw; height: 1.5cqw; }
+  /* The end screen's geobrowser.io, drawn in the video, as a link: a tint on hover, deeper on press. */
   .textlink {
     position: absolute; z-index: 2; border-radius: 0.6cqw; cursor: pointer; opacity: 0; pointer-events: none;
     transition: background-color 140ms ease, opacity 220ms ease;
   }
   .textlink.on { opacity: 1; pointer-events: auto; }
-  .textlink.on:hover { background: rgba(154, 78, 255, 0.14); }
-  .textlink.on:active, .textlink.on.clicked { background: rgba(154, 78, 255, 0.28); }
-  .textlink:focus-visible { outline: 0.25cqw solid #9a4eff; outline-offset: 0.2cqw; }
-  @media (prefers-reduced-motion: reduce) {
-    .btn, .btn .go { transition: none; }
-    .btn.on::after, .btn.on .go svg.arrow { animation: none; }
-  }
+  .textlink.on:hover { background: rgba(104, 51, 255, 0.12); }
+  .textlink.on:active, .textlink.on.clicked { background: rgba(104, 51, 255, 0.26); }
+  .textlink:focus-visible { outline: 0.25cqw solid #6833ff; outline-offset: 0.2cqw; }
+  @media (prefers-reduced-motion: reduce) { .row, .btn, .textlink { transition: none; } }
 `;
 
-const GO_ARROW =
-  '<svg class="arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>' +
-  '<svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+const ICON = {
+  agree:
+    '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  disagree:
+    '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M7 7l10 10M17 7L7 17"/></svg>',
+  arrow:
+    '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
+  done: '<svg class="done" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+};
 
 const GEO_MARK =
   '<svg class="mark" viewBox="0 0 25.8662 30" fill="none"><path d="M23.6374 28.2346C23.9907 28.8166 23.5717 29.5611 22.8909 29.5611H2.9992C2.31839 29.5611 1.8994 28.8167 2.25264 28.2347L4.00242 25.3518C4.25863 24.9296 4.81249 24.806 5.24126 25.0509C7.48535 26.333 10.117 27.0718 12.9319 27.0719C15.7543 27.0719 18.3928 26.3292 20.6408 25.0409C21.0697 24.7951 21.6242 24.9185 21.8807 25.341L23.6374 28.2346ZM12.1985 11.8531C12.5386 11.2931 13.3516 11.2933 13.6917 11.8531L19.5432 21.4924C19.7837 21.8887 19.6743 22.4069 19.2749 22.6424C17.4349 23.7272 15.2616 24.3561 12.9319 24.3561C10.6105 24.356 8.44448 23.7315 6.60858 22.6537C6.20827 22.4187 6.09825 21.8997 6.33918 21.5029L12.1985 11.8531Z" fill="currentColor"/><path d="M12.9326 23.5588C6.60632 23.5586 1.55672 18.5905 1.55666 12.5578C1.55666 6.52517 6.60628 1.55711 12.9326 1.55686C19.2592 1.55686 24.3096 6.52502 24.3096 12.5578C24.3095 18.5906 19.2592 23.5588 12.9326 23.5588Z" stroke="currentColor" stroke-width="3.11332"/></svg>';
 
 /**
- * The X player's buttons over a made-for-it share video, each live only while its screen is on:
- * Agree and Disagree on the claim screen, Watch on Geo while the reel plays, and all three on the
- * end screen, which stays once the video ends. They are page elements, not pixels in the video, so
- * they animate in, pulse, and answer hover and press; the video leaves room for them and reads as
- * finished without them, which is how it plays everywhere else.
+ * The X player's buttons over a made-for-it share video, each row live only while its screen is on:
+ * Agree and Disagree on the claim card, Watch on Geo while the reel plays, and Agree, Disagree and
+ * the geobrowser.io link on the end screen, which stays once the video ends. They are page elements,
+ * not pixels in the video; the video leaves room for them and reads as finished without them, which
+ * is how it plays everywhere else.
  *
- * Agree and Disagree open the debate with `?side=`, which casts the vote there (kept on the device
- * and the save sheet for a visitor). Every link carries `stay=1`, so a visitor from X lands on this
- * debate rather than the debates app.
+ * Every link opens the debate in the debates app, Preston's call. Agree and Disagree carry `?side=`:
+ * the app opens the debate with that side picked and asks for one tap to confirm it. It casts a side
+ * by itself only for a link from one of our own emails, so a link posted anywhere can't vote for
+ * whoever follows it.
  */
-function experienceOverlay(experience: ShareTestExperience, debateUrl: string): string {
+function experienceOverlay(experience: ShareTestExperience, debateId: string): string {
   const link = (side?: 'agree' | 'disagree') => {
-    const url = new URL(debateUrl);
+    const url = new URL(debatesAppDebateUrl(debateId));
     if (side) url.searchParams.set('side', side);
-    url.searchParams.set('stay', '1');
     return escapeHtml(url.toString());
   };
   const pct = (value: number) => `${(value * 100).toFixed(2)}%`;
-  const at = (rect: ShareTestRect) =>
-    `left:${pct(rect.x)};top:${pct(rect.y)};width:${pct(rect.w)};height:${pct(rect.h)}`;
-  const button = (group: string, cls: string, href: string, label: string, style = '') =>
-    `<a class="btn ${cls}" data-group="${group}" href="${href}" target="_blank" rel="noopener" style="${style}">${label}<span class="go">${GO_ARROW}</span></a>`;
+  const middle = (rect: ShareTestRect) => pct(rect.y + rect.h / 2);
+  const button = (tone: 'light' | 'dark', href: string, label: string, lead: string, trail: string) =>
+    `<a class="btn ${tone}" href="${href}" target="_blank" rel="noopener">${lead}${label}${trail}${ICON.done}</a>`;
+  const votes = (group: string, tone: 'light' | 'dark', rect: ShareTestRect) =>
+    `<div class="row" data-group="${group}" style="top:${middle(rect)}">${button(tone, link('agree'), 'Agree', ICON.agree, '')}${button(tone, link('disagree'), 'Disagree', ICON.disagree, '')}</div>`;
   const { claim, reel, end } = experience;
   return `
-${button('claim', 'light pulse', link('agree'), 'Agree', at(claim.agree))}
-${button('claim', 'light', link('disagree'), 'Disagree', at(claim.disagree))}
-${button('reel', 'light watch', link(), `${GEO_MARK}Watch on Geo`)}
-${button('end', 'dark pulse', link('agree'), 'Agree', at(end.agree))}
-${button('end', 'dark', link('disagree'), 'Disagree', at(end.disagree))}
-<a class="textlink" data-group="end" href="${link()}" target="_blank" rel="noopener" aria-label="Watch the full debate on Geo" style="${at(end.url)}"></a>
+${votes('claim', 'light', claim.agree)}
+<div class="row watch" data-group="reel">${button('light', link(), 'Watch on Geo', GEO_MARK, ICON.arrow)}</div>
+${votes('end', 'dark', end.agree)}
+<a class="textlink" data-group="end" href="${link()}" target="_blank" rel="noopener" aria-label="Watch the full debate on Geo" style="left:${pct(end.url.x)};top:${pct(end.url.y)};width:${pct(end.url.w)};height:${pct(end.url.h)}"></a>
 <script>
   (function () {
     var video = document.querySelector('video');
     var spans = { claim: [${claim.start}, ${claim.end}], reel: [${reel.start}, ${reel.end}], end: [${end.start}, Infinity] };
-    var buttons = document.querySelectorAll('.btn, .textlink');
+    var groups = document.querySelectorAll('[data-group]');
     function sync() {
       // Ended counts as the last moment, which only the end screen's open-ended span contains.
       var t = video.ended ? Number.MAX_VALUE : video.currentTime;
-      buttons.forEach(function (a, i) {
-        var span = spans[a.dataset.group];
+      groups.forEach(function (el) {
+        var span = spans[el.dataset.group];
         var on = t >= span[0] && t < span[1];
-        if (on === a.classList.contains('on')) return;
-        // In one after another, so a screen's buttons arrive rather than appear.
-        a.style.transitionDelay = on ? (i % 3) * 90 + 'ms' : '0ms';
-        a.style.setProperty('--delay', (i % 3) * 0.5 + 's');
-        a.classList.toggle('on', on);
-        a.tabIndex = on ? 0 : -1;
+        if (on === el.classList.contains('on')) return;
+        el.classList.toggle('on', on);
+        el.querySelectorAll('a').forEach(function (a) { a.tabIndex = on ? 0 : -1; });
+        if (el.tagName === 'A') el.tabIndex = on ? 0 : -1;
       });
     }
     ['timeupdate', 'seeked', 'ended', 'play'].forEach(function (e) { video.addEventListener(e, sync); });
@@ -361,7 +342,7 @@ ${button('end', 'dark', link('disagree'), 'Disagree', at(end.disagree))}
     video.addEventListener('click', function () { if (video.ended) video.play(); });
     // iOS Safari only shows :active on a touch when the page listens for touches.
     document.addEventListener('touchstart', function () {}, { passive: true });
-    buttons.forEach(function (a) {
+    document.querySelectorAll('.btn, .textlink').forEach(function (a) {
       a.addEventListener('click', function () {
         a.classList.add('clicked');
         setTimeout(function () { a.classList.remove('clicked'); }, 1600);
