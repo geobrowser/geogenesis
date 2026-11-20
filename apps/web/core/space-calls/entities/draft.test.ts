@@ -182,7 +182,16 @@ describe('buildCallEventRemoval', () => {
     c: CallEntityClaim,
     entityId: string,
     current: Parameters<typeof buildCallEventRemoval>[0]['current']
-  ) => buildCallEventRemoval({ claim: c, entityId, current });
+  ) =>
+    buildCallEventRemoval({
+      claim: c,
+      entityId,
+      current,
+      publisherAddress: '0xABCDEF0000000000000000000000000000000001',
+      appOrigin: 'https://geobrowser.io/',
+    });
+  const PAGE = `https://geobrowser.io/space/${SPACE}/calls/${CALL.replace(/-/g, '')}`;
+  const MINTED_NAME = 'Crypto Community Call · 25 Nov 2026';
 
   it('deletes only what this publisher wrote on a minted entity', () => {
     const c = claim({ action: 'remove', entity_id: MINTED, entity: entity({ status: 'not_held' }) });
@@ -190,10 +199,11 @@ describe('buildCallEventRemoval', () => {
     const parent = edgeId(MINTED, EVENT_SCHEMA.COMMUNITY_CALL_PARENT_PROPERTY, SERIES);
     const draft = removal(c, MINTED, {
       values: [
-        { propertyId: NAME_PROPERTY_ID, dataType: 'TEXT' },
-        { propertyId: EVENT_SCHEMA.START_TIME_PROPERTY, dataType: 'DATETIME' },
-        { propertyId: WEB_URL_PROPERTY_ID, dataType: 'TEXT' },
-        { propertyId: DESCRIPTION, dataType: 'TEXT' },
+        { propertyId: NAME_PROPERTY_ID, dataType: 'TEXT', value: MINTED_NAME },
+        // The indexer's spelling of the same instant.
+        { propertyId: EVENT_SCHEMA.START_TIME_PROPERTY, dataType: 'DATETIME', value: '2026-11-25T16:00:00.000Z' },
+        { propertyId: WEB_URL_PROPERTY_ID, dataType: 'TEXT', value: PAGE },
+        { propertyId: DESCRIPTION, dataType: 'TEXT', value: 'notes' },
       ],
       relations: [
         { id: types, entityId: 'r1', typeId: TYPES_PROPERTY_ID, toEntityId: EVENT_SCHEMA.COMMUNITY_CALL_EVENT_TYPE },
@@ -216,9 +226,9 @@ describe('buildCallEventRemoval', () => {
     const c = claim({ action: 'remove', entity_id: CURATOR_EVENT, entity: entity({ status: 'not_held' }) });
     const draft = removal(c, CURATOR_EVENT, {
       values: [
-        { propertyId: NAME_PROPERTY_ID, dataType: 'TEXT' },
-        { propertyId: EVENT_SCHEMA.START_TIME_PROPERTY, dataType: 'DATETIME' },
-        { propertyId: WEB_URL_PROPERTY_ID, dataType: 'TEXT' },
+        { propertyId: NAME_PROPERTY_ID, dataType: 'TEXT', value: 'Crypto · 25 Nov 2026' },
+        { propertyId: EVENT_SCHEMA.START_TIME_PROPERTY, dataType: 'DATETIME', value: '2026-11-25T16:00:00Z' },
+        { propertyId: WEB_URL_PROPERTY_ID, dataType: 'TEXT', value: PAGE },
       ],
       relations: [
         {
@@ -232,5 +242,38 @@ describe('buildCallEventRemoval', () => {
     });
     expect(draft.values.map(v => v.property.id)).toEqual([WEB_URL_PROPERTY_ID]);
     expect(draft.relations).toEqual([]);
+  });
+
+  it('keeps a value someone changed after our last write', () => {
+    const removed = (entityId: string, propertyId: string, value: string, over: Partial<CallEntityClaim> = {}) =>
+      removal(
+        claim({ action: 'remove', entity_id: entityId, entity: entity({ status: 'not_held' }), ...over }),
+        entityId,
+        {
+          values: [{ propertyId, dataType: 'TEXT', value }],
+          relations: [],
+        }
+      ).values.length;
+    // Adopted: curator replaced the Web URL; an unchanged one goes.
+    expect(removed(CURATOR_EVENT, WEB_URL_PROPERTY_ID, 'https://curator.example/call')).toBe(0);
+    expect(removed(CURATOR_EVENT, WEB_URL_PROPERTY_ID, PAGE)).toBe(1);
+    // Minted: an editor renamed it; our own name goes.
+    expect(removed(MINTED, NAME_PROPERTY_ID, 'Renamed by an editor')).toBe(0);
+    expect(removed(MINTED, NAME_PROPERTY_ID, MINTED_NAME)).toBe(1);
+  });
+
+  it('compares against the recorded write when there is one', () => {
+    // The call moved after our last write: the graph still holds the old date, which is ours.
+    const moved = entity({
+      status: 'not_held',
+      original_start: '2026-12-02T16:00:00Z',
+      starts_at: '2026-12-02T16:00:00Z',
+    });
+    const c = claim({ action: 'remove', entity_id: MINTED, entity: moved, previous: entity() });
+    const draft = removal(c, MINTED, {
+      values: [{ propertyId: NAME_PROPERTY_ID, dataType: 'TEXT', value: MINTED_NAME }],
+      relations: [],
+    });
+    expect(draft.values).toHaveLength(1);
   });
 });

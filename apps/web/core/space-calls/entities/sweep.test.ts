@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { WEB_URL_PROPERTY_ID } from '~/core/debates/ontology';
 import type { DebateAcceptorConfig } from '~/core/debates/server/acceptor-config';
 
 import type { CallEntity, CallEntityClaim, CallEntityRecord } from './service';
@@ -166,13 +167,15 @@ describe('sweepCallEntities', () => {
   });
 
   it('removes what the graph holds for a recorded entity', async () => {
+    const page = (id: string) => `https://geobrowser.io/space/${SPACE}/calls/${id}`;
     const callId = '8'.repeat(32);
     const { deps, records, submit } = harness([claim(callId, { action: 'remove', entity_id: callId })], {
       loadEntity: vi.fn(async () => ({
         id: callId,
         values: [
-          { spaceId: SPACE, property: { id: 'a126ca530c8e48d5b88882c734c38935', dataType: 'TEXT' } },
-          { spaceId: 'f'.repeat(32), property: { id: 'a126ca530c8e48d5b88882c734c38935', dataType: 'TEXT' } },
+          // Our Web URL in this space; the same property in another space is not ours to touch.
+          { spaceId: SPACE, property: { id: WEB_URL_PROPERTY_ID, dataType: 'TEXT' }, value: page(callId) },
+          { spaceId: 'f'.repeat(32), property: { id: WEB_URL_PROPERTY_ID, dataType: 'TEXT' }, value: page(callId) },
         ],
         relations: [],
       })),

@@ -84,7 +84,7 @@ function removalOf(entity: Entity, spaceId: string): GraphEntityForRemoval {
   return {
     values: entity.values
       .filter(value => inSpace(value.spaceId))
-      .map(value => ({ propertyId: value.property.id, dataType: value.property.dataType })),
+      .map(value => ({ propertyId: value.property.id, dataType: value.property.dataType, value: value.value })),
     relations: entity.relations
       .filter(relation => inSpace(relation.spaceId))
       .map(relation => ({
@@ -227,7 +227,13 @@ export async function sweepCallEntities(
         }
       }
       const draft = current
-        ? buildCallEventRemoval({ claim, entityId, current: removalOf(current, space.id) })
+        ? buildCallEventRemoval({
+            claim,
+            entityId,
+            current: removalOf(current, space.id),
+            publisherAddress,
+            appOrigin,
+          })
         : buildCallEventDraft({ claim, entityId, publisherAddress, appOrigin });
 
       const ops = await prepareOps(draft, ID.uuidToHex(space.id));

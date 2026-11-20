@@ -205,22 +205,33 @@ export function updateChangesNothing(claim: CallEntityClaim): boolean {
 
 /** What the graph holds for the entity in the call's space. */
 export type GraphEntityForRemoval = {
-  values: Array<{ propertyId: string; dataType: DataType }>;
+  values: Array<{ propertyId: string; dataType: DataType; value: string }>;
   relations: Array<{ id: string; entityId: string; typeId: string; toEntityId: string }>;
+};
+
+const sameValue = (dataType: DataType, a: string, b: string) => {
+  if (dataType !== 'DATETIME') return a === b;
+  const [ta, tb] = [Date.parse(a), Date.parse(b)];
+  return Number.isNaN(ta) || Number.isNaN(tb) ? a === b : ta === tb;
 };
 
 /**
  * A `remove` deletes only what this publisher wrote: a minted entity's values and derived relations,
- * or an adopted curator event's Web URL. Editors' and curator's triples stay.
+ * or an adopted curator event's Web URL. A value is deleted only while it still equals our last
+ * write (`previous`, else what `entity` would write), so a newer edit by anyone else stays.
  */
 export function buildCallEventRemoval({
   claim,
   entityId: rawEntityId,
   current,
+  publisherAddress,
+  appOrigin,
 }: {
   claim: CallEntityClaim;
   entityId: string;
   current: GraphEntityForRemoval;
+  publisherAddress: string;
+  appOrigin: string;
 }): CallEventDraft {
   const entityId = ID.uuidToHex(rawEntityId);
   const spaceId = ID.uuidToHex(claim.entity.space_id);
@@ -228,9 +239,19 @@ export function buildCallEventRemoval({
   const ref = { id: entityId, name };
   const ownProperties = isMintedCallEntity(claim, entityId) ? MINTED_VALUE_PROPERTIES : [WEB_URL_PROPERTY_ID];
   const ownRelations = ownRelationIds(claim, entityId);
+  const written = buildCallEventDraft({
+    claim: { ...claim, entity: claim.previous ?? claim.entity, previous: null },
+    entityId,
+    publisherAddress,
+    appOrigin,
+  }).values;
+  const stillOurs = (value: GraphEntityForRemoval['values'][number]) =>
+    written.some(
+      ours => ID.equals(ours.property.id, value.propertyId) && sameValue(value.dataType, ours.value, value.value)
+    );
 
   const values: Value[] = current.values
-    .filter(value => ownProperties.some(id => ID.equals(id, value.propertyId)))
+    .filter(value => ownProperties.some(id => ID.equals(id, value.propertyId)) && stillOurs(value))
     .map(value => ({
       id: ID.createValueId({ entityId, propertyId: value.propertyId, spaceId }),
       entity: ref,
