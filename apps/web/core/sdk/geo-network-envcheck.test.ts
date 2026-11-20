@@ -19,11 +19,13 @@ delete process.env.NEXT_PUBLIC_GEOGENESIS_RPC;
 delete process.env.NEXT_PUBLIC_GEOGENESIS_RPC_TESTNET;
 delete process.env.NEXT_PUBLIC_API_ENDPOINT;
 delete process.env.NEXT_PUBLIC_API_ENDPOINT_TESTNET;
+delete process.env.NEXT_PUBLIC_GEO_WEB_ORIGIN;
 
 describe('geo-network env resolution (SDK defaults)', () => {
   it('resolves testnet identity entirely from the SDK when env overrides are unset', async () => {
     const { Environment } = await import('~/core/environment');
-    const { GEO_NETWORK, SPACE_REGISTRY_ADDRESS, DAO_SPACE_FACTORY_ADDRESS } = await import('~/core/sdk/geo-network');
+    const { GEO_NETWORK, GEO_WEB_ORIGIN, SPACE_REGISTRY_ADDRESS, DAO_SPACE_FACTORY_ADDRESS } =
+      await import('~/core/sdk/geo-network');
 
     const config = Environment.getConfig();
     expect(config.chainId).toBe('55516');
@@ -34,6 +36,7 @@ describe('geo-network env resolution (SDK defaults)', () => {
     expect(GEO_NETWORK.apiOrigin).toBe('https://api-testnet.geobrowser.io');
     expect(GEO_NETWORK.chain?.id).toBe(55516);
     expect(GEO_NETWORK.sponsorship?.rpcUrl).toBeTruthy();
+    expect(GEO_WEB_ORIGIN).toBe('https://www.geobrowser.io');
 
     expect(SPACE_REGISTRY_ADDRESS).toBe('0xCF13491802747e759e1BB8E364bc43045398d1DD');
     expect(DAO_SPACE_FACTORY_ADDRESS).toBe('0x323aF429B85c954D4a161b2A6281c26DF45b7128');

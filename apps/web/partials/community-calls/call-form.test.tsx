@@ -25,6 +25,9 @@ vi.mock('~/core/community-calls/call-ops', () => ({
 }));
 vi.mock('~/core/space-calls/series/after-publish', () => ({ useAfterSeriesPublish: () => vi.fn() }));
 vi.mock('~/core/state/feature-flags', () => ({ useFeatureFlag: () => true }));
+vi.mock('~/partials/space-calls/geo-publisher-notice', () => ({
+  GeoPublisherNotice: () => <div data-testid="geo-publisher-notice" />,
+}));
 
 const { CallForm } = await import('./call-form');
 

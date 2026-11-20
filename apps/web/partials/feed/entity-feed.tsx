@@ -32,6 +32,7 @@ import type { ClaimCardVariant } from '~/partials/explore/claim-explore-feed-car
 import { ExploreFeedCard } from '~/partials/explore/explore-feed-card';
 
 import { ExploreTypeFilterMenu } from './explore-type-filter-menu';
+import { feedEditionKey } from './feed-edition-key';
 
 /**
  * Cards drawn in full on the first render, whatever the viewport. The rest wait until they are near
@@ -200,11 +201,17 @@ type EntityFeedProps = {
    * the personal URL, because the CDN ignores cookies.
    */
   cdnFirstPage?: boolean;
-  /**
-   * Extra cards between the feed's own, by the index of the card they follow, for `feedLength`
-   * cards (GEO-3421's past calls). Drawn only on an unfiltered feed; pages and cursors ignore them.
-   */
-  interleave?: (feedLength: number) => ReadonlyMap<number, React.ReactNode>;
+  /** Extra cards between the feed's own (GEO-3421's past calls). Only on an unfiltered feed. */
+  interleave?: FeedInterleave;
+};
+
+/**
+ * Extra cards by the index of the card they follow. `replaces` holds the feed cards (by
+ * `feedEditionKey`) a placed card stands for, left out so a thing shows once.
+ */
+export type FeedInterleave = (feedLength: number) => {
+  cards: ReadonlyMap<number, React.ReactNode>;
+  replaces: ReadonlySet<string>;
 };
 
 /**
@@ -805,6 +812,7 @@ export function EntityFeed({
     if (placeholderLeadId !== null) setPinnedLeadId(placeholderLeadId);
   }, [placeholderLeadId, setPinnedLeadId]);
 
+  // Slots follow the unfiltered list, so leaving a replaced card out cannot move them.
   const interleaved = unfiltered ? interleave?.(items.length) : undefined;
 
   const timeLabel = TIME_OPTIONS.find(o => o.value === time)?.label ?? time;
@@ -973,18 +981,20 @@ export function EntityFeed({
             <React.Fragment key={`${item.entityId}-${item.spaceId}`}>
               {/* A feed, so its debates play as they come into view; nowhere else does (GEO-3812).
                   Around the card only, not what is interleaved between them. */}
-              <DebateFeedAutoplay>
-                <ExploreFeedCard
-                  itemPosition={index + 1}
-                  item={item}
-                  hideSpaceLink={lockedSpaceId != null}
-                  hideJoinButton={lockedSpaceId != null}
-                  titleOpensSidePanel={titleOpensSidePanel}
-                  claimCardVariant={claimCardVariant}
-                  deferUntilNearViewport={index >= EAGER_CARD_COUNT}
-                />
-              </DebateFeedAutoplay>
-              {interleaved?.get(index)}
+              {interleaved?.replaces.has(feedEditionKey(item.spaceId, item.entityId)) ? null : (
+                <DebateFeedAutoplay>
+                  <ExploreFeedCard
+                    itemPosition={index + 1}
+                    item={item}
+                    hideSpaceLink={lockedSpaceId != null}
+                    hideJoinButton={lockedSpaceId != null}
+                    titleOpensSidePanel={titleOpensSidePanel}
+                    claimCardVariant={claimCardVariant}
+                    deferUntilNearViewport={index >= EAGER_CARD_COUNT}
+                  />
+                </DebateFeedAutoplay>
+              )}
+              {interleaved?.cards.get(index)}
             </React.Fragment>
           ))
         )}
