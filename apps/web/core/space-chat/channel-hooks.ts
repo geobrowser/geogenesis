@@ -125,11 +125,7 @@ function usePageVisible() {
   );
 }
 
-/**
- * Moves the read cursor to `newestId` while the channel shows in a visible tab (GEO-3818), and
- * clears its badge in the cached lists at once. The write trails by `READ_CURSOR_DELAY_MS`, and
- * goes sooner when the tab hides or loses focus, or the channel closes.
- */
+/** Clears a shown channel's badge at once; the cursor write trails, or goes when the tab hides or the channel closes. */
 export function useMarkChannelRead(room: SpaceChatRoom | null, newestId: string | null, showing: boolean) {
   const { auth } = useSpaceChatAuth();
   const queryClient = useQueryClient();
