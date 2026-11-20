@@ -3,39 +3,21 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 
 import * as React from 'react';
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import type { ExploreFeedRow } from '~/core/explore/explore-card-item';
 
 import { ProfileActivitySection } from './profile-activity-section';
 
-const activityMocks = vi.hoisted(() => ({ unavailableDebateIds: new Set<string>() }));
-
 // The gallery is local to the file under test, so its dependencies are mocked
 // rather than the gallery itself.
 vi.mock('~/partials/explore/explore-feed-card', () => ({
-  ExploreFeedCard: ({
-    item,
-    onDebatePlaybackRequest,
-    onDebatePlaybackAvailabilityChange,
-  }: {
-    item: { entityId: string };
-    onDebatePlaybackRequest?: (debateId: string) => void;
-    onDebatePlaybackAvailabilityChange?: (debateId: string, available: boolean) => void;
-  }) => {
-    const available = !activityMocks.unavailableDebateIds.has(item.entityId);
-    React.useEffect(() => {
-      onDebatePlaybackAvailabilityChange?.(item.entityId, available);
-      return () => onDebatePlaybackAvailabilityChange?.(item.entityId, false);
-    }, [available, item.entityId, onDebatePlaybackAvailabilityChange]);
-
-    return (
-      <button type="button" data-testid="card" onClick={() => onDebatePlaybackRequest?.(item.entityId)}>
-        {item.entityId}
-      </button>
-    );
-  },
+  ExploreFeedCard: ({ item }: { item: { entityId: string } }) => (
+    <button type="button" data-testid="card">
+      {item.entityId}
+    </button>
+  ),
 }));
 
 vi.mock('./gallery-claim-card', () => ({
@@ -45,14 +27,6 @@ vi.mock('./gallery-claim-card', () => ({
 vi.mock('~/core/hooks/use-space-labels', () => ({
   useSpaceLabels: () => ({ labelsById: new Map(), isLoading: false }),
   spaceLabel: () => undefined,
-}));
-
-vi.mock('~/core/debates/debate-playback-gate', () => ({
-  DebatePlaybackGate: ({ allowedId, children }: { allowedId: string | null; children: React.ReactNode }) => (
-    <div data-testid="playback-gate" data-allowed-id={allowedId}>
-      {children}
-    </div>
-  ),
 }));
 
 vi.mock('~/design-system/prefetch-link', () => ({
@@ -218,8 +192,6 @@ function armScrollListener() {
  * no positions, while the rail beside it counted 208.
  */
 describe('ProfileActivitySection', () => {
-  beforeEach(() => activityMocks.unavailableDebateIds.clear());
-
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
@@ -432,18 +404,14 @@ describe('ProfileActivitySection', () => {
   it('keeps a visible gallery mounted while rankings refresh for newly arrived debates', () => {
     const debates = kind({ rows: [row('d1'), row('d2')] });
     const { rerender } = render(<ProfileActivitySection kinds={[debates]} />);
-    const gallery = screen.getByTestId('playback-gate');
     const cards = screen.getAllByTestId('card');
-    fireEvent.click(cards[1]);
-    expect(gallery).toHaveAttribute('data-allowed-id', 'd2');
 
     // A new debate changes useEntityScores' query key, so ranking is loading again.
     rerender(<ProfileActivitySection kinds={[{ ...debates, rows: [...debates.rows, row('d3')], isLoading: true }]} />);
 
     expect(screen.queryByRole('status', { name: 'Loading activity' })).not.toBeInTheDocument();
-    expect(screen.getByTestId('playback-gate')).toBe(gallery);
+    // The same card elements, so a debate being watched in one of them keeps playing.
     expect(screen.getAllByTestId('card')[1]).toBe(cards[1]);
-    expect(gallery).toHaveAttribute('data-allowed-id', 'd2');
   });
 
   it('keeps a pick through a render where both kinds blank together', () => {
@@ -521,7 +489,7 @@ describe('ProfileActivitySection', () => {
     expect(screen.getAllByTestId('card')).toHaveLength(1);
   });
 
-  it('autoplays only the first debate and transfers playback when another is clicked', () => {
+  it('lays debate cards out at the gallery width, each in its own frame', () => {
     render(<ProfileActivitySection kinds={[kind({ rows: [row('d1'), row('d2')] })]} />);
 
     const cards = screen.getAllByTestId('card');
@@ -530,91 +498,6 @@ describe('ProfileActivitySection', () => {
     // The playable card owns its frame and its 12px inset. A second frame squeezed the pills.
     expect(cards[0]?.parentElement).not.toHaveClass('border');
     expect(cards[0]?.parentElement).not.toHaveClass('px-3');
-
-    const gate = screen.getByTestId('playback-gate');
-    expect(gate).toHaveAttribute('data-allowed-id', 'd1');
-
-    fireEvent.click(screen.getByRole('button', { name: 'd2' }));
-    expect(gate).toHaveAttribute('data-allowed-id', 'd2');
-  });
-
-  it('assigns playback only to debate cards that mounted a playable player', () => {
-    activityMocks.unavailableDebateIds.add('d1');
-    render(<ProfileActivitySection kinds={[kind({ rows: [row('d1'), row('d2')] })]} />);
-
-    expect(screen.getByTestId('playback-gate')).toHaveAttribute('data-allowed-id', 'd2');
-  });
-
-  it('keeps the current owner when an earlier debate becomes playable later', () => {
-    activityMocks.unavailableDebateIds.add('d1');
-    const props = { kinds: [kind({ rows: [row('d1'), row('d2')] })] };
-    const view = render(<ProfileActivitySection {...props} />);
-    const gate = screen.getByTestId('playback-gate');
-    expect(gate).toHaveAttribute('data-allowed-id', 'd2');
-
-    activityMocks.unavailableDebateIds.delete('d1');
-    view.rerender(<ProfileActivitySection {...props} />);
-
-    expect(gate).toHaveAttribute('data-allowed-id', 'd2');
-  });
-
-  it('reselects a visible debate when the requested player becomes unavailable', async () => {
-    const props = { kinds: [kind({ rows: [row('d1'), row('d2'), row('d3')] })] };
-    const view = render(<ProfileActivitySection {...props} />);
-    const scroller = document.querySelector<HTMLElement>('.overflow-x-auto') as HTMLElement;
-    const cards = screen.getAllByTestId('card').map(card => card.parentElement as HTMLElement);
-    const gate = screen.getByTestId('playback-gate');
-    const horizontalRect = (left: number, width: number): DOMRect => ({
-      ...rect(width, 400),
-      x: left,
-      left,
-      right: left + width,
-      bottom: 400,
-    });
-    vi.spyOn(scroller, 'getBoundingClientRect').mockImplementation(() => horizontalRect(0, 536));
-    const starts = [0, 276, 552];
-    scroller.scrollLeft = 276;
-    cards.forEach((card, index) => {
-      vi.spyOn(card, 'getBoundingClientRect').mockImplementation(() =>
-        horizontalRect(starts[index]! - scroller.scrollLeft, 260)
-      );
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: 'd3' }));
-    expect(gate).toHaveAttribute('data-allowed-id', 'd3');
-
-    // A failed refetch can replace the selected player's card with fallback content. The next
-    // owner must come from what is visible now, not from the first mounted row in source order.
-    activityMocks.unavailableDebateIds.add('d3');
-    view.rerender(<ProfileActivitySection {...props} />);
-    await act(async () => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
-    expect(gate).toHaveAttribute('data-allowed-id', 'd2');
-
-    // The stale request must be gone too: remounting d3 cannot reclaim ownership by itself.
-    activityMocks.unavailableDebateIds.delete('d3');
-    view.rerender(<ProfileActivitySection {...props} />);
-    await act(async () => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
-    expect(gate).toHaveAttribute('data-allowed-id', 'd2');
-  });
-
-  it('returns playback to the first debate after switching to another Activity collection', () => {
-    render(
-      <ProfileActivitySection
-        kinds={[
-          kind({ rows: [row('d1'), row('d2')] }),
-          kind({ key: 'claims', label: 'Claims', rows: [claimRow('c1')] }),
-        ]}
-      />
-    );
-
-    const gate = screen.getByTestId('playback-gate');
-    fireEvent.click(screen.getByRole('button', { name: 'd2' }));
-    expect(gate).toHaveAttribute('data-allowed-id', 'd2');
-
-    fireEvent.click(screen.getByRole('button', { name: /Claims/ }));
-    fireEvent.click(screen.getByRole('button', { name: /Debates/ }));
-
-    expect(screen.getByTestId('playback-gate')).toHaveAttribute('data-allowed-id', 'd1');
   });
 
   it('keeps Claim cards wide enough for side-by-side response buttons', () => {
@@ -673,78 +556,6 @@ describe('ProfileActivitySection', () => {
     fireEvent.scroll(scroller);
     await act(async () => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
     expect(screen.getByRole('button', { name: 'Next page' })).toBeDisabled();
-  });
-
-  it('hands autoplay to the next visible debate when the current one scrolls out', async () => {
-    render(<ProfileActivitySection kinds={[kind({ rows: [row('d1'), row('d2'), row('d3')] })]} />);
-
-    const scroller = document.querySelector<HTMLElement>('.overflow-x-auto');
-    const cards = screen.getAllByTestId('card').map(card => card.parentElement as HTMLElement);
-    const gate = screen.getByTestId('playback-gate');
-    expect(scroller).not.toBeNull();
-
-    const horizontalRect = (left: number, width: number): DOMRect => ({
-      ...rect(width, 400),
-      x: left,
-      left,
-      right: left + width,
-      bottom: 400,
-    });
-    vi.spyOn(scroller as HTMLElement, 'getBoundingClientRect').mockImplementation(() => horizontalRect(0, 750));
-
-    const starts = [0, 276, 552];
-    cards.forEach((card, index) => {
-      vi.spyOn(card, 'getBoundingClientRect').mockImplementation(() =>
-        horizontalRect(starts[index]! - (scroller as HTMLElement).scrollLeft, 260)
-      );
-    });
-
-    (scroller as HTMLElement).scrollLeft = 170;
-    fireEvent.scroll(scroller as HTMLElement);
-    await act(async () => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
-    expect(gate).toHaveAttribute('data-allowed-id', 'd2');
-
-    (scroller as HTMLElement).scrollLeft = 446;
-    fireEvent.scroll(scroller as HTMLElement);
-    await act(async () => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
-    expect(gate).toHaveAttribute('data-allowed-id', 'd3');
-  });
-
-  it('hands autoplay off when two-dimensional visibility deactivates the current player', async () => {
-    render(<ProfileActivitySection kinds={[kind({ rows: [row('d1'), row('d2')] })]} />);
-
-    const scroller = document.querySelector<HTMLElement>('.overflow-x-auto') as HTMLElement;
-    const cards = screen.getAllByTestId('card').map(card => card.parentElement as HTMLElement);
-    const gate = screen.getByTestId('playback-gate');
-    const railTop = { value: 0 };
-    const visibleRect = (left: number, width: number): DOMRect => ({
-      ...rect(width, 400),
-      x: left,
-      left,
-      right: left + width,
-      top: railTop.value,
-      bottom: railTop.value + 400,
-    });
-    vi.spyOn(scroller, 'getBoundingClientRect').mockImplementation(() => visibleRect(0, 750));
-    const starts = [0, 276];
-    cards.forEach((card, index) => {
-      vi.spyOn(card, 'getBoundingClientRect').mockImplementation(() =>
-        visibleRect(starts[index]! - scroller.scrollLeft, 260)
-      );
-    });
-
-    // At full height the first card is 60% visible horizontally, so it remains the owner.
-    scroller.scrollLeft = 104;
-    fireEvent.scroll(scroller);
-    await act(async () => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
-    expect(gate).toHaveAttribute('data-allowed-id', 'd1');
-
-    // Once the rail is only 60% high in the viewport, the first card's visible area is 36%, below
-    // the player's 40% deactivation edge. The fully wide second card is still 60% visible overall.
-    railTop.value = -160;
-    fireEvent.scroll(window);
-    await act(async () => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
-    expect(gate).toHaveAttribute('data-allowed-id', 'd2');
   });
 
   it('draws a dash rather than a zero when the count could not be read', () => {

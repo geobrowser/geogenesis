@@ -11,6 +11,7 @@ import { getCachedIdentityToken } from '~/core/auth/identity-token';
 import { browseSidebarVisibleSpaces } from '~/core/browse/fetch-browse-sidebar-data';
 import { useCachedBrowseSidebarData } from '~/core/browse/use-browse-sidebar-cache';
 import { keepSelectableSpaces } from '~/core/debates/claim-space-allowlist';
+import { DebateFeedAutoplay } from '~/core/debates/debate-playback-gate';
 import { type HubFilterOption, HubMultiFilterMenu, pickerLabel } from '~/core/debates/matchmaking/hub-filter-menu';
 import { keepSelectableTopics, orderFacetOptions, toggleId } from '~/core/debates/matchmaking/topic-facets';
 import { FEED_SESSION_GC_MS } from '~/core/explore/explore-constants';
@@ -970,15 +971,19 @@ export function EntityFeed({
         ) : (
           items.map((item, index) => (
             <React.Fragment key={`${item.entityId}-${item.spaceId}`}>
-              <ExploreFeedCard
-                itemPosition={index + 1}
-                item={item}
-                hideSpaceLink={lockedSpaceId != null}
-                hideJoinButton={lockedSpaceId != null}
-                titleOpensSidePanel={titleOpensSidePanel}
-                claimCardVariant={claimCardVariant}
-                deferUntilNearViewport={index >= EAGER_CARD_COUNT}
-              />
+              {/* A feed, so its debates play as they come into view; nowhere else does (GEO-3812).
+                  Around the card only, not what is interleaved between them. */}
+              <DebateFeedAutoplay>
+                <ExploreFeedCard
+                  itemPosition={index + 1}
+                  item={item}
+                  hideSpaceLink={lockedSpaceId != null}
+                  hideJoinButton={lockedSpaceId != null}
+                  titleOpensSidePanel={titleOpensSidePanel}
+                  claimCardVariant={claimCardVariant}
+                  deferUntilNearViewport={index >= EAGER_CARD_COUNT}
+                />
+              </DebateFeedAutoplay>
               {interleaved?.get(index)}
             </React.Fragment>
           ))
