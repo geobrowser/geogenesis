@@ -10,12 +10,22 @@ import type { PastCall } from './api';
 const mocks = vi.hoisted(() => ({
   calls: undefined as PastCall[] | undefined,
   enabled: [] as boolean[],
+  hasNextPage: false,
+  isFetchingNextPage: false,
+  isFetchNextPageError: false,
+  fetchNextPage: vi.fn(),
 }));
 
 vi.mock('./hooks', () => ({
   usePastCalls: (enabled: boolean) => {
     mocks.enabled.push(enabled);
-    return { data: enabled ? mocks.calls : undefined };
+    return {
+      data: enabled ? mocks.calls : undefined,
+      hasNextPage: mocks.hasNextPage,
+      isFetchingNextPage: mocks.isFetchingNextPage,
+      isFetchNextPageError: mocks.isFetchNextPageError,
+      fetchNextPage: mocks.fetchNextPage,
+    };
   },
 }));
 vi.mock('./call-recording-player', () => ({
@@ -33,6 +43,10 @@ afterEach(() => {
   cleanup();
   mocks.calls = undefined;
   mocks.enabled = [];
+  mocks.hasNextPage = false;
+  mocks.isFetchingNextPage = false;
+  mocks.isFetchNextPageError = false;
+  mocks.fetchNextPage.mockReset();
 });
 
 const CALL: PastCall = {
@@ -94,5 +108,48 @@ describe('usePastCallInterleave', () => {
     const cards = result.current!(30);
     expect([...cards.keys()]).toEqual([3, 13]);
     expect(React.isValidElement(cards.get(3))).toBe(true);
+  });
+
+  const drawCards = (
+    feedLength: number,
+    interleave: ((n: number) => ReadonlyMap<number, React.ReactNode>) | undefined
+  ) => render(<>{[...interleave!(feedLength).values()]}</>);
+
+  it('loads the next page once the feed reaches the last loaded call', () => {
+    mocks.calls = [CALL, { ...CALL, call_id: 'call2' }];
+    mocks.hasNextPage = true;
+    const { result } = renderHook(() => usePastCallInterleave(true));
+
+    drawCards(10, result.current);
+    expect(mocks.fetchNextPage).not.toHaveBeenCalled();
+    cleanup();
+
+    drawCards(30, result.current);
+    expect(mocks.fetchNextPage).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps earlier calls in their slots when a page arrives', () => {
+    mocks.calls = [CALL, { ...CALL, call_id: 'call2' }];
+    const { result, rerender } = renderHook(() => usePastCallInterleave(true));
+    const before = [...result.current!(100).keys()];
+    mocks.calls = [...mocks.calls, { ...CALL, call_id: 'call3' }];
+    rerender();
+    expect([...result.current!(100).keys()]).toEqual([...before, 23]);
+  });
+
+  it('stops at the last page, while a page loads, and after a page fails', () => {
+    mocks.calls = [CALL];
+    for (const state of [
+      { hasNextPage: false },
+      { hasNextPage: true, isFetchingNextPage: true },
+      { hasNextPage: true, isFetchNextPageError: true },
+    ]) {
+      Object.assign(mocks, { hasNextPage: false, isFetchingNextPage: false, isFetchNextPageError: false }, state);
+      const { result, unmount } = renderHook(() => usePastCallInterleave(true));
+      drawCards(30, result.current);
+      unmount();
+      cleanup();
+    }
+    expect(mocks.fetchNextPage).not.toHaveBeenCalled();
   });
 });

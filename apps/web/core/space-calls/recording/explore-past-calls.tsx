@@ -9,9 +9,13 @@ import { pastCallSlots } from './past-calls-interleave';
 /**
  * Explore's past-call cards for `EntityFeed`'s `interleave` (GEO-3421), or `undefined` while there
  * are none. The list loads beside the feed, never ahead of it, and a failed read draws nothing.
+ * Once the feed reaches the last loaded call, the next page loads; a call's slot depends only on
+ * its index, so a new page only adds cards further down.
  */
 export function usePastCallInterleave(enabled: boolean) {
-  const calls = usePastCalls(enabled).data;
+  const { data: calls, hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage } = usePastCalls(enabled);
+  // A failed page stops paging; the calls already drawn stay.
+  const canLoadMore = hasNextPage && !isFetchingNextPage && !isFetchNextPageError;
 
   return React.useMemo(() => {
     if (!enabled || !calls || calls.length === 0) return undefined;
@@ -19,9 +23,23 @@ export function usePastCallInterleave(enabled: boolean) {
       const cards = new Map<number, React.ReactNode>();
       for (const [afterIndex, callIndex] of pastCallSlots(feedLength, calls.length)) {
         const call = calls[callIndex]!;
-        cards.set(afterIndex, <PastCallCard key={`past-call-${call.call_id}`} call={call} />);
+        const last = callIndex === calls.length - 1;
+        cards.set(
+          afterIndex,
+          <React.Fragment key={`past-call-${call.call_id}`}>
+            <PastCallCard call={call} />
+            {last && canLoadMore ? <LoadMorePastCalls load={fetchNextPage} /> : null}
+          </React.Fragment>
+        );
       }
       return cards;
     };
-  }, [calls, enabled]);
+  }, [calls, canLoadMore, enabled, fetchNextPage]);
+}
+
+function LoadMorePastCalls({ load }: { load: () => unknown }) {
+  React.useEffect(() => {
+    void load();
+  }, [load]);
+  return null;
 }
