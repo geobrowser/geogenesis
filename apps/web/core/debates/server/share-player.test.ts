@@ -120,6 +120,18 @@ describe('sharePlayerHtml', () => {
     expect(html).toContain(`poster="${posterUrl}"`);
     expect(html).toContain('playsinline');
     expect(html).not.toContain('<b>');
+    expect(html).not.toContain('Open on Geo');
+  });
+
+  // X frames the whole card, so the player itself is the only way through to the debate.
+  it('links out to the debate in a new tab, in the corner and on the end screen', () => {
+    const debateUrl = `${ORIGIN}/space/${SPACE_HEX}/${DEBATE_HEX}`;
+    const html = sharePlayerHtml({ debateId: DEBATE_HEX, title: 'x', debateUrl });
+    expect(html).toContain(`<a class="open" href="${debateUrl}" target="_blank" rel="noopener">Open on Geo</a>`);
+    expect(html).toContain(
+      `<a class="full" href="${debateUrl}" target="_blank" rel="noopener">See the full debate on Geo</a>`
+    );
+    expect(html).toContain("addEventListener('ended'");
   });
 });
 
@@ -143,7 +155,9 @@ describe('sharePlayerResponse', () => {
     const d = deps(debate());
     const response = await sharePlayerResponse(ids, d);
     expect(response.status).toBe(200);
-    expect(await response.text()).toContain('<title>Claim | A vs. B</title>');
+    const html = await response.text();
+    expect(html).toContain('<title>Claim | A vs. B</title>');
+    expect(html).toContain(`href="${ORIGIN}/space/${SPACE_HEX}/${DEBATE_HEX}"`);
     expect(d.fetchEntity).toHaveBeenCalledWith(DEBATE_HEX, SPACE_HEX, expect.any(AbortSignal));
   });
 

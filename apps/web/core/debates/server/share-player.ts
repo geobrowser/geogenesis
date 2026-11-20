@@ -111,21 +111,50 @@ function escapeHtml(value: string): string {
 }
 
 /**
- * The page inside X's card iframe: just the video, letterboxed on black so either player shape
- * shows all of it. A route handler rather than a page, because every page sits under the app's
- * client-only Privy provider and would paint nothing until the whole app bundle had loaded.
+ * The page inside X's card iframe: the video, letterboxed on black so either player shape shows all
+ * of it, plus the way out to the debate. X frames the whole card, so taps never reach the debate page
+ * on their own; an "Open on Geo" link sits in the corner while it plays, and an end screen offers the
+ * full debate and a replay. Both open a new tab, so the card keeps its place in the timeline.
+ *
+ * A route handler rather than a page, because every page sits under the app's client-only Privy
+ * provider and would paint nothing until the whole app bundle had loaded.
  */
 export function sharePlayerHtml({
   debateId,
   title,
+  debateUrl,
   headTags = '',
 }: {
   debateId: string;
   title: string;
+  /** Where the click-through goes: the debate's page. Absent, the player has no way out. */
+  debateUrl?: string;
   headTags?: string;
 }): string {
   const src = escapeHtml(debateArtifactContentUrl(debateId, 'social_video'));
   const poster = escapeHtml(debateArtifactContentUrl(debateId, 'social_preview_image'));
+  const href = debateUrl ? escapeHtml(debateUrl) : null;
+  const clickThrough = href
+    ? `
+<a class="open" href="${href}" target="_blank" rel="noopener">Open on Geo</a>
+<div class="end" hidden>
+  <a class="full" href="${href}" target="_blank" rel="noopener">See the full debate on Geo</a>
+  <button class="replay" type="button">Replay</button>
+</div>
+<script>
+  (function () {
+    var video = document.querySelector('video');
+    var end = document.querySelector('.end');
+    var open = document.querySelector('.open');
+    video.addEventListener('ended', function () { end.hidden = false; open.hidden = true; });
+    video.addEventListener('play', function () { end.hidden = true; open.hidden = false; });
+    document.querySelector('.replay').addEventListener('click', function () {
+      video.currentTime = 0;
+      video.play();
+    });
+  })();
+</script>`
+    : '';
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -135,11 +164,27 @@ export function sharePlayerHtml({
 <title>${escapeHtml(title)}</title>${headTags ? `\n${headTags}` : ''}
 <style>
   html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  body { position: relative; font: 600 14px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
   video { display: block; width: 100%; height: 100%; object-fit: contain; background: #000; }
+  a { color: #fff; text-decoration: none; }
+  .open {
+    position: absolute; top: 12px; right: 12px; padding: 8px 12px; border-radius: 999px;
+    background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  }
+  .end {
+    position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 12px; background: rgba(0, 0, 0, 0.7);
+  }
+  .end[hidden], .open[hidden] { display: none; }
+  .full { padding: 12px 20px; border-radius: 999px; background: #fff; color: #000; font-size: 16px; }
+  .replay {
+    padding: 10px 16px; border: 1px solid rgba(255, 255, 255, 0.5); border-radius: 999px;
+    background: transparent; color: #fff; font: inherit; cursor: pointer;
+  }
 </style>
 </head>
 <body>
-<video src="${src}" poster="${poster}" controls playsinline preload="metadata"></video>
+<video src="${src}" poster="${poster}" controls playsinline preload="metadata"></video>${clickThrough}
 </body>
 </html>`;
 }
@@ -232,7 +277,9 @@ export async function sharePlayerResponse(
 
   const title = entity?.name || 'Geo debate';
   const headTags = sharePlayerHeadTags({ origin, spaceId, debateId, media, title });
-  return new Response(sharePlayerHtml({ debateId, title, headTags }), {
+  // Production's own URL shape, on whatever host served the player (the preview while testing).
+  const debateUrl = new URL(`/space/${ID.uuidToHex(spaceId)}/${ID.uuidToHex(debateId)}`, origin).toString();
+  return new Response(sharePlayerHtml({ debateId, title, debateUrl, headTags }), {
     headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=300' },
   });
 }
