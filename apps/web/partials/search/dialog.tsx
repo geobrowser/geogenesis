@@ -17,6 +17,7 @@ import { useSpace } from '~/core/hooks/use-space';
 import { useSpacesWhereMember } from '~/core/hooks/use-spaces-where-member';
 import { EntityId } from '~/core/io/substream-schema';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
+import { withClaimHomeSpaceFirst } from '~/core/utils/space/search-result-home-space';
 import { NavUtils, hasName, validateEntityId } from '~/core/utils/utils';
 
 import { ResultContent, ResultsList, SpaceContent } from '~/design-system/autocomplete/results-list';
@@ -94,7 +95,7 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
     [filterTags]
   );
 
-  const search = useSearch({
+  const rawSearch = useSearch({
     enabled: open,
     includeNonCanonical,
     filterBySpace: selectedSpaceId ?? undefined,
@@ -102,6 +103,9 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
     filterByTypes,
     filterByTags: filterByTagIds,
   });
+  // A claim's link, badge and types follow its home space, not a space that only links to it.
+  const results = useMemo(() => rawSearch.results.map(withClaimHomeSpaceFirst), [rawSearch.results]);
+  const search = { ...rawSearch, results };
 
   const { fetchNextPage, hasNextPage, isFetchingNextPage, onQueryChange } = search;
 
