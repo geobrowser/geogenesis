@@ -1118,7 +1118,7 @@ function PairedDebateFeedPlayer({
   // An effect event, so the effect runs on the facts that decide it rather than on every render
   // for a `playFromStart` that is a fresh function each time.
   const restartNow = React.useEffectEvent((control: 'replay' | 'start_over') => playFromStart(control));
-  const startOverOffered = true || startOverId === debate.id; // TEMP test: remove
+  const startOverOffered = startOverId === debate.id;
   React.useEffect(() => {
     if (restartPending == null) return;
     const lapsed = restartPending === 'replay' ? !playbackEnded : playbackEnded || !startOverOffered;
@@ -1135,7 +1135,7 @@ function PairedDebateFeedPlayer({
   // which have no room for the label.
   const refusedPrompt = active && ready && refusedStart && !held && !playbackEnded && !reducedOverlays && !editorMode;
   // Playing muted only by default on a touch screen, where a tap anywhere turns the sound on.
-  const soundHint = active && playing && (true || (mutedByDefault && touch)) && !reducedOverlays; // TEMP test: remove
+  const soundHint = active && playing && mutedByDefault && touch && !reducedOverlays;
   const showControls = ready && (awaitingTap || showReplay) && !refusedPrompt && !editorMode;
   // An ended debate always offers a replay; a stopped one shows the paused glyph.
   const showPausedGlyph = ready && awaitingTap && !playbackEnded && !held && !refusedPrompt && !editorMode;
