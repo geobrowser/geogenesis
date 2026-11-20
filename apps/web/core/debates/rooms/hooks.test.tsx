@@ -224,6 +224,49 @@ describe('useRoomPresence', () => {
   });
 });
 
+// geo-chat#383: a join refused because either debater is in another open session says so, once.
+describe('useRoomPresence refused for an open session', () => {
+  it('reports the refusal without retrying, and clears it when a later join lands', async () => {
+    const { renderHook: render, act } = await import('@testing-library/react');
+    const { useRoomPresence } = await import('./hooks');
+    const api = await import('../api');
+    vi.useFakeTimers();
+    let refuse = true;
+    const spy = vi
+      .spyOn(api, 'setDebateRoomPresence')
+      .mockImplementation((_room, body) =>
+        body.joined && refuse
+          ? Promise.reject(
+              new api.GeoChatRequestError(
+                'the other person is already in another debate session',
+                'already_in_open_session',
+                409
+              )
+            )
+          : Promise.resolve({} as never)
+      );
+    try {
+      const { result, unmount } = render(() => useRoomPresence('room-1', true), { wrapper: withQueryClient });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30_000);
+      });
+
+      expect(result.current.refusal).toBe('The other person is already in another debate session.');
+      expect(spy.mock.calls.filter(call => call[1].joined)).toHaveLength(1);
+
+      refuse = false;
+      await act(async () => {
+        await result.current.rejoin();
+      });
+      expect(result.current.refusal).toBeNull();
+      unmount();
+    } finally {
+      spy.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+});
+
 // GEO-3427: geo-chat counts an arrival by a join at or after the start, so a tab someone is waiting
 // in says so again once the start passes. A crashed tab, which never does, is the one left out.
 describe('useRoomPresence at the start', () => {

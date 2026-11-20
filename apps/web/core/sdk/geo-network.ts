@@ -70,6 +70,16 @@ export const GEO_NETWORK = defineGeoNetworkConfig({
   contracts,
 });
 
+/**
+ * The public web app's origin, for URLs written on chain; never a deployment's own host. Testnet
+ * defaults to the live site. Mainnet has none until NEXT_PUBLIC_GEO_WEB_ORIGIN is set to an http(s) URL.
+ */
+export const GEO_WEB_ORIGIN: string | null = (() => {
+  const override = Environment.variables.webOrigin ? new URL(Environment.variables.webOrigin) : null;
+  if (override && (override.protocol === 'https:' || override.protocol === 'http:')) return override.origin;
+  return IS_TESTNET ? 'https://www.geobrowser.io' : null;
+})();
+
 export const SPACE_REGISTRY_ADDRESS = contracts.SPACE_REGISTRY_ADDRESS;
 
 export const SPACE_REGISTRY_ADDRESS_HEX = SPACE_REGISTRY_ADDRESS as Hex;

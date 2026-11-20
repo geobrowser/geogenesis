@@ -48,6 +48,7 @@ const mocks = vi.hoisted(() => ({
   mediaMutate: vi.fn(),
   handleMutate: vi.fn(),
   acceptChallengeMutate: vi.fn(),
+  acceptChallengeError: null as Error | null,
   rejectChallengeMutate: vi.fn(),
   fetch: vi.fn(),
   share: vi.fn(),
@@ -102,7 +103,11 @@ vi.mock('./hooks', () => ({
   useDebateMediaArtifactUrl: () => ({ mutate: mocks.mediaMutate, error: null }),
   useDebateMedia: () => ({ data: mocks.media }),
   useHandleDebateSharePrompt: () => ({ mutate: mocks.handleMutate, isPending: false }),
-  useAcceptDebateChallenge: () => ({ mutate: mocks.acceptChallengeMutate, isPending: false, error: null }),
+  useAcceptDebateChallenge: () => ({
+    mutate: mocks.acceptChallengeMutate,
+    isPending: false,
+    error: mocks.acceptChallengeError,
+  }),
   useLeaveDebateRematch: () => ({ mutate: mocks.leaveRematchMutate, isPending: false, error: null }),
   useRejectDebateChallenge: () => ({ mutate: mocks.rejectChallengeMutate, isPending: false, error: null }),
   useAbortDebate: () => ({ mutateAsync: mocks.abortMutateAsync, isPending: false }),
@@ -239,6 +244,7 @@ vi.mock('~/core/state/feature-flags', async importOriginal => ({
 beforeEach(() => {
   sessionStorage.clear();
   mocks.roomAtPath = null;
+  mocks.acceptChallengeError = null;
   mocks.myLobby = { current_lobby_id: null, stepped_out: false };
   mocks.myLobbyFetching = false;
   mocks.media = { artifacts: [{ kind: 'social_video' }] };
@@ -803,6 +809,24 @@ describe('DebateCoordinator', () => {
     expect(mocks.acceptChallengeMutate).toHaveBeenCalled();
     // The card's mic and camera choice, both off by default.
     expect(readRematchJoinIntent('rematch-1')).toStrictEqual({ micOn: false, cameraOn: false, source: 'card' });
+  });
+
+  it('says why an accept was refused when either person is in another open session', async () => {
+    mocks.currentUserId = 'user-recipient';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = { ...activityWithRematch('browsing'), rematch: null, challenge: pendingChallenge() };
+    const { GeoChatRequestError } = await import('./api');
+    mocks.acceptChallengeError = new GeoChatRequestError(
+      'you are already in another debate session -- finish or leave it first',
+      'already_in_open_session',
+      409
+    );
+
+    render(<DebateCoordinator />);
+
+    expect(
+      await screen.findByText('You’re already in another debate session. Finish or leave it first.')
+    ).toBeVisible();
   });
 
   it('walks the person who accepted into the picker without a card', async () => {

@@ -7,6 +7,7 @@ import { motion } from 'framer-motion';
 import { useAtomValue } from 'jotai';
 import { usePathname } from 'next/navigation';
 
+import { isSpaceCallPath } from '~/core/space-calls/routes';
 import { useDiff } from '~/core/state/diff-store';
 
 import { debateFullscreenActiveAtom } from '~/atoms';
@@ -31,10 +32,10 @@ export const Main = ({ children }: MainProps) => {
     // the space header and tabs from the same two routes. The patterns are separate because that
     // file also runs on `/root`, which never reaches here.
     /^\/space\/[^/]+\/(debates|claims)(\/|$)/.test(pathname);
-  // A debate room — a lobby, or the notice before one — sizes itself to the viewport under the
-  // navbar, so the page padding only pushed the document 6rem past the screen: scrolling outside
-  // the lobby's own columns moved the whole page onto blank space. It keeps the centred width.
-  const fillsViewport = /^\/debate\/[^/]+\/?$/.test(pathname);
+  // A debate room or a space call (the same room shell) sizes itself to the viewport under the
+  // navbar. Page padding pushes it 6rem past the screen: its bottom bar falls below the fold and
+  // scrolling outside its columns moves the page onto blank space. It keeps the centred width.
+  const fillsViewport = /^\/debate\/[^/]+\/?$/.test(pathname) || isSpaceCallPath(pathname);
 
   return (
     <motion.main

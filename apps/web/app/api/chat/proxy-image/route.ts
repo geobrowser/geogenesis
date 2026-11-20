@@ -1,9 +1,7 @@
 // POST /api/chat/proxy-image — members-only image proxy for `setEntityImage`.
 // Direct browser fetch is CORS-blocked on most public image hosts; this route
 // fetches server-side with a real User-Agent and streams the bytes back.
-import { cookies } from 'next/headers';
-
-import { WALLET_ADDRESS } from '~/core/cookie';
+import { readWalletSessionLowercase } from '~/core/auth/server/wallet-session';
 
 import { ipCeilingLimit, loggedInLimit } from '../rate-limit';
 import { SsrfBlockedError, isPrivateHost, safeFetch } from '../web-fetch/helpers';
@@ -22,12 +20,6 @@ function isSameOrigin(req: Request): boolean {
   } catch {
     return false;
   }
-}
-
-function parseWalletCookie(raw: string | undefined): string | null {
-  if (!raw) return null;
-  const lower = raw.toLowerCase();
-  return /^0x[0-9a-f]{40}$/.test(lower) ? lower : null;
 }
 
 function getClientIp(req: Request): string {
@@ -70,8 +62,7 @@ export async function POST(req: Request) {
     return jsonError(403, 'Forbidden');
   }
 
-  const cookieStore = await cookies();
-  const wallet = parseWalletCookie(cookieStore.get(WALLET_ADDRESS)?.value);
+  const wallet = await readWalletSessionLowercase();
   if (!wallet) {
     return jsonError(401, 'Sign in to proxy images.');
   }

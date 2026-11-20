@@ -7,15 +7,20 @@ import cx from 'classnames';
 import { useActionContext } from '~/core/action-context-provider';
 import { copyShareLink } from '~/core/sharing/share-handoff';
 import { createShareLink } from '~/core/sharing/share-link';
+import { CallEntityLink } from '~/core/space-calls/call-entity-link';
 import {
   EndCallPublishChoice,
   callRecordingMetaLabel,
+  canManageCallRecording,
   useEndCallPublishes,
 } from '~/core/space-calls/recording/call-recording-room';
 import { spaceCallPath } from '~/core/space-calls/routes';
+import { useFeatureFlag } from '~/core/state/feature-flags';
 
 import { Ellipsis } from '~/design-system/icons/ellipsis';
 import { Text } from '~/design-system/text';
+
+import { GeoPublisherNotice } from '~/partials/space-calls/geo-publisher-notice';
 
 import { debateActionAnalyticsAttributes, debateSurfaceAnalyticsAttributes } from '../matchmaking/hub-analytics';
 import { HubPillButton } from '../matchmaking/hub-pill-button';
@@ -94,6 +99,12 @@ export function LobbyHeader({
   const hostLists = memberLobby ? <LobbyHostListsChip lobby={memberLobby} /> : null;
   const { noun, recording } = useRoomCapabilities();
   const recordingLabel = callRecordingMetaLabel(lobby);
+  const metaLabel = recording ? callMetaLabel(lobby, recordingLabel) : lobbyMetaLabel(lobby);
+  // Rendered only behind `spaceCalls` with an entity recorded; otherwise the header is unchanged.
+  const entityLink =
+    useFeatureFlag('spaceCalls') && lobby.call?.entity_id ? (
+      <CallEntityLink spaceId={lobby.call.space_id} entityId={lobby.call.entity_id} />
+    ) : null;
 
   if (phone) {
     return (
@@ -105,6 +116,13 @@ export function LobbyHeader({
         <div className="flex flex-wrap items-center gap-2">
           <LivePill lobby={lobby} small />
           {hostLists}
+          {entityLink && lobby.call ? (
+            <CallEntityLink
+              spaceId={lobby.call.space_id}
+              entityId={lobby.call.entity_id}
+              className="text-metadata text-ctaPrimary hover:underline"
+            />
+          ) : null}
         </div>
       </header>
     );
@@ -124,9 +142,16 @@ export function LobbyHeader({
           </Text>
           <LivePill lobby={lobby} />
         </div>
-        <Text as="p" variant="metadata" color="grey-04">
-          {recording ? callMetaLabel(lobby, recordingLabel) : lobbyMetaLabel(lobby)}
-        </Text>
+        {entityLink ? (
+          <Text as="p" variant="metadata" color="grey-04" className="flex flex-wrap items-center gap-2">
+            <span>{metaLabel}</span>
+            {entityLink}
+          </Text>
+        ) : (
+          <Text as="p" variant="metadata" color="grey-04">
+            {metaLabel}
+          </Text>
+        )}
       </div>
       <div className="flex flex-wrap items-center gap-2">
         {hostLists}
@@ -180,6 +205,13 @@ function EndLobbyControl({ lobby }: { lobby: LobbyPageView }) {
       {confirming ? (
         <>
           <EndCallPublishChoice lobby={lobby} checked={publishRecording} onChange={setPublishRecording} />
+          {lobby.call ? (
+            <GeoPublisherNotice
+              spaceId={lobby.call.space_id}
+              viewerIsEditor={canManageCallRecording(lobby)}
+              className="basis-full"
+            />
+          ) : null}
           <HubPillButton
             variant="primary"
             analyticsLabel="Lobby end confirm"

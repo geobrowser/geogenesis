@@ -13,6 +13,7 @@ import {
   SPONSORSHIP_RPC_URL,
   TEST_ENV,
   WALLETCONNECT_PROJECT_ID,
+  WEB_ORIGIN,
 } from './config';
 
 type SupportedChainId = '80451' | '55516';
@@ -90,6 +91,7 @@ type IVars = Readonly<{
   spaceRegistryAddress?: string;
   daoSpaceFactoryAddress?: string;
   sponsorshipRpcUrl?: string;
+  webOrigin?: string;
   walletConnectProjectId: string;
   privyAppId: string;
   /** Mainnet endpoints — required only when chainId is '80451' (validated in getConfig). */
@@ -106,6 +108,7 @@ export const variables: IVars = {
   spaceRegistryAddress: resolveAddressOverride('NEXT_PUBLIC_SPACE_REGISTRY_ADDRESS', SPACE_REGISTRY_ADDRESS),
   daoSpaceFactoryAddress: resolveAddressOverride('NEXT_PUBLIC_DAO_SPACE_FACTORY_ADDRESS', DAO_SPACE_FACTORY_ADDRESS),
   sponsorshipRpcUrl: resolveUrlOverride('NEXT_PUBLIC_SPONSORSHIP_RPC_URL', SPONSORSHIP_RPC_URL),
+  webOrigin: resolveUrlOverride('NEXT_PUBLIC_GEO_WEB_ORIGIN', WEB_ORIGIN),
   isTestEnv: TEST_ENV === 'true',
   privyAppId: PRIVY_APP_ID!,
   // `|| undefined` / `||` fallbacks: empty string reads as unset.

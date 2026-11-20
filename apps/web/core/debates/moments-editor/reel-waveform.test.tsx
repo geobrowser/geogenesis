@@ -33,13 +33,12 @@ const READY: PeaksView = {
   peaks: { bucketMs: 10, samples: new Uint8Array(1_000).fill(80), version: 'v1' },
 };
 
-/** The panel with the editor's snap switch and pad, held here as the editor holds them. */
-function Snapping(
-  props: Omit<React.ComponentProps<typeof ReelWaveform>, 'pad' | 'focus' | 'snap' | 'onSnap'> &
+/** The panel with the editor's default pad and focus. */
+function Panel(
+  props: Omit<React.ComponentProps<typeof ReelWaveform>, 'pad' | 'focus'> &
     Partial<Pick<React.ComponentProps<typeof ReelWaveform>, 'pad' | 'focus'>>
 ) {
-  const [snap, setSnap] = React.useState(true);
-  return <ReelWaveform pad={2_000} focus="clip" {...props} snap={snap} onSnap={() => setSnap(on => !on)} />;
+  return <ReelWaveform pad={2_000} focus="clip" {...props} />;
 }
 
 function renderPanel(
@@ -48,7 +47,7 @@ function renderPanel(
   const onChangeClip = vi.fn();
   const onSeek = vi.fn();
   const utils = render(
-    <Snapping
+    <Panel
       view={READY}
       clip={clip(1_000, 2_900)}
       index={0}
@@ -73,10 +72,10 @@ function renderPanel(
 }
 
 /** Drags the start handle from 1 s to 1.234 s, in the middle of "Coffee". */
-function dragStart(options: { altKey?: boolean } = {}) {
+function dragStart() {
   const handle = screen.getByTestId('fine-start-handle');
   fireEvent.pointerDown(handle, { clientX: 1_000, pointerId: 1 });
-  fireEvent.pointerMove(handle, { clientX: 1_234, pointerId: 1, altKey: options.altKey ?? false });
+  fireEvent.pointerMove(handle, { clientX: 1_234, pointerId: 1 });
   fireEvent.pointerUp(handle, { pointerId: 1 });
 }
 
@@ -92,17 +91,9 @@ describe('ReelWaveform (GEO-3673)', () => {
     expect(screen.getByTestId('waveform-played')).toBeInTheDocument();
   });
 
-  it('has "Snap to words" on to begin with, and snaps a dragged edge out to the whole word', () => {
+  it('places a dragged edge exactly where it is let go, to the 10 ms, never snapping to a word', () => {
     const { onChangeClip } = renderPanel();
-    expect(screen.getByRole('switch', { name: 'Snap to words' })).toBeChecked();
-    dragStart();
-    expect(onChangeClip).toHaveBeenLastCalledWith(0, { start_ms: 1_000, end_ms: 2_900, claim_index: 0 });
-  });
-
-  it('places an edge freely, to the 10 ms, with snapping off', () => {
-    const { onChangeClip } = renderPanel();
-    fireEvent.click(screen.getByRole('switch', { name: 'Snap to words' }));
-    expect(screen.getByRole('switch', { name: 'Snap to words' })).not.toBeChecked();
+    expect(screen.queryByRole('switch', { name: 'Snap to words' })).toBeNull();
     dragStart();
     expect(onChangeClip).toHaveBeenLastCalledWith(0, {
       start_ms: 1_230,
@@ -110,18 +101,6 @@ describe('ReelWaveform (GEO-3673)', () => {
       free_start_ms: 1_230,
       claim_index: 0,
     });
-  });
-
-  it('flips snapping for a drag with Alt held', () => {
-    const { onChangeClip } = renderPanel();
-    dragStart({ altKey: true });
-    expect(onChangeClip).toHaveBeenLastCalledWith(
-      0,
-      expect.objectContaining({ start_ms: 1_230, free_start_ms: 1_230 })
-    );
-    fireEvent.click(screen.getByRole('switch', { name: 'Snap to words' }));
-    dragStart({ altKey: true });
-    expect(onChangeClip).toHaveBeenLastCalledWith(0, { start_ms: 1_000, end_ms: 2_900, claim_index: 0 });
   });
 
   it('seeks the player where the track is clicked', () => {
@@ -163,7 +142,7 @@ describe('ReelWaveform (GEO-3673)', () => {
       function Live() {
         const [current, setCurrent] = React.useState(clip(1_000, 2_900));
         return (
-          <Snapping
+          <Panel
             focus="clip"
             view={READY}
             clip={current}
@@ -188,7 +167,6 @@ describe('ReelWaveform (GEO-3673)', () => {
         width: 4_900,
         left: 0,
       } as DOMRect);
-      fireEvent.click(screen.getByRole('switch', { name: 'Snap to words' }));
       // The end, from 2.9 s out to 6 s: past the window's 4.9 s, and past the track's right edge.
       fireEvent.pointerDown(screen.getByTestId('fine-end-handle'), { clientX: 2_900, pointerId: 1 });
       fireEvent.pointerMove(screen.getByTestId('waveform-track'), { clientX: 6_000, pointerId: 1 });
@@ -228,7 +206,7 @@ describe('ReelWaveform zoomed on an edge (GEO-3773)', () => {
     function Live() {
       const [current, setCurrent] = React.useState(clip(1_000, 2_900));
       return (
-        <Snapping
+        <Panel
           pad={1_000}
           focus="end"
           view={READY}
@@ -268,7 +246,6 @@ describe('ReelWaveform zoomed on an edge (GEO-3773)', () => {
 
   it('maps a drag to the zoomed window’s ms, keeps the window still under it, and centres on the edge when let go', () => {
     const onChangeClip = renderOnEnd();
-    fireEvent.click(screen.getByRole('switch', { name: 'Snap to words' }));
     const handle = screen.getByTestId('fine-end-handle');
     // The end sits at 1,000 px (2.9 s); 207 px right is 207 ms later: 3.107 s, to the 10 ms.
     fireEvent.pointerDown(handle, { clientX: 1_000, pointerId: 1 });
@@ -282,19 +259,19 @@ describe('ReelWaveform zoomed on an edge (GEO-3773)', () => {
     expect(screen.getByTestId('fine-end-handle')).toHaveStyle({ left: '50%' });
   });
 
-  it('snaps a dragged edge to the words in the zoomed window', () => {
+  it('leaves a dragged edge mid-word in the zoomed window: no snapping out to the word', () => {
     const onChangeClip = renderOnEnd();
     const handle = screen.getByTestId('fine-end-handle');
-    // From 2.9 s back 600 ms to 2.3 s, mid "dates": it snaps out to the word's end.
+    // From 2.9 s back 600 ms to 2.3 s, mid "dates": it stays there.
     fireEvent.pointerDown(handle, { clientX: 1_000, pointerId: 1 });
     fireEvent.pointerMove(handle, { clientX: 400, pointerId: 1 });
-    expect(onChangeClip).toHaveBeenLastCalledWith(0, expect.objectContaining({ end_ms: 2_900 }));
+    expect(onChangeClip).toHaveBeenLastCalledWith(0, expect.objectContaining({ end_ms: 2_300, free_end_ms: 2_300 }));
   });
 
   it('seeks to the ms clicked in the zoomed window', () => {
     const onSeek = vi.fn();
     render(
-      <Snapping
+      <Panel
         pad={1_000}
         focus="start"
         view={READY}

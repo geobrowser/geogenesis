@@ -15,7 +15,7 @@ import {
 } from '~/core/blocks/ranking/ranking-og-storage';
 
 import { getRequestWallet, walletCanEditSpace } from '../auth';
-import { checkRankingOgWalletRateLimit } from '../rate-limit';
+import { checkRankingOgGenerateIpRateLimit, checkRankingOgWalletRateLimit, getClientIp } from '../rate-limit';
 import {
   hasRankingOgAdminSecret,
   isSafeOgVersion,
@@ -177,13 +177,18 @@ async function uploadGlobalVariant({
 
 export async function POST(req: Request): Promise<Response> {
   // The server-to-server backfill script authenticates with the admin secret.
-  // The browser publish/share flow must be same-origin and present a valid
-  // wallet cookie, and is rate-limited per wallet.
+  // The browser publish/share flow must be same-origin and present a verified
+  // wallet session, and is rate-limited per IP (before the session is read, so
+  // requests without one count too) and per wallet.
   const isAdmin = hasRankingOgAdminSecret(req);
   let wallet: string | null = null;
   if (!isAdmin) {
     if (!isSameOrigin(req)) {
       return jsonResponse(403, { ok: false, error: 'forbidden' });
+    }
+    const ipLimit = await checkRankingOgGenerateIpRateLimit(getClientIp(req));
+    if (!ipLimit.ok) {
+      return jsonResponse(429, { ok: false, error: 'rate_limited', retryAfter: ipLimit.retryAfter });
     }
     wallet = await getRequestWallet();
     if (!wallet) {

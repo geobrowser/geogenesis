@@ -23,13 +23,14 @@ const mocks = vi.hoisted(() => ({
   submitResponseAsync: vi.fn(),
   authReady: false,
   authenticated: false,
+  user: null as unknown,
   smartAccount: null as unknown,
   personalSpace: { personalSpaceId: null as string | null, isRegistered: false, isLoading: false },
   responseSpaceId: null as string | null,
 }));
 
 vi.mock('~/core/wallet/auth-hooks', () => ({
-  usePrivy: () => ({ ready: mocks.authReady, authenticated: mocks.authenticated }),
+  usePrivy: () => ({ ready: mocks.authReady, authenticated: mocks.authenticated, user: mocks.user }),
   useGeoLogin: () => ({ login: vi.fn() }),
 }));
 vi.mock('~/core/analytics', () => ({
@@ -92,6 +93,7 @@ beforeEach(() => {
   mocks.submitResponseAsync.mockResolvedValue(undefined);
   mocks.authReady = false;
   mocks.authenticated = false;
+  mocks.user = null;
   mocks.smartAccount = null;
   mocks.personalSpace = { personalSpaceId: null, isRegistered: false, isLoading: false };
   mocks.responseSpaceId = null;
@@ -104,6 +106,22 @@ afterEach(cleanup);
 describe('a vote pressed while sign-in is still resolving', () => {
   const renderButtons = () =>
     render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="curation" />, { wrapper });
+
+  it('titles the arrows for a signed-in viewer before the signing account is built', () => {
+    mocks.authReady = true;
+    mocks.authenticated = true;
+    mocks.user = {
+      linkedAccounts: [
+        { type: 'wallet', walletClientType: 'privy', chainType: 'ethereum', address: `0x${'ab'.repeat(20)}` },
+      ],
+    };
+    mocks.personalSpace = { personalSpaceId: null, isRegistered: false, isLoading: true };
+
+    renderButtons();
+
+    expect(screen.getAllByRole('button', { name: 'Vote now — saved until your account is ready' })).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: 'Sign in to vote' })).toBeNull();
+  });
 
   it('never prompts a viewer who turns out to be signed in', async () => {
     mocks.authReady = true;

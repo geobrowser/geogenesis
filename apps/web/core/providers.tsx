@@ -9,6 +9,7 @@ import { Provider as JotaiProvider } from 'jotai';
 import { AnalyticsUserIdentifier } from './analytics-user-identifier';
 import { CodeStepTracker } from './auth/code-step-tracker';
 import { GoogleOAuthHost } from './auth/google-oauth';
+import { WalletSessionSync } from './auth/wallet-session-sync';
 import { BrowserTimezoneReporter } from './debates/browser-timezone';
 import { EmailClickReporter } from './notifications/email-click';
 import { NotificationRegistration } from './notifications/hooks';
@@ -19,6 +20,7 @@ import { SentryUserIdentifier } from './sentry-user-identifier';
 import { DiffProvider } from './state/diff-store';
 import { store } from './state/jotai-store';
 import { SyncEngineProvider } from './sync/use-sync-engine';
+import { AccountReadinessSync } from './wallet/account-readiness';
 import { AuthRoot } from './wallet/auth-root';
 
 interface Props {
@@ -29,6 +31,7 @@ export function Providers({ children }: Props) {
   return (
     <>
       <AuthRoot />
+      <WalletSessionSync />
       <PrivyAuthTracker />
       <CodeStepTracker />
       <ReactQueryProvider>
@@ -38,6 +41,7 @@ export function Providers({ children }: Props) {
         <EmailClickReporter />
         <BrowserTimezoneReporter />
         <SentryUserIdentifier />
+        <AccountReadinessSync />
         <JotaiProvider store={store}>
           {/* Inside the Jotai provider: it reads the googleSignIn flag. */}
           <GoogleOAuthHost />

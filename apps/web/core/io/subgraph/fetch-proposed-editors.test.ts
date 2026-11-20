@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { fetchActiveEditorRequest } from './fetch-proposed-editors';
+import { EditorRequestLookupError, fetchActiveEditorRequest } from './fetch-proposed-editors';
 
 const restFetchMock = vi.fn();
 
@@ -28,6 +28,8 @@ function proposal(over: {
   endTime?: number;
   isVotingEnded?: boolean;
   actionType?: string;
+  passed?: boolean;
+  executeBy?: number;
 }) {
   return {
     proposalId: over.proposalId,
@@ -38,15 +40,16 @@ function proposal(over: {
     votingMode: 'SLOW',
     actions: [{ actionType: over.actionType ?? 'ADD_EDITOR', targetId: over.targetId ?? EDITOR_DASHED }],
     userVote: null,
-    quorum: { required: 1, current: 0, progress: 0, reached: false },
-    threshold: { required: '50%', current: 0, progress: 0, reached: false },
+    quorum: { required: 1, current: 0, progress: 0, reached: over.passed ?? false },
+    threshold: { required: '50%', current: 0, progress: 0, reached: over.passed ?? false },
+    executeBy: over.executeBy ?? null,
     timing: {
       startTime: 0,
       endTime: over.endTime ?? 100,
       timeRemaining: null,
       isVotingEnded: over.isVotingEnded ?? false,
     },
-    canExecute: false,
+    canExecute: over.passed ?? false,
     votes: { yes: 0, no: 0, abstain: 0, total: 0 },
   };
 }
@@ -64,6 +67,7 @@ describe('fetchActiveEditorRequest', () => {
     await expect(fetchActiveEditorRequest(SPACE, EDITOR_DASHLESS)).resolves.toEqual({
       proposalId: 'p1',
       isVotingEnded: true,
+      canExecute: false,
     });
 
     const { path } = restFetchMock.mock.calls[0][0] as { path: string };
@@ -94,6 +98,31 @@ describe('fetchActiveEditorRequest', () => {
     await expect(fetchActiveEditorRequest(SPACE, EDITOR_DASHLESS)).resolves.toEqual({
       proposalId: 'new',
       isVotingEnded: false,
+      canExecute: false,
     });
+  });
+
+  it('says whether an ended request can still execute, by the governance rule', async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const read = (over: { passed: boolean; executeBy?: number }) => {
+      mockProposals([proposal({ proposalId: 'p1', status: 'EXECUTABLE', isVotingEnded: true, ...over })]);
+      return fetchActiveEditorRequest(SPACE, EDITOR_DASHLESS);
+    };
+    await expect(read({ passed: true, executeBy: now + 3600 })).resolves.toMatchObject({ canExecute: true });
+    await expect(read({ passed: true, executeBy: now - 60 })).resolves.toMatchObject({ canExecute: false });
+    await expect(read({ passed: false })).resolves.toMatchObject({ canExecute: false });
+  });
+
+  it('reads a failed or undecodable lookup as none, or throws when strict', async () => {
+    restFetchMock.mockImplementation(() => Effect.fail(new Error('down')));
+    await expect(fetchActiveEditorRequest(SPACE, EDITOR_DASHLESS)).resolves.toBeNull();
+    await expect(fetchActiveEditorRequest(SPACE, EDITOR_DASHLESS, { strict: true })).rejects.toBeInstanceOf(
+      EditorRequestLookupError
+    );
+    restFetchMock.mockImplementation(() => Effect.succeed({ nope: true }));
+    await expect(fetchActiveEditorRequest(SPACE, EDITOR_DASHLESS)).resolves.toBeNull();
+    await expect(fetchActiveEditorRequest(SPACE, EDITOR_DASHLESS, { strict: true })).rejects.toBeInstanceOf(
+      EditorRequestLookupError
+    );
   });
 });

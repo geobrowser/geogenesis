@@ -6,14 +6,29 @@ import { Effect } from 'effect';
 
 import type { Space } from '~/core/io/dto/spaces';
 import { getSpaceByAddress } from '~/core/io/queries';
-
-import { useSmartAccount } from './use-smart-account';
+import { useAccountReadiness } from '~/core/wallet/account-readiness';
 
 /**
  * How often to re-check for a personal space that doesn't exist yet. Space creation
  * resolves in ~30s–3min, so this keeps the wait feeling live without hammering the API.
  */
 const UNREGISTERED_POLL_INTERVAL_MS = 3_000;
+
+/** The longest wait between polls while the index keeps failing, so an outage isn't hammered. */
+const ERROR_POLL_MAX_INTERVAL_MS = 60_000;
+
+/** The next poll: none once registered, backing off while the index fails, else the steady interval. */
+export function personalSpacePollInterval(state: {
+  data: PersonalSpaceIdData | null | undefined;
+  status: 'pending' | 'error' | 'success';
+  errorUpdateCount: number;
+}) {
+  if (state.data?.isRegistered) return false;
+  if (state.status === 'error') {
+    return Math.min(UNREGISTERED_POLL_INTERVAL_MS * 2 ** state.errorUpdateCount, ERROR_POLL_MAX_INTERVAL_MS);
+  }
+  return UNREGISTERED_POLL_INTERVAL_MS;
+}
 
 /**
  * How long after this browser sends a profile publish we keep trusting it over an index
@@ -27,16 +42,20 @@ function profilePublishStorageKey(address: string) {
   return `personalProfilePublishedAt:${address.toLowerCase()}`;
 }
 
-/** Record that this browser just sent the personal profile publish for `address`. */
-export function markPersonalProfilePublished(address: string) {
+/**
+ * Record that the personal profile publish for `address` was sent at `at`: now, or the chain's time
+ * for one sent earlier, so a retry can't keep extending the window.
+ */
+export function markPersonalProfilePublished(address: string, at = Date.now()) {
   try {
-    window.localStorage.setItem(profilePublishStorageKey(address), String(Date.now()));
+    window.localStorage.setItem(profilePublishStorageKey(address), String(at));
   } catch {
     // Storage can be unavailable (private mode, blocked site data); the grace is a nicety.
   }
 }
 
-function recentlyPublishedProfile(address: string) {
+/** Whether this browser sent `address`'s profile publish within the grace window. */
+export function recentlyPublishedProfile(address: string) {
   try {
     const at = Number(window.localStorage.getItem(profilePublishStorageKey(address)));
     return Number.isFinite(at) && Date.now() - at < PROFILE_PUBLISH_GRACE_MS;
@@ -55,7 +74,20 @@ function recentlyPublishedProfile(address: string) {
  */
 export function needsPersonalProfile(space: Pick<Space, 'type' | 'hasProfile'> | null, address: string) {
   if (recentlyPublishedProfile(address)) return false;
+  return indexLacksPersonalProfile(space);
+}
+
+/** The index's answer alone: no space served yet, or a personal space with no profile entity. */
+export function indexLacksPersonalProfile(space: Pick<Space, 'type' | 'hasProfile'> | null) {
   return space === null || (space.type === 'PERSONAL' && !space.hasProfile);
+}
+
+/**
+ * The person entity of a personal space: its topic, or else its page. The page fills in while the
+ * indexer ignores the web's TOPIC_DECLARED, which leaves `topicId` null on most personal spaces.
+ */
+export function personalEntityIdOf(space: Pick<Space, 'topicId' | 'hasProfile' | 'entity'>) {
+  return space.topicId ?? (space.hasProfile && space.entity.id ? space.entity.id : null);
 }
 
 export type PersonalSpaceIdData = {
@@ -71,16 +103,16 @@ export type PersonalSpaceIdData = {
   needsProfile?: boolean;
 };
 
+/** Lowercased, so the restored address and the signing account's meet whatever their spelling. */
 export function personalSpaceIdQueryKey(address: string | null | undefined) {
-  return ['personal-space-id', address] as const;
+  return ['personal-space-id', address?.toLowerCase()] as const;
 }
 
 /** Hook to get the user's personal space ID from the GraphQL API. */
 export function usePersonalSpaceId() {
-  const { smartAccount, isLoading: isLoadingSmartAccount } = useSmartAccount();
-  const address = smartAccount?.account.address;
+  const { state, address } = useAccountReadiness();
 
-  const { data, isLoading, isFetched } = useQuery({
+  const { data, isLoading, isFetched, isSuccess } = useQuery({
     queryKey: personalSpaceIdQueryKey(address),
     queryFn: async (): Promise<PersonalSpaceIdData | null> => {
       if (!address) return null;
@@ -94,7 +126,7 @@ export function usePersonalSpaceId() {
       return {
         isRegistered: true,
         personalSpaceId: space.id,
-        personalEntityId: space.topicId ?? null,
+        personalEntityId: personalEntityIdOf(space),
         needsProfile: needsPersonalProfile(space, address),
       };
     },
@@ -113,7 +145,7 @@ export function usePersonalSpaceId() {
     //
     // Registered is terminal — a space is never un-created — so returning false here
     // ends the polling permanently rather than just skipping a tick.
-    refetchInterval: query => (query.state.data?.isRegistered ? false : UNREGISTERED_POLL_INTERVAL_MS),
+    refetchInterval: query => personalSpacePollInterval(query.state),
     // Don't burn requests for a tab nobody is looking at; it resumes on focus.
     refetchIntervalInBackground: false,
   });
@@ -126,7 +158,10 @@ export function usePersonalSpaceId() {
     // TanStack's isLoading can read false for a tick after the query becomes enabled but
     // before it dispatches a fetch — same gap a disabled query has pre-address. isFetched
     // doesn't lag: it stays false until a fetch for this queryKey actually completes.
-    isLoading: isLoadingSmartAccount || (!!address && !isFetched) || isLoading,
+    isLoading: state === 'restoring' || (!!address && !isFetched) || isLoading,
     isFetched,
+    // The index has answered (a failed refetch keeps the last answer). "Not registered" and
+    // "needs a profile" mean something only when this is true; a failed fetch reads as unregistered.
+    hasAnswer: isSuccess || data != null,
   };
 }

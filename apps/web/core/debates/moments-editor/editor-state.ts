@@ -76,7 +76,7 @@ export type EditorAction =
   /** Toggles a popover: a second press on what opened it closes it. */
   | { type: 'togglePopover'; popover: EditorPopover }
   | { type: 'closePopover' }
-  /** The fine-tune panel's Clip, Start or End, or an edge's time or word stepper. */
+  /** The fine-tune panel's Clip, Start or End, or an edge's time or play button. */
   | { type: 'focus'; focus: FineFocus }
   /** Esc: one level at a time, see {@link escapeTarget}. */
   | { type: 'escape' }

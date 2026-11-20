@@ -1,5 +1,7 @@
 import type { Hex } from 'viem';
 
+import { normId } from '~/core/utils/norm-id';
+
 /**
  * Server-only credentials for the debate acceptor — the account that auto-publishes finished
  * debates to the knowledge graph. Named after gaia's `membership-acceptor`, which follows the
@@ -65,4 +67,13 @@ export function getDebateAcceptorConfig(): DebateAcceptorConfig | null {
   }
 
   return { privateKey, address, spaceId, rpcUrl };
+}
+
+/**
+ * The acceptor's personal space id alone, normalized, or `null` when unset or malformed. Public, so
+ * it is read without the signing key: readers that only need to name the publisher use this.
+ */
+export function getPublisherSpaceId(): string | null {
+  const spaceId = normId(readEnv('DEBATE_ACCEPTOR_SPACE_ID'));
+  return /^[0-9a-f]{32}$/.test(spaceId) ? spaceId : null;
 }

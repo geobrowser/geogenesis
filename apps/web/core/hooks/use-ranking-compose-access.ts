@@ -11,14 +11,37 @@ import { normalizeSpaceId } from '~/core/access/space-access';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { useSpace } from '~/core/hooks/use-space';
+import { useAccountReadiness } from '~/core/wallet/account-readiness';
 
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 
 export type RankingComposeAccessStatus =
   'loading' | 'needs-login' | 'needs-onboarding' | 'needs-membership' | 'not-found' | 'ready';
+
+/**
+ * Where the viewer stands. Waits on an answer from the index: a failed personal-space fetch reads
+ * as unregistered, and treating it as "needs onboarding" opened the profile prompt during outages.
+ */
+export function rankingComposeAccessStatus(input: {
+  isLoadingSmartAccount: boolean;
+  address: string | null | undefined;
+  isLoading: boolean;
+  hasAnswer: boolean;
+  isRegistered: boolean;
+  personalSpaceId: string | null;
+  space: { type: string } | null | undefined;
+  canEdit: boolean;
+}): RankingComposeAccessStatus {
+  if (input.isLoadingSmartAccount) return 'loading';
+  if (!input.address) return 'needs-login';
+  if (input.isLoading || !input.hasAnswer) return 'loading';
+  if (!input.isRegistered || !input.personalSpaceId) return 'needs-onboarding';
+  if (!input.space) return 'not-found';
+  if (input.space.type === 'DAO' && !input.canEdit) return 'needs-membership';
+  return 'ready';
+}
 
 /**
  * Whether this status sends the viewer through sign-in or onboarding — and so needs a return address
@@ -35,8 +58,9 @@ export function rankingComposeNeedsAccountStep(status: RankingComposeAccessStatu
 
 export function useRankingComposeAccess(spaceId: string, rankingId?: string) {
   const queryClient = useQueryClient();
-  const { smartAccount, isLoading: isLoadingSmartAccount } = useSmartAccount();
-  const { personalSpaceId, isRegistered, isLoading: isLoadingPersonalSpace, isFetched } = usePersonalSpaceId();
+  const { state: accountState, address } = useAccountReadiness();
+  const isLoadingSmartAccount = accountState === 'restoring';
+  const { personalSpaceId, isRegistered, isLoading: isLoadingPersonalSpace, hasAnswer } = usePersonalSpaceId();
   const { space, isLoading: isLoadingSpace } = useSpace(spaceId);
   const { canEdit, isLoading: isLoadingAccess } = useAccessControl(spaceId);
   const tx = useSmartAccountTransaction();
@@ -46,15 +70,16 @@ export function useRankingComposeAccess(spaceId: string, rankingId?: string) {
 
   const isLoading = isLoadingPersonalSpace || isLoadingSpace || isLoadingAccess;
 
-  const status: RankingComposeAccessStatus = (() => {
-    if (isLoadingSmartAccount) return 'loading';
-    if (!smartAccount) return 'needs-login';
-    if (isLoading || !isFetched) return 'loading';
-    if (!isRegistered || !personalSpaceId) return 'needs-onboarding';
-    if (!space) return 'not-found';
-    if (space.type === 'DAO' && !canEdit) return 'needs-membership';
-    return 'ready';
-  })();
+  const status = rankingComposeAccessStatus({
+    isLoadingSmartAccount,
+    address,
+    isLoading,
+    hasAnswer,
+    isRegistered,
+    personalSpaceId,
+    space,
+    canEdit,
+  });
 
   const promptLogin = useCallback(
     (postLoginRedirect?: string) => {
@@ -82,12 +107,12 @@ export function useRankingComposeAccess(spaceId: string, rankingId?: string) {
   );
 
   const ensureAccess = useCallback(async (): Promise<boolean> => {
-    if (!smartAccount || !isRegistered || !personalSpaceId) {
+    if (!address || !isRegistered || !personalSpaceId) {
       return false;
     }
 
     return ensureSpaceMembership({ spaceId, personalSpaceId, tx, queryClient });
-  }, [smartAccount, isRegistered, personalSpaceId, spaceId, tx, queryClient]);
+  }, [address, isRegistered, personalSpaceId, spaceId, tx, queryClient]);
 
   const recheckAccess = useCallback(() => {
     if (!personalSpaceId) return;

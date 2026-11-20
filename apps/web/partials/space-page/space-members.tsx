@@ -1,7 +1,5 @@
-import { cookies } from 'next/headers';
-
 import { getSpaceAccessForRequest } from '~/core/access/get-space-access-for-request';
-import { WALLET_ADDRESS } from '~/core/cookie';
+import { readWalletSession } from '~/core/auth/server/wallet-session';
 import { getCachedSpaceParticipantsPage } from '~/core/space-members/get-cached-space-participants-page';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
@@ -22,7 +20,7 @@ interface Props {
 }
 
 export async function SpaceMembers({ spaceId }: Props) {
-  const connectedAddress = (await cookies()).get(WALLET_ADDRESS)?.value;
+  const connectedAddress = (await readWalletSession()) ?? undefined;
 
   const space = await cachedFetchSpace(spaceId);
 

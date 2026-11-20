@@ -7,6 +7,7 @@ import {
   privyJwksUrl,
   resetPrivyJwksCacheForTests,
   verifyPrivyIdentityToken,
+  verifyPrivyIdentityTokenDetailed,
 } from './privy-identity-token';
 
 const APP_ID = 'app-under-test';
@@ -139,8 +140,26 @@ describe('verifyPrivyIdentityToken', () => {
     const result = await verifyPrivyIdentityToken(await sign(rotated.privateKey, 'new', claims()), {
       appId: APP_ID,
       fetcher,
+      now: () => Date.now() + 61_000,
     });
     expect(result?.userId).toBe('did:privy:abc');
+    expect(calls).toHaveLength(2);
+  });
+
+  it('refetches for unknown kids at most once a minute', async () => {
+    const { privateKey, jwk } = await keyPair('k1');
+    const stranger = await keyPair('stranger');
+    const { fetcher, calls } = jwksFetcher([jwk]);
+    await verifyPrivyIdentityToken(await sign(privateKey, 'k1', claims()), { appId: APP_ID, fetcher });
+
+    for (let i = 0; i < 5; i += 1) {
+      const forged = await sign(stranger.privateKey, `random-${i}`, claims());
+      await expect(verifyPrivyIdentityToken(forged, { appId: APP_ID, fetcher })).resolves.toBeNull();
+    }
+    expect(calls).toHaveLength(1);
+
+    const later = await sign(stranger.privateKey, 'random-late', claims());
+    await verifyPrivyIdentityToken(later, { appId: APP_ID, fetcher, now: () => Date.now() + 61_000 });
     expect(calls).toHaveLength(2);
   });
 
@@ -170,5 +189,104 @@ describe('bearerToken', () => {
     expect(bearerToken('bearer  x ')).toBe('x');
     expect(bearerToken('Basic x')).toBeNull();
     expect(bearerToken(null)).toBeNull();
+  });
+});
+
+describe('verifyPrivyIdentityTokenDetailed', () => {
+  beforeEach(() => resetPrivyJwksCacheForTests());
+
+  it('reports a JWKS outage as unavailable', async () => {
+    const { privateKey } = await keyPair('k1');
+    const fetcher = (async () => new Response('down', { status: 503 })) as unknown as typeof fetch;
+    const token = await sign(privateKey, 'k1', claims());
+    await expect(verifyPrivyIdentityTokenDetailed(token, { appId: APP_ID, fetcher })).resolves.toEqual({
+      ok: false,
+      reason: 'unavailable',
+    });
+  });
+
+  it('reports a bad signature, an unknown kid and an expired token as invalid', async () => {
+    const { privateKey, jwk } = await keyPair('k1');
+    const other = await keyPair('k1');
+    const { fetcher } = jwksFetcher([jwk]);
+    const tokens = [
+      await sign(other.privateKey, 'k1', claims()),
+      await sign(privateKey, 'unknown', claims()),
+      await sign(privateKey, 'k1', claims({ exp: now - 3600 })),
+    ];
+    for (const token of tokens) {
+      // A cold cache each time, so the unknown kid is checked against freshly fetched keys.
+      resetPrivyJwksCacheForTests();
+      await expect(verifyPrivyIdentityTokenDetailed(token, { appId: APP_ID, fetcher })).resolves.toEqual({
+        ok: false,
+        reason: 'invalid',
+      });
+    }
+  });
+
+  it('reports an unknown kid as unavailable while the refetch cap holds, and recovers after', async () => {
+    const old = await keyPair('old');
+    const rotated = await keyPair('new');
+    let served = [old.jwk];
+    const calls: string[] = [];
+    const fetcher = (async (url: string) => {
+      calls.push(String(url));
+      return new Response(JSON.stringify({ keys: served }), { status: 200 });
+    }) as unknown as typeof fetch;
+    await verifyPrivyIdentityToken(await sign(old.privateKey, 'old', claims()), { appId: APP_ID, fetcher });
+
+    // Privy rotated within the cap window: the token cannot be checked yet.
+    served = [old.jwk, rotated.jwk];
+    const token = await sign(rotated.privateKey, 'new', claims());
+    await expect(verifyPrivyIdentityTokenDetailed(token, { appId: APP_ID, fetcher })).resolves.toEqual({
+      ok: false,
+      reason: 'unavailable',
+    });
+    expect(calls).toHaveLength(1);
+
+    const later = await verifyPrivyIdentityTokenDetailed(token, {
+      appId: APP_ID,
+      fetcher,
+      now: () => Date.now() + 61_000,
+    });
+    expect(later.ok).toBe(true);
+  });
+
+  it('shares one refetch between concurrent unknown kids', async () => {
+    const { privateKey, jwk } = await keyPair('k1');
+    const stranger = await keyPair('stranger');
+    const { fetcher, calls } = jwksFetcher([jwk]);
+    await verifyPrivyIdentityToken(await sign(privateKey, 'k1', claims()), { appId: APP_ID, fetcher });
+
+    const later = () => Date.now() + 61_000;
+    const forged = await Promise.all(
+      Array.from({ length: 5 }, (_, i) => sign(stranger.privateKey, `burst-${i}`, claims()))
+    );
+    await Promise.all(forged.map(token => verifyPrivyIdentityToken(token, { appId: APP_ID, fetcher, now: later })));
+
+    expect(calls).toHaveLength(2);
+  });
+
+  it('reports an unknown kid as invalid after a real refetch', async () => {
+    const { privateKey, jwk } = await keyPair('k1');
+    const stranger = await keyPair('stranger');
+    const { fetcher, calls } = jwksFetcher([jwk]);
+    await verifyPrivyIdentityToken(await sign(privateKey, 'k1', claims()), { appId: APP_ID, fetcher });
+
+    const forged = await sign(stranger.privateKey, 'stranger', claims());
+    await expect(
+      verifyPrivyIdentityTokenDetailed(forged, { appId: APP_ID, fetcher, now: () => Date.now() + 61_000 })
+    ).resolves.toEqual({ ok: false, reason: 'invalid' });
+    expect(calls).toHaveLength(2);
+  });
+
+  it('returns the identity, wallet or not', async () => {
+    const { privateKey, jwk } = await keyPair('k1');
+    const { fetcher } = jwksFetcher([jwk]);
+    const token = await sign(privateKey, 'k1', claims({ linked_accounts: '[]' }));
+    await expect(verifyPrivyIdentityTokenDetailed(token, { appId: APP_ID, fetcher })).resolves.toEqual({
+      ok: true,
+      identity: { userId: 'did:privy:abc', walletAddress: null },
+    });
   });
 });

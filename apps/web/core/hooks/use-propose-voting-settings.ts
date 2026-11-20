@@ -10,6 +10,7 @@ import { runEffectEither } from '~/core/telemetry/effect-runtime';
 
 import type { VotingSettingsInput } from '~/partials/governance/voting-settings';
 
+import { awaitSigningAccount } from './cached-write-identity';
 import { usePersonalSpaceId } from './use-personal-space-id';
 import { useSmartAccount } from './use-smart-account';
 
@@ -28,25 +29,26 @@ type ProposeVotingSettingsArgs = {
  * the at-most-once submission discipline used by usePublish.
  */
 export function useProposeVotingSettings() {
-  const { smartAccount } = useSmartAccount();
+  const { smartAccount: liveSmartAccount } = useSmartAccount();
   const { personalSpaceId } = usePersonalSpaceId();
   const [isPending, setIsPending] = React.useState(false);
 
   const propose = React.useCallback(
     async ({ spaceId, votingSettings }: ProposeVotingSettingsArgs) => {
-      if (!smartAccount) {
-        throw new TransactionWriteFailedError(
-          'Unable to propose: wallet is not connected. Please reconnect and try again.'
-        );
-      }
-      if (!personalSpaceId) {
-        throw new TransactionWriteFailedError(
-          'Unable to propose: your personal space could not be resolved. Please complete onboarding.'
-        );
-      }
-
       setIsPending(true);
       try {
+        const smartAccount = await awaitSigningAccount(liveSmartAccount);
+        if (!smartAccount) {
+          throw new TransactionWriteFailedError(
+            'Unable to propose: wallet is not connected. Please reconnect and try again.'
+          );
+        }
+        if (!personalSpaceId) {
+          throw new TransactionWriteFailedError(
+            'Unable to propose: your personal space could not be resolved. Please complete onboarding.'
+          );
+        }
+
         const submit = Effect.gen(function* () {
           const { to, calldata } = yield* Effect.try({
             try: () =>
@@ -91,7 +93,7 @@ export function useProposeVotingSettings() {
         setIsPending(false);
       }
     },
-    [smartAccount, personalSpaceId]
+    [liveSmartAccount, personalSpaceId]
   );
 
   return { propose, isPending };

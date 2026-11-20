@@ -2968,6 +2968,8 @@ export type DebateLobbyPerson = {
 export type DebateLobbyCallDetails = {
   space_id: string;
   space_name: string | null;
+  /** The call's Call Event entity once written (GEO-3593); absent from older geo-chat. */
+  entity_id?: string | null;
   /** The space's member chat room (GEO-3422); absent from geo-chat without space chat. */
   chat_room_id?: string | null;
   started_by: DebateLobbyPerson | null;

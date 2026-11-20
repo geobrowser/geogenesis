@@ -14,6 +14,7 @@ const item = (over: Partial<CallListItem>): CallListItem => ({
   status: 'scheduled',
   headcount: 0,
   avatars: [],
+  entityId: null,
   ...over,
 });
 

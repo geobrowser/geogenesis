@@ -31,7 +31,7 @@ export function useOnboarding() {
 
   const [isOnboardingVisible, setIsOnboardingVisible] = useAtom(isOnboardingVisibleAtom);
   const [dismissedAtPath, setDismissedAtPath] = useAtom(onboardingDismissedAtPathAtom);
-  const { isRegistered, needsProfile, isFetched, isLoading } = usePersonalSpaceId();
+  const { isRegistered, needsProfile, hasAnswer, isLoading } = usePersonalSpaceId();
   // A registered account whose profile publish never landed onboards again: re-running
   // creation skips the registration it already has and publishes only the profile.
   // Without this the account was treated as done for good, with no name, no page, and
@@ -47,8 +47,10 @@ export function useOnboarding() {
 
   const onboardingDismissed = dismissedAtPath !== null && dismissedAtPath === pathname;
 
+  // Only an answer from the index can say an account needs setup. A failed fetch reads as
+  // unregistered, and opening on it flickered the prompt on every poll during an outage.
   const shouldOnboard =
-    isFetched && !isLoading && needsSetup && user && !suppress && !onboardingDismissed && !pendingSetupTopicId;
+    hasAnswer && !isLoading && needsSetup && user && !suppress && !onboardingDismissed && !pendingSetupTopicId;
 
   // Set the onboarding to visible the first time we fetch the
   // profile for the user. Any subsequent changes to the visibility
@@ -75,7 +77,7 @@ export function useOnboarding() {
     onConnect(data) {
       const { address } = data;
 
-      if (address && isFetched && needsSetup && !suppress && !onboardingDismissed && !pendingSetupTopicId) {
+      if (address && hasAnswer && needsSetup && !suppress && !onboardingDismissed && !pendingSetupTopicId) {
         setIsOnboardingVisible(true);
       }
     },

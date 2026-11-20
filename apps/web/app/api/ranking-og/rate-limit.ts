@@ -8,6 +8,7 @@ export type RankingOgRateLimitResult = { ok: true } | { ok: false; retryAfter: n
 // rate limiting is unavailable — OG images are non-critical.
 let walletLimiter: Ratelimit | null = null;
 let ipLimiter: Ratelimit | null = null;
+let generateIpLimiter: Ratelimit | null = null;
 
 // `Redis.fromEnv()` returns a client even when the env vars are missing; it only
 // fails once a command runs, after retrying for ~4.4s. Gate on the env so that
@@ -32,6 +33,14 @@ if (hasUpstashEnv) {
       analytics: true,
       prefix: 'ranking-og:ip',
     });
+    // Generate renders and uploads, so it is capped per IP as well as per wallet. Its own bucket,
+    // as wide as the wallet one, so previews and crawlers on the same IP do not use it up.
+    generateIpLimiter = new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(300, '1 h'),
+      analytics: true,
+      prefix: 'ranking-og:generate-ip',
+    });
   } catch {
     // Construction failed despite env present — rate limiting disabled (allow).
   }
@@ -53,6 +62,8 @@ async function check(limiter: Ratelimit | null, identifier: string): Promise<Ran
 export const checkRankingOgWalletRateLimit = (wallet: string) => check(walletLimiter, wallet);
 
 export const checkRankingOgIpRateLimit = (ip: string) => check(ipLimiter, ip);
+
+export const checkRankingOgGenerateIpRateLimit = (ip: string) => check(generateIpLimiter, ip);
 
 export function getClientIp(req: Request): string {
   const forwarded = req.headers.get('x-forwarded-for');

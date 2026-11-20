@@ -11,6 +11,9 @@ const mocks = vi.hoisted(() => ({
   personalSpace: { personalSpaceId: null as string | null, isRegistered: false, isFetched: true },
 }));
 
+vi.mock('~/core/wallet/auth-hooks', () => ({
+  usePrivy: () => ({ ready: true, authenticated: Boolean(mocks.smartAccount), user: null }),
+}));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mocks.push }) }));
 vi.mock('~/core/hooks/use-smart-account', () => ({ useSmartAccount: () => ({ smartAccount: mocks.smartAccount }) }));
 vi.mock('~/core/hooks/use-personal-space-id', () => ({ usePersonalSpaceId: () => mocks.personalSpace }));

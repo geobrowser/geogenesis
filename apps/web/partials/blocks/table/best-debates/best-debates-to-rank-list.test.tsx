@@ -241,3 +241,158 @@ describe('To rank', () => {
     resetCollapsedSpacesForTests();
   });
 });
+
+describe('To rank: Show ranked debates (GEO-3810)', () => {
+  const display = (title: string): BestDebateRowData => ({
+    entityId: '',
+    title,
+    debaterSpaceIds: [],
+    ownSpaceId: 'own',
+    createdAtMs: null,
+    topics: [{ id: 'economy', name: 'economy' }],
+    keyframeUrl: null,
+    debaters: null,
+    space: null,
+  });
+  const displays = new Map([
+    ['d1', display('Tariffs hurt farmers')],
+    ['d2', display('Dating apps should verify IDs')],
+    ['r1', display('Tariffs raise prices')],
+    ['r2', display('Cats beat dogs')],
+    ['r3', display('Tariffs protect jobs')],
+    ['p1', display('Tariffs are a tax')],
+  ]);
+  const names: Record<string, string> = {
+    d1: 'Newest',
+    r1: 'Ranked one',
+    r2: 'Ranked two',
+    r3: 'Ranked three',
+    p1: 'Pushed',
+  };
+  const matches = { ranked: ['r1', 'r2', 'r3'], downRanked: ['p1'], capped: false };
+  const list = (props: Partial<React.ComponentProps<typeof BestDebatesToRankList>> = {}, watch = vi.fn()) => (
+    <BestDebateWatchContext.Provider value={watch}>
+      <BestDebateDisplaysContext.Provider value={displays}>
+        <BestDebatesToRankList
+          debates={debates}
+          isLoading={false}
+          error={null}
+          // No ranked-by badges, so a row's text is its name and its place.
+          rankers={rankers({ status: 'loading', rankerCount: () => null, rankersOf: () => null })}
+          entriesById={new Map()}
+          onPlace={vi.fn()}
+          onPushDown={vi.fn()}
+          draggable
+          rankedMatches={matches}
+          nameOf={id => names[id] ?? null}
+          {...props}
+        />
+      </BestDebateDisplaysContext.Provider>
+    </BestDebateWatchContext.Provider>
+  );
+  const rankedRows = () => screen.queryAllByTestId('best-debates-to-rank-ranked-row').map(row => row.textContent);
+
+  it('isn’t there without a search or filter', () => {
+    render(list());
+    expect(screen.queryByRole('button', { name: /ranked debates/ })).toBeNull();
+    render(list({ debates: [] }));
+    expect(screen.queryByRole('button', { name: /ranked debates/ })).toBeNull();
+  });
+
+  it('shows the ranked matches in your order with their place, then the down ranked ones', () => {
+    const watch = vi.fn();
+    render(list({ query: 'tariffs' }, watch));
+    const toggle = screen.getByRole('button', { name: 'Show ranked debates (3)' });
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(toggle.getAttribute('data-geo-analytics-label')).toBe('Best debates show ranked');
+    expect(rankedRows()).toEqual([]);
+
+    fireEvent.click(toggle);
+    expect(toggle.textContent).toBe('Hide ranked debates (3)');
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(toggle.getAttribute('data-geo-analytics-label')).toBe('Best debates hide ranked');
+    // r2 doesn't match the search; r3 keeps its place (#3) in your ranking.
+    expect(rankedRows()).toEqual(['Ranked oneYou: #1', 'Ranked threeYou: #3', 'PushedDown ranked']);
+    // Already yours: no Rank, drag or Down rank, and a press opens it to watch.
+    expect(screen.queryByRole('button', { name: /^Rank Ranked|^Rank Pushed/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Down rank (Ranked|Pushed)/ })).toBeNull();
+    const row = screen.getAllByTestId('best-debates-to-rank-ranked-row')[0];
+    expect(row.getAttribute('draggable')).toBeNull();
+    fireEvent.click(screen.getByText('Ranked one'));
+    expect(watch).toHaveBeenCalledWith('r1', 'row');
+
+    // The unranked list (and its count) stays unranked-only.
+    expect(screen.getAllByTestId('best-debates-to-rank-row')).toHaveLength(1);
+
+    fireEvent.click(toggle);
+    expect(toggle.textContent).toBe('Show ranked debates (3)');
+    expect(rankedRows()).toEqual([]);
+  });
+
+  it('shows it after the empty line when nothing unranked is left or matches', () => {
+    render(list({ debates: [], query: 'tariffs' }));
+    expect(screen.getByText('You’re up to date.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Show ranked debates (3)' })).toBeTruthy();
+    cleanup();
+
+    render(list({ query: 'tariffs prices' }));
+    expect(screen.getByText('No debates match.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Show ranked debates (1)' }));
+    expect(rankedRows()).toEqual(['Ranked oneYou: #1']);
+    cleanup();
+
+    render(list({ debates: [], filtered: true }));
+    expect(screen.getByText('Nothing left to rank with these filters.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Show ranked debates (4)' }));
+    expect(rankedRows()).toHaveLength(4);
+  });
+
+  it('is hidden when none of your ranked debates match', () => {
+    render(list({ query: 'dating' }));
+    expect(screen.queryByRole('button', { name: /ranked debates/ })).toBeNull();
+    cleanup();
+    render(list({ query: 'tariffs', rankedMatches: { ranked: [], downRanked: [], capped: false } }));
+    expect(screen.queryByRole('button', { name: /ranked debates/ })).toBeNull();
+  });
+
+  it('follows the search, and your ranking as debates move in and out of it', () => {
+    const { rerender } = render(list({ query: 'tariffs' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Show ranked debates (3)' }));
+
+    rerender(list({ query: 'cats' }));
+    expect(screen.getByRole('button', { name: 'Hide ranked debates (1)' })).toBeTruthy();
+    expect(rankedRows()).toEqual(['Ranked twoYou: #2']);
+
+    // d1 is dragged into your ranking at #1: it leaves the unranked list for the section, with its place.
+    rerender(
+      list({
+        query: 'tariffs',
+        debates: debates.filter(debate => debate.entityId !== 'd1'),
+        rankedMatches: { ...matches, ranked: ['d1', ...matches.ranked] },
+      })
+    );
+    expect(screen.queryAllByTestId('best-debates-to-rank-row')).toHaveLength(0);
+    expect(screen.getByRole('button', { name: 'Hide ranked debates (4)' })).toBeTruthy();
+    expect(rankedRows()).toEqual(['NewestYou: #1', 'Ranked oneYou: #2', 'Ranked threeYou: #4', 'PushedDown ranked']);
+
+    // The last debate left to rank goes in too: the section stays open.
+    rerender(
+      list({ query: 'tariffs', debates: [], rankedMatches: { ...matches, ranked: ['d2', 'd1', ...matches.ranked] } })
+    );
+    expect(screen.getByText('You’re up to date.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Hide ranked debates (4)' })).toBeTruthy();
+    expect(rankedRows()[0]).toBe('NewestYou: #2');
+
+    // Removed from your ranking: it leaves the section and is to rank again.
+    rerender(list({ query: 'tariffs', rankedMatches: { ...matches, ranked: ['r3'] } }));
+    expect(screen.getByRole('button', { name: 'Hide ranked debates (2)' })).toBeTruthy();
+    expect(rankedRows()).toEqual(['Ranked threeYou: #1', 'PushedDown ranked']);
+    expect(screen.getAllByTestId('best-debates-to-rank-row')).toHaveLength(1);
+  });
+
+  it('says when the filtered read stopped at its cap', () => {
+    render(list({ filtered: true, rankedMatches: { ...matches, capped: true } }));
+    fireEvent.click(screen.getByRole('button', { name: 'Show ranked debates (4)' }));
+    expect(screen.getByText('Showing the first 1000.')).toBeTruthy();
+  });
+});

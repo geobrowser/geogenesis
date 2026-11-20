@@ -4,8 +4,10 @@ import Link from 'next/link';
 
 import { Tag } from '~/design-system/tag';
 
-const ITEM_CLASS =
-  'flex w-full cursor-pointer items-center gap-2 bg-white px-3 py-2.5 text-left text-button text-text hover:bg-bg md:hidden';
+/** A row in a debate's "…" menu. */
+export const DEBATE_MENU_ITEM_CLASS =
+  'flex w-full cursor-pointer items-center gap-2 bg-white px-3 py-2.5 text-left text-button text-text hover:bg-bg';
+const ITEM_CLASS = `${DEBATE_MENU_ITEM_CLASS} md:hidden`;
 
 /**
  * "Edit moments" in a debate's "…" menu, for media admins: the feed card's and the Best debates

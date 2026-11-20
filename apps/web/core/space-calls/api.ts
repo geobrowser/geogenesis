@@ -31,6 +31,8 @@ export type SpaceCallSummary = {
   avatars: DebateLobbyPerson[];
   /** Orders `debate.space_calls_changed` patches; `null` on a scheduled row never broadcast. */
   as_of: string | null;
+  /** The call's Call Event entity once written (GEO-3593); absent from older geo-chat. */
+  entity_id?: string | null;
 };
 
 /** A series on the space's list (GEO-3420). */

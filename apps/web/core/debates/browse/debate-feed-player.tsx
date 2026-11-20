@@ -153,8 +153,8 @@ type DebateFeedPlayerProps = {
   onOpenClaims?: () => void;
   /**
    * Asks for this debate to become the active one. Replay on the end card calls it when the debate
-   * is not the active one yet, and holds the replay until it is. A row whose own click capture
-   * already hands playback over (the explore row) can leave it out.
+   * is not the active one yet, and holds the replay until it is; so does Play on a `tapToPlay` card,
+   * which is how such a card learns it was tapped.
    */
   onPlaybackRequest?: () => void;
   /**
@@ -180,6 +180,15 @@ type DebateFeedPlayerProps = {
    * have a Stream copy (`debateStreamsFully`).
    */
   holdFullPlayback?: boolean;
+  /**
+   * Play only when tapped (GEO-3812): the debate cards outside a feed pass it. While not `active`
+   * the card shows its stills and the Play control, as a held card does, and never starts itself —
+   * no autoplay, no preview clips, no Stream start. Unlike a held card its recordings stay attached
+   * (paused, under the stills) whenever the card keeps its media, so Play starts them inside the
+   * tap, with sound where the browser allows it, and calls `onPlaybackRequest` to be made active.
+   * Supersedes `holdFullPlayback`, and never lifts the feeds' tab-wide hold.
+   */
+  tapToPlay?: boolean;
   /** Clips to loop on a held card in place of the stills. Defaults to `debatePreviewClips`. */
   previewClips?: DebatePreviewClips;
   /**
@@ -298,7 +307,8 @@ function PairedDebateFeedPlayer({
   initialSeekSeconds = null,
   onPlaybackState,
   onPlayheadChange,
-  holdFullPlayback = false,
+  holdFullPlayback: holdFullPlaybackProp = false,
+  tapToPlay = false,
   previewClips,
   stills,
   playbackRate = 1,
@@ -314,6 +324,8 @@ function PairedDebateFeedPlayer({
   const reducedOverlays = reducedOverlaysProp || editorMode;
   // Read first, so whatever decides how the debate opens can see a saved position.
   const resumeSeconds = useDebateResume(debate.id);
+  // A tap-to-play card has its own hold, below, and keeps out of the feeds' one entirely.
+  const holdFullPlayback = holdFullPlaybackProp && !tapToPlay;
   const [fullPlaybackStarted, setFullPlaybackStarted] = useAtom(feedFullPlaybackStartedAtom);
   /*
    * A card with Stream preview clips is held until it is tapped itself, not until any card is.
@@ -337,19 +349,23 @@ function PairedDebateFeedPlayer({
   const preview = useDebatePreviewClips(debate, holdFullPlayback && !cardStarted && (active || preload));
   // The hold rule keys on either slot having a preview, not on the pair being shown: a one-clip
   // debate shows stills (GEO-3641) but must not fall back to the tab-wide rule and buffer raw media.
-  const held = holdFullPlayback && (preview.hasAnyPreview ? !(cardStarted || autoStarted) : !fullPlaybackStarted);
+  const fullPlaybackHeld =
+    holdFullPlayback && (preview.hasAnyPreview ? !(cardStarted || autoStarted) : !fullPlaybackStarted);
+  // Waiting for a tap (`tapToPlay`): drawn as a held card is, but with its media left attached.
+  const tapHeld = tapToPlay && !active;
+  const held = fullPlaybackHeld || tapHeld;
   // Loading is deliberately wider than playing. `useDebatePlayback`'s flag gates only the URL
   // fetch and the transcript query — playback is driven by `active` in the effect below — so a
   // preloading card fetches without autoplaying off-screen.
   // A held card is detached as a released one is, so its URLs lapse and re-sign the same way.
   const controller = useDebatePlayback(debate, active || preload, {
-    mediaAttached: !releaseMedia && !held,
+    mediaAttached: !releaseMedia && !fullPlaybackHeld,
     playbackRate,
     forceSound,
   });
   // What the <video> elements actually hold: a released card, a held one, or one re-signing lapsed
-  // URLs, has none.
-  const detached = releaseMedia || held || controller.urlsLapsed;
+  // URLs, has none. A card waiting for a tap is not one of them: its elements are there, paused.
+  const detached = releaseMedia || fullPlaybackHeld || controller.urlsLapsed;
   const measurement = usePlaybackAnalytics(debate, active, controller, !detached && measure);
   const {
     slot1VideoRef,
@@ -446,7 +462,9 @@ function PairedDebateFeedPlayer({
     measurement.control(playing ? 'pause' : playbackEnded ? 'replay' : 'play');
     if (playbackEnded) resetAnimationSeek();
     if (!playing) {
-      setFullPlaybackStarted(true);
+      // A tap outside a feed is a choice about that one debate, not the viewer saying they are here
+      // to watch the feeds' cards, so it leaves their hold as it is.
+      if (!tapToPlay) setFullPlaybackStarted(true);
       setStartedDebateId(debate.id);
     }
     pair.release();
@@ -485,6 +503,49 @@ function PairedDebateFeedPlayer({
     pair.release();
     void playFromStartRaw();
   };
+  /**
+   * Play on a tap-to-play card that is waiting for it.
+   *
+   * The card is made active, and in the same tap its elements — attached, paused, under the stills —
+   * are started the way the paused card's own Play starts them, so the browser counts the tap and
+   * plays with sound. Where they are not there yet (the URLs still signing or re-signing), it falls
+   * back to what a held card does: once active, the autoplay effect starts them, muted, and the mute
+   * control is there. The `play` is reported either way, exactly once: here when the elements are
+   * started, and otherwise as soon as there is media for the report to be about — reporting it now
+   * would go nowhere, since `measurement` binds only to attached elements.
+   */
+  const pendingTapReportRef = React.useRef(false);
+  const playFromTap = () => {
+    onPlaybackRequest?.();
+    if (detached || !ready || !slot1VideoRef.current || !slot2VideoRef.current) {
+      pendingTapReportRef.current = true;
+      return;
+    }
+    pendingTapReportRef.current = false;
+    if (playing) return;
+    // An ended debate too: `togglePlayback` replays it, and unlike `playFromStart` it lets the sound
+    // on inside this tap.
+    togglePlayback();
+  };
+  // After `usePlaybackAnalytics` in this component, so its effect has bound to the attached
+  // elements by the time this one reports to it. Only `playFromTap` arms it, and it re-arms or
+  // disarms on every tap, so a tap whose card never became active cannot be reported twice.
+  //
+  // The autoplay effect starts only a debate that is neither ended nor paused, so a tap that waited
+  // on one of those — an ended debate whose URLs lapsed while it was off screen, or one the viewer
+  // paused before scrolling away — is carried out here instead, or the card would land on its end
+  // card or its paused glyph and need a second tap. Through `togglePlayback`, which replays an ended
+  // one and reports `replay` or `play` itself; without sound, since this is no longer inside the tap.
+  // (A browser that refused autoplay refuses this too, so that case keeps its "Watch the debate".)
+  const landPendingTap = React.useEffectEvent(() => {
+    if (playbackEnded || userPaused) togglePlayback(null);
+    else measurement.control('play');
+  });
+  React.useEffect(() => {
+    if (!active || detached || !ready || !pendingTapReportRef.current) return;
+    pendingTapReportRef.current = false;
+    landPendingTap();
+  }, [active, detached, ready]);
   /*
    * Let both recordings make sound later, from inside the Unmute tap (GEO-3115).
    *
@@ -875,7 +936,8 @@ function PairedDebateFeedPlayer({
   const betweenTurns = React.useMemo(() => silentAt(playbackBreaks, playheadMs), [playbackBreaks, playheadMs]);
   const breakNames = { 1: breakFirstName(slot1Participant), 2: breakFirstName(slot2Participant) };
 
-  const showReplay = ready && playbackEnded;
+  // A card waiting for a tap offers only Play, which replays an ended debate.
+  const showReplay = ready && playbackEnded && !tapHeld;
   // The end card is where an ended debate lands, except on a compact gallery tile — which has no
   // room for it and keeps the plain centred replay.
   const endCardShown = showReplay && !reducedOverlays;
@@ -1095,7 +1157,7 @@ function PairedDebateFeedPlayer({
    * play only on the visible one, so reaching the next card does not wait on a fetch. A clip
    * supplied any other way plays on the active card only, as it always has.
    */
-  const previewNear = held && (active || (preview.available && preload));
+  const previewNear = fullPlaybackHeld && (active || (preview.available && preload));
   const slot1PreviewRef = React.useRef<HTMLVideoElement | null>(null);
   const slot2PreviewRef = React.useRef<HTMLVideoElement | null>(null);
   usePreviewPairSync(
@@ -1299,6 +1361,10 @@ function PairedDebateFeedPlayer({
   const toggleFromVideo = () => {
     // The editor's own controls play and pause it.
     if (editorMode) return;
+    if (tapHeld) {
+      playFromTap();
+      return;
+    }
     if (held) {
       startFullPlayback();
       return;
@@ -1380,7 +1446,8 @@ function PairedDebateFeedPlayer({
           previewVideoRef={slot1PreviewRef}
           onPreviewError={preview.available ? () => preview.refresh(1) : undefined}
           held={held}
-          concealed={!pair.mayShow}
+          // A card waiting for a tap shows its stills over its paused elements, whatever frame they hold.
+          concealed={!pair.mayShow || tapHeld}
           audible={playing && turnState?.slot === 1 && !betweenTurns}
           countdown={playing && !announcementShown && displayedTurn?.slot === 1 ? displayedTurn : null}
           roundBadge={displayedTurn?.slot === 1 ? displayedRoundBadge : null}
@@ -1505,7 +1572,7 @@ function PairedDebateFeedPlayer({
           previewVideoRef={slot2PreviewRef}
           onPreviewError={preview.available ? () => preview.refresh(2) : undefined}
           held={held}
-          concealed={!pair.mayShow}
+          concealed={!pair.mayShow || tapHeld}
           audible={playing && turnState?.slot === 2 && !betweenTurns}
           countdown={playing && !announcementShown && displayedTurn?.slot === 2 ? displayedTurn : null}
           roundBadge={displayedTurn?.slot === 2 ? displayedRoundBadge : null}
@@ -1693,7 +1760,7 @@ function PairedDebateFeedPlayer({
           <button
             type="button"
             aria-label="Play debate"
-            onClick={startFullPlayback}
+            onClick={tapHeld ? playFromTap : startFullPlayback}
             className={cx(CENTERED_PLAYBACK_CONTROL_CLASS, 'z-30 grid')}
           >
             <Play />

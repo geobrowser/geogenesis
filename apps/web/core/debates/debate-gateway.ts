@@ -120,9 +120,30 @@ type DebateEventPayload = {
   sections?: MatchmakingSection[];
 };
 
+/** Each event's audience (geo-chat `events.rs`). Only a `broadcast`'s refetches are spread. */
+const DEBATE_EVENT_AUDIENCE = {
+  'debate.activity_changed': 'participants',
+  'debate.claims_changed': 'broadcast',
+  'debate.state_changed': 'participants',
+  'debate.rematch_changed': 'participants',
+  'debate.media_changed': 'broadcast',
+  'debate.share_prompts_changed': 'participants',
+  'debate.requests_changed': 'participants',
+  'debate.matchmaking_changed': 'broadcast',
+  'debate.lobbies_changed': 'broadcast',
+  'debate.my_lobby_changed': 'participants',
+  'debate.lobby_changed': 'participants',
+  'debate.lobby_highlights_changed': 'participants',
+  'debate.lobby_claim_lists_changed': 'participants',
+  'debate.lobby_guests_changed': 'participants',
+  'debate.space_calls_changed': 'broadcast',
+} as const satisfies Record<string, 'broadcast' | 'participants'>;
+
+type DebateEventType = keyof typeof DEBATE_EVENT_AUDIENCE;
+
 type DebateInvalidationEvent = {
   event_id: string;
-  event_type: string;
+  event_type: DebateEventType;
   payload: DebateEventPayload;
 };
 
@@ -174,6 +195,11 @@ const MAX_RECENT_EVENT_IDS = 256;
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 30_000;
 const HANDSHAKE_TIMEOUT_MS = 10_000;
 const INVALIDATION_COALESCE_MS = 50;
+/**
+ * Max random delay on refetches that many viewers make at once (broadcast events, reconnect
+ * reconciles), so their reads don't land together.
+ */
+export const BROADCAST_INVALIDATION_SPREAD_MS = 500;
 const INVALIDATION_RETRY_BASE_MS = 250;
 /**
  * How long an unrecognised `ERROR` frame suppresses another reconnect. One recycle repairs a
@@ -253,6 +279,9 @@ export class DebateGatewayClient {
   private handshakeTimer: ReturnType<typeof setTimeout> | null = null;
   private tokenRotationTimer: ReturnType<typeof setTimeout> | null = null;
   private invalidationTimer: ReturnType<typeof setTimeout> | null = null;
+  private invalidationDueAt = 0;
+  /** One random delay shared by everything queued inside `withInvalidationSpread`; 0 outside it. */
+  private invalidationSpreadDelayMs = 0;
   private invalidationRetryTimers = new Set<ReturnType<typeof setTimeout>>();
   private connectionGeneration = 0;
   /** Signed out and turned away for load; see `retryAfterFocus`. */
@@ -613,14 +642,19 @@ export class DebateGatewayClient {
       if (!readyScopes.has(key)) this.confirmedScopes.delete(key);
     }
 
+    const newlyConfirmed: DebateGatewayScope[] = [];
     for (const key of readyScopes) {
       this.clearSubscriptionRetry(key);
       const retained = this.scopes.get(key);
       if (!retained || this.confirmedScopes.has(key)) continue;
       this.confirmedScopes.add(key);
       // The retained spelling, which is what the query keys were built from.
-      this.queueScopeReconcile(retained.scope);
+      newlyConfirmed.push(retained.scope);
     }
+    // Spread on a socket's first READY (a reconnect); a later one confirms a scope the viewer just opened.
+    this.withInvalidationSpread(firstReadyForSocket, () => {
+      for (const scope of newlyConfirmed) this.queueScopeReconcile(scope);
+    });
 
     for (const { scope } of this.scopes.values()) this.sendSubscription(scope, 'SUBSCRIBE');
     this.scopesChanged();
@@ -640,6 +674,23 @@ export class DebateGatewayClient {
   private handleEvent(payload: unknown) {
     if (!isDebateEvent(payload) || this.recentEventIds.has(payload.event_id)) return;
     this.rememberEvent(payload.event_id);
+    const spread = DEBATE_EVENT_AUDIENCE[payload.event_type] === 'broadcast';
+    this.withInvalidationSpread(spread, () => this.applyEvent(payload));
+  }
+
+  /** Spread: one draw for every key `queue` adds, so several keys don't take the earliest of many. */
+  private withInvalidationSpread(spread: boolean, queue: () => void) {
+    const previous = this.invalidationSpreadDelayMs;
+    if (!spread) this.invalidationSpreadDelayMs = 0;
+    else if (previous === 0) this.invalidationSpreadDelayMs = this.random() * BROADCAST_INVALIDATION_SPREAD_MS;
+    try {
+      queue();
+    } finally {
+      this.invalidationSpreadDelayMs = previous;
+    }
+  }
+
+  private applyEvent(payload: DebateInvalidationEvent) {
     const identifiers = payload.payload;
 
     switch (payload.event_type) {
@@ -939,7 +990,12 @@ export class DebateGatewayClient {
     this.queueQuery(['debates', 'transcript', dashlessId(scope.debate_id)]);
   }
 
+  /** After a (re)connect, which every viewer of a restarted gateway makes together; spread. */
   private queueBroadReconcile() {
+    this.withInvalidationSpread(true, () => this.queueBroadReconcileNow());
+  }
+
+  private queueBroadReconcileNow() {
     if (this.anonymous) {
       for (const { scope } of this.scopes.values()) this.queueScopeReconcile(scope);
       return;
@@ -1121,18 +1177,28 @@ export class DebateGatewayClient {
     if (key === BROAD_INVALIDATION_KEY) {
       this.pendingInvalidations.clear();
       this.pendingChangedClaimsBySpace.clear();
-    } else if (this.pendingInvalidations.has(BROAD_INVALIDATION_KEY)) {
-      return;
     }
-    this.pendingInvalidations.set(key, filters);
-    if (this.invalidationTimer) return;
+    // A pending broad invalidation covers this one; only an unspread one brings its flush sooner.
+    if (key !== BROAD_INVALIDATION_KEY && this.pendingInvalidations.has(BROAD_INVALIDATION_KEY)) {
+      if (this.invalidationSpreadDelayMs > 0) return;
+    } else {
+      this.pendingInvalidations.set(key, filters);
+    }
+    // One flush for everything pending, at the earliest time asked for.
+    const delay = INVALIDATION_COALESCE_MS + this.invalidationSpreadDelayMs;
+    const dueAt = Date.now() + delay;
+    if (this.invalidationTimer) {
+      if (dueAt >= this.invalidationDueAt) return;
+      clearTimeout(this.invalidationTimer);
+    }
+    this.invalidationDueAt = dueAt;
     this.invalidationTimer = setTimeout(() => {
       this.invalidationTimer = null;
       const invalidations = [...this.pendingInvalidations.values()];
       this.pendingInvalidations.clear();
       this.pendingChangedClaimsBySpace.clear();
       void this.flushInvalidations(invalidations);
-    }, INVALIDATION_COALESCE_MS);
+    }, delay);
   }
 
   private async flushInvalidations(invalidations: InvalidationFilters[], attempt = 0) {
@@ -1847,6 +1913,7 @@ function isDebateEvent(value: unknown): value is DebateInvalidationEvent {
     isRecord(value) &&
     typeof value.event_id === 'string' &&
     typeof value.event_type === 'string' &&
+    Object.hasOwn(DEBATE_EVENT_AUDIENCE, value.event_type) &&
     isRecord(value.payload)
   );
 }
