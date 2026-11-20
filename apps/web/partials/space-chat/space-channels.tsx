@@ -119,7 +119,7 @@ export function SpaceChannels({ spaceId }: { spaceId: string }) {
 
   const title = (
     <>
-      <span className="inline-flex items-center gap-1.5 mobile:hidden">
+      <span className="inline-flex items-center gap-1.5 text-smallTitle mobile:hidden">
         <ChannelTitle room={current} name={name} />
       </span>
       <span className="hidden mobile:inline-flex">
@@ -353,7 +353,7 @@ function ChannelMenu({
         <button
           type="button"
           aria-label={`${SPACE_CHANNELS_COPY.channels}: # ${name}`}
-          className="flex items-center gap-1.5 text-metadataMedium text-text"
+          className="flex items-center gap-1.5 text-smallTitle text-text"
         >
           <ChannelTitle room={current} name={name} />
           <ChevronDownSmall color="grey-04" />
