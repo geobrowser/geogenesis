@@ -276,14 +276,15 @@ describe('the made-for-it share video', () => {
     });
   });
 
-  it('lays vote and watch links over the drawn buttons, casting the side on the debate page', () => {
+  it('draws live vote and watch buttons over the video, casting the side on the debate page', () => {
     const debateUrl = `${ORIGIN}/space/${GOLD_SPACE}/${GOLD}?stay=1`;
     const html = sharePlayerHtml({ debateId: GOLD, title: 't', debateUrl });
     expect(html).toContain(`src="${experience.videoUrl}"`);
     expect(html).toContain(`href="${debateUrl}&#38;side=agree"`);
     expect(html.match(/side=agree/g)).toHaveLength(2);
     expect(html.match(/side=disagree/g)).toHaveLength(2);
-    expect(html).toContain('aria-label="Watch the full debate on Geo"');
+    expect(html).toContain('Watch the full debate on Geo<span class="go">');
+    expect(html).toContain('Watch on Geo<span class="go">');
     expect(html).not.toContain('Open on Geo</a>');
   });
 });

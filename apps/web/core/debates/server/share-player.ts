@@ -198,13 +198,15 @@ export function sharePlayerHtml({
     position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center;
     justify-content: center; gap: 12px; background: rgba(0, 0, 0, 0.7);
   }
-  .end[hidden], .open[hidden], .hot[hidden] { display: none; }
+  .end[hidden], .open[hidden] { display: none; }
   .stage { position: absolute; inset: 0; }
-  /* The made-for-it video is 16:9 with its buttons drawn in; the stage keeps the links on them. */
-  .stage.fixed { margin: auto; aspect-ratio: 16 / 9; width: min(100vw, calc(100vh * 16 / 9)); height: auto; }
-  .hot { position: absolute; border-radius: 999px; }
-  .hot:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
-  .full { padding: 12px 20px; border-radius: 999px; background: #fff; color: #000; font-size: 16px; }
+  /* The made-for-it video is 16:9 and leaves room for its buttons; the stage keeps them in it. Its
+     size is the container, so the buttons scale with the card however large X draws it. */
+  .stage.fixed {
+    margin: auto; aspect-ratio: 16 / 9; width: min(100vw, calc(100vh * 16 / 9)); height: auto;
+    container-type: size; font-family: Geist, -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+${SHARE_TEST_BUTTON_CSS}  .full { padding: 12px 20px; border-radius: 999px; background: #fff; color: #000; font-size: 16px; }
   .replay {
     padding: 10px 16px; border: 1px solid rgba(255, 255, 255, 0.5); border-radius: 999px;
     background: transparent; color: #fff; font: inherit; cursor: pointer;
@@ -217,12 +219,67 @@ export function sharePlayerHtml({
 </html>`;
 }
 
+/** The Geo Debate Clip's pill (label and a round go button), as the X player's live buttons. */
+const SHARE_TEST_BUTTON_CSS = `
+  @font-face { font-family: Geist; src: url('/fonts/Geist-Medium.ttf'); font-weight: 500; }
+  .btn {
+    position: absolute; z-index: 2; display: flex; align-items: center; justify-content: space-between;
+    gap: 1.1cqw; padding: 0 0.7cqw 0 2cqw; border-radius: 999px; box-sizing: border-box;
+    font-weight: 500; font-size: 2.35cqw; letter-spacing: -0.04em; white-space: nowrap; text-decoration: none;
+    box-shadow: 0 0.6cqw 2cqw rgba(0, 0, 0, 0.28);
+    transition: transform 160ms ease, box-shadow 160ms ease, opacity 220ms ease;
+    opacity: 0; transform: translateY(1cqw); pointer-events: none;
+  }
+  .btn.on { opacity: 1; transform: none; pointer-events: auto; }
+  .btn:hover { transform: translateY(-0.3cqw); box-shadow: 0 1cqw 2.6cqw rgba(0, 0, 0, 0.34); }
+  .btn:active { transform: scale(0.96); }
+  .btn:focus-visible { outline: 0.25cqw solid #9a4eff; outline-offset: 0.3cqw; }
+  .btn .go {
+    flex: none; display: grid; place-items: center; width: 4.4cqw; height: 4.4cqw; border-radius: 50%;
+    transition: transform 160ms ease;
+  }
+  .btn:hover .go { transform: translateX(0.3cqw); }
+  .btn .go svg { width: 2cqw; height: 2cqw; }
+  .btn.light { background: #fff; color: #151515; }
+  .btn.light .go { background: #151515; color: #fff; }
+  .btn.dark { background: #151515; color: #fff; }
+  .btn.dark .go { background: #fff; color: #151515; }
+  .btn .mark { width: 1.6cqw; height: 1.9cqw; margin-right: -0.4cqw; }
+  /* The one to press: a ring that keeps drawing the eye while its screen is on. */
+  .btn.pulse.on::after {
+    content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+    animation: ring 1.8s ease-out infinite;
+  }
+  @keyframes ring {
+    0% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.7); }
+    100% { box-shadow: 0 0 0 1.6cqw rgba(255, 255, 255, 0); }
+  }
+  .btn.dark.pulse.on::after { animation-name: ring-dark; }
+  @keyframes ring-dark {
+    0% { box-shadow: 0 0 0 0 rgba(21, 21, 21, 0.45); }
+    100% { box-shadow: 0 0 0 1.6cqw rgba(21, 21, 21, 0); }
+  }
+  .btn.watch { top: 3.6cqh; right: 2.6cqw; height: 6.2cqh; font-size: 1.9cqw; padding-left: 1.4cqw; }
+  .btn.watch .go { width: 3.6cqw; height: 3.6cqw; }
+  @media (prefers-reduced-motion: reduce) { .btn, .btn .go { transition: none; } .btn.pulse.on::after { animation: none; } }
+`;
+
+const GO_ARROW =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
+
+const GEO_MARK =
+  '<svg class="mark" viewBox="0 0 25.8662 30" fill="none"><path d="M23.6374 28.2346C23.9907 28.8166 23.5717 29.5611 22.8909 29.5611H2.9992C2.31839 29.5611 1.8994 28.8167 2.25264 28.2347L4.00242 25.3518C4.25863 24.9296 4.81249 24.806 5.24126 25.0509C7.48535 26.333 10.117 27.0718 12.9319 27.0719C15.7543 27.0719 18.3928 26.3292 20.6408 25.0409C21.0697 24.7951 21.6242 24.9185 21.8807 25.341L23.6374 28.2346ZM12.1985 11.8531C12.5386 11.2931 13.3516 11.2933 13.6917 11.8531L19.5432 21.4924C19.7837 21.8887 19.6743 22.4069 19.2749 22.6424C17.4349 23.7272 15.2616 24.3561 12.9319 24.3561C10.6105 24.356 8.44448 23.7315 6.60858 22.6537C6.20827 22.4187 6.09825 21.8997 6.33918 21.5029L12.1985 11.8531Z" fill="currentColor"/><path d="M12.9326 23.5588C6.60632 23.5586 1.55672 18.5905 1.55666 12.5578C1.55666 6.52517 6.60628 1.55711 12.9326 1.55686C19.2592 1.55686 24.3096 6.52502 24.3096 12.5578C24.3095 18.5906 19.2592 23.5588 12.9326 23.5588Z" stroke="currentColor" stroke-width="3.11332"/></svg>';
+
 /**
- * Real links laid over the buttons drawn into a made-for-it share video, each shown only while its
- * screen is on: Agree and Disagree on the claim screen, Watch on Geo while the reel plays, and all
- * three on the end screen, which stays once the video ends. Agree and Disagree open the debate with
- * `?side=`, which casts the vote there (kept on the device and the save sheet for a visitor). Every
- * link carries `stay=1`, so a visitor from X lands on this debate rather than the debates app.
+ * The X player's buttons over a made-for-it share video, each live only while its screen is on:
+ * Agree and Disagree on the claim screen, Watch on Geo while the reel plays, and all three on the
+ * end screen, which stays once the video ends. They are page elements, not pixels in the video, so
+ * they animate in, pulse, and answer hover and press; the video leaves room for them and reads as
+ * finished without them, which is how it plays everywhere else.
+ *
+ * Agree and Disagree open the debate with `?side=`, which casts the vote there (kept on the device
+ * and the save sheet for a visitor). Every link carries `stay=1`, so a visitor from X lands on this
+ * debate rather than the debates app.
  */
 function experienceOverlay(experience: ShareTestExperience, debateUrl: string): string {
   const link = (side?: 'agree' | 'disagree') => {
@@ -232,29 +289,37 @@ function experienceOverlay(experience: ShareTestExperience, debateUrl: string): 
     return escapeHtml(url.toString());
   };
   const pct = (value: number) => `${(value * 100).toFixed(2)}%`;
-  const hot = (group: string, rect: ShareTestRect, href: string, label: string) =>
-    `<a class="hot" data-group="${group}" hidden href="${href}" target="_blank" rel="noopener" aria-label="${label}" style="left:${pct(rect.x)};top:${pct(rect.y)};width:${pct(rect.w)};height:${pct(rect.h)}"></a>`;
+  const at = (rect: ShareTestRect) =>
+    `left:${pct(rect.x)};top:${pct(rect.y)};width:${pct(rect.w)};height:${pct(rect.h)}`;
+  const button = (group: string, cls: string, href: string, label: string, style = '') =>
+    `<a class="btn ${cls}" data-group="${group}" href="${href}" target="_blank" rel="noopener" style="${style}">${label}<span class="go">${GO_ARROW}</span></a>`;
   const { claim, reel, end } = experience;
   return `
-${hot('claim', claim.agree, link('agree'), 'Agree')}
-${hot('claim', claim.disagree, link('disagree'), 'Disagree')}
-${hot('reel', reel.watch, link(), 'Watch on Geo')}
-${hot('end', end.agree, link('agree'), 'Agree')}
-${hot('end', end.disagree, link('disagree'), 'Disagree')}
-${hot('end', end.full, link(), 'Watch the full debate on Geo')}
+${button('claim', 'light pulse', link('agree'), 'Agree', at(claim.agree))}
+${button('claim', 'light', link('disagree'), 'Disagree', at(claim.disagree))}
+${button('reel', 'light watch', link(), `${GEO_MARK}Watch on Geo`)}
+${button('end', 'dark', link('agree'), 'Agree', at(end.agree))}
+${button('end', 'dark', link('disagree'), 'Disagree', at(end.disagree))}
+${button('end', 'dark pulse', link(), 'Watch the full debate on Geo', at(end.full))}
 <script>
   (function () {
     var video = document.querySelector('video');
     var spans = { claim: [${claim.start}, ${claim.end}], reel: [${reel.start}, ${reel.end}], end: [${end.start}, Infinity] };
-    var links = document.querySelectorAll('.hot');
+    var buttons = document.querySelectorAll('.btn');
     function sync() {
       var t = video.ended ? Infinity : video.currentTime;
-      links.forEach(function (a) {
+      buttons.forEach(function (a, i) {
         var span = spans[a.dataset.group];
-        a.hidden = !(t >= span[0] && t < span[1]);
+        var on = t >= span[0] && t < span[1];
+        if (on === a.classList.contains('on')) return;
+        // In one after another, so a screen's buttons arrive rather than appear.
+        a.style.transitionDelay = on ? (i % 3) * 90 + 'ms' : '0ms';
+        a.classList.toggle('on', on);
+        a.tabIndex = on ? 0 : -1;
       });
     }
     ['timeupdate', 'seeked', 'ended', 'play'].forEach(function (e) { video.addEventListener(e, sync); });
+    sync();
   })();
 </script>`;
 }
