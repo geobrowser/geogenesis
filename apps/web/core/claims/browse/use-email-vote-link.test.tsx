@@ -162,6 +162,21 @@ describe('useEmailVoteLink', () => {
     expect(window.location.search).toBe('?side=agree');
   });
 
+  // GEO-3817: the share video's Agree and Disagree open the debate's page, not the claim's.
+  it("casts on the debate's page when the control names the debate, keeping the other params", () => {
+    const DEBATE = '01a039bdac2c7ec097758284ce61200d';
+    arriveAt(`/space/${SPACE}/${DEBATE}?stay=1&side=agree`);
+    render({ pageEntityId: DEBATE });
+    expect(pressed).toEqual([{ position: true, refEmail: undefined }]);
+    expect(window.location.search).toBe('?stay=1');
+  });
+
+  it('answers no link for a control with no page to match, even on the claim’s own page', () => {
+    render({ pageEntityId: null });
+    expect(pressed).toEqual([]);
+    expect(window.location.search).toContain('side=disagree');
+  });
+
   it('does nothing where responding is blocked', () => {
     render({ canRespond: false });
     expect(pressed).toEqual([]);

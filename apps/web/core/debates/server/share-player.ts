@@ -16,6 +16,7 @@ import {
   fetchEntityFromGraph,
   isVisibleDebate,
 } from './published-debate-path';
+import { type ShareTestExperience, type ShareTestRect, shareTestExperience } from './share-test-experience';
 
 /**
  * GEO-3817 experiment: a playable share card for debate links. X gets a player card (poster with a
@@ -76,35 +77,41 @@ export function sharePlayerMetadata({
   shape?: SharePlayerShape;
 }): Pick<Metadata, 'openGraph' | 'twitter'> | null {
   const video = media?.artifacts.find(artifact => artifact.kind === 'social_video');
-  if (!video) return null;
+  // The hand-made landscape video, where this debate has one (`share-test-experience.ts`).
+  const experience = shareTestExperience(debateId);
+  if (!video && !experience) return null;
 
-  const videoSize = {
-    width: positiveNumber(video.metadata.width) ?? DEFAULT_VIDEO_SIZE.width,
-    height: positiveNumber(video.metadata.height) ?? DEFAULT_VIDEO_SIZE.height,
-  };
-  const playerSize = shape === 'wide' ? WIDE_PLAYER_SIZE : videoSize;
+  const videoSize = experience
+    ? experience.video
+    : {
+        width: positiveNumber(video?.metadata.width) ?? DEFAULT_VIDEO_SIZE.width,
+        height: positiveNumber(video?.metadata.height) ?? DEFAULT_VIDEO_SIZE.height,
+      };
+  const playerSize = experience ? experience.video : shape === 'wide' ? WIDE_PLAYER_SIZE : videoSize;
   const hasPoster = media?.artifacts.some(artifact => artifact.kind === 'social_preview_image') ?? false;
 
   // Absolute, because a crawler resolves nothing; the public base is relative in the dev setup.
   const absolute = (url: string) => new URL(url, origin).toString();
-  const videoUrl = absolute(debateArtifactContentUrl(debateId, 'social_video'));
+  const videoUrl = experience ? experience.videoUrl : absolute(debateArtifactContentUrl(debateId, 'social_video'));
   const playerUrl = absolute(sharePlayerPath(spaceId, debateId));
   // The image X shows with the play button, matched to the frame: the landscape card (cut from the
   // first frame) in the wide one, the vertical first frame itself in the tall one. A render with no
   // recorded layout can't be cut, so it falls back to the vertical frame; with no frame at all, the
   // page's share card stays.
-  const posterUrl = !hasPoster
-    ? null
-    : shape === 'wide' && shareVideoLayout(media)
-      ? absolute(sharePlayerCardPath(spaceId, debateId))
-      : absolute(debateArtifactContentUrl(debateId, 'social_preview_image'));
+  const posterUrl = experience
+    ? experience.cardUrl
+    : !hasPoster
+      ? null
+      : shape === 'wide' && shareVideoLayout(media)
+        ? absolute(sharePlayerCardPath(spaceId, debateId))
+        : absolute(debateArtifactContentUrl(debateId, 'social_preview_image'));
 
   return {
     openGraph: {
       title,
       description,
       type: 'video.other',
-      videos: [{ url: videoUrl, secureUrl: videoUrl, type: video.content_type || 'video/mp4', ...videoSize }],
+      videos: [{ url: videoUrl, secureUrl: videoUrl, type: video?.content_type || 'video/mp4', ...videoSize }],
     },
     twitter: {
       card: 'player',
@@ -143,11 +150,15 @@ export function sharePlayerHtml({
   debateUrl?: string;
   headTags?: string;
 }): string {
-  const src = escapeHtml(debateArtifactContentUrl(debateId, 'social_video'));
-  const poster = escapeHtml(debateArtifactContentUrl(debateId, 'social_preview_image'));
+  const experience = shareTestExperience(debateId);
+  const src = escapeHtml(experience?.videoUrl ?? debateArtifactContentUrl(debateId, 'social_video'));
+  const poster = escapeHtml(experience?.cardUrl ?? debateArtifactContentUrl(debateId, 'social_preview_image'));
   const href = debateUrl ? escapeHtml(debateUrl) : null;
-  const clickThrough = href
-    ? `
+  const clickThrough =
+    experience && debateUrl
+      ? experienceOverlay(experience, debateUrl)
+      : href
+        ? `
 <a class="open" href="${href}" target="_blank" rel="noopener">Open on Geo</a>
 <div class="end" hidden>
   <a class="full" href="${href}" target="_blank" rel="noopener">See the full debate on Geo</a>
@@ -166,7 +177,7 @@ export function sharePlayerHtml({
     });
   })();
 </script>`
-    : '';
+        : '';
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -187,7 +198,12 @@ export function sharePlayerHtml({
     position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center;
     justify-content: center; gap: 12px; background: rgba(0, 0, 0, 0.7);
   }
-  .end[hidden], .open[hidden] { display: none; }
+  .end[hidden], .open[hidden], .hot[hidden] { display: none; }
+  .stage { position: absolute; inset: 0; }
+  /* The made-for-it video is 16:9 with its buttons drawn in; the stage keeps the links on them. */
+  .stage.fixed { margin: auto; aspect-ratio: 16 / 9; width: min(100vw, calc(100vh * 16 / 9)); height: auto; }
+  .hot { position: absolute; border-radius: 999px; }
+  .hot:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
   .full { padding: 12px 20px; border-radius: 999px; background: #fff; color: #000; font-size: 16px; }
   .replay {
     padding: 10px 16px; border: 1px solid rgba(255, 255, 255, 0.5); border-radius: 999px;
@@ -196,9 +212,51 @@ export function sharePlayerHtml({
 </style>
 </head>
 <body>
-<video src="${src}" poster="${poster}" controls playsinline preload="metadata"></video>${clickThrough}
+<div class="stage${experience ? ' fixed' : ''}"><video src="${src}" poster="${poster}" controls playsinline preload="metadata"></video>${clickThrough}</div>
 </body>
 </html>`;
+}
+
+/**
+ * Real links laid over the buttons drawn into a made-for-it share video, each shown only while its
+ * screen is on: Agree and Disagree on the claim screen, Watch on Geo while the reel plays, and all
+ * three on the end screen, which stays once the video ends. Agree and Disagree open the debate with
+ * `?side=`, which casts the vote there (kept on the device and the save sheet for a visitor). Every
+ * link carries `stay=1`, so a visitor from X lands on this debate rather than the debates app.
+ */
+function experienceOverlay(experience: ShareTestExperience, debateUrl: string): string {
+  const link = (side?: 'agree' | 'disagree') => {
+    const url = new URL(debateUrl);
+    if (side) url.searchParams.set('side', side);
+    url.searchParams.set('stay', '1');
+    return escapeHtml(url.toString());
+  };
+  const pct = (value: number) => `${(value * 100).toFixed(2)}%`;
+  const hot = (group: string, rect: ShareTestRect, href: string, label: string) =>
+    `<a class="hot" data-group="${group}" hidden href="${href}" target="_blank" rel="noopener" aria-label="${label}" style="left:${pct(rect.x)};top:${pct(rect.y)};width:${pct(rect.w)};height:${pct(rect.h)}"></a>`;
+  const { claim, reel, end } = experience;
+  return `
+${hot('claim', claim.agree, link('agree'), 'Agree')}
+${hot('claim', claim.disagree, link('disagree'), 'Disagree')}
+${hot('reel', reel.watch, link(), 'Watch on Geo')}
+${hot('end', end.agree, link('agree'), 'Agree')}
+${hot('end', end.disagree, link('disagree'), 'Disagree')}
+${hot('end', end.full, link(), 'Watch the full debate on Geo')}
+<script>
+  (function () {
+    var video = document.querySelector('video');
+    var spans = { claim: [${claim.start}, ${claim.end}], reel: [${reel.start}, ${reel.end}], end: [${end.start}, Infinity] };
+    var links = document.querySelectorAll('.hot');
+    function sync() {
+      var t = video.ended ? Infinity : video.currentTime;
+      links.forEach(function (a) {
+        var span = spans[a.dataset.group];
+        a.hidden = !(t >= span[0] && t < span[1]);
+      });
+    }
+    ['timeupdate', 'seeked', 'ended', 'play'].forEach(function (e) { video.addEventListener(e, sync); });
+  })();
+</script>`;
 }
 
 /** Social previews size an image they're told the size of; the poster still is 540×960. */
@@ -259,8 +317,10 @@ export function sharePlayerHeadTags(input: Parameters<typeof sharePlayerMetadata
   const video = og.videos[0];
   const player = twitter.players[0];
   const poster = twitter.images?.[0];
-  const card =
-    poster && shareVideoLayout(input.media)
+  const experience = shareTestExperience(input.debateId);
+  const card = experience
+    ? { url: experience.cardUrl, ...SHARE_CARD_SIZE }
+    : poster && shareVideoLayout(input.media)
       ? {
           url: new URL(sharePlayerCardPath(input.spaceId, input.debateId), input.origin).toString(),
           ...SHARE_CARD_SIZE,
@@ -346,7 +406,8 @@ export async function sharePlayerResponse(
   const { title, media } = debate;
   const headTags = sharePlayerHeadTags({ origin, spaceId, debateId, media, title });
   // Production's own URL shape, on whatever host served the player (the preview while testing).
-  const debateUrl = new URL(`/space/${ID.uuidToHex(spaceId)}/${ID.uuidToHex(debateId)}`, origin).toString();
+  // `stay=1`: a visitor from X would otherwise be sent on to the debates app (GEO-3695).
+  const debateUrl = new URL(`/space/${ID.uuidToHex(spaceId)}/${ID.uuidToHex(debateId)}?stay=1`, origin).toString();
   return new Response(sharePlayerHtml({ debateId, title, debateUrl, headTags }), {
     headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=300' },
   });

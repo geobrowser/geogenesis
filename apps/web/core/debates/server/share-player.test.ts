@@ -11,6 +11,7 @@ import {
   sharePlayerPath,
   sharePlayerResponse,
 } from './share-player';
+import { SHARE_TEST_EXPERIENCES } from './share-test-experience';
 
 vi.stubEnv('NEXT_PUBLIC_GEO_CHAT_API_BASE_URL', 'https://chat.example');
 
@@ -179,7 +180,7 @@ describe('sharePlayerResponse', () => {
     expect(response.status).toBe(200);
     const html = await response.text();
     expect(html).toContain('<title>Claim | A vs. B</title>');
-    expect(html).toContain(`href="${ORIGIN}/space/${SPACE_HEX}/${DEBATE_HEX}"`);
+    expect(html).toContain(`href="${ORIGIN}/space/${SPACE_HEX}/${DEBATE_HEX}?stay=1"`);
     expect(d.fetchEntity).toHaveBeenCalledWith(DEBATE_HEX, SPACE_HEX, expect.any(AbortSignal));
   });
 
@@ -250,5 +251,39 @@ describe('sharePlayerResponse', () => {
     expect(off.fetchEntity).not.toHaveBeenCalled();
     expect((await sharePlayerResponse({ ...ids, debateId: 'nope' }, deps(debate()))).status).toBe(404);
     expect((await sharePlayerResponse({ ...ids, spaceId: 'nope' }, deps(debate()))).status).toBe(404);
+  });
+});
+
+// GEO-3817 test: the one debate with a hand-made landscape video plays it, with real links on the
+// buttons drawn into it.
+describe('the made-for-it share video', () => {
+  const GOLD = '01a039bdac2c7ec097758284ce61200d';
+  const GOLD_SPACE = 'c9f267dcb0d270718c2a3c45a64afd32';
+  const experience = SHARE_TEST_EXPERIENCES[GOLD]!;
+
+  it('tags the IPFS video and landscape card, even before geo-chat answers', () => {
+    const result = sharePlayerMetadata({
+      origin: ORIGIN,
+      spaceId: GOLD_SPACE,
+      debateId: GOLD,
+      media: null,
+      title: 't',
+    });
+    expect(result?.openGraph).toMatchObject({ videos: [{ url: experience.videoUrl, width: 1280, height: 720 }] });
+    expect(result?.twitter).toMatchObject({
+      players: [{ streamUrl: experience.videoUrl, width: 1280, height: 720 }],
+      images: [experience.cardUrl],
+    });
+  });
+
+  it('lays vote and watch links over the drawn buttons, casting the side on the debate page', () => {
+    const debateUrl = `${ORIGIN}/space/${GOLD_SPACE}/${GOLD}?stay=1`;
+    const html = sharePlayerHtml({ debateId: GOLD, title: 't', debateUrl });
+    expect(html).toContain(`src="${experience.videoUrl}"`);
+    expect(html).toContain(`href="${debateUrl}&#38;side=agree"`);
+    expect(html.match(/side=agree/g)).toHaveLength(2);
+    expect(html.match(/side=disagree/g)).toHaveLength(2);
+    expect(html).toContain('aria-label="Watch the full debate on Geo"');
+    expect(html).not.toContain('Open on Geo</a>');
   });
 });
