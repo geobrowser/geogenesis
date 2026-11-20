@@ -3,11 +3,7 @@ import { type GetPrivyIdentityToken, geoChatRequest } from '~/core/debates/api';
 export type SpaceChannelReadPolicy = 'everyone' | 'members_and_editors' | 'editors_only' | 'invited';
 export type SpaceChannelPostPolicy = 'members_and_editors' | 'editors_only' | 'everyone_signed_in';
 
-/**
- * A space chat room (GEO-3422), which is a channel (GEO-3818): `member` is #general, `editor` is
- * #editors, `channel` is one an editor made. The channel fields are absent from a geo-chat without
- * channels.
- */
+/** A space chat room, i.e. a channel (GEO-3818): `member` is #general, `editor` #editors. */
 export type SpaceChatRoom = {
   id: string;
   public_dao_space_id: string;

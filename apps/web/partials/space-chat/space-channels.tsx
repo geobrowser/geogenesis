@@ -88,7 +88,7 @@ export function SpaceChannels({ spaceId }: { spaceId: string }) {
     return () => window.clearTimeout(timer);
   }, [notice]);
 
-  // Losing a channel: geo-chat revokes the subscription, or the re-read list no longer has it.
+  // Access is lost when geo-chat revokes the subscription or the refetched list lacks the channel.
   const [shown, setShown] = React.useState<{ id: string; name: string } | null>(null);
   React.useEffect(() => {
     if (current) setShown({ id: current.id, name: channelName(current) });
