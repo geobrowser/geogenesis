@@ -40,11 +40,17 @@ const videoUrl = `https://chat.example/debates/${DEBATE_HEX}/media/artifacts/soc
 const posterUrl = `https://chat.example/debates/${DEBATE_HEX}/media/artifacts/social_preview_image/content`;
 
 describe('sharePlayerEnabled', () => {
-  it('is on for Vercel previews and local dev only', () => {
-    expect(sharePlayerEnabled({ VERCEL_ENV: 'preview', NODE_ENV: 'production' })).toBe(true);
-    expect(sharePlayerEnabled({ NODE_ENV: 'development' })).toBe(true);
-    expect(sharePlayerEnabled({ VERCEL_ENV: 'production', NODE_ENV: 'production' })).toBe(false);
-    expect(sharePlayerEnabled({ NODE_ENV: 'production' })).toBe(false);
+  it('is on for every debate on Vercel previews and in local dev', () => {
+    expect(sharePlayerEnabled(DEBATE_HEX, { VERCEL_ENV: 'preview', NODE_ENV: 'production' })).toBe(true);
+    expect(sharePlayerEnabled(DEBATE_HEX, { NODE_ENV: 'development' })).toBe(true);
+  });
+
+  it('is on in production only for a debate with a hand-made experience', () => {
+    const production = { VERCEL_ENV: 'production', NODE_ENV: 'production' };
+    expect(sharePlayerEnabled(DEBATE_HEX, production)).toBe(false);
+    expect(sharePlayerEnabled(DEBATE_HEX, { NODE_ENV: 'production' })).toBe(false);
+    expect(sharePlayerEnabled('01a039bdac2c7ec097758284ce61200d', production)).toBe(true);
+    expect(sharePlayerEnabled('01a039bd-ac2c-7ec0-9775-8284ce61200d', production)).toBe(true);
   });
 });
 

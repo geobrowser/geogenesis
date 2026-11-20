@@ -743,7 +743,6 @@ function DebateFeedItem({
             />
           </div>
           <DebateClaimFooter
-            debateId={debate.id}
             claim={debate.claim}
             // The cards the feed is about to reach read theirs too, so a side is there to take
             // the moment one arrives.

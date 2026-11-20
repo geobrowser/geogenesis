@@ -2,7 +2,6 @@
 
 import * as React from 'react';
 
-import { useEmailVoteLink } from '~/core/claims/browse/use-email-vote-link';
 import type { Debate } from '~/core/debates/api';
 import { PositionRow } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { CLAIM_RESPONSE_KIND } from '~/core/responses/entity-response';
@@ -26,7 +25,6 @@ import { useDebateClaimResponse } from './use-debate-claim-response';
  * share in `actions` stay the debate's.
  */
 export function DebateClaimFooter({
-  debateId,
   claim,
   enabled,
   meta,
@@ -34,8 +32,6 @@ export function DebateClaimFooter({
   actions,
   wideActions = false,
 }: {
-  /** The debate this card is for: a `?side=` link on its page casts the claim's vote (GEO-3817). */
-  debateId?: string;
   /** The claim being debated, or null while the host has not resolved its debate. */
   claim: Debate['claim'] | null;
   /**
@@ -59,7 +55,6 @@ export function DebateClaimFooter({
       {claim ? (
         <ClaimPositions
           key={`${claim.space_id}:${claim.claim_entity_id}`}
-          debateId={debateId}
           claim={claim}
           enabled={enabled}
           actions={actions}
@@ -89,13 +84,11 @@ export function DebateClaimFooter({
 const IGNORE_RESPONSE = () => {};
 
 function ClaimPositions({
-  debateId,
   claim,
   enabled,
   actions,
   wideActions,
 }: {
-  debateId: string | undefined;
   claim: Debate['claim'];
   enabled: boolean;
   actions: React.ReactNode;
@@ -115,19 +108,6 @@ function ClaimPositions({
     row: null,
     entity: live ? (entities[0] ?? null) : null,
     savePromptSurface: 'feed',
-  });
-  // The share video's Agree and Disagree open this debate's page with `?side=` (GEO-3817): the vote is
-  // cast by this card's own control, so it takes the path a press does — kept on the device and the
-  // save sheet for a visitor, published for an account.
-  useEmailVoteLink({
-    claimId,
-    spaceId,
-    pageEntityId: debateId ?? null,
-    viewerPosition: response.control.viewerPosition,
-    answersReady: response.isResponseKindResolved && response.isViewerResponseResolved,
-    canRespond: response.control.canRespond,
-    isConnected: response.control.isConnected,
-    respond: response.control.respond,
   });
 
   return (

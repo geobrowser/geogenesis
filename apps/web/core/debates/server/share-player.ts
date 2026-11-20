@@ -23,11 +23,14 @@ import { type ShareTestExperience, type ShareTestRect, shareTestExperience } fro
  * GEO-3817 experiment: a playable share card for debate links. X gets a player card (poster with a
  * play button that plays the share video inside the card) and iMessage gets `og:video`.
  *
- * Preview deployments only, so production's cards do not change while we look at how this renders
- * on X and in iMessage. Local dev is included so the tags can be checked before pushing.
+ * On preview deployments for every debate with a share video, and in local dev, so the tags can be
+ * checked before pushing. In production only for a debate with a hand-made experience
+ * (`share-test-experience.ts`): one debate, to see how a player card from geobrowser.io itself
+ * renders on X, since a preview domain may be treated differently. Every other card is unchanged.
  */
-export function sharePlayerEnabled(env: Record<string, string | undefined> = process.env): boolean {
-  return env.VERCEL_ENV === 'preview' || env.NODE_ENV === 'development';
+export function sharePlayerEnabled(debateId: string, env: Record<string, string | undefined> = process.env): boolean {
+  if (env.VERCEL_ENV === 'preview' || env.NODE_ENV === 'development') return true;
+  return shareTestExperience(debateId) !== null;
 }
 
 /**
@@ -472,7 +475,7 @@ export type SharePlayerDeps = {
 export async function loadSharePlayerDebate(
   { spaceId, debateId }: { spaceId: string; debateId: string },
   {
-    enabled = sharePlayerEnabled(),
+    enabled = sharePlayerEnabled(debateId),
     fetchEntity = fetchEntityFromGraph,
     fetchVisibility = id => fetchDebateVisibility(id),
     fetchMedia = id => fetchDebatePageMedia(id),

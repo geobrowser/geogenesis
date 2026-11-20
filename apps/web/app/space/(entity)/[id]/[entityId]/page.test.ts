@@ -82,7 +82,7 @@ describe('debate page generateMetadata (GEO-3817)', () => {
     expect(metadata.twitter).toMatchObject({ players: [{ width: 1080, height: 1920 }] });
   });
 
-  it('adds nothing in production, without reading the graph or geo-chat', async () => {
+  it('adds nothing in production for an ordinary debate, without reading the graph or geo-chat', async () => {
     vi.stubEnv('VERCEL_ENV', 'production');
     vi.stubEnv('NODE_ENV', 'production');
     expect(await generateMetadata(props())).toEqual({});

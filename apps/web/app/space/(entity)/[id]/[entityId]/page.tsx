@@ -47,9 +47,9 @@ interface Props {
  * repeated so a withheld debate never gains a playable card.
  */
 export async function generateMetadata(props: Props): Promise<Metadata> {
-  if (!sharePlayerEnabled()) return {};
   const params = await props.params;
   if (!IdUtils.isValid(params.id) || !IdUtils.isValid(params.entityId)) return {};
+  if (!sharePlayerEnabled(params.entityId)) return {};
 
   const entity = (await cachedFetchEntityPage(params.entityId, params.id))?.entity ?? null;
   if (!entity || isHiddenEntity(entity) || !isDebateEntity(entity.types)) return {};

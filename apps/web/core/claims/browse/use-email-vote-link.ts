@@ -35,9 +35,6 @@ export type EmailVoteOutcome =
  * on the device for a visitor who is signed out — who then gets the save sheet asking them to log in.
  *
  * Never changes a side the reader already holds, whether the account holds it or this device does.
- *
- * The same `?side=` link also opens a debate's page with its claim's vote ready (GEO-3817: the share
- * video's Agree and Disagree), cast by the debate card's own control; `pageEntityId` names the debate.
  */
 export function useEmailVoteLink({
   claimId,
@@ -47,14 +44,8 @@ export function useEmailVoteLink({
   canRespond,
   isConnected,
   respond,
-  pageEntityId,
 }: {
   claimId: string;
-  /**
-   * The entity whose page the link opens, when it isn't the claim's own: the debate it was argued in.
-   * Null for a control that answers no link: a debate card with no debate to match its page against.
-   */
-  pageEntityId?: string | null;
   spaceId: string;
   /** The side drawn as the reader's: the account's, a queued one, or this device's. */
   viewerPosition: boolean | null;
@@ -69,10 +60,8 @@ export function useEmailVoteLink({
   const searchParams = useSearchParams();
   const link = readEmailVoteLink(searchParams);
   // Only the claim the page is for. `ClaimPageView` also renders in the side panel, over a page whose
-  // URL belongs to whatever is underneath it; a debate page's feed shows other debates' cards too.
-  const pageId = pageEntityId === undefined ? claimId : pageEntityId;
-  const forThisClaim =
-    link !== null && pageId !== null && (pathname ?? '').split('/').some(segment => equals(segment, pageId));
+  // URL belongs to whatever is underneath it.
+  const forThisClaim = link !== null && (pathname ?? '').split('/').some(segment => equals(segment, claimId));
   // Kept through the clearing; see `useDeepLinkParams`.
   const hash = typeof window === 'undefined' ? '' : window.location.hash;
 
