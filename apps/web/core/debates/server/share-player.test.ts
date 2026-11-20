@@ -175,6 +175,25 @@ describe('sharePlayerResponse', () => {
     expect(html).toContain('<meta property="og:title" content="Claim | A vs. B">');
   });
 
+  it('unfurls with the landscape card cut from the first frame when the render recorded its layout', async () => {
+    const region = { x: 0, y: 0, width: 10, height: 10 };
+    const layout = { canvas: region, header: region, slot_1_video: region, slot_2_video: region };
+    const d = {
+      ...deps(debate()),
+      fetchMedia: vi
+        .fn()
+        .mockResolvedValue(media([artifact('social_video', { layout }), artifact('social_preview_image')])),
+    };
+    const html = await (await sharePlayerResponse(ids, d)).text();
+    expect(html).toContain(
+      `<meta property="og:image" content="${ORIGIN}/share-player/debate/${SPACE_HEX}/${DEBATE_HEX}/card.jpg">`
+    );
+    expect(html).toContain('<meta property="og:image:width" content="1200">');
+    expect(html).toContain('<meta property="og:image:height" content="630">');
+    // X's player keeps the vertical frame, which matches the vertical player.
+    expect(html).toContain(`<meta name="twitter:image" content="${posterUrl}">`);
+  });
+
   it('plays without unfurl tags when geo-chat has no share video', async () => {
     const d = { ...deps(debate()), fetchMedia: vi.fn().mockResolvedValue(null) };
     const response = await sharePlayerResponse(ids, d);
