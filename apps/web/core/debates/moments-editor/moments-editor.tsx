@@ -47,6 +47,7 @@ import {
   clipFromWords,
   clipProblems,
   clipQuote,
+  clipRoundLabel,
   clipSpeaker,
   clipsFromLiveReel,
   clipsFromServedMoments,
@@ -1108,6 +1109,9 @@ function Editor({ debateId }: { debateId: string }) {
         number={selectedIndex + 1}
         speaker={selectedView.speaker}
         name={nameFor(selectedView.speaker)}
+        // Not for a carried reel: its cuts are on the old video's clock, so the new video's turns would
+        // put them in the wrong round, as they would its clip checks.
+        round={carried ? null : clipRoundLabel(selectedClip, turns)}
         lengthMs={selectedClip.end_ms - selectedClip.start_ms}
         startMs={selectedClip.start_ms}
         endMs={selectedClip.end_ms}

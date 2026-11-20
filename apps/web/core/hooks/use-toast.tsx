@@ -40,6 +40,15 @@ export function useSetToast({ placement = 'bottom' }: { placement?: ToastPlaceme
   return useSetAtom(toastAtoms[placement]);
 }
 
+const clearToastIfShowingAtom = atom(null, (get, set, content: React.ReactElement<any>) => {
+  if (get(toastStateAtom)?.content === content) set(toastStateAtom, null);
+});
+
+/** Clears the toast only while it still shows `content`, so a toast set since is left alone. */
+export function useClearToastIfShowing() {
+  return useSetAtom(clearToastIfShowingAtom);
+}
+
 export function Toast() {
   const toastState = useAtomValue(toastStateAtom);
   const clearToast = useSetAtom(toastAtoms.bottom);

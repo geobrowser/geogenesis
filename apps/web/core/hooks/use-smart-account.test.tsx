@@ -5,21 +5,27 @@ import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { signingAccountDelayMs, useSmartAccount } from './use-smart-account';
+import { resetWalletSessionClientForTests, syncWalletSession } from '~/core/auth/wallet-session-client';
+
+import {
+  WALLET_SESSION_WAIT_MS,
+  resetWalletSessionWaitForTests,
+  signingAccountDelayMs,
+  useSmartAccount,
+} from './use-smart-account';
 
 const ADDRESS = '0x5D6d0E45D76D360AB4F94941CE9a005b0AEa2ebD';
 
 const mocks = vi.hoisted(() => ({
   wallets: [] as Array<{ walletClientType: string; address: string }>,
   generateZeroDevAccount: vi.fn(),
-  syncWalletCookie: vi.fn(),
-  forgetSyncedWalletCookie: vi.fn(),
+  authenticated: true,
 }));
 
 vi.mock('~/core/wallet/auth-hooks', () => ({
   usePrivy: () => ({
     ready: true,
-    authenticated: true,
+    authenticated: mocks.authenticated,
     user: {
       linkedAccounts: [{ type: 'wallet', walletClientType: 'privy', chainType: 'ethereum', address: ADDRESS }],
     },
@@ -31,13 +37,15 @@ vi.mock('@geogenesis/auth/account', () => ({
   RevertedUserOperationError: class extends Error {},
   generateZeroDevAccount: mocks.generateZeroDevAccount,
 }));
-vi.mock('../cookie/sync-wallet-cookie', () => ({
-  syncWalletCookie: mocks.syncWalletCookie,
-  forgetSyncedWalletCookie: mocks.forgetSyncedWalletCookie,
-}));
 vi.mock('../sdk/geo-network', () => ({ GEO_NETWORK: {} }));
 
 const embedded = { walletClientType: 'privy', address: ADDRESS };
+
+/** The server's session answers for `ADDRESS`, as `WalletSessionSync` would see it. */
+async function syncSession(status = 200, body: object = { wallet: ADDRESS.toLowerCase(), status: 'issued' }) {
+  vi.stubGlobal('fetch', async () => new Response(JSON.stringify(body), { status }));
+  await act(() => syncWalletSession(`token-${status}`, () => {}));
+}
 
 function renderSmartAccount() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -50,49 +58,84 @@ function renderSmartAccount() {
 beforeEach(() => {
   mocks.wallets = [];
   mocks.generateZeroDevAccount.mockReset().mockResolvedValue({ account: { address: ADDRESS } });
-  mocks.syncWalletCookie.mockReset().mockResolvedValue(undefined);
-  mocks.forgetSyncedWalletCookie.mockReset();
+  resetWalletSessionClientForTests();
+  resetWalletSessionWaitForTests();
+  mocks.authenticated = true;
 });
 
 afterEach(() => {
   cleanup();
   vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
   vi.useRealTimers();
 });
 
 describe('useSmartAccount', () => {
-  it('syncs the wallet cookie from the restored address, before the wallet arrives', async () => {
-    const { result } = renderSmartAccount();
-
-    await waitFor(() => expect(mocks.syncWalletCookie).toHaveBeenCalledWith(ADDRESS));
-    expect(mocks.generateZeroDevAccount).not.toHaveBeenCalled();
-    expect(result.current).toEqual(expect.objectContaining({ smartAccount: null, isLoading: true }));
-  });
-
-  it('hands the account to writers only once the cookie sync has landed', async () => {
-    let land!: () => void;
-    mocks.syncWalletCookie.mockReturnValue(new Promise<void>(resolve => (land = resolve)));
+  it('hands the account to writers only once the server session holds the wallet', async () => {
     mocks.wallets = [embedded];
     const { result } = renderSmartAccount();
 
     await waitFor(() => expect(mocks.generateZeroDevAccount).toHaveBeenCalledOnce());
     await act(async () => {});
-    expect(result.current.smartAccount).toBeNull();
+    expect(result.current).toEqual(expect.objectContaining({ smartAccount: null, isLoading: true }));
 
-    await act(async () => land());
+    await syncSession();
     await waitFor(() => expect(result.current.smartAccount?.account.address).toBe(ADDRESS));
     expect(result.current.isLoading).toBe(false);
   });
 
-  it('hands the account over when the cookie sync fails', async () => {
-    mocks.syncWalletCookie.mockRejectedValue(new Error('action not found'));
+  it('hands the account over when syncing the session gives up', async () => {
     mocks.wallets = [embedded];
     const { result } = renderSmartAccount();
+    await syncSession(503, { wallet: null, status: 'unconfigured' });
 
     await waitFor(() => expect(result.current.smartAccount?.account.address).toBe(ADDRESS));
   });
 
+  it('hands the account over once the wait for a session runs out', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'Date'] });
+    mocks.wallets = [embedded];
+    const { result } = renderSmartAccount();
+
+    await act(() => vi.advanceTimersByTimeAsync(WALLET_SESSION_WAIT_MS - 1_000));
+    expect(result.current.smartAccount).toBeNull();
+    await act(() => vi.advanceTimersByTimeAsync(1_000));
+    expect(result.current.smartAccount?.account.address).toBe(ADDRESS);
+  });
+
+  it('does not restart the wait for a later mount', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'Date'] });
+    mocks.wallets = [embedded];
+    renderSmartAccount();
+    await act(() => vi.advanceTimersByTimeAsync(WALLET_SESSION_WAIT_MS));
+
+    const later = renderSmartAccount();
+    await act(() => vi.advanceTimersByTimeAsync(0));
+    await act(() => vi.advanceTimersByTimeAsync(0));
+    expect(later.result.current.smartAccount?.account.address).toBe(ADDRESS);
+  });
+
+  it('waits afresh for a sign-in after a sign-out on the same page', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'Date'] });
+    mocks.wallets = [embedded];
+    const { result, rerender } = renderSmartAccount();
+    await act(() => vi.advanceTimersByTimeAsync(WALLET_SESSION_WAIT_MS));
+    expect(result.current.smartAccount).not.toBeNull();
+
+    mocks.authenticated = false;
+    rerender();
+    await act(() => vi.advanceTimersByTimeAsync(0));
+    mocks.authenticated = true;
+    rerender();
+    await act(() => vi.advanceTimersByTimeAsync(0));
+
+    expect(result.current.smartAccount).toBeNull();
+    await act(() => vi.advanceTimersByTimeAsync(WALLET_SESSION_WAIT_MS));
+    expect(result.current.smartAccount?.account.address).toBe(ADDRESS);
+  });
+
   it('does not rebuild the account when a browser wallet connects', async () => {
+    await syncSession();
     mocks.wallets = [embedded];
     const { result, rerender } = renderSmartAccount();
     await waitFor(() => expect(result.current.smartAccount).not.toBeNull());
@@ -143,6 +186,7 @@ describe('signingAccountDelayMs', () => {
     vi.useFakeTimers({ toFake: ['setTimeout'] });
     vi.stubEnv('NEXT_PUBLIC_DELAY_SIGNING_ACCOUNT_MS', '30000');
     vi.stubEnv('NODE_ENV', 'development');
+    await syncSession();
     mocks.wallets = [embedded];
     const { result } = renderSmartAccount();
 

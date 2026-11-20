@@ -36,7 +36,7 @@ export function readCachedSmartAccount(
 
 /** The account to write with, waiting for it while it is built. Null if signed out or the build failed. */
 export async function awaitSigningAccount(live: GeoWalletClient | null | undefined): Promise<GeoWalletClient | null> {
-  // Not the query cache: it can hold a signer before its wallet cookie syncs, or one from an earlier session.
+  // Not the query cache: it can hold a signer before its wallet session syncs, or one from an earlier session.
   const account = live ?? publishedSigningAccount();
   if (account) return account;
   try {

@@ -72,6 +72,28 @@ const eslintConfig = defineConfig([
     rules: { 'jsx-a11y/alt-text': 'off' },
   },
   {
+    // Server identity comes only from the verified wallet session (GEO-3107), so request cookies are
+    // read in one place. Read who is signed in with `readWalletSession` instead.
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'next/headers',
+              importNames: ['cookies'],
+              message: 'Use readWalletSession from ~/core/auth/server/wallet-session.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ['core/auth/server/wallet-session.ts', 'app/api/wallet-session/route.ts', '**/*.test.ts', '**/*.test.tsx'],
+    rules: { 'no-restricted-imports': 'off' },
+  },
+  {
     rules: {
       // Reported every `_`-prefixed discard — 21 of them — because it carried no options at all.
       // Naming a binding `_thing` is how this codebase says "I have to destructure it and I am not

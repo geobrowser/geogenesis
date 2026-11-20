@@ -39,9 +39,15 @@ const mocks = vi.hoisted(() => ({
   composeArgs: null as null | Record<string, unknown>,
   search: 'relationId=r&parentEntityId=p&team=to-rank',
   mySubmission: null as null | { orderedEntityIds: string[] },
-  myRanking: null as null | { tierLines?: { aCount: number; bCount: number; banner: React.ReactNode } },
+  myRanking: null as null | {
+    tierLines?: { aCount: number; bCount: number; banner: React.ReactNode };
+    onRemove?: (entityId: string) => void;
+  },
   sentGrades: null as null | Map<string, string>,
   recordGrade: vi.fn(),
+  entries: [] as Array<{ entityId: string; name: string }>,
+  toast: null as null | React.ReactElement,
+  setToast: vi.fn(),
 }));
 vi.mock('./best-debates/best-debate-grading', async importOriginal => ({
   ...(await importOriginal<typeof import('./best-debates/best-debate-grading')>()),
@@ -138,7 +144,7 @@ vi.mock('~/core/blocks/ranking/use-ranking-compose-search', () => ({
   }),
 }));
 vi.mock('~/core/blocks/ranking/use-ranking-entry-entities', () => ({
-  useRankingEntryEntities: () => ({ entries: mocks.empty, isLoading: false }),
+  useRankingEntryEntities: () => ({ entries: mocks.entries, isLoading: false }),
 }));
 vi.mock('~/core/blocks/ranking/use-ranking-pending-proposals', () => ({
   useRankingPendingEntities: () => ({ pendingEntityIds: new Set(), pendingEntriesByEntityId: new Map() }),
@@ -148,7 +154,12 @@ vi.mock('~/core/hooks/use-create-entity-with-filters', () => ({
 }));
 vi.mock('~/core/hooks/use-is-mobile-layout', () => ({ useIsMobileLayout: () => false }));
 vi.mock('~/core/hooks/use-onboarding', () => ({ useOnboarding: () => ({ showOnboarding: vi.fn() }) }));
-vi.mock('~/core/hooks/use-toast', () => ({ useToast: () => [null, vi.fn()] }));
+// The toast the screen last set, to press its Undo.
+vi.mock('~/core/hooks/use-toast', () => ({
+  useToast: () => [null, mocks.setToast],
+  useSetToast: () => mocks.setToast,
+  useClearToastIfShowing: () => vi.fn(),
+}));
 vi.mock('~/core/state/pending-actions', () => ({ useEnqueuePendingAction: () => vi.fn() }));
 vi.mock('~/core/state/pending-personal-space', () => ({ usePendingPersonalSpace: () => ({ isPending: false }) }));
 vi.mock('~/core/use-ranking-opportunity', () => ({
@@ -254,6 +265,10 @@ beforeEach(() => {
   mocks.mySubmission = null;
   mocks.myRanking = null;
   mocks.sentGrades = null;
+  mocks.entries = [];
+  mocks.toast = null;
+  mocks.setToast.mockReset().mockImplementation((toast: React.ReactElement | null) => (mocks.toast = toast));
+  mocks.recordGrade.mockReset();
 });
 
 afterEach(cleanup);
@@ -474,5 +489,86 @@ describe('Grade your ranking on the ranking screen (GEO-3729)', () => {
       )
     );
     expect(mocks.recordGrade.mock.calls.map(([, change]) => change.method)).toEqual(ids.map(() => 'tier_lines'));
+  });
+});
+
+describe('Undo of a Remove on the ranking screen (GEO-3805)', () => {
+  const [a1, a2, b3] = ['a1', 'a2', 'b3'].map(pair => pair.repeat(16));
+  const grades = () =>
+    new Map<string, 'A' | 'B' | 'C'>([
+      [a1, 'A'],
+      [a2, 'A'],
+      [b3, 'B'],
+    ]);
+  const renderRanking = () => {
+    mocks.member = true;
+    mocks.lastIds = [a1, a2, b3];
+    mocks.myGrades = grades();
+    mocks.entries = [{ entityId: a2, name: 'Is AI good?' }];
+    renderScreen();
+  };
+  const pressUndo = async () => {
+    const toast = mocks.toast;
+    expect(toast).not.toBeNull();
+    const { getByRole, unmount } = render(toast!);
+    await act(async () => getByRole('button', { name: 'Undo' }).click());
+    unmount();
+  };
+  const places = () => [a1, a2, b3].map(id => mocks.grading?.placeOf(id) ?? null);
+
+  it('a row’s trash names the debate, and Undo puts it back with its grade, recording no grade', async () => {
+    renderRanking();
+    await act(async () => mocks.myRanking?.onRemove?.(a2));
+    expect(places()).toEqual([1, null, 2]);
+    const { getByText, unmount } = render(mocks.toast!);
+    expect(getByText('Removed “Is AI good?”.')).toBeInTheDocument();
+    unmount();
+
+    await pressUndo();
+    expect(places()).toEqual([1, 2, 3]);
+    expect(mocks.grading?.gradeOf(a2)).toBe('A');
+    expect(mocks.recordGrade).not.toHaveBeenCalled();
+  });
+
+  it('the popup’s Remove offers Undo too, which keeps an edit made after it', async () => {
+    renderRanking();
+    await act(async () => mocks.grading?.remove(a2));
+    expect(mocks.grading?.placeOf(a2)).toBeNull();
+    // Then b3 is graded A: the top of A.
+    await act(async () => mocks.grading?.grade(b3, 'A'));
+    expect(mocks.grading?.placeOf(b3)).toBe(1);
+
+    await pressUndo();
+    // Back below a1, the debate it sat under (as the block's Undo puts it), not at its old place 2.
+    expect(mocks.grading?.placeOf(a2)).toBe(3);
+    expect(mocks.grading?.gradeOf(a2)).toBe('A');
+    expect(mocks.grading?.placeOf(b3)).toBe(1);
+    expect(mocks.grading?.gradeOf(b3)).toBe('A');
+  });
+
+  it('after two removes, Undo brings back only the second, as it was just before it went', async () => {
+    renderRanking();
+    await act(async () => mocks.myRanking?.onRemove?.(a2));
+    // b3 graded A in between: the top of A.
+    await act(async () => mocks.grading?.grade(b3, 'A'));
+    await act(async () => mocks.myRanking?.onRemove?.(b3));
+    // Unnamed: the plain fallback.
+    const { getByText, unmount } = render(mocks.toast!);
+    expect(getByText('Removed.')).toBeInTheDocument();
+    unmount();
+    await pressUndo();
+    expect(places()).toEqual([2, null, 1]);
+    expect(mocks.grading?.gradeOf(b3)).toBe('A');
+  });
+
+  it('Undo changes nothing once the debate is back', async () => {
+    renderRanking();
+    await act(async () => mocks.grading?.remove(a2));
+    // Graded back in from the popup: C.
+    await act(async () => mocks.grading?.grade(a2, 'C'));
+    expect(places()).toEqual([1, 3, 2]);
+    await pressUndo();
+    expect(places()).toEqual([1, 3, 2]);
+    expect(mocks.grading?.gradeOf(a2)).toBe('C');
   });
 });

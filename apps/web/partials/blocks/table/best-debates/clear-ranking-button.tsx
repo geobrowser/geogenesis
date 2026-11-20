@@ -7,6 +7,7 @@ import { useSetToast } from '~/core/hooks/use-toast';
 import { DIALOG_ACTION_BUTTON_CLASS_NAME, DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME } from '~/design-system/button';
 
 import { RankingFlowDialog } from './ranking-flow-dialog';
+import { RankingUndoToast } from './ranking-undo-toast';
 
 /**
  * Your ranking's Clear (Preston, 12 Nov): after a confirm, empties the draft. Nothing publishes until
@@ -29,19 +30,13 @@ export function ClearRankingButton({
     setConfirming(false);
     setDraft([]);
     setToast(
-      <span className="flex items-center gap-3">
-        <span>Cleared. Publish to make it final.</span>
-        <button
-          type="button"
-          onClick={() => {
-            setToast(null);
-            setDraft(previous);
-          }}
-          className="shrink-0 rounded px-2 py-1 text-smallButton text-white underline-offset-2 hover:underline"
-        >
-          Undo
-        </button>
-      </span>
+      <RankingUndoToast
+        copy="Cleared. Publish to make it final."
+        onUndo={() => {
+          setToast(null);
+          setDraft(previous);
+        }}
+      />
     );
   };
 
