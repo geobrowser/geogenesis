@@ -23,10 +23,7 @@ export function retryAfterSeconds(error: GeoChatRequestError, fallbackMs = 10_00
 
 /** geo-chat's slow-mode refusal (GEO-3818). */
 export function isSlowModeError(error: unknown): boolean {
-  return (
-    error instanceof GeoChatRequestError &&
-    (error.code === 'slow_mode' || (error.code === 'rate_limited' && error.details?.limit === 'slow_mode'))
-  );
+  return error instanceof GeoChatRequestError && error.code === 'slow_mode';
 }
 
 /** A failed send, edit, delete or reaction as one line; `fallback` for anything unrecognised. */
