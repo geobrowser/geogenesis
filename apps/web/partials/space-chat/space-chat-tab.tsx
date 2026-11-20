@@ -27,7 +27,11 @@ export function SpaceChatTab({ spaceId }: { spaceId: string }) {
     );
   }
   if (channels) return <SpaceChannels spaceId={spaceId} />;
-  if (channelsFlag && rooms.isPending) return <div className="h-[min(70dvh,720px)] min-h-80" />;
+  // First load only: a refetch of a failed list goes pending again, and swapping the panel out then
+  // would remount it into another refetch.
+  if (channelsFlag && rooms.isPending && rooms.errorUpdateCount === 0) {
+    return <div className="h-[min(70dvh,720px)] min-h-80" />;
+  }
   return (
     <div className="flex h-[min(70dvh,720px)] min-h-80 flex-col rounded-lg border border-grey-02 bg-white">
       <SpaceChatPanel spaceId={spaceId} className="min-h-0 flex-1" />
