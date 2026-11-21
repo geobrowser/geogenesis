@@ -21,8 +21,8 @@ const CONTESTED_SPLIT: SplitBreakdown = {
   gapPoints: 88,
   totalVotes: 2418,
   rows: [
-    { id: 'pp', label: 'Community A', color: '#e07a1f', percent: 94, voterCount: 1180 },
-    { id: 'pi', label: 'Community B', color: '#1f8fa3', percent: 6, voterCount: 1090 },
+    { id: 'pp', label: 'Community A', color: '#6833ff', percent: 94, voterCount: 1180 },
+    { id: 'pi', label: 'Community B', color: '#3963fe', percent: 6, voterCount: 1090 },
     { id: 'all', label: 'Everyone', color: '#202020', percent: 52, voterCount: 2418, isEveryone: true },
   ],
 };

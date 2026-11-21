@@ -75,15 +75,13 @@ export function ClaimTemplate({ model, headerActions, footer, className }: Claim
       {model.agreedBasis && (
         <section
           aria-label="What both communities agree on"
-          className="flex flex-col gap-3 rounded-xl border border-[#d8efe3] bg-[#f2faf6] p-4 @[560px]:p-5"
+          className="flex flex-col gap-3 rounded-xl border border-l-2 border-grey-02/80 border-l-ctaPrimary bg-white p-4 @[560px]:p-5"
         >
-          <h2 className="m-0 text-[15px] leading-[20px] font-semibold text-[#127a5b]">
-            What both communities agree on
-          </h2>
-          <p className="m-0 text-[15px] leading-[22px] text-text">{model.agreedBasis.summary}</p>
+          <h2 className="m-0 text-[15px] leading-[20px] font-semibold text-text">What both communities agree on</h2>
+          <p className="m-0 text-[15px] leading-[22px] text-text/90">{model.agreedBasis.summary}</p>
           {model.agreedBasis.settlingSources.length > 0 && (
             <div className="flex flex-col gap-1.5">
-              <span className="text-[12px] font-semibold text-[#355e4c]">The sources that settled it</span>
+              <span className="text-[12px] font-semibold text-grey-04">The sources that settled it</span>
               <SourceChipList sources={model.agreedBasis.settlingSources} />
             </div>
           )}

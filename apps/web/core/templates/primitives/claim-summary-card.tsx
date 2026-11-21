@@ -30,12 +30,12 @@ export function ClaimSummaryCard({ claim, variant = 'default', className }: Clai
   const isAgreed = variant === 'agreed' || (!claim.split.isSplit && variant === 'default');
 
   const cardClasses = cx(
-    'group flex w-full flex-col gap-3 rounded-xl border p-4 text-left text-text no-underline transition-colors @[560px]:p-[18px]',
+    'group flex w-full flex-col gap-3 rounded-xl border bg-white p-4 text-left text-text no-underline transition-colors @[560px]:p-[18px]',
     isAgreed
-      ? 'border-[#d8efe3] bg-[#f2faf6] hover:border-[#127a5b]'
+      ? 'border-grey-02/80 hover:border-text'
       : isLead
-        ? 'border-grey-02 bg-grey-01/60 hover:border-text'
-        : 'border-grey-02/80 bg-white hover:border-text',
+        ? 'border-grey-02 shadow-light hover:border-text'
+        : 'border-grey-02/80 hover:border-text',
     className
   );
 
@@ -64,7 +64,7 @@ export function ClaimSummaryCard({ claim, variant = 'default', className }: Clai
         {claim.title}
       </h3>
 
-      {claim.basisSummary && <p className="m-0 text-[13px] leading-[18px] text-[#355e4c]">{claim.basisSummary}</p>}
+      {claim.basisSummary && <p className="m-0 text-[13px] leading-[18px] text-grey-04">{claim.basisSummary}</p>}
 
       <div className={cx('flex gap-4', isLead ? 'flex-col @[560px]:flex-row @[560px]:items-end' : 'flex-col')}>
         {isLead && claim.overallPercent !== undefined && (

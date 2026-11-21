@@ -133,7 +133,7 @@ export function outletInitialsFrom(name: string): string {
   return (initials || trimmed[0]?.toUpperCase() || 'G').slice(0, 3);
 }
 
-const OUTLET_PALETTE = ['#2f5f8a', '#7a4b2a', '#3d6b4f', '#5b4a8a', '#8a4a3a', '#245a6b'] as const;
+const OUTLET_PALETTE = ['#202020', '#6833ff', '#3963fe', '#35363a'] as const;
 
 /** Deterministic accent color for an outlet monogram tile. */
 export function outletColorFrom(name: string): string {

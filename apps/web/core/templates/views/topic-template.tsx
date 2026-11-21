@@ -562,13 +562,13 @@ function ViralPostPreviewCard({ post }: { post: TopicViralPostPreviewModel }) {
       {post.topNote ? (
         <div
           className={cx(
-            'flex flex-col gap-1 rounded-lg border p-2.5 text-[13px] leading-[18px]',
+            'flex flex-col gap-1 rounded-lg border p-3 text-[13px] leading-[18px]',
             post.topNote.status === 'shown'
-              ? 'border-[#f5d76e] bg-[#fff7e0]'
-              : 'border-dashed border-grey-03 bg-grey-01/50'
+              ? 'border-l-2 border-grey-02/80 border-l-purple bg-bg'
+              : 'border-dashed border-grey-02 bg-white'
           )}
         >
-          <span className="text-[11px] font-bold tracking-wide text-text uppercase">{post.topNote.tag}</span>
+          <span className="text-[11px] font-semibold tracking-wide text-purple uppercase">{post.topNote.tag}</span>
           <span className="text-text">{post.topNote.text}</span>
         </div>
       ) : (

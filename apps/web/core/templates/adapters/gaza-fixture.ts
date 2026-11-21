@@ -33,8 +33,8 @@ import { outletColorFrom, outletInitialsFrom } from '../ontology';
  */
 
 export const GAZA_COMMUNITIES: readonly CommunityDefinition[] = [
-  { id: 'pp', name: 'Pro-Palestinian', shortName: 'Pro-Palestinian', color: '#e07a1f', memberCount: 4812 },
-  { id: 'pi', name: 'Pro-Israel', shortName: 'Pro-Israel', color: '#1f8fa3', memberCount: 4377 },
+  { id: 'pp', name: 'Pro-Palestinian', shortName: 'Pro-Palestinian', color: '#6833ff', memberCount: 4812 },
+  { id: 'pi', name: 'Pro-Israel', shortName: 'Pro-Israel', color: '#3963fe', memberCount: 4377 },
 ];
 
 export type GazaFixtureRoute =
@@ -721,7 +721,7 @@ function computeEffectiveSplit(
     {
       id: 'pp',
       label: 'Pro-Palestinian',
-      color: '#e07a1f',
+      color: '#6833ff',
       percent: ppPct,
       voterCount: ppVotes,
       userLabel: ppVoted ? userLabel : undefined,
@@ -729,7 +729,7 @@ function computeEffectiveSplit(
     {
       id: 'pi',
       label: 'Pro-Israel',
-      color: '#1f8fa3',
+      color: '#3963fe',
       percent: piPct,
       voterCount: piVotes,
       userLabel: piVoted ? userLabel : undefined,
@@ -880,25 +880,25 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
         {
           id: 'cf',
           name: 'Ceasefire & strikes',
-          color: '#d9341c',
+          color: '#fe31c5',
           weeklyCounts: [16, 18, 12, 10, 8, 11, 16, 15, 14, 15, 12, 14, 12, 14, 22, 14, 13, 10, 12, 10, 15, 16, 24],
         },
         {
           id: 'aid',
           name: 'Aid & famine',
-          color: '#a55a00',
+          color: '#3963fe',
           weeklyCounts: [11, 7, 10, 8, 5, 7, 8, 9, 9, 12, 9, 7, 15, 9, 12, 7, 12, 5, 11, 9, 9, 12, 11],
         },
         {
           id: 'law',
           name: 'Courts & UN',
-          color: '#5b2fd0',
+          color: '#6833ff',
           weeklyCounts: [5, 8, 7, 8, 4, 4, 4, 3, 2, 8, 5, 4, 13, 10, 7, 4, 3, 5, 8, 4, 9, 26, 7],
         },
         {
           id: 'pol',
           name: 'Politics & governance',
-          color: '#127a5b',
+          color: '#202020',
           weeklyCounts: [8, 5, 8, 4, 3, 4, 5, 6, 5, 13, 3, 8, 8, 19, 12, 10, 7, 7, 9, 6, 9, 21, 14],
         },
       ],
@@ -906,7 +906,7 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
         {
           id: 'gen',
           name: 'Genocide',
-          color: '#5b2fd0',
+          color: '#6833ff',
           group: 'split',
           communityAWeekly: [
             92, 91, 93, 90, 92, 91, 93, 94, 93, 92, 94, 93, 95, 94, 93, 93, 94, 93, 92, 94, 93, 94, 93,
@@ -916,7 +916,7 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
         {
           id: 'cf',
           name: 'Ceasefire honoured',
-          color: '#127a5b',
+          color: '#202020',
           group: 'split',
           communityAWeekly: [11, 9, 7, 8, 6, 5, 6, 4, 4, 6, 5, 6, 5, 5, 5, 6, 5, 4, 4, 5, 6, 5, 4],
           communityBWeekly: [
@@ -926,7 +926,7 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
         {
           id: 'k70',
           name: 'More than 70,000 killed',
-          color: '#5b2fd0',
+          color: '#6833ff',
           group: 'common',
           communityAWeekly: [
             99, 99, 99, 99, 99, 99, 98, 99, 99, 98, 98, 99, 98, 99, 99, 98, 98, 99, 99, 99, 99, 98, 99,
@@ -938,7 +938,7 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
         {
           id: 'hostages',
           name: 'Every hostage returned',
-          color: '#127a5b',
+          color: '#202020',
           group: 'common',
           communityAWeekly: [
             88, 91, 92, 91, 93, 92, 94, 95, 96, 94, 95, 92, 93, 93, 94, 93, 94, 94, 93, 95, 95, 94, 94,
@@ -949,9 +949,9 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
         },
       ],
       communityALabel: 'Pro-Palestinian',
-      communityAColor: '#e07a1f',
+      communityAColor: '#6833ff',
       communityBLabel: 'Pro-Israel',
-      communityBColor: '#1f8fa3',
+      communityBColor: '#3963fe',
     }),
     [openEvent]
   );
@@ -1161,8 +1161,8 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
           isSplit: isClaimSplit(gap),
           gapPoints: gap,
           rows: [
-            { id: 'pp', label: 'Pro-Palestinian', color: '#e07a1f', percent: fact.pp },
-            { id: 'pi', label: 'Pro-Israel', color: '#1f8fa3', percent: fact.pi },
+            { id: 'pp', label: 'Pro-Palestinian', color: '#6833ff', percent: fact.pp },
+            { id: 'pi', label: 'Pro-Israel', color: '#3963fe', percent: fact.pi },
           ],
         },
         sources: toSourceChips(fact.sourceIds),
@@ -1173,7 +1173,7 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
       id: `${seed.id}-${item.communityId}`,
       communityId: item.communityId,
       title: item.title,
-      accentColor: item.communityId === 'pp' ? '#e07a1f' : '#1f8fa3',
+      accentColor: item.communityId === 'pp' ? '#6833ff' : '#3963fe',
       points: item.points,
       concede: item.concede,
       sources: toSourceChips(item.sourceIds),
@@ -1496,14 +1496,14 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
           statusLabel: note.shown ? 'Shown to everyone' : 'Needs ratings',
           text: note.text,
           authorLabel: `Written by a ${note.by === 'pp' ? 'Pro-Palestinian' : 'Pro-Israel'} member`,
-          authorColor: note.by === 'pp' ? '#e07a1f' : '#1f8fa3',
+          authorColor: note.by === 'pp' ? '#6833ff' : '#3963fe',
           sources: toSourceChips(note.sourceIds),
           ratingCountLabel: note.ratingCount,
           helpfulnessSplit: {
             isSplit: false,
             rows: [
-              { id: 'pp', label: 'Pro-Palestinian', color: '#e07a1f', percent: note.ppHelp, unit: 'helpful' },
-              { id: 'pi', label: 'Pro-Israel', color: '#1f8fa3', percent: note.piHelp, unit: 'helpful' },
+              { id: 'pp', label: 'Pro-Palestinian', color: '#6833ff', percent: note.ppHelp, unit: 'helpful' },
+              { id: 'pi', label: 'Pro-Israel', color: '#3963fe', percent: note.piHelp, unit: 'helpful' },
             ],
           },
           userRating: rating,
@@ -1544,7 +1544,7 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
           authorLabel: joinedCommunityId
             ? `Written by you (${joinedCommunityId === 'pp' ? 'Pro-Palestinian' : 'Pro-Israel'})`
             : 'Written by you (independent)',
-          authorColor: joinedCommunityId === 'pp' ? '#e07a1f' : joinedCommunityId === 'pi' ? '#1f8fa3' : '#202020',
+          authorColor: joinedCommunityId === 'pp' ? '#6833ff' : joinedCommunityId === 'pi' ? '#3963fe' : '#202020',
           sources: draft.sourceUrl
             ? [{ id: 'custom-src', index: 1, title: draft.sourceUrl, href: draft.sourceUrl }]
             : [],

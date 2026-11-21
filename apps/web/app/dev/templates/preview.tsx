@@ -140,8 +140,8 @@ function PrimitivesGallery() {
 
   const liveSplit: SplitBreakdown = React.useMemo(() => {
     const rows = [
-      { id: 'c1', label: 'Community A', color: '#e07a1f', percent: 94, voterCount: 1180 },
-      { id: 'c2', label: 'Community B', color: '#1f8fa3', percent: 6, voterCount: 1090 },
+      { id: 'c1', label: 'Community A', color: '#6833ff', percent: 94, voterCount: 1180 },
+      { id: 'c2', label: 'Community B', color: '#3963fe', percent: 6, voterCount: 1090 },
       {
         id: 'all',
         label: 'Everyone',
@@ -177,8 +177,8 @@ function PrimitivesGallery() {
       gapPoints: 6,
       totalVotes: 1620,
       rows: [
-        { id: 'c1', label: 'Community A', color: '#e07a1f', percent: 96 },
-        { id: 'c2', label: 'Community B', color: '#1f8fa3', percent: 90 },
+        { id: 'c1', label: 'Community A', color: '#6833ff', percent: 96 },
+        { id: 'c2', label: 'Community B', color: '#3963fe', percent: 90 },
       ],
     },
     onSelect: () => setLastSelected('Opened agreed claim'),

@@ -11,16 +11,16 @@ export type TemplateBadgeTone =
   'neutral' | 'split' | 'agreed' | 'fact' | 'judgment' | 'value' | 'event' | 'story' | 'source' | 'post' | 'dark';
 
 const BADGE_TONE_CLASSES: Record<TemplateBadgeTone, string> = {
-  neutral: 'bg-grey-01 text-grey-05',
-  split: 'bg-red-02 text-red-01',
-  agreed: 'bg-successTertiary text-[#127a5b]',
-  fact: 'bg-ctaTertiary text-[#1d5fbf]',
+  neutral: 'bg-grey-01 text-grey-04',
+  split: 'bg-pink/10 text-pink',
+  agreed: 'bg-grey-01 text-text',
+  fact: 'bg-ctaTertiary text-ctaPrimary',
   judgment: 'bg-purple-tint text-purple',
-  value: 'bg-[#fff4e6] text-[#a55a00]',
+  value: 'bg-pink/10 text-pink',
   event: 'bg-grey-01 text-grey-05',
   story: 'bg-ctaTertiary text-ctaPrimary',
   source: 'bg-grey-01 text-grey-04',
-  post: 'bg-[#eef4fb] text-[#245a8a]',
+  post: 'bg-purple-tint text-purple',
   dark: 'bg-text text-white',
 };
 

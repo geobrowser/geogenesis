@@ -278,15 +278,15 @@ function ContextNoteCard({ note }: { note: PostContextNoteModel }) {
       className={cx(
         'flex flex-col gap-2.5 rounded-xl border p-4 text-[14px] leading-[20px]',
         isShown
-          ? 'border-[#f5d76e] bg-[#fff7e0]'
+          ? 'border-l-2 border-grey-02/80 border-l-purple bg-white'
           : note.status === 'mine'
-            ? 'border-ctaPrimary/40 bg-ctaTertiary/40'
-            : 'border-dashed border-grey-03 bg-white'
+            ? 'border-ctaPrimary/40 bg-ctaTertiary/30'
+            : 'border-dashed border-grey-02 bg-white'
       )}
     >
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[12px] font-bold tracking-wide text-text uppercase">{note.tag}</span>
-        <span className={cx('text-[12px]', isShown ? 'font-semibold text-[#8a6500]' : 'text-grey-04')}>
+        <span className="text-[12px] font-semibold tracking-wide text-purple uppercase">{note.tag}</span>
+        <span className={cx('text-[12px]', isShown ? 'font-medium text-text' : 'text-grey-04')}>
           {note.statusLabel}
         </span>
       </div>

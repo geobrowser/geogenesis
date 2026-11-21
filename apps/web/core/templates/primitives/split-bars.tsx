@@ -61,7 +61,7 @@ export function SplitBars({ rows, density = 'compact', className }: SplitBarsPro
               aria-valuemin={0}
               aria-valuemax={100}
               aria-valuenow={Math.round(clamped)}
-              className={cx('overflow-hidden rounded-full bg-divider', isFull ? 'h-2' : 'h-1.5')}
+              className={cx('overflow-hidden rounded-full bg-grey-01', isFull ? 'h-2' : 'h-1.5')}
             >
               <div
                 className="h-full rounded-full transition-[width] duration-200"

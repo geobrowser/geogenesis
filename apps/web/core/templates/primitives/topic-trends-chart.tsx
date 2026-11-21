@@ -111,8 +111,8 @@ export function TopicTrendsChart({ trends, className }: TopicTrendsChartProps) {
         ? ['100% agree', '50%', '0%']
         : ['100 pts apart', '50', '0 = same'];
 
-  const colorA = trends.communityAColor ?? '#e07a1f';
-  const colorB = trends.communityBColor ?? '#1f8fa3';
+  const colorA = trends.communityAColor ?? '#6833ff';
+  const colorB = trends.communityBColor ?? '#3963fe';
 
   return (
     <section
