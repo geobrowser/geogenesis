@@ -13,6 +13,7 @@ import {
   mentionQueryAt,
   messageSegments,
 } from '~/core/space-chat/mentions';
+import { type ChatViewer, isViewerId } from '~/core/space-chat/viewer';
 
 import { Avatar } from '~/design-system/avatar';
 import { AvatarGroup } from '~/design-system/avatar-group';
@@ -82,7 +83,7 @@ type Props = {
   loadingOlder?: boolean;
   composer: ChatViewComposer;
   /** Dashless or dashed. */
-  viewerId: string | null;
+  viewer: ChatViewer | null;
   onEdit?: (id: string, body: string) => Promise<void>;
   /** Offered on the viewer's own with `canDeleteOwn`, and on everyone's with `canDeleteAny`. */
   onDelete?: (id: string) => Promise<void>;
@@ -114,7 +115,7 @@ export function SpaceChatView({
   onLoadOlder,
   loadingOlder = false,
   composer,
-  viewerId,
+  viewer,
   onEdit,
   onDelete,
   canDeleteOwn = true,
@@ -135,7 +136,7 @@ export function SpaceChatView({
   const [replyTo, setReplyTo] = React.useState<ChatViewMessage | null>(null);
   const firstId = messages[0]?.id ?? null;
   const lastId = messages.at(-1)?.id ?? null;
-  const lastIsOwn = viewerId !== null && messages.length > 0 && sameId(messages.at(-1)!.author.id, viewerId);
+  const lastIsOwn = messages.length > 0 && isViewerId(viewer, messages.at(-1)!.author.id);
   const previousEnds = React.useRef<{ first: string | null; last: string | null }>({ first: null, last: null });
   const posting = composer.kind === 'post';
   const breaks = React.useMemo(() => dayBreaks(messages), [messages]);
@@ -220,7 +221,7 @@ export function SpaceChatView({
               !message.replyTo &&
               sameId(previous.author.id, message.author.id) &&
               Date.parse(message.createdAt) - Date.parse(previous.createdAt) < GROUPING_WINDOW_MS;
-            const own = viewerId !== null && sameId(message.author.id, viewerId);
+            const own = isViewerId(viewer, message.author.id);
             const row = (
               <ChatRow
                 key={message.id}

@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   messages: [] as unknown[],
   send: vi.fn(),
   memberExtra: {} as Record<string, unknown>,
+  personId: null as string | null,
 }));
 
 vi.mock('~/core/debates/hooks', () => ({
@@ -48,6 +49,7 @@ vi.mock('~/core/space-chat/people', () => ({
 }));
 vi.mock('~/core/space-chat/channel-hooks', () => ({ useMarkChannelRead: () => undefined }));
 vi.mock('~/core/space-chat/hooks', () => ({
+  useChatViewer: () => (mocks.authenticated ? { userId: 'viewer', personId: mocks.personId } : null),
   useSpaceChatAuth: () => ({ ready: mocks.ready, auth: null, settingUp: mocks.settingUp }),
   useSpaceChatRooms: () => ({
     data: { supported: true, rooms: [] },
@@ -89,6 +91,7 @@ beforeEach(() => {
   mocks.refetchRooms.mockReset();
   mocks.send.mockReset();
   mocks.memberExtra = {};
+  mocks.personId = null;
 });
 afterEach(cleanup);
 
@@ -272,6 +275,19 @@ describe('SpaceChatPanel delete', () => {
     expect(deleteButtons()).toHaveLength(1);
   });
 
+  // GEO-3818: geo-chat moves author ids from the user id to the person id, after the web ships.
+  it('knows the viewer’s own message by user id (older geo-chat) or person id (newer)', () => {
+    mocks.canPost = true;
+    mocks.personId = 'person';
+    mocks.messages = [
+      chatMessage('0195000000007000800000000000000a', 'viewer'),
+      chatMessage('0195000000007000800000000000000c', 'person'),
+      chatMessage('0195000000007000800000000000000b', 'other'),
+    ];
+    render(<SpaceChatPanel spaceId={SPACE} />);
+    expect(deleteButtons()).toHaveLength(2);
+  });
+
   it('offers Delete on everyone’s messages to a moderator', () => {
     mocks.canPost = true;
     mocks.canModerate = true;
@@ -317,6 +333,12 @@ describe('SpaceChatPanel header and arrivals', () => {
     expect(onArrival).not.toHaveBeenCalled();
 
     mocks.messages = [chatMessage('a3', 'other'), ...mocks.messages];
+    rerender(<SpaceChatPanel spaceId={SPACE} onArrival={onArrival} />);
+    expect(onArrival).toHaveBeenCalledTimes(1);
+
+    // The viewer's own send under their person id is not an arrival either.
+    mocks.personId = 'person';
+    mocks.messages = [chatMessage('a4', 'person'), ...mocks.messages];
     rerender(<SpaceChatPanel spaceId={SPACE} onArrival={onArrival} />);
     expect(onArrival).toHaveBeenCalledTimes(1);
 

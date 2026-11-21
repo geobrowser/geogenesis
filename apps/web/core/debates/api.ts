@@ -1181,6 +1181,11 @@ export function getCurrentGeoChatUserId() {
   return decodeGeoChatAccessToken(session?.access_token)?.user_id ?? null;
 }
 
+/** The stored session's person entity id; null on a geo-chat build that sends none. */
+export function getCurrentGeoChatPersonId() {
+  return loadSession(null)?.profile?.person_id ?? null;
+}
+
 export async function getServerTime() {
   return geoChatRequest<{ server_time_ms: number }>('/time');
 }

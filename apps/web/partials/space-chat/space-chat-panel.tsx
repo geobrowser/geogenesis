@@ -6,7 +6,6 @@ import Link from 'next/link';
 
 import type { GeoChatRequestError } from '~/core/debates/api';
 import { useGeoChatAuth } from '~/core/debates/hooks';
-import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useJoinSpace } from '~/core/hooks/use-join-space';
 import { useIsMembershipPending } from '~/core/hooks/use-pending-memberships';
@@ -16,11 +15,12 @@ import type { SpaceChatMessage, SpaceChatRoom } from '~/core/space-chat/api';
 import { useMarkChannelRead } from '~/core/space-chat/channel-hooks';
 import { channelName, postPolicy } from '~/core/space-chat/channels';
 import { isSlowModeError, retryAfterSeconds, spaceChatErrorMessage } from '~/core/space-chat/errors';
-import { useSpaceChatAuth, useSpaceChatRoom, useSpaceChatRooms } from '~/core/space-chat/hooks';
+import { useChatViewer, useSpaceChatAuth, useSpaceChatRoom, useSpaceChatRooms } from '~/core/space-chat/hooks';
 import { mentionedIds } from '~/core/space-chat/mentions';
 import { type ChatPerson, unknownPerson, useChatPeople, useSpaceChatParticipants } from '~/core/space-chat/people';
 import { spaceChatTabPath } from '~/core/space-chat/routes';
 import { type SpaceChatState, shownReactions } from '~/core/space-chat/state';
+import { type ChatViewer, isViewerId, viewerPersonId } from '~/core/space-chat/viewer';
 import { normId } from '~/core/utils/norm-id';
 
 import { SpaceChatView } from './space-chat-view';
@@ -78,7 +78,7 @@ export function SpaceChatPanel({
 }) {
   const { ready: authReady, authenticated } = useGeoChatAuth();
   const { settingUp } = useSpaceChatAuth();
-  const viewerId = useCurrentGeoChatUserId();
+  const viewer = useChatViewer();
   const rooms = useSpaceChatRooms(spaceId, true);
   const listed = channel ?? rooms.memberRoom;
   // The room's own rules (replies-only, slow mode, archived), on the Chat tab and in calls alike. A
@@ -114,15 +114,19 @@ export function SpaceChatPanel({
   useMarkChannelRead(channel, newestId, channel !== null);
   const participants = useSpaceChatParticipants(spaceId, true);
 
-  const ids = React.useMemo(() => personIds(chat.state, viewerId), [chat.state, viewerId]);
+  const selfId = viewerPersonId(viewer);
+  const ids = React.useMemo(() => personIds(chat.state, selfId), [chat.state, selfId]);
   const people = useChatPeople(ids, participants);
   const self = React.useMemo(
-    () => (viewerId ? (people.get(normId(viewerId)) ?? unknownPerson(viewerId)) : null),
-    [people, viewerId]
+    () => (selfId ? (people.get(normId(selfId)) ?? unknownPerson(selfId)) : null),
+    [people, selfId]
   );
-  const messages = React.useMemo(() => viewMessages(chat.state, people, self), [chat.state, people, self]);
+  const messages = React.useMemo(
+    () => viewMessages(chat.state, people, self, viewer),
+    [chat.state, people, self, viewer]
+  );
   const recentAuthors = React.useMemo(() => recentPeople(chat.state, people), [chat.state, people]);
-  useArrivals(chat.state, viewerId, onArrival);
+  useArrivals(chat.state, viewer, onArrival);
   const signIn = usePrivySignIn(undefined, {
     analytics: {
       component: 'space_chat',
@@ -201,7 +205,7 @@ export function SpaceChatPanel({
       onLoadOlder={chat.loadOlder}
       loadingOlder={chat.loadingOlder}
       composer={composer}
-      viewerId={viewerId}
+      viewer={viewer}
       // geo-chat requires write access for edits and deletes: own messages need posting rights,
       // other people's need moderation.
       // geo-chat gates edits, own deletes and reactions on the right to reply (GEO-3818).
@@ -233,7 +237,7 @@ export function SpaceChatAlsoPostsTo({ spaceId }: { spaceId: string }) {
  * Reports each change of newest stored message written by someone else. The first load, older
  * pages and the viewer's own sends are not arrivals.
  */
-function useArrivals(state: SpaceChatState | undefined, viewerId: string | null, onArrival?: () => void) {
+function useArrivals(state: SpaceChatState | undefined, viewer: ChatViewer | null, onArrival?: () => void) {
   const newest = state?.messages[0];
   const newestId = newest ? normId(newest.id) : null;
   const previous = React.useRef<string | null>(null);
@@ -243,9 +247,9 @@ function useArrivals(state: SpaceChatState | undefined, viewerId: string | null,
     const before = previous.current;
     previous.current = newestId;
     if (before === null || newestId === null || before === newestId || !newest) return;
-    if (viewerId && normId(newest.author_id) === normId(viewerId)) return;
+    if (isViewerId(viewer, newest.author_id)) return;
     callback.current?.();
-  }, [newest, newestId, viewerId]);
+  }, [newest, newestId, viewer]);
 }
 
 /** Distinct authors of the loaded messages, newest first. */
@@ -317,9 +321,9 @@ function useChatMembership(spaceId: string, canPost: boolean, settingUp: boolean
 }
 
 /** Everyone the loaded messages name: authors and mentions, and the viewer for pending sends. */
-function personIds(state: SpaceChatState | undefined, viewerId: string | null) {
+function personIds(state: SpaceChatState | undefined, selfId: string | null) {
   const ids = new Set<string>();
-  if (viewerId) ids.add(normId(viewerId));
+  if (selfId) ids.add(normId(selfId));
   for (const message of state?.messages ?? []) {
     ids.add(normId(message.author_id));
     for (const id of mentionedIds(message.body)) ids.add(id);
@@ -330,11 +334,14 @@ function personIds(state: SpaceChatState | undefined, viewerId: string | null) {
 function viewMessages(
   state: SpaceChatState | undefined,
   people: Map<string, ChatPerson>,
-  self: ChatPerson | null
+  self: ChatPerson | null,
+  viewer: ChatViewer | null
 ): ChatViewMessage[] {
   if (!state) return [];
   const byId = new Map(state.messages.map(message => [normId(message.id), message]));
-  const author = (id: string) => people.get(normId(id)) ?? unknownPerson(id);
+  // The viewer's own messages show their profile under either wire id.
+  const author = (id: string) =>
+    (self && isViewerId(viewer, id) ? self : null) ?? people.get(normId(id)) ?? unknownPerson(id);
   const replyTo = (id: string | null): ChatViewMessage['replyTo'] => {
     if (!id) return undefined;
     const original = byId.get(normId(id));

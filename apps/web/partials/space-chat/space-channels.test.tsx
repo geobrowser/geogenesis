@@ -33,6 +33,7 @@ vi.mock('~/core/debates/hooks', () => ({ useGeoChatAuth: () => ({ ready: true, a
 vi.mock('~/core/debates/use-current-geo-chat-user-id', () => ({ useCurrentGeoChatUserId: () => 'viewer' }));
 vi.mock('~/core/space-chat/people', () => ({ useSpaceChatParticipants: () => [] }));
 vi.mock('~/core/space-chat/hooks', () => ({
+  useChatViewer: () => ({ userId: 'viewer', personId: null }),
   useSpaceChatRooms: () => ({
     data: { supported: true, rooms: mocks.rooms, channelsEnabled: true, canManageChannels: mocks.canManage },
     isSuccess: true,

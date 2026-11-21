@@ -3,6 +3,7 @@ import type { QueryKey } from '@tanstack/react-query';
 import { dashlessId } from '~/core/debates/api';
 
 import type { SpaceChatMessage, SpaceChatPage, SpaceChatReaction, SpaceChatRoom } from './api';
+import { type ChatViewer, isViewerId } from './viewer';
 
 /** A send not yet confirmed by geo-chat; matched to the stored message by `client_nonce`. */
 export type PendingSpaceChatMessage = {
@@ -321,11 +322,11 @@ function withReactionChange(message: HeldSpaceChatMessage, change: ReactionChang
   };
 }
 
-/** `viewerId` decides `reacted` on the viewer's own reaction events; every other field is shared. */
+/** `viewer` decides `reacted` on the viewer's own reaction events; every other field is shared. */
 export function withRoomEvent(
   current: SpaceChatState,
   event: SpaceChatRoomEvent,
-  viewerId: string | null
+  viewer: ChatViewer | null
 ): SpaceChatState {
   switch (event.type) {
     case 'created':
@@ -339,7 +340,7 @@ export function withRoomEvent(
     case 'deleted':
       return patchMessage(current, event.messageId, message => redacted(message, event.deletedAt));
     case 'reaction': {
-      const own = viewerId !== null && dashlessId(viewerId) === dashlessId(event.userId);
+      const own = isViewerId(viewer, event.userId);
       return patchMessage(current, event.messageId, message => withReactionChange(message, event, own));
     }
   }

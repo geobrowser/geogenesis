@@ -5,9 +5,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as React from 'react';
 
 import { GeoChatRequestError } from '~/core/debates/api';
+import { getCurrentGeoChatPersonId } from '~/core/debates/api';
 import { useDebateVisibility } from '~/core/debates/debate-attention';
 import { useSpaceChatRoomScope } from '~/core/debates/debate-gateway';
 import { useGeoChatAuth } from '~/core/debates/hooks';
+import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 import { useGeoChatAccountStatus } from '~/core/debates/use-geo-chat-account-status';
 import { useHydrated } from '~/core/hooks/use-hydrated';
 import { useFeatureFlag } from '~/core/state/feature-flags';
@@ -38,6 +40,7 @@ import {
   withoutPendingMessage,
   withoutPendingReaction,
 } from './state';
+import type { ChatViewer } from './viewer';
 
 const FIRST_PAGE_LIMIT = 50;
 /** A poll asks only for messages after the newest held. */
@@ -290,4 +293,12 @@ function newClientNonce() {
   return typeof crypto !== 'undefined' && 'randomUUID' in crypto
     ? `c-${crypto.randomUUID()}`
     : `c-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
+
+/** The signed-in viewer for space chat's "is this me" checks (see `isViewerId`). */
+export function useChatViewer(): ChatViewer | null {
+  const userId = useCurrentGeoChatUserId();
+  // Read every render, like the user id: the session carrying it is written outside React.
+  const personId = userId ? getCurrentGeoChatPersonId() : null;
+  return React.useMemo(() => (userId ? { userId, personId } : null), [personId, userId]);
 }

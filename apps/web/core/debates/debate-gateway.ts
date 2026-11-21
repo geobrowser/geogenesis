@@ -31,6 +31,7 @@ import {
   withChannelUpdate,
   withRoomEvent,
 } from '~/core/space-chat/state';
+import { currentChatViewer } from '~/core/space-chat/viewer';
 
 import {
   type DebateLobbiesResponse,
@@ -41,7 +42,6 @@ import {
   type GeoChatSession,
   type GetPrivyIdentityToken,
   dashlessId,
-  getCurrentGeoChatUserId,
   getGeoChatApiBaseUrl,
   getGeoChatSession,
   getStoredGeoChatAccessToken,
@@ -729,9 +729,9 @@ export class DebateGatewayClient {
     const event = parseSpaceChatRoomEvent(payload);
     const key = this.chatRoomQueryKey(roomId);
     if (!event || !key) return;
-    const viewerId = this.anonymous ? null : getCurrentGeoChatUserId();
+    const viewer = this.anonymous ? null : currentChatViewer();
     this.queryClient.setQueryData<SpaceChatState>(key, current =>
-      current ? withRoomEvent(current, event, viewerId) : current
+      current ? withRoomEvent(current, event, viewer) : current
     );
   }
 

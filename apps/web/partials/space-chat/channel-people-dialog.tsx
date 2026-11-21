@@ -7,6 +7,7 @@ import type { SpaceChatRoom } from '~/core/space-chat/api';
 import { useSpaceChannelMembers } from '~/core/space-chat/channel-hooks';
 import { channelName } from '~/core/space-chat/channels';
 import { type ChatPerson, unknownPerson, useChatPeople } from '~/core/space-chat/people';
+import { type ChatViewer, isViewerId } from '~/core/space-chat/viewer';
 import { normId } from '~/core/utils/norm-id';
 
 import { Avatar } from '~/design-system/avatar';
@@ -39,7 +40,7 @@ export function ChannelPeopleDialog({
   onOpenChange,
   room,
   canManage,
-  viewerId,
+  viewer,
   candidates,
   onLeft,
 }: {
@@ -47,7 +48,7 @@ export function ChannelPeopleDialog({
   onOpenChange: (open: boolean) => void;
   room: SpaceChatRoom;
   canManage: boolean;
-  viewerId: string | null;
+  viewer: ChatViewer | null;
   /** The space's editors and members, to add. */
   candidates: ChatPerson[];
   /** After the viewer leaves. */
@@ -59,7 +60,6 @@ export function ChannelPeopleDialog({
   const [adding, setAdding] = React.useState<ChatViewPerson[]>([]);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
-  const self = viewerId ? normId(viewerId) : null;
 
   const change = async (userIds: string[], added: boolean) => {
     if (busy) return;
@@ -68,7 +68,7 @@ export function ChannelPeopleDialog({
     try {
       await members.change(userIds, added);
       if (added) setAdding([]);
-      if (!added && self && userIds.includes(self) && !canManage) {
+      if (!added && userIds.some(id => isViewerId(viewer, id)) && !canManage) {
         onOpenChange(false);
         onLeft?.();
       }
@@ -137,7 +137,7 @@ export function ChannelPeopleDialog({
         ) : (
           ids.map(id => {
             const person = people.get(id) ?? unknownPerson(id);
-            const isSelf = id === self;
+            const isSelf = isViewerId(viewer, id);
             return (
               <li key={id} className="flex items-center justify-between gap-3 py-2">
                 <span className="flex min-w-0 items-center gap-2">

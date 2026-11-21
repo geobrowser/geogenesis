@@ -20,6 +20,7 @@ import {
 } from './state';
 
 const VIEWER = '0191aaaa000070008000000000000001';
+const ME = { userId: VIEWER, personId: null };
 const OTHER = '0191bbbb000070008000000000000002';
 
 function message(n: number, overrides: Partial<SpaceChatMessage> = {}): SpaceChatMessage {
@@ -140,14 +141,34 @@ describe('space chat state', () => {
         reactions: count ? [{ value: '👍', count }] : [],
       }) as const;
     let state = withChatPage(undefined, page([1]));
-    state = withRoomEvent(state, thumbs(1, OTHER, 1), VIEWER);
+    state = withRoomEvent(state, thumbs(1, OTHER, 1), ME);
     expect(state.messages[0]!.reactions).toEqual([{ value: '👍', count: 1, reacted: false }]);
-    state = withRoomEvent(state, thumbs(2, VIEWER.toUpperCase(), 2), VIEWER);
+    state = withRoomEvent(state, thumbs(2, VIEWER.toUpperCase(), 2), ME);
     expect(state.messages[0]!.reactions).toEqual([{ value: '👍', count: 2, reacted: true }]);
-    state = withRoomEvent(state, thumbs(3, OTHER, 1, false), VIEWER);
+    state = withRoomEvent(state, thumbs(3, OTHER, 1, false), ME);
     expect(state.messages[0]!.reactions).toEqual([{ value: '👍', count: 1, reacted: true }]);
-    state = withRoomEvent(state, thumbs(4, VIEWER, 0, false), VIEWER);
+    state = withRoomEvent(state, thumbs(4, VIEWER, 0, false), ME);
     expect(state.messages[0]!.reactions).toEqual([]);
+  });
+
+  it('marks the viewer’s reaction under their person id as theirs too (GEO-3818)', () => {
+    const PERSON = '0191aaaa000070008000000000000009';
+    const viewer = { userId: VIEWER, personId: PERSON };
+    const thumbs = (reactionVersion: number, userId: string, count: number) =>
+      ({
+        type: 'reaction',
+        messageId: message(1).id,
+        userId,
+        value: '👍',
+        added: true,
+        reactionVersion,
+        reactions: count ? [{ value: '👍', count }] : [],
+      }) as const;
+    let state = withChatPage(undefined, page([1]));
+    state = withRoomEvent(state, thumbs(1, PERSON, 1), viewer);
+    expect(state.messages[0]!.reactions).toEqual([{ value: '👍', count: 1, reacted: true }]);
+    state = withRoomEvent(withChatPage(undefined, page([1])), thumbs(1, VIEWER, 1), viewer);
+    expect(state.messages[0]!.reactions).toEqual([{ value: '👍', count: 1, reacted: true }]);
   });
 
   describe('reaction versions', () => {
@@ -168,9 +189,9 @@ describe('space chat state', () => {
           { value: '👍', count: 1 },
           { value: '❤️', count: 1 },
         ]),
-        VIEWER
+        ME
       );
-      state = withRoomEvent(state, event(4, '👍', [{ value: '👍', count: 1 }]), VIEWER);
+      state = withRoomEvent(state, event(4, '👍', [{ value: '👍', count: 1 }]), ME);
       expect(reactionsOf(state)).toEqual([
         { value: '👍', count: 1, reacted: false },
         { value: '❤️', count: 1, reacted: false },
@@ -186,20 +207,20 @@ describe('space chat state', () => {
           { value: '👍', count: 2 },
           { value: '🎉', count: 1 },
         ]),
-        VIEWER
+        ME
       );
       expect(reactionsOf(state)).toEqual([
         { value: '👍', count: 2, reacted: true },
         { value: '🎉', count: 1, reacted: false },
       ]);
-      state = withRoomEvent(state, event(3, '👍', [{ value: '🎉', count: 1 }], VIEWER, false), VIEWER);
+      state = withRoomEvent(state, event(3, '👍', [{ value: '🎉', count: 1 }], VIEWER, false), ME);
       expect(reactionsOf(state)).toEqual([{ value: '🎉', count: 1, reacted: false }]);
-      state = withRoomEvent(state, event(4, '🎉', []), VIEWER);
+      state = withRoomEvent(state, event(4, '🎉', []), ME);
       expect(reactionsOf(state)).toEqual([]);
     });
 
     it('drops an event older than the history read it follows', () => {
-      const state = withRoomEvent(seeded(), event(1, '👍', []), VIEWER);
+      const state = withRoomEvent(seeded(), event(1, '👍', []), ME);
       expect(reactionsOf(state)).toEqual([{ value: '👍', count: 1, reacted: false }]);
     });
 
@@ -213,8 +234,8 @@ describe('space chat state', () => {
         reactions: [{ value: '👍', count: 2, reacted: true }],
       };
       const viewersEvent = event(2, '👍', [{ value: '👍', count: 2 }], VIEWER);
-      const viaResponse = withRoomEvent(withOwnReactionResult(tapped, pending, response), viewersEvent, VIEWER);
-      const viaEvent = withOwnReactionResult(withRoomEvent(tapped, viewersEvent, VIEWER), pending, response);
+      const viaResponse = withRoomEvent(withOwnReactionResult(tapped, pending, response), viewersEvent, ME);
+      const viaEvent = withOwnReactionResult(withRoomEvent(tapped, viewersEvent, ME), pending, response);
       for (const state of [viaResponse, viaEvent]) {
         expect(reactionsOf(state)).toEqual([{ value: '👍', count: 2, reacted: true }]);
         expect(state.pendingReactions).toEqual([]);
@@ -228,7 +249,7 @@ describe('space chat state', () => {
         { value: '👍', count: 1, reacted: true },
       ]);
       // Someone else's ❤️ committed first, without the viewer's 👍.
-      state = withRoomEvent(state, event(2, '❤️', [{ value: '❤️', count: 1 }]), VIEWER);
+      state = withRoomEvent(state, event(2, '❤️', [{ value: '❤️', count: 1 }]), ME);
       expect(shownReactions(state.messages[0]!, state.pendingReactions)).toEqual([
         { value: '❤️', count: 1, reacted: false },
         { value: '👍', count: 1, reacted: true },
@@ -258,7 +279,7 @@ describe('space chat state', () => {
           { value: '👍', count: 2 },
           { value: '🎉', count: 1 },
         ]),
-        VIEWER
+        ME
       );
       state = withOwnReactionResult(state, pending, {
         value: '👍',
@@ -324,7 +345,7 @@ describe('space chat state', () => {
     });
 
     it('keeps the higher-version reactions when a page copy is older', () => {
-      let state = withRoomEvent(seeded(), event(4, '👍', [{ value: '👍', count: 4 }]), VIEWER);
+      let state = withRoomEvent(seeded(), event(4, '👍', [{ value: '👍', count: 4 }]), ME);
       state = withChatPage(state, {
         messages: [message(1, { reactions: [{ value: '👍', count: 1, reacted: false }], reaction_version: 1 })],
         next_before: null,

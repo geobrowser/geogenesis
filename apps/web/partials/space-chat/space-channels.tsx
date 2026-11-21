@@ -8,7 +8,6 @@ import { useParams, useRouter } from 'next/navigation';
 
 import { useDebateGatewayScope, useSpaceChatRoomRevoked } from '~/core/debates/debate-gateway';
 import { useGeoChatAuth } from '~/core/debates/hooks';
-import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 import type { SpaceChatRoom } from '~/core/space-chat/api';
 import {
   GENERAL_CHANNEL,
@@ -21,7 +20,7 @@ import {
   sortChannels,
   unreadLabel,
 } from '~/core/space-chat/channels';
-import { useSpaceChatRooms } from '~/core/space-chat/hooks';
+import { useChatViewer, useSpaceChatRooms } from '~/core/space-chat/hooks';
 import { useSpaceChatParticipants } from '~/core/space-chat/people';
 import { spaceChannelPath } from '~/core/space-chat/routes';
 
@@ -69,7 +68,7 @@ export function SpaceChannels({ spaceId }: { spaceId: string }) {
   const wanted = useRouteChannel();
   const router = useRouter();
   const { authenticated } = useGeoChatAuth();
-  const viewerId = useCurrentGeoChatUserId();
+  const viewer = useChatViewer();
   const rooms = useSpaceChatRooms(spaceId, true, { pollSignedOut: true });
   // `space.channels_changed` arrives on the signed-in space scope.
   useDebateGatewayScope({ scope: 'space', space_id: spaceId }, authenticated);
@@ -224,7 +223,7 @@ export function SpaceChannels({ spaceId }: { spaceId: string }) {
           onOpenChange={open => !open && setDialog(null)}
           room={current}
           canManage={canManage}
-          viewerId={viewerId}
+          viewer={viewer}
           candidates={participants}
           onLeft={() => {
             setShown(null);
