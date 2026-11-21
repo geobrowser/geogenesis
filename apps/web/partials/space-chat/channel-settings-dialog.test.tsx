@@ -70,7 +70,13 @@ describe('changedSettings', () => {
 describe('channelSettingsError', () => {
   it('names the people who have not used chat yet', () => {
     const error = new GeoChatRequestError('x', 'unknown_users', 400, null, { user_ids: ['ann'] });
-    expect(channelSettingsError(error, 'markets', [ann])).toBe(CHANNEL_SETTINGS_COPY.errors.unknownUsers('Ann'));
+    expect(channelSettingsError(error, 'markets', [ann])).toBe(
+      'Ann can’t be added yet. They need to sign in to Geo first.'
+    );
+    const two = new GeoChatRequestError('x', 'unknown_users', 400, null, { user_ids: ['ann', 'zed'] });
+    expect(channelSettingsError(two, 'markets', [ann])).toBe(
+      'Ann and someone can’t be added yet. They need to sign in to Geo first.'
+    );
     expect(channelSettingsError(new GeoChatRequestError('x', 'channel_name_taken', 409), 'markets', [])).toBe(
       'There’s already a channel called #markets.'
     );

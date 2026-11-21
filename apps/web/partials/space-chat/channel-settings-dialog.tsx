@@ -62,7 +62,7 @@ export const CHANNEL_SETTINGS_COPY = {
     nameInvalid: 'Use letters, numbers and dashes, starting with a letter or number.',
     limit: 'This space has 50 channels, the most it can have. Archive one first.',
     locked: 'That setting can’t change for this channel.',
-    unknownUsers: (names: string) => `These people haven’t used chat yet, so they can’t be added: ${names}.`,
+    unknownUsers: (names: string) => `${names} can’t be added yet. They need to sign in to Geo first.`,
     forbidden: 'Only editors create and change channels.',
     failed: 'Couldn’t save the channel. Try again.',
   },
@@ -161,11 +161,17 @@ export function channelSettingsError(error: unknown, name: string, candidates: C
       const names = ids
         .filter((id): id is string => typeof id === 'string')
         .map(id => candidates.find(person => person.id === normId(id))?.name ?? 'someone');
-      return copy.unknownUsers(names.join(', ') || 'someone');
+      return copy.unknownUsers(joinNames(names));
     }
     default:
       return copy.failed;
   }
+}
+
+/** "Ann", "Ann and Ben", "Ann, Ben and Cy". */
+function joinNames(names: string[]) {
+  const joined = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : (names[0] ?? 'someone');
+  return joined.charAt(0).toUpperCase() + joined.slice(1);
 }
 
 function ChannelSettingsForm({
