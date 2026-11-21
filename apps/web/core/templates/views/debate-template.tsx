@@ -61,7 +61,7 @@ export function DebateTemplate({ model, headerActions, footer, className }: Deba
 
         <h1 className="m-0 text-largeTitle text-pretty text-text">{model.claimTitle}</h1>
 
-        {model.summary && <p className="m-0 text-body text-text/90">{model.summary}</p>}
+        {model.summary && <p className="m-0 text-[16.5px] leading-[25px] text-text/85">{model.summary}</p>}
 
         {(model.claimHref || model.onOpenClaim) && (
           <div>

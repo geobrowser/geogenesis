@@ -52,7 +52,7 @@ export function NewsStoryTemplate({ model, headerActions, footer, className }: N
 
         <h1 className="m-0 text-entityTitle text-pretty text-text">{model.headline}</h1>
 
-        {model.summary && <p className="m-0 text-body text-text/90">{model.summary}</p>}
+        {model.summary && <p className="m-0 text-[16.5px] leading-[25px] text-text/85">{model.summary}</p>}
 
         {(model.externalUrl || model.archiveUrl) && (
           <div className="flex flex-wrap items-center gap-3 pt-1">

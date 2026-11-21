@@ -58,19 +58,10 @@ export function TopicTemplate({ model, headerActions, footer, className }: Topic
 
   const communities = model.communities ?? [];
   const activeCommunityId = model.activeCommunityId ?? 'all';
-  const activeCommunity = communities.find(community => community.id === activeCommunityId) ?? null;
 
   const hasClaimExplorer = Boolean(model.claimDetailsById && (contested.length > 0 || agreed.length > 0));
 
-  const jumpLinks = [
-    ...(contested.length > 0 || agreed.length > 0 ? [{ id: 'claims', label: 'Claims' }] : []),
-    ...(model.trends ? [{ id: 'trends', label: 'Trends' }] : []),
-    ...(model.timelineHighlights && model.timelineHighlights.length > 0 ? [{ id: 'timeline', label: 'Timeline' }] : []),
-    ...(model.entityGraph && model.entityGraph.nodes.length > 0 ? [{ id: 'whos-who', label: 'Who’s who' }] : []),
-    ...(model.rankings && model.rankings.length > 0 ? [{ id: 'rankings', label: 'Rankings' }] : []),
-    ...(model.viralPosts && model.viralPosts.length > 0 ? [{ id: 'spreading', label: 'Spreading' }] : []),
-    ...(model.sections && model.sections.length > 0 ? [{ id: 'sources-section', label: 'Sources' }] : []),
-  ];
+  const inlineStats = model.stats?.filter(stat => Boolean(stat.value)) ?? [];
 
   return (
     <TemplateShell maxWidth={1120} breadcrumbs={model.breadcrumbs} className={className}>
@@ -83,20 +74,25 @@ export function TopicTemplate({ model, headerActions, footer, className }: Topic
         )}
 
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
             <TemplateBadge tone="neutral">Topic</TemplateBadge>
             {model.tags?.map(tag => (
               <TemplateBadge key={tag} tone="neutral">
                 {tag}
               </TemplateBadge>
             ))}
+            {inlineStats.length > 0 && (
+              <span className="text-[14px] text-grey-04">
+                {inlineStats.map(stat => `${stat.value} ${stat.label.toLowerCase()}`).join(' · ')}
+              </span>
+            )}
           </div>
           {headerActions}
         </div>
 
         <h1 className="m-0 text-entityTitle text-pretty text-text">{model.title}</h1>
 
-        {model.lede && <p className="m-0 max-w-[820px] text-body text-text/90">{model.lede}</p>}
+        {model.lede && <p className="m-0 max-w-[780px] text-[16.5px] leading-[25px] text-text/85">{model.lede}</p>}
 
         {/* In each community's own words — placed right up top so the page immediately frames both perspectives */}
         {model.communityCases && model.communityCases.length > 0 && (
@@ -111,90 +107,52 @@ export function TopicTemplate({ model, headerActions, footer, className }: Topic
             </div>
           </section>
         )}
-
-        {model.stats && model.stats.length > 0 && (
-          <div className="mt-1 flex flex-col gap-4 border-y border-divider py-5">
-            <dl className="m-0 grid grid-cols-2 gap-x-8 gap-y-4 @[600px]:flex @[600px]:flex-wrap @[600px]:gap-x-12">
-              {model.stats.map(stat => (
-                <div key={stat.label} className="flex flex-col gap-0.5">
-                  <dt className="order-2 text-[14px] text-grey-04">{stat.label}</dt>
-                  <dd className="order-1 m-0 text-[26px] leading-[30px] font-semibold tracking-[-0.02em] text-text tabular-nums">
-                    {stat.value}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-
-            {jumpLinks.length >= 3 && (
-              <nav aria-label="Jump to section" className="flex flex-wrap items-center gap-1.5 pt-1">
-                {jumpLinks.map(link => (
-                  <a
-                    key={link.id}
-                    href={`#${link.id}`}
-                    className="inline-flex h-8 items-center rounded-full bg-grey-01/85 px-3 text-[13.5px] font-medium text-grey-05 no-underline transition-colors hover:bg-text hover:text-white"
-                  >
-                    {link.label}
-                  </a>
-                ))}
-              </nav>
-            )}
-          </div>
-        )}
       </header>
 
       {/* Community perspective filter bar */}
       {communities.length > 0 && (
-        <section aria-label="Community view" className="flex flex-col gap-2.5">
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              aria-pressed={activeCommunityId === 'all'}
-              onClick={() => model.onSelectCommunity?.('all')}
-              className={cx(
-                'inline-flex h-10 cursor-pointer items-center gap-2 rounded-full border px-4 text-[15px] font-medium whitespace-nowrap transition-colors',
-                activeCommunityId === 'all'
-                  ? 'border-text bg-text text-white'
-                  : 'border-grey-02 bg-white text-text hover:border-text'
-              )}
-            >
-              <span>Everyone</span>
-            </button>
+        <section aria-label="Community view" className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            aria-pressed={activeCommunityId === 'all'}
+            onClick={() => model.onSelectCommunity?.('all')}
+            className={cx(
+              'inline-flex h-10 cursor-pointer items-center gap-2 rounded-full border px-4 text-[15px] font-medium whitespace-nowrap transition-colors',
+              activeCommunityId === 'all'
+                ? 'border-text bg-text text-white'
+                : 'border-grey-02 bg-white text-text hover:border-text'
+            )}
+          >
+            <span>Everyone</span>
+          </button>
 
-            {communities.map(community => {
-              const isSelected = activeCommunityId === community.id;
-              return (
-                <button
-                  key={community.id}
-                  type="button"
-                  aria-pressed={isSelected}
-                  onClick={() => model.onSelectCommunity?.(community.id)}
-                  className={cx(
-                    'inline-flex h-10 cursor-pointer items-center gap-2 rounded-full border px-4 text-[15px] font-medium whitespace-nowrap transition-colors',
-                    isSelected
-                      ? 'border-text bg-text text-white'
-                      : 'border-grey-02 bg-white text-text hover:border-text'
-                  )}
-                >
-                  <span
-                    aria-hidden
-                    className="inline-block size-2.5 shrink-0 rounded-full"
-                    style={{ backgroundColor: community.color }}
-                  />
-                  <span>{community.name}</span>
-                  {community.memberCount !== undefined && (
-                    <span className={cx('text-[14px] tabular-nums', isSelected ? 'text-grey-03' : 'text-grey-04')}>
-                      {community.memberCount.toLocaleString('en-US')}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-          <p className="m-0 text-[15px] leading-[21px] text-grey-04">
-            {activeCommunity
-              ? `Viewing ${activeCommunity.name}: claims ordered by what this community pins first.`
-              : 'Every number is split by community so turnout alone cannot decide a claim.'}
-          </p>
+          {communities.map(community => {
+            const isSelected = activeCommunityId === community.id;
+            return (
+              <button
+                key={community.id}
+                type="button"
+                aria-pressed={isSelected}
+                onClick={() => model.onSelectCommunity?.(community.id)}
+                className={cx(
+                  'inline-flex h-10 cursor-pointer items-center gap-2 rounded-full border px-4 text-[15px] font-medium whitespace-nowrap transition-colors',
+                  isSelected ? 'border-text bg-text text-white' : 'border-grey-02 bg-white text-text hover:border-text'
+                )}
+              >
+                <span
+                  aria-hidden
+                  className="inline-block size-2.5 shrink-0 rounded-full"
+                  style={{ backgroundColor: community.color }}
+                />
+                <span>{community.name}</span>
+                {community.memberCount !== undefined && (
+                  <span className={cx('text-[14px] tabular-nums', isSelected ? 'text-grey-03' : 'text-grey-04')}>
+                    {community.memberCount.toLocaleString('en-US')}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </section>
       )}
 
@@ -296,11 +254,16 @@ export function TopicTemplate({ model, headerActions, footer, className }: Topic
               </button>
             ) : null}
           </div>
-          <div className={cx('divide-y divide-divider overflow-hidden', TEMPLATE_CARD_SURFACE)}>
-            {model.timelineHighlights.map(turn => (
-              <TimelineHighlightRow key={turn.id} turn={turn} />
+          <ol className="m-0 flex list-none flex-col p-0">
+            {model.timelineHighlights.map((turn, idx) => (
+              <TimelineHighlightRow
+                key={turn.id}
+                turn={turn}
+                isFirst={idx === 0}
+                isLast={idx === (model.timelineHighlights?.length ?? 0) - 1}
+              />
             ))}
-          </div>
+          </ol>
         </section>
       )}
 
@@ -379,7 +342,7 @@ function CommunityCaseCard({ item }: { item: TopicCommunityCaseModel }) {
           )}
         </div>
 
-        <p className="m-0 text-[16px] leading-[25px] text-text/90">{item.summary}</p>
+        <p className="m-0 text-[15px] leading-[23px] text-text/85">{item.summary}</p>
       </div>
 
       <div className="flex flex-col gap-3">
@@ -398,7 +361,7 @@ function CommunityCaseCard({ item }: { item: TopicCommunityCaseModel }) {
         )}
 
         {item.concede && (
-          <div className="flex flex-col gap-1 rounded-lg bg-grey-01/80 px-4 py-3 text-[15px] leading-[22px] text-text/85">
+          <div className="flex flex-col gap-1 rounded-lg bg-grey-01/80 px-4 py-3 text-[14.5px] leading-[21px] text-text/85">
             <span className="text-[12px] font-semibold tracking-[0.04em] text-grey-04 uppercase">They’d concede</span>
             <span>{item.concede}</span>
           </div>
@@ -408,19 +371,34 @@ function CommunityCaseCard({ item }: { item: TopicCommunityCaseModel }) {
   );
 }
 
-function TimelineHighlightRow({ turn }: { turn: TopicTimelineHighlightModel }) {
-  const titleNode = <span className="text-[18px] leading-[24px] font-semibold text-text">{turn.title}</span>;
+function TimelineHighlightRow({
+  turn,
+  isFirst,
+  isLast,
+}: {
+  turn: TopicTimelineHighlightModel;
+  isFirst: boolean;
+  isLast: boolean;
+}) {
+  const titleNode = <span className="text-[17px] leading-[23px] font-semibold text-text">{turn.title}</span>;
 
   return (
-    <div className="grid grid-cols-1 gap-3 px-5 py-5 @[680px]:grid-cols-[120px_minmax(0,1fr)] @[680px]:gap-5 @[680px]:px-6">
-      {/* Left date rail */}
-      <div className="flex items-center gap-2 self-start pt-0.5">
-        <span aria-hidden className="inline-block size-2 shrink-0 rounded-full bg-text" />
-        <span className="text-[14px] font-medium text-grey-04">{turn.when}</span>
+    <li className="grid grid-cols-1 gap-2 @[680px]:grid-cols-[118px_28px_minmax(0,1fr)] @[680px]:gap-4">
+      {/* Left date */}
+      <div className="pt-4 text-[14px] font-semibold text-grey-04 @[680px]:pt-5 @[680px]:text-right">{turn.when}</div>
+
+      {/* Continuous vertical timeline spine directly on page */}
+      <div className="relative hidden justify-center @[680px]:flex">
+        {!isFirst && <span aria-hidden className="absolute top-0 h-[26px] w-[2px] bg-grey-02/80" />}
+        {!isLast && <span aria-hidden className="absolute top-[26px] bottom-0 w-[2px] bg-grey-02/80" />}
+        <span
+          aria-hidden
+          className="relative z-10 mt-[21px] inline-block size-3 shrink-0 rounded-full bg-text ring-4 ring-white"
+        />
       </div>
 
       {/* Right: event title + clean stacked claim rows with aligned right bars */}
-      <div className="flex min-w-0 flex-col gap-3">
+      <div className={cx('flex min-w-0 flex-col gap-3 py-4 @[680px]:py-5', !isLast && 'border-b border-divider/90')}>
         {turn.href ? (
           <Link href={turn.href} className="text-text no-underline hover:text-ctaPrimary">
             {titleNode}
@@ -483,7 +461,7 @@ function TimelineHighlightRow({ turn }: { turn: TopicTimelineHighlightModel }) {
           </div>
         )}
       </div>
-    </div>
+    </li>
   );
 }
 
@@ -641,12 +619,12 @@ function TopicRankingsSection({
 
             const rowInner = (
               <>
-                <span className="inline-grid size-7 shrink-0 place-items-center rounded-md bg-grey-01 text-[14px] font-semibold text-grey-04 tabular-nums">
+                <span className="w-6 shrink-0 text-center text-[15px] font-semibold text-grey-04 tabular-nums">
                   {item.rank > 0 ? item.rank : '+'}
                 </span>
                 <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <span className="text-[17px] leading-[23px] font-medium text-text">{item.title}</span>
-                  {item.subtitle && <span className="text-[15px] text-grey-04">{item.subtitle}</span>}
+                  <span className="text-[16px] leading-[22px] font-medium text-text">{item.title}</span>
+                  {item.subtitle && <span className="text-[14.5px] text-grey-04">{item.subtitle}</span>}
                 </span>
                 {item.rankDelta && (
                   <span
@@ -795,10 +773,10 @@ function ViralPostPreviewCard({ post }: { post: TopicViralPostPreviewModel }) {
           </span>
         </div>
 
-        <p className="m-0 text-[16px] leading-[24px] text-text">{post.body}</p>
+        <p className="m-0 text-[15px] leading-[23px] text-text">{post.body}</p>
 
         {post.topNote ? (
-          <div className="flex flex-col gap-1.5 rounded-lg bg-grey-01/80 p-3.5 text-[15px] leading-[22px]">
+          <div className="flex flex-col gap-1.5 rounded-lg bg-grey-01/80 p-3.5 text-[14.5px] leading-[21px]">
             <div className="flex items-center gap-2">
               <span className="text-[13px] font-semibold text-purple">{post.topNote.tag}</span>
               <span className="text-[13px] text-grey-04">Shown to everyone</span>

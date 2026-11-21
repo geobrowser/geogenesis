@@ -223,7 +223,7 @@ export function EntityGraphExplorer({ graph, className }: EntityGraphExplorerPro
 
             {tab === 'details' && (
               <div className="flex flex-col gap-3 pt-1">
-                <p className="m-0 text-[16px] leading-[25px] text-text/90">{activeNode.summary}</p>
+                <p className="m-0 text-[15px] leading-[23px] text-text/85">{activeNode.summary}</p>
                 {activeNode.href ? (
                   <Link
                     href={activeNode.href}

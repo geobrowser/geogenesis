@@ -124,7 +124,7 @@ export function ContextPeekDrawer({ item, canGoBack, backLabel, onBack, onClose 
             )}
           </div>
 
-          {item.summary && <p className="m-0 text-[16px] leading-[25px] text-text/90">{item.summary}</p>}
+          {item.summary && <p className="m-0 text-[15px] leading-[23px] text-text/85">{item.summary}</p>}
 
           {item.externalUrl && (
             <a

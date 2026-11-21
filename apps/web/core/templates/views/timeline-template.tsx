@@ -18,8 +18,9 @@ export interface TimelineTemplateProps {
 /**
  * Full topic Timeline template.
  *
- * Supports era filtering, Key turns vs. Everything toggle, side-by-side "How each community tells
- * it" framings, Known / Disputed / Unknown event breakdowns, Key numbers rail, and turn suggestions.
+ * Renders a true continuous vertical timeline with era milestones, solid/hollow node markers on
+ * a hairline spine, era filter strip, Key turns vs. Everything toggle, side-by-side community
+ * framings, Known / Disputed / Unknown breakdowns, and sticky Key numbers rail.
  */
 export function TimelineTemplate({ model, headerActions, footer, className }: TimelineTemplateProps) {
   const [selectedEraId, setSelectedEraId] = React.useState<string | 'all'>('all');
@@ -62,7 +63,7 @@ export function TimelineTemplate({ model, headerActions, footer, className }: Ti
   return (
     <TemplateShell maxWidth={1120} breadcrumbs={model.breadcrumbs} className={className}>
       {/* Header */}
-      <header className="flex flex-col gap-4">
+      <header className="flex flex-col gap-3.5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
             <TemplateBadge tone="event">Timeline</TemplateBadge>
@@ -71,7 +72,7 @@ export function TimelineTemplate({ model, headerActions, footer, className }: Ti
           {headerActions}
         </div>
         <h1 className="m-0 text-entityTitle text-pretty text-text">{model.title}</h1>
-        {model.lede && <p className="m-0 max-w-[780px] text-body text-text/90">{model.lede}</p>}
+        {model.lede && <p className="m-0 max-w-[760px] text-[16.5px] leading-[25px] text-text/85">{model.lede}</p>}
       </header>
 
       {/* Filter controls */}
@@ -162,30 +163,40 @@ export function TimelineTemplate({ model, headerActions, footer, className }: Ti
         </div>
       </section>
 
-      {/* Main timeline + Key numbers rail */}
-      <div className="grid grid-cols-1 items-start gap-8 @[900px]:grid-cols-[minmax(0,1fr)_320px]">
+      {/* Main vertical timeline + Key numbers rail */}
+      <div className="grid grid-cols-1 items-start gap-8 @[900px]:grid-cols-[minmax(0,1fr)_310px]">
         <div className="flex min-w-0 flex-col gap-10">
           {groupedEras.map(({ era, turns }) => (
-            <section key={era.id} aria-label={era.name} className="flex flex-col gap-4">
-              <div className="flex flex-col gap-1">
+            <section key={era.id} aria-label={era.name} className="flex flex-col gap-5">
+              {/* Era header anchored above the spine */}
+              <div className="flex flex-col gap-1 border-b border-divider pb-3">
                 <div className="flex flex-wrap items-baseline gap-2.5">
-                  <span className="text-[14px] font-semibold text-ctaPrimary">{era.years}</span>
+                  <span className="rounded-md bg-ctaTertiary px-2 py-0.5 text-[13px] font-semibold text-ctaPrimary">
+                    {era.years}
+                  </span>
                   <h2 className="m-0 text-mediumTitle font-semibold text-text">{era.name}</h2>
                 </div>
-                <p className="m-0 text-[15px] text-grey-04">{era.blurb}</p>
+                <p className="m-0 text-[14.5px] leading-[21px] text-grey-04">{era.blurb}</p>
               </div>
 
-              <div className="flex flex-col gap-3.5">
-                {turns.map(turn => (
-                  <TimelineTurnCard key={turn.id} turn={turn} showFramings={showFramings} />
+              {/* Continuous vertical timeline rail */}
+              <ol className="m-0 flex list-none flex-col p-0">
+                {turns.map((turn, index) => (
+                  <TimelineTurnItem
+                    key={turn.id}
+                    turn={turn}
+                    showFramings={showFramings}
+                    isFirst={index === 0}
+                    isLast={index === turns.length - 1}
+                  />
                 ))}
-              </div>
+              </ol>
             </section>
           ))}
         </div>
 
         {/* Right rail: Key numbers & Suggest a turn */}
-        <aside className="flex flex-col gap-5 @[900px]:sticky @[900px]:top-20">
+        <aside className="flex flex-col gap-5 @[900px]:sticky @[900px]:top-16">
           {model.keyNumbers && model.keyNumbers.length > 0 && (
             <div className={cx('flex flex-col gap-4 p-5', TEMPLATE_CARD_SURFACE)}>
               <h2 className="m-0 text-smallTitle text-text">The numbers, and who says them</h2>
@@ -196,7 +207,7 @@ export function TimelineTemplate({ model, headerActions, footer, className }: Ti
                       <span>{item.label}</span>
                       <span className="text-[13px] text-grey-04">{item.attribution}</span>
                     </dt>
-                    <dd className="m-0 shrink-0 text-right text-[16px] font-semibold text-text tabular-nums">
+                    <dd className="m-0 shrink-0 text-right text-[15px] font-semibold text-text tabular-nums">
                       {item.value}
                     </dd>
                   </div>
@@ -206,11 +217,10 @@ export function TimelineTemplate({ model, headerActions, footer, className }: Ti
           )}
 
           {model.onSuggestTurn && (
-            <div className="flex flex-col gap-3 rounded-xl border border-divider bg-bg p-5">
-              <h3 className="m-0 text-[17px] font-semibold text-text">Something missing or wrong?</h3>
-              <p className="m-0 text-[14.5px] leading-[21px] text-grey-04">
-                Suggest a turn or correction with a source. It appears on the timeline once people in both communities
-                rate it accurate.
+            <div className="flex flex-col gap-3 rounded-xl bg-grey-01/75 p-5">
+              <h3 className="m-0 text-[16px] font-semibold text-text">Something missing or wrong?</h3>
+              <p className="m-0 text-[14px] leading-[20px] text-grey-04">
+                Suggest a turn or correction with a source. It appears once people in both communities rate it accurate.
               </p>
 
               {!suggestOpen ? (
@@ -278,117 +288,153 @@ export function TimelineTemplate({ model, headerActions, footer, className }: Ti
   );
 }
 
-function TimelineTurnCard({ turn, showFramings }: { turn: TimelineTurnModel; showFramings: boolean }) {
+function TimelineTurnItem({
+  turn,
+  showFramings,
+  isFirst,
+  isLast,
+}: {
+  turn: TimelineTurnModel;
+  showFramings: boolean;
+  isFirst: boolean;
+  isLast: boolean;
+}) {
   const titleNode = (
-    <h3 className="m-0 text-[19px] leading-[25px] font-semibold text-pretty text-text">{turn.title}</h3>
+    <h3 className="m-0 text-[18px] leading-[24px] font-semibold text-pretty text-text">{turn.title}</h3>
   );
 
   return (
-    <article className={cx('flex flex-col gap-3.5 p-5', TEMPLATE_CARD_SURFACE)}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[14px] font-semibold text-text">{turn.when}</span>
-          {turn.isKey && <TemplateBadge tone="neutral">Key turn</TemplateBadge>}
-        </div>
-        {turn.sourceLabel && <span className="text-[14px] text-grey-04">{turn.sourceLabel}</span>}
+    <li className="grid grid-cols-[20px_minmax(0,1fr)] gap-3.5 @[640px]:grid-cols-[112px_28px_minmax(0,1fr)] @[640px]:gap-4">
+      {/* Desktop date column */}
+      <div className="hidden pt-1 text-right @[640px]:block">
+        <time className="text-[14px] font-semibold text-text">{turn.when}</time>
       </div>
 
-      {turn.href ? (
-        <Link href={turn.href} className="text-text no-underline hover:text-ctaPrimary">
-          {titleNode}
-        </Link>
-      ) : turn.onSelect ? (
-        <button
-          type="button"
-          onClick={turn.onSelect}
-          className="cursor-pointer border-0 bg-transparent p-0 text-left text-text hover:text-ctaPrimary"
-        >
-          {titleNode}
-        </button>
-      ) : (
-        titleNode
-      )}
+      {/* Continuous vertical timeline track + milestone node */}
+      <div className="relative flex justify-center">
+        {!isFirst && <span aria-hidden className="absolute top-0 h-[14px] w-[2px] bg-grey-02/80" />}
+        {!isLast && <span aria-hidden className="absolute top-[14px] bottom-0 w-[2px] bg-grey-02/80" />}
+        <span
+          aria-hidden
+          className={cx(
+            'relative z-10 mt-[7px] shrink-0 rounded-full ring-4 ring-white',
+            turn.isKey ? 'size-3 bg-text' : 'size-2.5 border-2 border-grey-03 bg-white'
+          )}
+        />
+      </div>
 
-      <p className="m-0 text-[16px] leading-[24px] text-text/90">{turn.why}</p>
+      {/* Turn body */}
+      <article className={cx('flex min-w-0 flex-col gap-3 pb-7', isLast && 'pb-2')}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <time className="text-[14px] font-semibold text-text @[640px]:hidden">{turn.when}</time>
+            {turn.isKey && <TemplateBadge tone="neutral">Key turn</TemplateBadge>}
+          </div>
+          {turn.sourceLabel && <span className="text-[13.5px] text-grey-04">{turn.sourceLabel}</span>}
+        </div>
 
-      {/* Known / Disputed / Unknown structured breakdown */}
-      {turn.knownDisputedUnknown && (
-        <dl className="m-0 grid grid-cols-1 gap-3 rounded-lg border border-divider bg-bg p-4 @[600px]:grid-cols-3">
-          <div className="flex flex-col gap-1">
-            <dt className="text-[13px] font-semibold tracking-[0.02em] text-text uppercase">Known</dt>
-            <dd className="m-0 text-[14.5px] leading-[21px] text-text/90">{turn.knownDisputedUnknown.known}</dd>
-          </div>
-          <div className="flex flex-col gap-1">
-            <dt className="text-[13px] font-semibold tracking-[0.02em] text-purple uppercase">Disputed</dt>
-            <dd className="m-0 text-[14.5px] leading-[21px] text-text/90">{turn.knownDisputedUnknown.disputed}</dd>
-          </div>
-          <div className="flex flex-col gap-1">
-            <dt className="text-[13px] font-semibold tracking-[0.02em] text-grey-04 uppercase">Unknown</dt>
-            <dd className="m-0 text-[14.5px] leading-[21px] text-text/90">{turn.knownDisputedUnknown.unknown}</dd>
-          </div>
-        </dl>
-      )}
+        {turn.href ? (
+          <Link href={turn.href} className="text-text no-underline hover:text-ctaPrimary">
+            {titleNode}
+          </Link>
+        ) : turn.onSelect ? (
+          <button
+            type="button"
+            onClick={turn.onSelect}
+            className="cursor-pointer border-0 bg-transparent p-0 text-left text-text hover:text-ctaPrimary"
+          >
+            {titleNode}
+          </button>
+        ) : (
+          titleNode
+        )}
 
-      {/* Side-by-side community framings */}
-      {showFramings && turn.communityFramings && turn.communityFramings.length > 0 && (
-        <div className="grid grid-cols-1 gap-3 border-t border-divider pt-3.5 @[600px]:grid-cols-2">
-          {turn.communityFramings.map(framing => (
-            <div
-              key={framing.communityId}
-              className="flex flex-col gap-1.5 rounded-lg border border-divider bg-bg p-3.5"
-            >
-              <span className="inline-flex items-center gap-2 text-[14px] font-semibold text-text">
+        <p className="m-0 text-[15px] leading-[23px] text-text/85">{turn.why}</p>
+
+        {/* Known / Disputed / Unknown structured breakdown */}
+        {turn.knownDisputedUnknown && (
+          <dl className={cx('m-0 grid grid-cols-1 gap-4 p-4 @[600px]:grid-cols-3', TEMPLATE_CARD_SURFACE)}>
+            <div className="flex flex-col gap-1">
+              <dt className="text-[12.5px] font-semibold tracking-[0.04em] text-text uppercase">Known</dt>
+              <dd className="m-0 text-[14.5px] leading-[21px] text-text/85">{turn.knownDisputedUnknown.known}</dd>
+            </div>
+            <div className="flex flex-col gap-1">
+              <dt className="text-[12.5px] font-semibold tracking-[0.04em] text-purple uppercase">Disputed</dt>
+              <dd className="m-0 text-[14.5px] leading-[21px] text-text/85">{turn.knownDisputedUnknown.disputed}</dd>
+            </div>
+            <div className="flex flex-col gap-1">
+              <dt className="text-[12.5px] font-semibold tracking-[0.04em] text-grey-04 uppercase">Unknown</dt>
+              <dd className="m-0 text-[14.5px] leading-[21px] text-text/85">{turn.knownDisputedUnknown.unknown}</dd>
+            </div>
+          </dl>
+        )}
+
+        {/* Side-by-side community framings */}
+        {showFramings && turn.communityFramings && turn.communityFramings.length > 0 && (
+          <div className="grid grid-cols-1 gap-3 pt-1 @[600px]:grid-cols-2">
+            {turn.communityFramings.map(framing => (
+              <div
+                key={framing.communityId}
+                className={cx('relative flex flex-col gap-1.5 overflow-hidden p-4', TEMPLATE_CARD_SURFACE)}
+              >
                 <span
                   aria-hidden
-                  className="inline-block size-2.5 shrink-0 rounded-full"
+                  className="absolute inset-x-0 top-0 h-[2.5px]"
                   style={{ backgroundColor: framing.color }}
                 />
-                {framing.communityName}
-              </span>
-              <p className="m-0 text-[15px] leading-[22px] text-text/90">{framing.text}</p>
-            </div>
-          ))}
-        </div>
-      )}
+                <span className="inline-flex items-center gap-2 text-[13.5px] font-semibold text-text">
+                  <span
+                    aria-hidden
+                    className="inline-block size-2 shrink-0 rounded-full"
+                    style={{ backgroundColor: framing.color }}
+                  />
+                  {framing.communityName}
+                </span>
+                <p className="m-0 text-[14.5px] leading-[21px] text-text/85">{framing.text}</p>
+              </div>
+            ))}
+          </div>
+        )}
 
-      {/* Linked claims & open event */}
-      {((turn.claims && turn.claims.length > 0) || turn.onSelect || turn.href) && (
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-          <div className="flex flex-wrap gap-2">
-            {turn.claims?.map(claim =>
-              claim.href ? (
-                <Link
-                  key={claim.id}
-                  href={claim.href}
-                  className="inline-flex items-center rounded-full border border-grey-02 bg-white px-3 py-1 text-[14px] font-medium text-text no-underline transition-colors hover:border-text hover:text-ctaPrimary"
-                >
-                  {claim.title}
-                </Link>
-              ) : (
-                <button
-                  key={claim.id}
-                  type="button"
-                  onClick={claim.onSelect}
-                  className="inline-flex cursor-pointer items-center rounded-full border border-grey-02 bg-white px-3 py-1 text-[14px] font-medium text-text transition-colors hover:border-text hover:text-ctaPrimary"
-                >
-                  {claim.title}
-                </button>
-              )
+        {/* Linked claims & open event */}
+        {((turn.claims && turn.claims.length > 0) || turn.onSelect || turn.href) && (
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-0.5">
+            <div className="flex flex-wrap gap-2">
+              {turn.claims?.map(claim =>
+                claim.href ? (
+                  <Link
+                    key={claim.id}
+                    href={claim.href}
+                    className="inline-flex items-center rounded-full border border-black/[0.06] bg-white px-3 py-1 text-[13.5px] font-medium text-text no-underline shadow-[0_1px_4px_rgba(0,0,0,0.04)] transition-colors hover:border-text hover:text-ctaPrimary"
+                  >
+                    {claim.title}
+                  </Link>
+                ) : (
+                  <button
+                    key={claim.id}
+                    type="button"
+                    onClick={claim.onSelect}
+                    className="inline-flex cursor-pointer items-center rounded-full border border-black/[0.06] bg-white px-3 py-1 text-[13.5px] font-medium text-text shadow-[0_1px_4px_rgba(0,0,0,0.04)] transition-colors hover:border-text hover:text-ctaPrimary"
+                  >
+                    {claim.title}
+                  </button>
+                )
+              )}
+            </div>
+
+            {turn.onSelect && (
+              <button
+                type="button"
+                onClick={turn.onSelect}
+                className="inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent p-0 text-[14px] font-medium text-ctaPrimary hover:text-ctaHover"
+              >
+                <span>Event page</span>
+                <ArrowRightIcon className="size-3.5" />
+              </button>
             )}
           </div>
-
-          {turn.onSelect && (
-            <button
-              type="button"
-              onClick={turn.onSelect}
-              className="inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent p-0 text-[14px] font-medium text-ctaPrimary hover:text-ctaHover"
-            >
-              <span>Event page</span>
-              <ArrowRightIcon className="size-3.5" />
-            </button>
-          )}
-        </div>
-      )}
-    </article>
+        )}
+      </article>
+    </li>
   );
 }

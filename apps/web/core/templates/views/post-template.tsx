@@ -96,7 +96,7 @@ export function PostTemplate({ model, headerActions, footer, className }: PostTe
             <TemplateBadge tone="neutral">{model.platform}</TemplateBadge>
           </div>
 
-          <p className="m-0 text-[18px] leading-[27px] whitespace-pre-line text-text">{model.body}</p>
+          <p className="m-0 text-[16px] leading-[24px] whitespace-pre-line text-text">{model.body}</p>
 
           {model.mediaUrl && (
             <div className="overflow-hidden rounded-lg border border-divider bg-grey-01">
@@ -361,7 +361,7 @@ function ContextNoteCard({ note }: { note: PostContextNoteModel }) {
   return (
     <article
       className={cx(
-        'flex flex-col gap-3.5 p-5 text-[16px] leading-[24px]',
+        'flex flex-col gap-3.5 p-5 text-[15px] leading-[23px]',
         isShown
           ? TEMPLATE_CARD_SURFACE
           : note.status === 'mine'

@@ -89,7 +89,7 @@ export function ClaimTemplate({ model, headerActions, footer, className }: Claim
             <CheckCircleIcon className="size-5" />
             <h2 className="m-0 text-smallTitle text-text">What both communities agree on</h2>
           </div>
-          <p className="m-0 text-[17px] leading-[26px] text-text/90">{model.agreedBasis.summary}</p>
+          <p className="m-0 text-[15.5px] leading-[24px] text-text/85">{model.agreedBasis.summary}</p>
           {model.agreedBasis.settlingSources.length > 0 && (
             <div className="flex flex-col gap-2.5 border-t border-divider pt-4">
               <span className="text-[14px] font-medium text-grey-04">Sources that settled it</span>
@@ -102,7 +102,7 @@ export function ClaimTemplate({ model, headerActions, footer, className }: Claim
       {/* Key stat callout */}
       {model.keyStat && (
         <section aria-label="Key evidence" className={`flex flex-col gap-3 p-5 ${TEMPLATE_CARD_SURFACE}`}>
-          <p className="m-0 text-[17px] leading-[25px] text-text">{model.keyStat.text}</p>
+          <p className="m-0 text-[15.5px] leading-[24px] text-text">{model.keyStat.text}</p>
           <SourceChipList sources={model.keyStat.sources} />
         </section>
       )}
@@ -223,7 +223,7 @@ function StrongestCaseCard({ item }: { item: StrongestCaseModel }) {
         </div>
 
         {item.points.length > 0 && (
-          <ul className="m-0 flex list-disc flex-col gap-2 pl-5 text-[16px] leading-[24px] text-text/90">
+          <ul className="m-0 flex list-disc flex-col gap-2 pl-5 text-[15px] leading-[23px] text-text/85">
             {item.points.map(point => (
               <li key={point}>{point}</li>
             ))}

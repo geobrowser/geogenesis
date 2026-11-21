@@ -193,7 +193,7 @@ function RichMediaCard({ item }: { item: EntityLinkRowModel }) {
             {item.date && <span className="shrink-0 text-[14px] text-grey-04">{item.date}</span>}
           </div>
 
-          <p className="m-0 text-[16px] leading-[24px] text-text">{item.excerpt ?? item.title}</p>
+          <p className="m-0 text-[15px] leading-[23px] text-text">{item.excerpt ?? item.title}</p>
         </div>
 
         <div className="flex items-center justify-between border-t border-divider pt-2.5 text-[14px] text-grey-04">

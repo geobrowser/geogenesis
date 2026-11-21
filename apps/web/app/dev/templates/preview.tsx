@@ -67,7 +67,7 @@ export function DevTemplatesPreview() {
   const fixture = useGazaFixtureTemplates();
 
   return (
-    <div className="min-h-screen bg-bg/40">
+    <div className="min-h-screen bg-white">
       <div className="border-b border-divider bg-white">
         <div className="mx-auto flex max-w-[1120px] flex-wrap items-center justify-between gap-2 px-5 py-3">
           <div className="flex flex-wrap items-center gap-1.5">

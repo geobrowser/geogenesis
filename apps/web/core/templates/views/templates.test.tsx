@@ -193,7 +193,7 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     expect(within(explorer).getByText('What both communities agree on')).toBeInTheDocument();
 
     // Clicking a source chip opens the slide-over ContextPeekDrawer without leaving the topic
-    fireEvent.click(within(explorer).getByRole('button', { name: /UNOSAT satellite damage assessment/i }));
+    fireEvent.click(within(explorer).getAllByRole('button', { name: /UNOSAT satellite damage assessment/i })[0]);
     const drawer = screen.getByRole('dialog');
     expect(within(drawer).getByRole('heading', { name: 'UNOSAT satellite damage assessment' })).toBeInTheDocument();
 

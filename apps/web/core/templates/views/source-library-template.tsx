@@ -85,7 +85,7 @@ export function SourceLibraryTemplate({ model, headerActions, footer, className 
           {headerActions}
         </div>
         <h1 className="m-0 text-entityTitle text-pretty text-text">{model.title}</h1>
-        {model.lede && <p className="m-0 max-w-[780px] text-body text-text/90">{model.lede}</p>}
+        {model.lede && <p className="m-0 max-w-[760px] text-[16.5px] leading-[25px] text-text/85">{model.lede}</p>}
       </header>
 
       {/* Search + group filters */}
