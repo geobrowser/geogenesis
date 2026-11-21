@@ -185,7 +185,7 @@ export function useLiveTopicTemplate({
     if (coverageItems.length > 0) {
       sections.push({
         id: 'coverage',
-        title: 'Coverage & sources',
+        title: 'Sources & evidence',
         items: coverageItems,
       });
     }

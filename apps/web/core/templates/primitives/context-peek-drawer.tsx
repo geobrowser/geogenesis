@@ -18,6 +18,7 @@ import {
   PlayIcon,
   TweetIcon,
 } from './icons';
+import { SourceChipList } from './source-chip-list';
 import { SplitBars } from './split-bars';
 import { TemplateBadge } from './template-shell';
 
@@ -126,6 +127,8 @@ export function ContextPeekDrawer({ item, canGoBack, backLabel, onBack, onClose 
 
           {item.summary && <p className="m-0 text-[15px] leading-[23px] text-text/85">{item.summary}</p>}
 
+          {item.settlingSources && item.settlingSources.length > 0 && <SourceChipList sources={item.settlingSources} />}
+
           {item.externalUrl && (
             <a
               href={item.externalUrl}
@@ -139,9 +142,75 @@ export function ContextPeekDrawer({ item, canGoBack, backLabel, onBack, onClose 
           )}
 
           {item.split && item.split.rows.length > 0 && (
-            <div className="flex flex-col gap-2 rounded-xl bg-grey-01/70 p-4">
+            <div className="flex flex-col gap-3.5 rounded-xl bg-grey-01/70 p-4">
               <SplitBars rows={item.split.rows} density="compact" />
+
+              {item.voteBox && (
+                <div className="flex flex-col gap-2.5 border-t border-divider pt-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={item.voteBox.disabled}
+                      aria-pressed={item.voteBox.userVote === 'agree'}
+                      onClick={() => item.voteBox?.onVote('agree')}
+                      className={cx(
+                        'inline-flex h-9 cursor-pointer items-center rounded-full border px-4 text-[14px] font-medium transition-colors',
+                        item.voteBox.userVote === 'agree'
+                          ? 'border-text bg-text text-white'
+                          : 'border-grey-02 bg-white text-text hover:border-text'
+                      )}
+                    >
+                      Agree
+                    </button>
+                    <button
+                      type="button"
+                      disabled={item.voteBox.disabled}
+                      aria-pressed={item.voteBox.userVote === 'disagree'}
+                      onClick={() => item.voteBox?.onVote('disagree')}
+                      className={cx(
+                        'inline-flex h-9 cursor-pointer items-center rounded-full border px-4 text-[14px] font-medium transition-colors',
+                        item.voteBox.userVote === 'disagree'
+                          ? 'border-text bg-text text-white'
+                          : 'border-grey-02 bg-white text-text hover:border-text'
+                      )}
+                    >
+                      Disagree
+                    </button>
+                    {item.voteBox.userVote && item.voteBox.onClear && (
+                      <button
+                        type="button"
+                        onClick={item.voteBox.onClear}
+                        className="cursor-pointer border-0 bg-transparent px-1 text-[14px] font-medium text-ctaPrimary hover:text-ctaHover"
+                      >
+                        Change
+                      </button>
+                    )}
+                  </div>
+                  <span className="text-[13.5px] text-grey-04">{item.voteBox.countSummary}</span>
+                </div>
+              )}
             </div>
+          )}
+
+          {item.subClaims && item.subClaims.length > 0 && (
+            <section className="flex flex-col gap-3">
+              <span className="text-[13px] font-semibold tracking-[0.04em] text-grey-04 uppercase">
+                The facts it turns on
+              </span>
+              <div className="flex flex-col gap-3">
+                {item.subClaims.map(fact => (
+                  <div
+                    key={fact.id}
+                    className="flex flex-col gap-2 rounded-xl border border-black/[0.05] bg-white p-3.5"
+                  >
+                    <span className="text-[15px] leading-[21px] font-semibold text-text">{fact.title}</span>
+                    {fact.stat && <span className="text-[13.5px] leading-[19px] text-grey-04">{fact.stat}</span>}
+                    <SplitBars rows={fact.split.rows} density="compact" />
+                    {fact.sources.length > 0 && <SourceChipList sources={fact.sources} />}
+                  </div>
+                ))}
+              </div>
+            </section>
           )}
 
           {item.metadata && item.metadata.length > 0 && (

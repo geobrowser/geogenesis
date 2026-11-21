@@ -25,7 +25,6 @@ import {
   type SubClaimFactModel,
   type TemplateDataSource,
   type TimelineTemplateModel,
-  type TopicEntityGraphModel,
   type TopicRankingItemModel,
   type TopicRankingModel,
   type TopicTemplateModel,
@@ -1312,28 +1311,6 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
     return [bestReads, bestDebates, bridging];
   }, [openDebate, openSource, openStory, rankingSuggestions]);
 
-  const entityGraph: TopicEntityGraphModel = React.useMemo(
-    () => ({
-      title: 'Who’s who',
-      initialNodeId: 'hamas',
-      nodes: SEED_GRAPH_NODES.map(node => ({
-        id: node.id,
-        name: node.name,
-        kind: node.kind,
-        tags: node.tags,
-        summary: node.summary,
-        featured: node.featured,
-        relations: node.relations,
-        claims: node.claimIds
-          ?.map(cid => CLAIM_BY_ID[cid])
-          .filter((c): c is SeedClaim => Boolean(c))
-          .map(toSummary),
-        onSelect: node.eventId ? () => openEvent(node.eventId!) : undefined,
-      })),
-    }),
-    [openEvent, toSummary]
-  );
-
   const viralPosts: readonly TopicViralPostPreviewModel[] = React.useMemo(
     () =>
       SEED_POSTS.map(post => {
@@ -1588,8 +1565,12 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
 
   const topicModel: TopicTemplateModel = React.useMemo(() => {
     const order = PIN_ORDER[activeCommunityId] ?? PIN_ORDER.all;
-    const contestedClaims = order.map(id => toSummary(CLAIM_BY_ID[id]));
-    const agreedClaims = ['hostages', 'build', 'oct7', 'k70'].map(id => toSummary(CLAIM_BY_ID[id]));
+    const toTopicClaimRow = (claim: SeedClaim): ClaimSummaryModel => ({
+      ...toSummary(claim),
+      onSelect: () => pushPeek({ kind: 'claim', id: claim.id }),
+    });
+    const contestedClaims = order.map(id => toTopicClaimRow(CLAIM_BY_ID[id]));
+    const agreedClaims = ['hostages', 'build', 'oct7', 'k70'].map(id => toTopicClaimRow(CLAIM_BY_ID[id]));
 
     return {
       id: 'israel-gaza-war',
@@ -1643,14 +1624,13 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
         };
       }),
       onOpenTimeline: openTimeline,
-      entityGraph,
       rankings,
       viralPosts,
       onOpenSources: openSources,
       sections: [
         {
           id: 'topic-sources',
-          title: 'Key sources & media',
+          title: 'Sources & evidence',
           layout: 'cards',
           items: ['s-il-icj', 's-idf-est', 's-coi', 's-unosat']
             .map(id => SOURCE_BY_ID[id])
@@ -1666,11 +1646,11 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
   }, [
     activeCommunityId,
     claimDetailsById,
-    entityGraph,
     joinedCommunityId,
     openEvent,
     openSources,
     openTimeline,
+    pushPeek,
     rankings,
     toRichSourceCard,
     toSourceChips,
@@ -2305,20 +2285,38 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
       };
     }
 
+    const claimDetail = claimDetailsById[current.id];
     const claim = CLAIM_BY_ID[current.id];
-    if (!claim) return null;
-    const summary = toSummary(claim);
+    if (!claim || !claimDetail) return null;
+
+    const relations = (claimDetail.graphConnections ?? []).flatMap(group =>
+      group.items.map(entry => ({
+        id: entry.id,
+        predicate: group.predicate,
+        targetName: entry.label,
+        onSelect: entry.onSelect,
+      }))
+    );
+
     return {
       id: claim.id,
       kind: 'claim',
-      kindLabel: summary.split.isSplit ? 'Contested claim' : 'Agreed claim',
+      kindLabel: claimDetail.split.isSplit ? 'Contested claim' : 'Agreed claim',
       title: claim.title,
-      split: summary.split,
-      summary: claim.agreedBasis?.summary,
+      tags:
+        claimDetail.split.isSplit && claimDetail.split.gapPoints !== undefined
+          ? [`${Math.round(claimDetail.split.gapPoints)} pts apart`]
+          : undefined,
+      summary: claimDetail.agreedBasis?.summary,
+      settlingSources: claimDetail.agreedBasis?.settlingSources,
+      split: claimDetail.split,
+      voteBox: claimDetail.voteBox,
+      subClaims: claimDetail.subClaims,
+      relations: relations.length > 0 ? relations : undefined,
       openFullLabel: 'Open full claim page',
       onOpenFull: () => openClaim(claim.id),
     };
-  }, [openClaim, openEvent, openSource, openStory, peekStack, pushPeek, toSummary]);
+  }, [claimDetailsById, openClaim, openEvent, openSource, openStory, peekStack, pushPeek, toSummary]);
 
   const peekBackLabel = React.useMemo(() => {
     if (peekStack.length < 2) return undefined;

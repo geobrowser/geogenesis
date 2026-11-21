@@ -128,9 +128,11 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     fireEvent.click(proIsraelFilter);
     expect(proIsraelFilter).toHaveAttribute('aria-pressed', 'true');
 
-    const explorer = screen.getByRole('region', { name: 'Claim explorer' });
-    fireEvent.click(within(explorer).getByRole('option', { name: /Israel is committing genocide in Gaza/i }));
-    fireEvent.click(within(explorer).getByRole('button', { name: /Open full claim/i }));
+    const claimsSection = screen.getByRole('region', { name: 'Claims' });
+    fireEvent.click(within(claimsSection).getByRole('button', { name: /Israel is committing genocide in Gaza/i }));
+    const claimDrawer = screen.getByRole('dialog');
+    expect(within(claimDrawer).getByText('Contested claim')).toBeInTheDocument();
+    fireEvent.click(within(claimDrawer).getByRole('button', { name: /Open full claim page/i }));
     expect(screen.getByText('Contested claim')).toBeInTheDocument();
 
     // Verify GraphConnectionsStrip + ContextPeekDrawer on Claim page
@@ -183,40 +185,37 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
   it('renders agreed claim basis and peekable settling sources when inspecting a common-ground claim', () => {
     render(<FixtureHarness />);
 
-    const explorer = screen.getByRole('region', { name: 'Claim explorer' });
-    fireEvent.click(within(explorer).getByRole('button', { name: /Common ground/i }));
+    const claimsSection = screen.getByRole('region', { name: 'Claims' });
+    fireEvent.click(within(claimsSection).getByRole('tab', { name: /Common ground/i }));
     fireEvent.click(
-      within(explorer).getByRole('option', { name: /Most of Gaza’s buildings are damaged or destroyed/i })
+      within(claimsSection).getByRole('button', { name: /Most of Gaza’s buildings are damaged or destroyed/i })
     );
 
-    expect(within(explorer).getByText('Agreed claim')).toBeInTheDocument();
-    expect(within(explorer).getByText('What both communities agree on')).toBeInTheDocument();
-
-    // Clicking a source chip opens the slide-over ContextPeekDrawer without leaving the topic
-    fireEvent.click(within(explorer).getAllByRole('button', { name: /UNOSAT satellite damage assessment/i })[0]);
+    // Clicking the claim row opens the ContextPeekDrawer with agreed basis & settling sources
     const drawer = screen.getByRole('dialog');
+    expect(within(drawer).getByText('Agreed claim')).toBeInTheDocument();
+
+    // Clicking a source chip inside the drawer drills into the source with a Back button
+    fireEvent.click(within(drawer).getAllByRole('button', { name: /UNOSAT satellite damage assessment/i })[0]);
     expect(within(drawer).getByRole('heading', { name: 'UNOSAT satellite damage assessment' })).toBeInTheDocument();
 
-    // Opening full claim page works cleanly too
-    fireEvent.click(within(drawer).getByRole('button', { name: 'Close' }));
-    fireEvent.click(within(explorer).getByRole('button', { name: /Open full claim/i }));
+    // Go back to claim in drawer, then open the full Claim page
+    fireEvent.click(within(drawer).getByRole('button', { name: /Back/i }));
+    fireEvent.click(within(drawer).getByRole('button', { name: /Open full claim page/i }));
     expect(screen.getByRole('heading', { name: 'Where they split next' })).toBeInTheDocument();
   });
 
-  it('supports Who’s who entity graph navigation, tabs, and back history on TopicTemplate', () => {
+  it('orders Timeline -> Sources & evidence -> How it’s moving cleanly without Who’s who on TopicTemplate', () => {
     render(<FixtureHarness />);
 
-    const graph = screen.getByRole('region', { name: 'Who’s who' });
-    expect(within(graph).getByRole('heading', { name: 'Hamas' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Who’s who' })).toBeNull();
 
-    // Switch to Relationships tab and click into Gaza Health Ministry
-    fireEvent.click(within(graph).getByRole('tab', { name: /Relationships/i }));
-    fireEvent.click(within(graph).getByRole('button', { name: /runs.*Gaza Health Ministry/i }));
-    expect(within(graph).getByRole('heading', { name: 'Gaza Health Ministry' })).toBeInTheDocument();
+    const timeline = screen.getByRole('region', { name: 'Timeline' });
+    const sources = screen.getByRole('region', { name: 'Sources & evidence' });
+    const trends = screen.getByRole('region', { name: 'Coverage and agreement over time' });
 
-    // Back button returns to Hamas
-    fireEvent.click(within(graph).getByRole('button', { name: /Back to Hamas/i }));
-    expect(within(graph).getByRole('heading', { name: 'Hamas' })).toBeInTheDocument();
+    expect(timeline.compareDocumentPosition(sources) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(sources.compareDocumentPosition(trends) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('navigates from Topic rankings to DebateTemplate and renders vote shifts', () => {

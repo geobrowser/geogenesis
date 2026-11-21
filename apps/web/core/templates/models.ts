@@ -189,6 +189,9 @@ export interface ContextPeekItemModel {
   externalUrl?: string;
   externalLabel?: string;
   split?: SplitBreakdown;
+  voteBox?: VoteControlModel;
+  settlingSources?: readonly SourceChipModel[];
+  subClaims?: readonly SubClaimFactModel[];
   claims?: readonly ClaimSummaryModel[];
   relations?: readonly {
     id: string;

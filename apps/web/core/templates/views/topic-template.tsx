@@ -16,8 +16,6 @@ import {
   ArrowRightIcon,
   CheckCircleIcon,
   ClaimExplorer,
-  ClaimSummaryCard,
-  EntityGraphExplorer,
   RelatedListSection,
   SourceChipList,
   SplitBars,
@@ -38,28 +36,17 @@ export interface TopicTemplateProps {
   className?: string;
 }
 
-const DEFAULT_CONTESTED_PREVIEW = 3;
-const DEFAULT_AGREED_PREVIEW = 4;
-
 /**
  * Pure, data-driven Topic page template.
  *
  * Clean, spacious white/black Geo layout sized to Calibre typography with restrained blue/purple touches.
  */
 export function TopicTemplate({ model, headerActions, footer, className }: TopicTemplateProps) {
-  const [showAllContested, setShowAllContested] = React.useState(false);
-  const [showAllAgreed, setShowAllAgreed] = React.useState(false);
-
   const contested = model.contestedClaims ?? [];
-  const visibleContested = showAllContested ? contested : contested.slice(0, DEFAULT_CONTESTED_PREVIEW);
-
   const agreed = model.agreedClaims ?? [];
-  const visibleAgreed = showAllAgreed ? agreed : agreed.slice(0, DEFAULT_AGREED_PREVIEW);
 
   const communities = model.communities ?? [];
   const activeCommunityId = model.activeCommunityId ?? 'all';
-
-  const hasClaimExplorer = Boolean(model.claimDetailsById && (contested.length > 0 || agreed.length > 0));
 
   const inlineStats = model.stats?.filter(stat => Boolean(stat.value)) ?? [];
 
@@ -156,85 +143,16 @@ export function TopicTemplate({ model, headerActions, footer, className }: Topic
         </section>
       )}
 
-      {/* Interactive Master-Detail Claim Explorer when rich claim details are available, else card grids */}
-      {hasClaimExplorer && model.claimDetailsById ? (
-        <ClaimExplorer
-          contestedClaims={contested}
-          agreedClaims={agreed}
-          claimDetailsById={model.claimDetailsById}
-          title={communities.length > 0 ? 'Claims & common ground' : 'Claims'}
-        />
-      ) : (
-        <>
-          {/* Contested claims ("Where they split" / "Claims") */}
-          {contested.length > 0 && (
-            <section id="claims" aria-label="Contested claims" className="flex flex-col gap-4">
-              <div className="flex flex-wrap items-baseline justify-between gap-3">
-                <h2 className="m-0 text-mediumTitle font-semibold text-text">
-                  {communities.length > 0 ? 'Where they split' : 'Claims'}
-                </h2>
-                {contested.length > DEFAULT_CONTESTED_PREVIEW && (
-                  <button
-                    type="button"
-                    onClick={() => setShowAllContested(prev => !prev)}
-                    className="cursor-pointer border-0 bg-transparent p-0 text-[15px] font-medium text-ctaPrimary hover:text-ctaHover"
-                  >
-                    {showAllContested ? 'Show fewer' : `Show all ${contested.length}`}
-                  </button>
-                )}
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 @[680px]:grid-cols-2">
-                {visibleContested.map((claim, index) => (
-                  <ClaimSummaryCard
-                    key={claim.id}
-                    claim={claim}
-                    variant={index === 0 ? 'lead' : 'default'}
-                    className={index === 0 ? '@[680px]:col-span-2' : undefined}
-                  />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* Agreed claims ("Common ground") */}
-          {agreed.length > 0 && (
-            <section aria-label="Common ground" className="flex flex-col gap-4">
-              <div className="flex flex-wrap items-baseline justify-between gap-3">
-                <h2 className="m-0 text-mediumTitle font-semibold text-text">Common ground</h2>
-                {agreed.length > DEFAULT_AGREED_PREVIEW && (
-                  <button
-                    type="button"
-                    onClick={() => setShowAllAgreed(prev => !prev)}
-                    className="cursor-pointer border-0 bg-transparent p-0 text-[15px] font-medium text-ctaPrimary hover:text-ctaHover"
-                  >
-                    {showAllAgreed ? 'Show fewer' : `Show all ${agreed.length}`}
-                  </button>
-                )}
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 @[680px]:grid-cols-2">
-                {visibleAgreed.map(claim => (
-                  <ClaimSummaryCard key={claim.id} claim={claim} variant="agreed" />
-                ))}
-              </div>
-            </section>
-          )}
-        </>
+      {/* Calm single-column Claims list with 2-tab switch (Where they split | Common ground) */}
+      {(contested.length > 0 || agreed.length > 0) && (
+        <ClaimExplorer contestedClaims={contested} agreedClaims={agreed} title="Claims" />
       )}
 
-      {/* Trends chart (Coverage & Agreement over time) */}
-      {model.trends && (
-        <div id="trends">
-          <TopicTrendsChart trends={model.trends} />
-        </div>
-      )}
-
-      {/* How we got here (editorial 3-column timeline highlights) */}
+      {/* Timeline (rendered open directly on the page, above trends) */}
       {model.timelineHighlights && model.timelineHighlights.length > 0 && (
-        <section id="timeline" aria-label="How we got here" className="flex flex-col gap-4">
+        <section id="timeline" aria-label="Timeline" className="flex flex-col gap-4">
           <div className="flex flex-wrap items-baseline justify-between gap-3">
-            <h2 className="m-0 text-mediumTitle font-semibold text-text">How we got here</h2>
+            <h2 className="m-0 text-mediumTitle font-semibold text-text">Timeline</h2>
             {model.timelineHref ? (
               <Link
                 href={model.timelineHref}
@@ -267,8 +185,21 @@ export function TopicTemplate({ model, headerActions, footer, className }: Topic
         </section>
       )}
 
-      {/* Who's who interactive entity graph */}
-      {model.entityGraph && model.entityGraph.nodes.length > 0 && <EntityGraphExplorer graph={model.entityGraph} />}
+      {/* Sources & evidence (and additional structured sections) */}
+      {model.sections && model.sections.length > 0 && (
+        <div id="sources-section" className="flex flex-col gap-8">
+          {model.sections.map(section => (
+            <RelatedListSection key={section.id} section={section} />
+          ))}
+        </div>
+      )}
+
+      {/* Trends chart (Coverage & Agreement over time) */}
+      {model.trends && (
+        <div id="trends">
+          <TopicTrendsChart trends={model.trends} />
+        </div>
+      )}
 
       {/* Rankings (Best reads, Best debates, Bridging picks) */}
       {model.rankings && model.rankings.length > 0 && (
@@ -277,15 +208,6 @@ export function TopicTemplate({ model, headerActions, footer, className }: Topic
 
       {/* What's spreading (viral posts with bridging context notes) */}
       {model.viralPosts && model.viralPosts.length > 0 && <ViralPostsSection posts={model.viralPosts} />}
-
-      {/* Additional structured sections (Rich Sources, Coverage, Debates, Subtopics) */}
-      {model.sections && model.sections.length > 0 && (
-        <div id="sources-section" className="flex flex-col gap-8">
-          {model.sections.map(section => (
-            <RelatedListSection key={section.id} section={section} />
-          ))}
-        </div>
-      )}
 
       {footer}
     </TemplateShell>
