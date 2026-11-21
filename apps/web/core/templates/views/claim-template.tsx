@@ -14,6 +14,7 @@ import {
 import {
   CheckCircleIcon,
   ChevronRightIcon,
+  GraphConnectionsStrip,
   RelatedListSection,
   SourceChipList,
   SplitBars,
@@ -72,6 +73,11 @@ export function ClaimTemplate({ model, headerActions, footer, className }: Claim
 
       {/* Vote box + community split bars */}
       <VoteBox split={model.split} control={model.voteBox} />
+
+      {/* Typed graph connections */}
+      {model.graphConnections && model.graphConnections.length > 0 && (
+        <GraphConnectionsStrip groups={model.graphConnections} />
+      )}
 
       {/* Agreed basis (clean soft-shadow editorial panel) */}
       {model.agreedBasis && (

@@ -15,6 +15,7 @@ import type {
 import {
   ArrowRightIcon,
   CheckCircleIcon,
+  ClaimExplorer,
   ClaimSummaryCard,
   EntityGraphExplorer,
   RelatedListSection,
@@ -59,6 +60,18 @@ export function TopicTemplate({ model, headerActions, footer, className }: Topic
   const activeCommunityId = model.activeCommunityId ?? 'all';
   const activeCommunity = communities.find(community => community.id === activeCommunityId) ?? null;
 
+  const hasClaimExplorer = Boolean(model.claimDetailsById && (contested.length > 0 || agreed.length > 0));
+
+  const jumpLinks = [
+    ...(contested.length > 0 || agreed.length > 0 ? [{ id: 'claims', label: 'Claims' }] : []),
+    ...(model.trends ? [{ id: 'trends', label: 'Trends' }] : []),
+    ...(model.timelineHighlights && model.timelineHighlights.length > 0 ? [{ id: 'timeline', label: 'Timeline' }] : []),
+    ...(model.entityGraph && model.entityGraph.nodes.length > 0 ? [{ id: 'whos-who', label: 'Who’s who' }] : []),
+    ...(model.rankings && model.rankings.length > 0 ? [{ id: 'rankings', label: 'Rankings' }] : []),
+    ...(model.viralPosts && model.viralPosts.length > 0 ? [{ id: 'spreading', label: 'Spreading' }] : []),
+    ...(model.sections && model.sections.length > 0 ? [{ id: 'sources-section', label: 'Sources' }] : []),
+  ];
+
   return (
     <TemplateShell maxWidth={1120} breadcrumbs={model.breadcrumbs} className={className}>
       {/* Hero header */}
@@ -100,16 +113,32 @@ export function TopicTemplate({ model, headerActions, footer, className }: Topic
         )}
 
         {model.stats && model.stats.length > 0 && (
-          <dl className="m-0 mt-1 grid grid-cols-2 gap-x-8 gap-y-4 border-y border-divider py-5 @[600px]:flex @[600px]:flex-wrap @[600px]:gap-x-12">
-            {model.stats.map(stat => (
-              <div key={stat.label} className="flex flex-col gap-0.5">
-                <dt className="order-2 text-[14px] text-grey-04">{stat.label}</dt>
-                <dd className="order-1 m-0 text-[26px] leading-[30px] font-semibold tracking-[-0.02em] text-text tabular-nums">
-                  {stat.value}
-                </dd>
-              </div>
-            ))}
-          </dl>
+          <div className="mt-1 flex flex-col gap-4 border-y border-divider py-5">
+            <dl className="m-0 grid grid-cols-2 gap-x-8 gap-y-4 @[600px]:flex @[600px]:flex-wrap @[600px]:gap-x-12">
+              {model.stats.map(stat => (
+                <div key={stat.label} className="flex flex-col gap-0.5">
+                  <dt className="order-2 text-[14px] text-grey-04">{stat.label}</dt>
+                  <dd className="order-1 m-0 text-[26px] leading-[30px] font-semibold tracking-[-0.02em] text-text tabular-nums">
+                    {stat.value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+
+            {jumpLinks.length >= 3 && (
+              <nav aria-label="Jump to section" className="flex flex-wrap items-center gap-1.5 pt-1">
+                {jumpLinks.map(link => (
+                  <a
+                    key={link.id}
+                    href={`#${link.id}`}
+                    className="inline-flex h-8 items-center rounded-full bg-grey-01/85 px-3 text-[13.5px] font-medium text-grey-05 no-underline transition-colors hover:bg-text hover:text-white"
+                  >
+                    {link.label}
+                  </a>
+                ))}
+              </nav>
+            )}
+          </div>
         )}
       </header>
 
@@ -169,67 +198,83 @@ export function TopicTemplate({ model, headerActions, footer, className }: Topic
         </section>
       )}
 
-      {/* Contested claims ("Where they split" / "Claims") */}
-      {contested.length > 0 && (
-        <section aria-label="Contested claims" className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-baseline justify-between gap-3">
-            <h2 className="m-0 text-mediumTitle font-semibold text-text">
-              {communities.length > 0 ? 'Where they split' : 'Claims'}
-            </h2>
-            {contested.length > DEFAULT_CONTESTED_PREVIEW && (
-              <button
-                type="button"
-                onClick={() => setShowAllContested(prev => !prev)}
-                className="cursor-pointer border-0 bg-transparent p-0 text-[15px] font-medium text-ctaPrimary hover:text-ctaHover"
-              >
-                {showAllContested ? 'Show fewer' : `Show all ${contested.length}`}
-              </button>
-            )}
-          </div>
+      {/* Interactive Master-Detail Claim Explorer when rich claim details are available, else card grids */}
+      {hasClaimExplorer && model.claimDetailsById ? (
+        <ClaimExplorer
+          contestedClaims={contested}
+          agreedClaims={agreed}
+          claimDetailsById={model.claimDetailsById}
+          title={communities.length > 0 ? 'Claims & common ground' : 'Claims'}
+        />
+      ) : (
+        <>
+          {/* Contested claims ("Where they split" / "Claims") */}
+          {contested.length > 0 && (
+            <section id="claims" aria-label="Contested claims" className="flex flex-col gap-4">
+              <div className="flex flex-wrap items-baseline justify-between gap-3">
+                <h2 className="m-0 text-mediumTitle font-semibold text-text">
+                  {communities.length > 0 ? 'Where they split' : 'Claims'}
+                </h2>
+                {contested.length > DEFAULT_CONTESTED_PREVIEW && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllContested(prev => !prev)}
+                    className="cursor-pointer border-0 bg-transparent p-0 text-[15px] font-medium text-ctaPrimary hover:text-ctaHover"
+                  >
+                    {showAllContested ? 'Show fewer' : `Show all ${contested.length}`}
+                  </button>
+                )}
+              </div>
 
-          <div className="grid grid-cols-1 gap-4 @[680px]:grid-cols-2">
-            {visibleContested.map((claim, index) => (
-              <ClaimSummaryCard
-                key={claim.id}
-                claim={claim}
-                variant={index === 0 ? 'lead' : 'default'}
-                className={index === 0 ? '@[680px]:col-span-2' : undefined}
-              />
-            ))}
-          </div>
-        </section>
-      )}
+              <div className="grid grid-cols-1 gap-4 @[680px]:grid-cols-2">
+                {visibleContested.map((claim, index) => (
+                  <ClaimSummaryCard
+                    key={claim.id}
+                    claim={claim}
+                    variant={index === 0 ? 'lead' : 'default'}
+                    className={index === 0 ? '@[680px]:col-span-2' : undefined}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
 
-      {/* Agreed claims ("Common ground") */}
-      {agreed.length > 0 && (
-        <section aria-label="Common ground" className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-baseline justify-between gap-3">
-            <h2 className="m-0 text-mediumTitle font-semibold text-text">Common ground</h2>
-            {agreed.length > DEFAULT_AGREED_PREVIEW && (
-              <button
-                type="button"
-                onClick={() => setShowAllAgreed(prev => !prev)}
-                className="cursor-pointer border-0 bg-transparent p-0 text-[15px] font-medium text-ctaPrimary hover:text-ctaHover"
-              >
-                {showAllAgreed ? 'Show fewer' : `Show all ${agreed.length}`}
-              </button>
-            )}
-          </div>
+          {/* Agreed claims ("Common ground") */}
+          {agreed.length > 0 && (
+            <section aria-label="Common ground" className="flex flex-col gap-4">
+              <div className="flex flex-wrap items-baseline justify-between gap-3">
+                <h2 className="m-0 text-mediumTitle font-semibold text-text">Common ground</h2>
+                {agreed.length > DEFAULT_AGREED_PREVIEW && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllAgreed(prev => !prev)}
+                    className="cursor-pointer border-0 bg-transparent p-0 text-[15px] font-medium text-ctaPrimary hover:text-ctaHover"
+                  >
+                    {showAllAgreed ? 'Show fewer' : `Show all ${agreed.length}`}
+                  </button>
+                )}
+              </div>
 
-          <div className="grid grid-cols-1 gap-4 @[680px]:grid-cols-2">
-            {visibleAgreed.map(claim => (
-              <ClaimSummaryCard key={claim.id} claim={claim} variant="agreed" />
-            ))}
-          </div>
-        </section>
+              <div className="grid grid-cols-1 gap-4 @[680px]:grid-cols-2">
+                {visibleAgreed.map(claim => (
+                  <ClaimSummaryCard key={claim.id} claim={claim} variant="agreed" />
+                ))}
+              </div>
+            </section>
+          )}
+        </>
       )}
 
       {/* Trends chart (Coverage & Agreement over time) */}
-      {model.trends && <TopicTrendsChart trends={model.trends} />}
+      {model.trends && (
+        <div id="trends">
+          <TopicTrendsChart trends={model.trends} />
+        </div>
+      )}
 
       {/* How we got here (editorial 3-column timeline highlights) */}
       {model.timelineHighlights && model.timelineHighlights.length > 0 && (
-        <section aria-label="How we got here" className="flex flex-col gap-4">
+        <section id="timeline" aria-label="How we got here" className="flex flex-col gap-4">
           <div className="flex flex-wrap items-baseline justify-between gap-3">
             <h2 className="m-0 text-mediumTitle font-semibold text-text">How we got here</h2>
             {model.timelineHref ? (
@@ -272,7 +317,7 @@ export function TopicTemplate({ model, headerActions, footer, className }: Topic
 
       {/* Additional structured sections (Rich Sources, Coverage, Debates, Subtopics) */}
       {model.sections && model.sections.length > 0 && (
-        <div className="flex flex-col gap-8">
+        <div id="sources-section" className="flex flex-col gap-8">
           {model.sections.map(section => (
             <RelatedListSection key={section.id} section={section} />
           ))}
@@ -669,7 +714,7 @@ function ViralPostsSection({ posts }: { posts: readonly TopicViralPostPreviewMod
   }, [filter, posts]);
 
   return (
-    <section aria-label="What’s spreading" className="flex flex-col gap-4">
+    <section id="spreading" aria-label="What’s spreading" className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="m-0 text-mediumTitle font-semibold text-text">What’s spreading</h2>
 

@@ -217,3 +217,40 @@ export function PlusIcon({ className = 'size-4' }: IconProps) {
     </svg>
   );
 }
+
+export function CloseIcon({ className = 'size-4' }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      className={`shrink-0 ${className}`}
+    >
+      <path d="M4.2 4.2l7.6 7.6M11.8 4.2l-7.6 7.6" />
+    </svg>
+  );
+}
+
+export function NetworkIcon({ className = 'size-4' }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      className={`shrink-0 ${className}`}
+    >
+      <circle cx="8" cy="3.5" r="1.8" />
+      <circle cx="3.5" cy="12" r="1.8" />
+      <circle cx="12.5" cy="12" r="1.8" />
+      <path d="M7 5L4.5 10.3M9 5l2.5 5.3M5.3 12h5.4" />
+    </svg>
+  );
+}

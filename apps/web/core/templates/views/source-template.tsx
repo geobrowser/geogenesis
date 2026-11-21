@@ -3,7 +3,14 @@
 import * as React from 'react';
 
 import type { SourceTemplateModel } from '../models';
-import { ArrowUpRightIcon, ClaimSummaryCard, RelatedListSection, TemplateBadge, TemplateShell } from '../primitives';
+import {
+  ArrowUpRightIcon,
+  ClaimSummaryCard,
+  GraphConnectionsStrip,
+  RelatedListSection,
+  TemplateBadge,
+  TemplateShell,
+} from '../primitives';
 
 export interface SourceTemplateProps {
   model: SourceTemplateModel;
@@ -68,6 +75,10 @@ export function SourceTemplate({ model, headerActions, footer, className }: Sour
             </div>
           ))}
         </dl>
+      )}
+
+      {model.graphConnections && model.graphConnections.length > 0 && (
+        <GraphConnectionsStrip groups={model.graphConnections} />
       )}
 
       {model.supportedClaims.length > 0 && (

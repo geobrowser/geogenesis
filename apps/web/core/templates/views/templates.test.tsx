@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { type GazaFixtureRoute, useGazaFixtureTemplates } from '../adapters/gaza-fixture';
 import type { TopicTemplateModel } from '../models';
+import { ContextPeekDrawer } from '../primitives';
 import { ClaimTemplate } from './claim-template';
 import { DebateTemplate } from './debate-template';
 import { EventTemplate } from './event-template';
@@ -29,28 +30,51 @@ function FixtureHarness({ initialRoute }: { initialRoute?: GazaFixtureRoute }) {
     }
   }, [fixture, initialRoute]);
 
+  let pageView: React.ReactNode = null;
   switch (fixture.activeRoute.kind) {
     case 'topic':
-      return fixture.topicSource.data ? <TopicTemplate model={fixture.topicSource.data} /> : null;
+      pageView = fixture.topicSource.data ? <TopicTemplate model={fixture.topicSource.data} /> : null;
+      break;
     case 'claim':
-      return fixture.claimSource.data ? <ClaimTemplate model={fixture.claimSource.data} /> : null;
+      pageView = fixture.claimSource.data ? <ClaimTemplate model={fixture.claimSource.data} /> : null;
+      break;
     case 'event':
-      return fixture.eventSource.data ? <EventTemplate model={fixture.eventSource.data} /> : null;
+      pageView = fixture.eventSource.data ? <EventTemplate model={fixture.eventSource.data} /> : null;
+      break;
     case 'news-story':
-      return fixture.storySource.data ? <NewsStoryTemplate model={fixture.storySource.data} /> : null;
+      pageView = fixture.storySource.data ? <NewsStoryTemplate model={fixture.storySource.data} /> : null;
+      break;
     case 'source':
-      return fixture.sourceSource.data ? <SourceTemplate model={fixture.sourceSource.data} /> : null;
+      pageView = fixture.sourceSource.data ? <SourceTemplate model={fixture.sourceSource.data} /> : null;
+      break;
     case 'post':
-      return fixture.postSource.data ? <PostTemplate model={fixture.postSource.data} /> : null;
+      pageView = fixture.postSource.data ? <PostTemplate model={fixture.postSource.data} /> : null;
+      break;
     case 'debate':
-      return fixture.debateSource.data ? <DebateTemplate model={fixture.debateSource.data} /> : null;
+      pageView = fixture.debateSource.data ? <DebateTemplate model={fixture.debateSource.data} /> : null;
+      break;
     case 'timeline':
-      return fixture.timelineSource.data ? <TimelineTemplate model={fixture.timelineSource.data} /> : null;
+      pageView = fixture.timelineSource.data ? <TimelineTemplate model={fixture.timelineSource.data} /> : null;
+      break;
     case 'sources':
-      return fixture.sourceLibrarySource.data ? (
+      pageView = fixture.sourceLibrarySource.data ? (
         <SourceLibraryTemplate model={fixture.sourceLibrarySource.data} />
       ) : null;
+      break;
   }
+
+  return (
+    <>
+      {pageView}
+      <ContextPeekDrawer
+        item={fixture.peekItem}
+        canGoBack={fixture.canPeekGoBack}
+        backLabel={fixture.peekBackLabel}
+        onBack={fixture.popPeek}
+        onClose={fixture.closePeek}
+      />
+    </>
+  );
 }
 
 describe('TopicTemplate progressive disclosure', () => {
@@ -98,22 +122,31 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     fireEvent.click(within(rankings).getByRole('button', { name: /Bridging picks/i }));
     expect(within(rankings).queryByRole('button', { name: 'Everyone' })).toBeNull();
 
-    // Switch community view and open a contested claim
+    // Switch community view and open a contested claim via the master-detail Claim Explorer
     const communityBar = screen.getByRole('region', { name: 'Community view' });
     const proIsraelFilter = within(communityBar).getByRole('button', { name: /Pro-Israel/i });
     fireEvent.click(proIsraelFilter);
     expect(proIsraelFilter).toHaveAttribute('aria-pressed', 'true');
 
-    const contestedSection = screen.getByRole('region', { name: 'Contested claims' });
-    fireEvent.click(within(contestedSection).getByRole('button', { name: /Israel is committing genocide in Gaza/i }));
+    const explorer = screen.getByRole('region', { name: 'Claim explorer' });
+    fireEvent.click(within(explorer).getByRole('option', { name: /Israel is committing genocide in Gaza/i }));
+    fireEvent.click(within(explorer).getByRole('button', { name: /Open full claim/i }));
     expect(screen.getByText('Contested claim')).toBeInTheDocument();
+
+    // Verify GraphConnectionsStrip + ContextPeekDrawer on Claim page
+    const graphStrip = screen.getByRole('region', { name: 'Connected in the graph' });
+    fireEvent.click(within(graphStrip).getByRole('button', { name: /International Court of Justice/i }));
+    const drawer = screen.getByRole('dialog');
+    expect(within(drawer).getByRole('heading', { name: 'International Court of Justice' })).toBeInTheDocument();
+    fireEvent.click(within(drawer).getByRole('button', { name: 'Close' }));
 
     // Vote Agree
     fireEvent.click(screen.getByRole('button', { name: 'Agree' }));
     expect(screen.getByText('You agreed.')).toBeInTheDocument();
 
     // Navigate from Claim -> Event -> News Story -> Source
-    fireEvent.click(screen.getByRole('button', { name: /ICJ orders Israel to prevent genocidal acts/i }));
+    const eventsRegion = screen.getByRole('region', { name: 'Events' });
+    fireEvent.click(within(eventsRegion).getByRole('button', { name: /ICJ orders Israel to prevent genocidal acts/i }));
     expect(screen.getByRole('heading', { name: 'ICJ orders Israel to prevent genocidal acts' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /World court orders Israel to prevent genocidal acts/i }));
@@ -147,14 +180,26 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     expect(screen.getByText(/Reverse image search confirms this footage/i)).toBeInTheDocument();
   });
 
-  it('renders agreed claim basis and settling sources when opening a common-ground claim', () => {
+  it('renders agreed claim basis and peekable settling sources when inspecting a common-ground claim', () => {
     render(<FixtureHarness />);
 
-    fireEvent.click(screen.getByRole('button', { name: /Most of Gaza’s buildings are damaged or destroyed/i }));
+    const explorer = screen.getByRole('region', { name: 'Claim explorer' });
+    fireEvent.click(within(explorer).getByRole('button', { name: /Common ground/i }));
+    fireEvent.click(
+      within(explorer).getByRole('option', { name: /Most of Gaza’s buildings are damaged or destroyed/i })
+    );
 
-    expect(screen.getByText('Agreed claim')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'What both communities agree on' })).toBeInTheDocument();
-    expect(screen.getByText(/UNOSAT satellite damage assessment \(Jun 2026\)/)).toBeInTheDocument();
+    expect(within(explorer).getByText('Agreed claim')).toBeInTheDocument();
+    expect(within(explorer).getByText('What both communities agree on')).toBeInTheDocument();
+
+    // Clicking a source chip opens the slide-over ContextPeekDrawer without leaving the topic
+    fireEvent.click(within(explorer).getByRole('button', { name: /UNOSAT satellite damage assessment/i }));
+    const drawer = screen.getByRole('dialog');
+    expect(within(drawer).getByRole('heading', { name: 'UNOSAT satellite damage assessment' })).toBeInTheDocument();
+
+    // Opening full claim page works cleanly too
+    fireEvent.click(within(drawer).getByRole('button', { name: 'Close' }));
+    fireEvent.click(within(explorer).getByRole('button', { name: /Open full claim/i }));
     expect(screen.getByRole('heading', { name: 'Where they split next' })).toBeInTheDocument();
   });
 

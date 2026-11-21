@@ -161,6 +161,47 @@ export interface ClaimAgreedBasisModel {
   settlingSources: readonly SourceChipModel[];
 }
 
+export interface GraphConnectionItemModel {
+  id: string;
+  label: string;
+  kind: EntityLinkKind | 'entity';
+  meta?: string;
+  href?: string;
+  onSelect?: () => void;
+}
+
+export interface GraphConnectionGroupModel {
+  /** Predicate / relation label (e.g. 'Events', 'Sources', 'Actors', 'Debates', 'Subclaims'). */
+  predicate: string;
+  items: readonly GraphConnectionItemModel[];
+}
+
+export interface ContextPeekItemModel {
+  id: string;
+  kind: 'source' | 'entity' | 'event' | 'news-story' | 'claim';
+  kindLabel: string;
+  title: string;
+  subtitle?: string;
+  mediaType?: SourceMediaKind;
+  tags?: readonly string[];
+  summary?: string;
+  metadata?: readonly { label: string; value: string }[];
+  externalUrl?: string;
+  externalLabel?: string;
+  split?: SplitBreakdown;
+  claims?: readonly ClaimSummaryModel[];
+  relations?: readonly {
+    id: string;
+    predicate: string;
+    targetName: string;
+    note?: string;
+    onSelect?: () => void;
+  }[];
+  openFullLabel?: string;
+  fullHref?: string;
+  onOpenFull?: () => void;
+}
+
 export interface ClaimTemplateModel {
   id: string;
   title: string;
@@ -171,6 +212,7 @@ export interface ClaimTemplateModel {
   debateCount?: number;
   debatesHref?: string;
   onOpenDebates?: () => void;
+  graphConnections?: readonly GraphConnectionGroupModel[];
   keyStat?: {
     text: string;
     sources: readonly SourceChipModel[];
@@ -328,6 +370,11 @@ export interface TopicTemplateModel {
   onSelectCommunity?: (communityId: string | 'all') => void;
   contestedClaims?: readonly ClaimSummaryModel[];
   agreedClaims?: readonly ClaimSummaryModel[];
+  /**
+   * Optional rich per-claim detail models powering the inline master–detail Claim Explorer
+   * (allowing voting, fact inspection, strongest cases, and source verification without leaving the topic).
+   */
+  claimDetailsById?: Readonly<Record<string, ClaimTemplateModel>>;
   communityCases?: readonly TopicCommunityCaseModel[];
   trends?: TopicTrendsModel;
   timelineHighlights?: readonly TopicTimelineHighlightModel[];
@@ -418,6 +465,7 @@ export interface EventTemplateModel {
   coverUrl?: string | null;
   breadcrumbs?: readonly BreadcrumbItem[];
   storyCountLabel?: string;
+  graphConnections?: readonly GraphConnectionGroupModel[];
   claims: readonly ClaimSummaryModel[];
   sections: readonly EntityListSectionModel[];
   previousEvent?: { id: string; title: string; when: string; href?: string; onSelect?: () => void };
@@ -436,6 +484,7 @@ export interface NewsStoryTemplateModel {
   externalUrl?: string;
   archiveUrl?: string;
   breadcrumbs?: readonly BreadcrumbItem[];
+  graphConnections?: readonly GraphConnectionGroupModel[];
   accuracyRating?: {
     prompt: string;
     split: SplitBreakdown;
@@ -457,6 +506,7 @@ export interface SourceTemplateModel {
   externalLabel?: string;
   breadcrumbs?: readonly BreadcrumbItem[];
   tags?: readonly string[];
+  graphConnections?: readonly GraphConnectionGroupModel[];
   metadata: readonly { label: string; value: string }[];
   supportedClaims: readonly ClaimSummaryModel[];
   sections: readonly EntityListSectionModel[];

@@ -7,9 +7,11 @@ import {
   type ClaimSummaryModel,
   type ClaimTemplateModel,
   type CommunityDefinition,
+  type ContextPeekItemModel,
   type DebateTemplateModel,
   type EntityListSectionModel,
   type EventTemplateModel,
+  type GraphConnectionGroupModel,
   type NewsStoryTemplateModel,
   type PostContextNoteModel,
   type PostSuggestedEvidenceModel,
@@ -873,6 +875,13 @@ function computeEffectiveSplit(
   };
 }
 
+export type GazaPeekTarget =
+  | { kind: 'source'; id: string }
+  | { kind: 'entity'; id: string }
+  | { kind: 'event'; id: string }
+  | { kind: 'news-story'; id: string }
+  | { kind: 'claim'; id: string };
+
 export interface GazaFixtureController {
   activeRoute: GazaFixtureRoute;
   navigate: (route: GazaFixtureRoute) => void;
@@ -885,6 +894,11 @@ export interface GazaFixtureController {
   openDebate: (id: string) => void;
   openTimeline: () => void;
   openSources: () => void;
+  peekItem: ContextPeekItemModel | null;
+  canPeekGoBack: boolean;
+  peekBackLabel?: string;
+  popPeek: () => void;
+  closePeek: () => void;
   topicSource: TemplateDataSource<TopicTemplateModel>;
   claimSource: TemplateDataSource<ClaimTemplateModel>;
   eventSource: TemplateDataSource<EventTemplateModel>;
@@ -901,7 +915,7 @@ export interface GazaFixtureController {
 /**
  * Interactive fixture controller producing live-updating `TemplateDataSource` objects for all nine
  * templates (`Topic`, `Claim`, `Event`, `NewsStory`, `Source`, `Post`, `Debate`, `Timeline`,
- * `SourceLibrary`).
+ * `SourceLibrary`) plus the slide-over `ContextPeekDrawer` state.
  */
 export function useGazaFixtureTemplates(): GazaFixtureController {
   const [activeRoute, setActiveRoute] = React.useState<GazaFixtureRoute>({ kind: 'topic' });
@@ -912,29 +926,68 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
   const [userNotes, setUserNotes] = React.useState<Record<string, PostContextNoteModel[]>>({});
   const [rankingSuggestions, setRankingSuggestions] = React.useState<Record<string, TopicRankingItemModel[]>>({});
   const [userSources, setUserSources] = React.useState<SourceLibraryItemModel[]>([]);
+  const [peekStack, setPeekStack] = React.useState<GazaPeekTarget[]>([]);
 
-  const navigate = React.useCallback((route: GazaFixtureRoute) => setActiveRoute(route), []);
-  const openTopic = React.useCallback(() => setActiveRoute({ kind: 'topic' }), []);
+  const pushPeek = React.useCallback((target: GazaPeekTarget) => {
+    setPeekStack(prev => [...prev.slice(-7), target]);
+  }, []);
+  const popPeek = React.useCallback(() => {
+    setPeekStack(prev => prev.slice(0, -1));
+  }, []);
+  const closePeek = React.useCallback(() => setPeekStack([]), []);
+
+  const navigate = React.useCallback((route: GazaFixtureRoute) => {
+    setPeekStack([]);
+    setActiveRoute(route);
+  }, []);
+  const openTopic = React.useCallback(() => {
+    setPeekStack([]);
+    setActiveRoute({ kind: 'topic' });
+  }, []);
   const openClaim = React.useCallback((id: string) => {
-    if (CLAIM_BY_ID[id]) setActiveRoute({ kind: 'claim', id });
+    if (CLAIM_BY_ID[id]) {
+      setPeekStack([]);
+      setActiveRoute({ kind: 'claim', id });
+    }
   }, []);
   const openEvent = React.useCallback((id: string) => {
-    if (EVENT_BY_ID[id]) setActiveRoute({ kind: 'event', id });
+    if (EVENT_BY_ID[id]) {
+      setPeekStack([]);
+      setActiveRoute({ kind: 'event', id });
+    }
   }, []);
   const openStory = React.useCallback((id: string) => {
-    if (STORY_BY_ID[id]) setActiveRoute({ kind: 'news-story', id });
+    if (STORY_BY_ID[id]) {
+      setPeekStack([]);
+      setActiveRoute({ kind: 'news-story', id });
+    }
   }, []);
   const openSource = React.useCallback((id: string) => {
-    if (SOURCE_BY_ID[id]) setActiveRoute({ kind: 'source', id });
+    if (SOURCE_BY_ID[id]) {
+      setPeekStack([]);
+      setActiveRoute({ kind: 'source', id });
+    }
   }, []);
   const openPost = React.useCallback((id: string) => {
-    if (POST_BY_ID[id]) setActiveRoute({ kind: 'post', id });
+    if (POST_BY_ID[id]) {
+      setPeekStack([]);
+      setActiveRoute({ kind: 'post', id });
+    }
   }, []);
   const openDebate = React.useCallback((id: string) => {
-    if (DEBATE_BY_ID[id]) setActiveRoute({ kind: 'debate', id });
+    if (DEBATE_BY_ID[id]) {
+      setPeekStack([]);
+      setActiveRoute({ kind: 'debate', id });
+    }
   }, []);
-  const openTimeline = React.useCallback(() => setActiveRoute({ kind: 'timeline' }), []);
-  const openSources = React.useCallback(() => setActiveRoute({ kind: 'sources' }), []);
+  const openTimeline = React.useCallback(() => {
+    setPeekStack([]);
+    setActiveRoute({ kind: 'timeline' });
+  }, []);
+  const openSources = React.useCallback(() => {
+    setPeekStack([]);
+    setActiveRoute({ kind: 'sources' });
+  }, []);
 
   const toSourceChips = React.useCallback(
     (ids: readonly string[]) =>
@@ -946,9 +999,9 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
           index: index + 1,
           title: `${s.title} (${s.date})`,
           mediaType: s.mediaType,
-          onSelect: () => openSource(s.id),
+          onSelect: () => pushPeek({ kind: 'source', id: s.id }),
         })),
-    [openSource]
+    [pushPeek]
   );
 
   const toRichSourceCard = React.useCallback(
@@ -1305,6 +1358,234 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
     [openPost, userNotes]
   );
 
+  const buildClaimModel = React.useCallback(
+    (seed: SeedClaim): ClaimTemplateModel => {
+      const userVote = votes[seed.id] ?? null;
+      const eff = computeEffectiveSplit(
+        seed.pp,
+        seed.pi,
+        seed.all,
+        seed.npp,
+        seed.npi,
+        seed.nall,
+        userVote,
+        joinedCommunityId,
+        true
+      );
+
+      const subClaims: SubClaimFactModel[] | undefined = seed.subClaims?.map(fact => {
+        const gap = Math.abs(fact.pp - fact.pi);
+        return {
+          id: fact.id,
+          title: fact.title,
+          stat: fact.stat,
+          split: {
+            isSplit: isClaimSplit(gap),
+            gapPoints: gap,
+            rows: [
+              { id: 'pp', label: 'Pro-Palestinian', color: '#6833ff', percent: fact.pp },
+              { id: 'pi', label: 'Pro-Israel', color: '#3963fe', percent: fact.pi },
+            ],
+          },
+          sources: toSourceChips(fact.sourceIds),
+        };
+      });
+
+      const strongestCases: StrongestCaseModel[] | undefined = seed.cases?.map(item => ({
+        id: `${seed.id}-${item.communityId}`,
+        communityId: item.communityId,
+        title: item.title,
+        accentColor: item.communityId === 'pp' ? '#6833ff' : '#3963fe',
+        points: item.points,
+        concede: item.concede,
+        sources: toSourceChips(item.sourceIds),
+      }));
+
+      const sections: EntityListSectionModel[] = [];
+
+      if (seed.splitNextIds && seed.splitNextIds.length > 0) {
+        sections.push({
+          id: 'split-next',
+          title: 'Where they split next',
+          items: seed.splitNextIds
+            .map(id => CLAIM_BY_ID[id])
+            .filter((item): item is SeedClaim => Boolean(item))
+            .map(item => ({
+              id: item.id,
+              kind: 'claim',
+              kindLabel: 'Contested claim',
+              title: item.title,
+              meta: `Pro-Palestinian ${item.pp}% · Pro-Israel ${item.pi}% agree`,
+              onSelect: () => openClaim(item.id),
+            })),
+        });
+      }
+
+      if (seed.eventIds.length > 0) {
+        sections.push({
+          id: 'events',
+          title: 'Events',
+          items: seed.eventIds
+            .map(id => EVENT_BY_ID[id])
+            .filter((ev): ev is SeedEvent => Boolean(ev))
+            .map(ev => ({
+              id: ev.id,
+              kind: 'event',
+              kindLabel: 'Event',
+              title: ev.title,
+              meta: `${ev.when} · ${ev.storyIds.length} ${ev.storyIds.length === 1 ? 'news story' : 'news stories'}`,
+              onSelect: () => openEvent(ev.id),
+            })),
+        });
+      }
+
+      if (seed.storyIds.length > 0) {
+        sections.push({
+          id: 'stories',
+          title: 'In the news',
+          items: seed.storyIds
+            .map(id => STORY_BY_ID[id])
+            .filter((st): st is SeedStory => Boolean(st))
+            .map(st => ({
+              id: st.id,
+              kind: 'news-story',
+              kindLabel: 'News',
+              title: st.headline,
+              meta: `${st.outlet} · ${st.date}`,
+              onSelect: () => openStory(st.id),
+            })),
+        });
+      }
+
+      const claimDebates = SEED_DEBATES.filter(d => d.claimId === seed.id);
+
+      sections.push({
+        id: 'sources',
+        title: 'Sources',
+        layout: 'cards',
+        items: seed.sourceIds
+          .map(id => SOURCE_BY_ID[id])
+          .filter((s): s is SeedSource => Boolean(s))
+          .map(toRichSourceCard),
+        emptyText: 'No sources linked yet.',
+      });
+
+      if (claimDebates.length > 0) {
+        sections.push({
+          id: 'debates',
+          title: claimDebates.length > 1 ? `Debates on this claim (${claimDebates.length})` : 'Debate on this claim',
+          items: claimDebates.map(debate => ({
+            id: debate.id,
+            kind: 'debate',
+            kindLabel: 'Debate',
+            title: `${debate.ppDebater} vs ${debate.piDebater}`,
+            meta: `${debate.date} · ${debate.duration} · ${debate.votesLabel}`,
+            onSelect: () => openDebate(debate.id),
+          })),
+        });
+      }
+
+      const relatedActors = SEED_GRAPH_NODES.filter(node => node.claimIds?.includes(seed.id));
+      const graphConnections: GraphConnectionGroupModel[] = [
+        ...(relatedActors.length > 0
+          ? [
+              {
+                predicate: 'Actors',
+                items: relatedActors.map(node => ({
+                  id: `actor-${node.id}`,
+                  label: node.name,
+                  kind: 'entity' as const,
+                  onSelect: () => pushPeek({ kind: 'entity', id: node.id }),
+                })),
+              },
+            ]
+          : []),
+        ...(seed.eventIds.length > 0
+          ? [
+              {
+                predicate: 'Events',
+                items: seed.eventIds
+                  .map(id => EVENT_BY_ID[id])
+                  .filter((ev): ev is SeedEvent => Boolean(ev))
+                  .map(ev => ({
+                    id: `ev-${ev.id}`,
+                    label: ev.title,
+                    kind: 'event' as const,
+                    onSelect: () => pushPeek({ kind: 'event', id: ev.id }),
+                  })),
+              },
+            ]
+          : []),
+        ...(seed.sourceIds.length > 0
+          ? [
+              {
+                predicate: 'Sources',
+                items: seed.sourceIds
+                  .map(id => SOURCE_BY_ID[id])
+                  .filter((s): s is SeedSource => Boolean(s))
+                  .map(s => ({
+                    id: `src-${s.id}`,
+                    label: s.title,
+                    kind: 'source' as const,
+                    onSelect: () => pushPeek({ kind: 'source', id: s.id }),
+                  })),
+              },
+            ]
+          : []),
+      ];
+
+      return {
+        id: seed.id,
+        title: seed.title,
+        breadcrumbs: [
+          { id: 'topic', label: 'Israel–Gaza war', onSelect: openTopic },
+          { id: seed.id, label: seed.title },
+        ],
+        kind: seed.kind,
+        split: eff.split,
+        debateCount: seed.debatesCount,
+        onOpenDebates: claimDebates[0] ? () => openDebate(claimDebates[0].id) : undefined,
+        graphConnections: graphConnections.length > 0 ? graphConnections : undefined,
+        voteBox: {
+          userVote,
+          countSummary: `${eff.totalVotes.toLocaleString('en-US')} votes in all · ${(seed.npp + seed.npi).toLocaleString('en-US')} from community members`,
+          hint: joinedCommunityId
+            ? `Your vote counts in Everyone and in the ${joinedCommunityId === 'pp' ? 'Pro-Palestinian' : 'Pro-Israel'} split.`
+            : 'You haven’t joined a community, so your vote counts in Everyone only.',
+          impactNote: eff.impactNote,
+          onVote: choice => setVotes(prev => ({ ...prev, [seed.id]: choice })),
+          onClear: () => setVotes(prev => ({ ...prev, [seed.id]: null })),
+        },
+        agreedBasis: seed.agreedBasis
+          ? {
+              summary: seed.agreedBasis.summary,
+              settlingSources: toSourceChips(seed.agreedBasis.sourceIds),
+            }
+          : undefined,
+        subClaims,
+        strongestCases,
+        sections,
+      };
+    },
+    [
+      joinedCommunityId,
+      openClaim,
+      openDebate,
+      openEvent,
+      openStory,
+      openTopic,
+      pushPeek,
+      toRichSourceCard,
+      toSourceChips,
+      votes,
+    ]
+  );
+
+  const claimDetailsById = React.useMemo<Readonly<Record<string, ClaimTemplateModel>>>(
+    () => Object.fromEntries(SEED_CLAIMS.map(seed => [seed.id, buildClaimModel(seed)])),
+    [buildClaimModel]
+  );
+
   const topicModel: TopicTemplateModel = React.useMemo(() => {
     const order = PIN_ORDER[activeCommunityId] ?? PIN_ORDER.all;
     const contestedClaims = order.map(id => toSummary(CLAIM_BY_ID[id]));
@@ -1329,6 +1610,7 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
       onSelectCommunity: setActiveCommunityId,
       contestedClaims,
       agreedClaims,
+      claimDetailsById,
       communityCases: [
         {
           community: { ...GAZA_COMMUNITIES[0], memberCount: 4812 + (joinedCommunityId === 'pp' ? 1 : 0) },
@@ -1383,6 +1665,7 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
     };
   }, [
     activeCommunityId,
+    claimDetailsById,
     entityGraph,
     joinedCommunityId,
     openEvent,
@@ -1397,176 +1680,7 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
   ]);
 
   const activeClaimId = activeRoute.kind === 'claim' ? activeRoute.id : 'gen';
-  const claimModel: ClaimTemplateModel = React.useMemo(() => {
-    const seed = CLAIM_BY_ID[activeClaimId] ?? CLAIM_BY_ID.gen;
-    const userVote = votes[seed.id] ?? null;
-    const eff = computeEffectiveSplit(
-      seed.pp,
-      seed.pi,
-      seed.all,
-      seed.npp,
-      seed.npi,
-      seed.nall,
-      userVote,
-      joinedCommunityId,
-      true
-    );
-
-    const subClaims: SubClaimFactModel[] | undefined = seed.subClaims?.map(fact => {
-      const gap = Math.abs(fact.pp - fact.pi);
-      return {
-        id: fact.id,
-        title: fact.title,
-        stat: fact.stat,
-        split: {
-          isSplit: isClaimSplit(gap),
-          gapPoints: gap,
-          rows: [
-            { id: 'pp', label: 'Pro-Palestinian', color: '#6833ff', percent: fact.pp },
-            { id: 'pi', label: 'Pro-Israel', color: '#3963fe', percent: fact.pi },
-          ],
-        },
-        sources: toSourceChips(fact.sourceIds),
-      };
-    });
-
-    const strongestCases: StrongestCaseModel[] | undefined = seed.cases?.map(item => ({
-      id: `${seed.id}-${item.communityId}`,
-      communityId: item.communityId,
-      title: item.title,
-      accentColor: item.communityId === 'pp' ? '#6833ff' : '#3963fe',
-      points: item.points,
-      concede: item.concede,
-      sources: toSourceChips(item.sourceIds),
-    }));
-
-    const sections: EntityListSectionModel[] = [];
-
-    if (seed.splitNextIds && seed.splitNextIds.length > 0) {
-      sections.push({
-        id: 'split-next',
-        title: 'Where they split next',
-        items: seed.splitNextIds
-          .map(id => CLAIM_BY_ID[id])
-          .filter((item): item is SeedClaim => Boolean(item))
-          .map(item => ({
-            id: item.id,
-            kind: 'claim',
-            kindLabel: 'Contested claim',
-            title: item.title,
-            meta: `Pro-Palestinian ${item.pp}% · Pro-Israel ${item.pi}% agree`,
-            onSelect: () => openClaim(item.id),
-          })),
-      });
-    }
-
-    if (seed.eventIds.length > 0) {
-      sections.push({
-        id: 'events',
-        title: 'Events',
-        items: seed.eventIds
-          .map(id => EVENT_BY_ID[id])
-          .filter((ev): ev is SeedEvent => Boolean(ev))
-          .map(ev => ({
-            id: ev.id,
-            kind: 'event',
-            kindLabel: 'Event',
-            title: ev.title,
-            meta: `${ev.when} · ${ev.storyIds.length} ${ev.storyIds.length === 1 ? 'news story' : 'news stories'}`,
-            onSelect: () => openEvent(ev.id),
-          })),
-      });
-    }
-
-    if (seed.storyIds.length > 0) {
-      sections.push({
-        id: 'stories',
-        title: 'In the news',
-        items: seed.storyIds
-          .map(id => STORY_BY_ID[id])
-          .filter((st): st is SeedStory => Boolean(st))
-          .map(st => ({
-            id: st.id,
-            kind: 'news-story',
-            kindLabel: 'News',
-            title: st.headline,
-            meta: `${st.outlet} · ${st.date}`,
-            onSelect: () => openStory(st.id),
-          })),
-      });
-    }
-
-    const claimDebates = SEED_DEBATES.filter(d => d.claimId === seed.id);
-
-    sections.push({
-      id: 'sources',
-      title: 'Sources',
-      layout: 'cards',
-      items: seed.sourceIds
-        .map(id => SOURCE_BY_ID[id])
-        .filter((s): s is SeedSource => Boolean(s))
-        .map(toRichSourceCard),
-      emptyText: 'No sources linked yet.',
-    });
-
-    if (claimDebates.length > 0) {
-      sections.push({
-        id: 'debates',
-        title: claimDebates.length > 1 ? `Debates on this claim (${claimDebates.length})` : 'Debate on this claim',
-        items: claimDebates.map(debate => ({
-          id: debate.id,
-          kind: 'debate',
-          kindLabel: 'Debate',
-          title: `${debate.ppDebater} vs ${debate.piDebater}`,
-          meta: `${debate.date} · ${debate.duration} · ${debate.votesLabel}`,
-          onSelect: () => openDebate(debate.id),
-        })),
-      });
-    }
-
-    return {
-      id: seed.id,
-      title: seed.title,
-      breadcrumbs: [
-        { id: 'topic', label: 'Israel–Gaza war', onSelect: openTopic },
-        { id: seed.id, label: seed.title },
-      ],
-      kind: seed.kind,
-      split: eff.split,
-      debateCount: seed.debatesCount,
-      onOpenDebates: claimDebates[0] ? () => openDebate(claimDebates[0].id) : undefined,
-      voteBox: {
-        userVote,
-        countSummary: `${eff.totalVotes.toLocaleString('en-US')} votes in all · ${(seed.npp + seed.npi).toLocaleString('en-US')} from community members`,
-        hint: joinedCommunityId
-          ? `Your vote counts in Everyone and in the ${joinedCommunityId === 'pp' ? 'Pro-Palestinian' : 'Pro-Israel'} split.`
-          : 'You haven’t joined a community, so your vote counts in Everyone only.',
-        impactNote: eff.impactNote,
-        onVote: choice => setVotes(prev => ({ ...prev, [seed.id]: choice })),
-        onClear: () => setVotes(prev => ({ ...prev, [seed.id]: null })),
-      },
-      agreedBasis: seed.agreedBasis
-        ? {
-            summary: seed.agreedBasis.summary,
-            settlingSources: toSourceChips(seed.agreedBasis.sourceIds),
-          }
-        : undefined,
-      subClaims,
-      strongestCases,
-      sections,
-    };
-  }, [
-    activeClaimId,
-    joinedCommunityId,
-    openClaim,
-    openDebate,
-    openEvent,
-    openStory,
-    openTopic,
-    toRichSourceCard,
-    toSourceChips,
-    votes,
-  ]);
+  const claimModel: ClaimTemplateModel = claimDetailsById[activeClaimId] ?? claimDetailsById.gen;
 
   const activeEventId = activeRoute.kind === 'event' ? activeRoute.id : 'e71k';
   const eventModel: EventTemplateModel = React.useMemo(() => {
@@ -2079,6 +2193,143 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
     };
   }, [openStory, openTopic, toRichSourceCard, userSources]);
 
+  const peekItem = React.useMemo<ContextPeekItemModel | null>(() => {
+    const current = peekStack[peekStack.length - 1];
+    if (!current) return null;
+
+    if (current.kind === 'source') {
+      const src = SOURCE_BY_ID[current.id];
+      if (!src) return null;
+      const supportedClaims = SEED_CLAIMS.filter(c => c.sourceIds.includes(src.id)).map(toSummary);
+      const citingEvents = SEED_EVENTS.filter(ev => ev.sourceIds.includes(src.id));
+      return {
+        id: src.id,
+        kind: 'source',
+        kindLabel: src.sourceType,
+        title: src.title,
+        subtitle: [src.publisher, src.date].filter(Boolean).join(' · '),
+        mediaType: src.mediaType,
+        tags: src.pickTag ? [src.pickTag] : undefined,
+        summary: src.summary,
+        metadata: [
+          { label: 'Publisher', value: src.publisher },
+          { label: 'Date', value: src.date },
+          { label: 'Type', value: src.sourceType },
+        ],
+        externalUrl: src.url,
+        externalLabel: 'Open external source',
+        claims: supportedClaims,
+        relations: citingEvents.map(ev => ({
+          id: ev.id,
+          predicate: 'Cited by event',
+          targetName: ev.title,
+          note: ev.when,
+          onSelect: () => pushPeek({ kind: 'event', id: ev.id }),
+        })),
+        openFullLabel: 'Open full source page',
+        onOpenFull: () => openSource(src.id),
+      };
+    }
+
+    if (current.kind === 'entity') {
+      const node = SEED_GRAPH_NODES.find(n => n.id === current.id);
+      if (!node) return null;
+      const nodeMap = Object.fromEntries(SEED_GRAPH_NODES.map(n => [n.id, n]));
+      return {
+        id: node.id,
+        kind: 'entity',
+        kindLabel: node.kind,
+        title: node.name,
+        tags: node.tags,
+        summary: node.summary,
+        relations: node.relations
+          .filter(rel => Boolean(nodeMap[rel.targetId]))
+          .map(rel => ({
+            id: rel.targetId,
+            predicate: rel.label,
+            targetName: nodeMap[rel.targetId].name,
+            note: rel.sourceNote,
+            onSelect: () => pushPeek({ kind: 'entity', id: rel.targetId }),
+          })),
+        claims: node.claimIds
+          ?.map(cid => CLAIM_BY_ID[cid])
+          .filter((c): c is SeedClaim => Boolean(c))
+          .map(toSummary),
+        openFullLabel: node.eventId ? 'Open related event' : undefined,
+        onOpenFull: node.eventId ? () => openEvent(node.eventId!) : undefined,
+      };
+    }
+
+    if (current.kind === 'event') {
+      const ev = EVENT_BY_ID[current.id];
+      if (!ev) return null;
+      return {
+        id: ev.id,
+        kind: 'event',
+        kindLabel: 'Event',
+        title: ev.title,
+        subtitle: ev.when,
+        summary: ev.summary,
+        claims: ev.claimIds.map(cid => toSummary(CLAIM_BY_ID[cid])),
+        relations: ev.sourceIds
+          .map(id => SOURCE_BY_ID[id])
+          .filter((s): s is SeedSource => Boolean(s))
+          .map(s => ({
+            id: s.id,
+            predicate: 'Primary source',
+            targetName: s.title,
+            note: `${s.publisher} · ${s.date}`,
+            onSelect: () => pushPeek({ kind: 'source', id: s.id }),
+          })),
+        openFullLabel: 'Open full event page',
+        onOpenFull: () => openEvent(ev.id),
+      };
+    }
+
+    if (current.kind === 'news-story') {
+      const st = STORY_BY_ID[current.id];
+      if (!st) return null;
+      return {
+        id: st.id,
+        kind: 'news-story',
+        kindLabel: 'News story',
+        title: st.headline,
+        subtitle: `${st.outlet} · ${st.date}`,
+        mediaType: 'article',
+        summary: st.summary,
+        externalUrl: st.url,
+        externalLabel: `Read on ${st.outlet}`,
+        claims: [toSummary(CLAIM_BY_ID[st.claimId])],
+        openFullLabel: 'Open full story page',
+        onOpenFull: () => openStory(st.id),
+      };
+    }
+
+    const claim = CLAIM_BY_ID[current.id];
+    if (!claim) return null;
+    const summary = toSummary(claim);
+    return {
+      id: claim.id,
+      kind: 'claim',
+      kindLabel: summary.split.isSplit ? 'Contested claim' : 'Agreed claim',
+      title: claim.title,
+      split: summary.split,
+      summary: claim.agreedBasis?.summary,
+      openFullLabel: 'Open full claim page',
+      onOpenFull: () => openClaim(claim.id),
+    };
+  }, [openClaim, openEvent, openSource, openStory, peekStack, pushPeek, toSummary]);
+
+  const peekBackLabel = React.useMemo(() => {
+    if (peekStack.length < 2) return undefined;
+    const prev = peekStack[peekStack.length - 2];
+    if (prev.kind === 'source') return SOURCE_BY_ID[prev.id]?.publisher ?? 'source';
+    if (prev.kind === 'entity') return SEED_GRAPH_NODES.find(n => n.id === prev.id)?.name;
+    if (prev.kind === 'event') return EVENT_BY_ID[prev.id]?.when ?? 'event';
+    if (prev.kind === 'news-story') return STORY_BY_ID[prev.id]?.outlet;
+    return 'previous';
+  }, [peekStack]);
+
   return {
     activeRoute,
     navigate,
@@ -2091,6 +2342,11 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
     openDebate,
     openTimeline,
     openSources,
+    peekItem,
+    canPeekGoBack: peekStack.length > 1,
+    peekBackLabel,
+    popPeek,
+    closePeek,
     topicSource: { data: topicModel, isLoading: false, source: 'fixture' },
     claimSource: { data: claimModel, isLoading: false, source: 'fixture' },
     eventSource: { data: eventModel, isLoading: false, source: 'fixture' },

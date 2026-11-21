@@ -1,5 +1,8 @@
+export { ClaimExplorer, type ClaimExplorerProps } from './claim-explorer';
 export { ClaimSummaryCard, type ClaimSummaryCardProps } from './claim-summary-card';
+export { ContextPeekDrawer, type ContextPeekDrawerProps } from './context-peek-drawer';
 export { EntityGraphExplorer, type EntityGraphExplorerProps } from './entity-graph-explorer';
+export { GraphConnectionsStrip, type GraphConnectionsStripProps } from './graph-connections-strip';
 export {
   ArrowLeftIcon,
   ArrowRightIcon,
@@ -8,8 +11,10 @@ export {
   CheckCircleIcon,
   CheckIcon,
   ChevronRightIcon,
+  CloseIcon,
   DatasetIcon,
   DocumentIcon,
+  NetworkIcon,
   PlayIcon,
   PlusIcon,
   SearchIcon,

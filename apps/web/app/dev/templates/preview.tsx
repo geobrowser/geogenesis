@@ -17,6 +17,7 @@ import {
 } from '~/core/templates';
 import {
   ClaimSummaryCard,
+  ContextPeekDrawer,
   RelatedListSection,
   SourceChipList,
   TemplateBadge,
@@ -132,6 +133,14 @@ export function DevTemplatesPreview() {
       ) : fixture.activeRoute.kind === 'sources' && fixture.sourceLibrarySource.data ? (
         <SourceLibraryTemplate model={fixture.sourceLibrarySource.data} />
       ) : null}
+
+      <ContextPeekDrawer
+        item={fixture.peekItem}
+        canGoBack={fixture.canPeekGoBack}
+        backLabel={fixture.peekBackLabel}
+        onBack={fixture.popPeek}
+        onClose={fixture.closePeek}
+      />
     </div>
   );
 }

@@ -9,6 +9,7 @@ import {
   ArrowLeftIcon,
   ArrowRightIcon,
   ClaimSummaryCard,
+  GraphConnectionsStrip,
   RelatedListSection,
   TEMPLATE_INTERACTIVE_CARD_SURFACE,
   TemplateBadge,
@@ -47,6 +48,10 @@ export function EventTemplate({ model, headerActions, footer, className }: Event
         <div className="overflow-hidden rounded-xl border border-divider bg-grey-01">
           <img src={model.coverUrl} alt={model.title} className="max-h-[340px] w-full object-cover" />
         </div>
+      )}
+
+      {model.graphConnections && model.graphConnections.length > 0 && (
+        <GraphConnectionsStrip groups={model.graphConnections} />
       )}
 
       {model.claims.length > 0 && (
