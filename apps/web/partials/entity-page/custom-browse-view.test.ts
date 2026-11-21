@@ -3,7 +3,8 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { describe, expect, it } from 'vitest';
 
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
-import { TOPIC_TYPE_ID } from '~/core/constants';
+import { NEWS_STORY_TYPE_ID, TOPIC_TYPE_ID } from '~/core/constants';
+import { OFFICIAL_DOCUMENT_TYPE_ID } from '~/core/topics/ontology';
 
 import { customBrowseView, needsSpaceForView } from './custom-browse-view';
 
@@ -127,6 +128,20 @@ describe('customBrowseView', () => {
     const dashed = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 
     expect(view({ entityId: dashed })).toBe('person');
+  });
+
+  it('keeps v2 templates disabled unless enableV2Templates is true', () => {
+    expect(view({ entity: { types: [{ id: NEWS_STORY_TYPE_ID }] } })).toBe('generic');
+    expect(view({ entity: { types: [{ id: OFFICIAL_DOCUMENT_TYPE_ID }] } })).toBe('generic');
+
+    expect(view({ entity: { types: [{ id: NEWS_STORY_TYPE_ID }] }, enableV2Templates: true })).toBe('news-story');
+    expect(view({ entity: { types: [{ id: OFFICIAL_DOCUMENT_TYPE_ID }] }, enableV2Templates: true })).toBe('source');
+  });
+
+  it('falls back to generic while editing a v2 template', () => {
+    expect(view({ entity: { types: [{ id: NEWS_STORY_TYPE_ID }] }, enableV2Templates: true, isEditing: true })).toBe(
+      'generic'
+    );
   });
 });
 

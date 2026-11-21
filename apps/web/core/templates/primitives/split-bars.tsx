@@ -1,0 +1,91 @@
+'use client';
+
+import * as React from 'react';
+
+import cx from 'classnames';
+
+import { type SplitRow, formatPercentInt } from '../models';
+
+export interface SplitBarsProps {
+  rows: readonly SplitRow[];
+  /** Compact mode fits inside cards/rows; full mode shows voter counts and larger tracks. */
+  density?: 'compact' | 'full';
+  className?: string;
+}
+
+/**
+ * Horizontal per-community agreement (or helpfulness) bars.
+ *
+ * Renders cleanly with 1 row (Everyone-only live data before communities exist) or N community rows
+ * plus an optional Everyone summary bar.
+ */
+export function SplitBars({ rows, density = 'compact', className }: SplitBarsProps) {
+  if (rows.length === 0) return null;
+
+  const isFull = density === 'full';
+
+  return (
+    <div className={cx('flex min-w-0 flex-col', isFull ? 'gap-2.5' : 'gap-1.5', className)}>
+      {rows.map(row => {
+        const clamped = Math.max(0, Math.min(100, row.percent));
+        const percentText = formatPercentInt(clamped);
+        const unit = row.unit ?? 'agree';
+
+        return (
+          <div
+            key={row.id}
+            className={cx(
+              'grid items-center gap-2',
+              isFull
+                ? 'grid-cols-[minmax(96px,132px)_minmax(0,1fr)_auto] text-[13px]'
+                : 'grid-cols-[minmax(88px,118px)_minmax(0,1fr)_38px] text-[12px]',
+              row.isEveryone ? 'text-text' : 'text-grey-04'
+            )}
+          >
+            <span className="flex min-w-0 items-center gap-1.5 truncate">
+              <span
+                aria-hidden
+                className={cx(
+                  'inline-block shrink-0 rounded-[2px]',
+                  row.isEveryone ? 'h-2 w-2 rotate-45' : 'h-2 w-2',
+                  isFull && 'h-2.5 w-2.5'
+                )}
+                style={{ backgroundColor: row.color }}
+              />
+              <span className={cx('truncate', row.isEveryone && 'font-medium')}>{row.label}</span>
+            </span>
+
+            <div
+              role="meter"
+              aria-label={`${row.label} ${unit}`}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(clamped)}
+              className={cx('overflow-hidden rounded-full bg-divider', isFull ? 'h-2' : 'h-1.5')}
+            >
+              <div
+                className="h-full rounded-full transition-[width] duration-200"
+                style={{
+                  width: `${clamped.toFixed(2)}%`,
+                  backgroundColor: row.color,
+                }}
+              />
+            </div>
+
+            <span className="flex items-center justify-end gap-1.5 whitespace-nowrap tabular-nums">
+              <strong className="font-semibold text-text">{percentText}</strong>
+              {isFull && row.voterCount !== undefined && (
+                <span className="text-[12px] text-grey-04">({row.voterCount.toLocaleString('en-US')})</span>
+              )}
+              {row.userLabel && (
+                <span className="rounded-sm bg-grey-01 px-1.5 py-0.5 text-[11px] font-medium text-text">
+                  {row.userLabel}
+                </span>
+              )}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}

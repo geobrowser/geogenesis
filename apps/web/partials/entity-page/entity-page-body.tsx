@@ -10,6 +10,7 @@ import {
 import { FollowButton } from '~/core/follows/follow-button';
 import { useSpace } from '~/core/hooks/use-space';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
+import { useFeatureFlag } from '~/core/state/feature-flags';
 import { useQueryEntity } from '~/core/sync/use-store';
 import {
   TOPIC_PAGE_CONTENT_INSET_CLASS,
@@ -177,6 +178,7 @@ function CustomViewEditFooter({
  */
 function useCustomBrowseView(entityId: string, spaceId: string, isEditing: boolean) {
   const { entity, isLoading } = useQueryEntity({ id: entityId });
+  const enableV2Templates = useFeatureFlag('entityTemplatesV2');
 
   /*
    * Asked for only by an entity whose view actually depends on it.
@@ -190,7 +192,9 @@ function useCustomBrowseView(entityId: string, spaceId: string, isEditing: boole
    * `needsSpaceForView` reads the same precedence the dispatch does rather than
    * repeating part of it — see the note there.
    */
-  const { space, isLoading: isLoadingSpace } = useSpace(needsSpaceForView({ entity, isEditing }) ? spaceId : undefined);
+  const { space, isLoading: isLoadingSpace } = useSpace(
+    needsSpaceForView({ entity, isEditing, enableV2Templates }) ? spaceId : undefined
+  );
 
   return {
     customView: customBrowseView({
@@ -200,7 +204,9 @@ function useCustomBrowseView(entityId: string, spaceId: string, isEditing: boole
       space,
       isLoadingSpace,
       isEditing,
+      enableV2Templates,
     }),
+    enableV2Templates,
     entity,
   };
 }

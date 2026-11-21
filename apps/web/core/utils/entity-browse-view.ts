@@ -1,22 +1,15 @@
-import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { type StableEntityTemplateId, resolveEntityTemplateFromTypes } from '~/core/templates/registry';
 
-import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
-import { TOPIC_TYPE_ID } from '~/core/constants';
-import { ID } from '~/core/id';
-
-export type EntityBrowseView = 'claim' | 'topic' | 'person' | null;
+export type EntityBrowseView = StableEntityTemplateId | null;
 
 /**
  * The custom read surface an entity's types put it in line for.
  *
- * This precedence is shared by the client body and the server route/layout. Keeping it here avoids
- * a mixed-type entity being classified as a Claim in one layer and wrapped in a Person profile in
- * another. Claim and Topic are narrower record types, so both take precedence over Person.
+ * Precedence is owned by `ENTITY_TEMPLATE_REGISTRY` in `~/core/templates/registry` and shared by
+ * the client body and server route/layout. Keeping one source of truth avoids a mixed-type entity
+ * being classified as a Claim in one layer and wrapped in a Person profile in another.
  */
 export function entityBrowseViewFromTypes(types: readonly { id: string }[]): EntityBrowseView {
-  if (types.some(type => ID.equals(type.id, CLAIM_TYPE_ID))) return 'claim';
-  if (types.some(type => ID.equals(type.id, TOPIC_TYPE_ID))) return 'topic';
-  if (types.some(type => ID.equals(type.id, SystemIds.PERSON_TYPE))) return 'person';
-
-  return null;
+  const match = resolveEntityTemplateFromTypes(types, { includeV2: false });
+  return match ? (match.id as StableEntityTemplateId) : null;
 }
