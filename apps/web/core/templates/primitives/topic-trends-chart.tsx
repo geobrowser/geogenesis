@@ -28,10 +28,7 @@ function toPolyline(values: readonly number[], weeks: number, mapValue: (v: numb
 
 /**
  * Interactive Coverage (weekly stacked bars by theme) & Agreement (weekly community gap /
- * per-community drill-down) SVG chart.
- *
- * Works with Coverage alone (day-one Geo news pipeline) and reveals the Agreement toggle whenever
- * `trends.agreementSeries` is populated.
+ * per-community drill-down) SVG chart styled to Geo's crisp white/black + purple/blue editorial palette.
  */
 export function TopicTrendsChart({ trends, className }: TopicTrendsChartProps) {
   const hasAgreement = Boolean(trends.agreementSeries && trends.agreementSeries.length > 0);
@@ -106,10 +103,10 @@ export function TopicTrendsChart({ trends, className }: TopicTrendsChartProps) {
 
   const yLabels =
     activeMode === 'coverage'
-      ? [`${maxWeeklyCoverage} stories/wk`, String(maxWeeklyCoverage / 2), '0']
+      ? [`${maxWeeklyCoverage} / wk`, String(maxWeeklyCoverage / 2), '0']
       : activeSeries
-        ? ['100% agree', '50%', '0%']
-        : ['100 pts apart', '50', '0 = same'];
+        ? ['100%', '50%', '0%']
+        : ['100 pts', '50', '0'];
 
   const colorA = trends.communityAColor ?? '#6833ff';
   const colorB = trends.communityBColor ?? '#3963fe';
@@ -117,12 +114,12 @@ export function TopicTrendsChart({ trends, className }: TopicTrendsChartProps) {
   return (
     <section
       aria-label="Coverage and agreement over time"
-      className={cx('flex flex-col gap-4 rounded-xl border border-grey-02/80 bg-white p-4 @[560px]:p-5', className)}
+      className={cx('flex flex-col gap-5 rounded-xl border border-grey-02/80 bg-white p-5 @[560px]:p-6', className)}
     >
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-col gap-0.5">
-          <h2 className="m-0 text-[18px] leading-[24px] font-semibold text-text">How it’s moving</h2>
-          <p className="m-0 text-[13px] text-grey-04">{verdictText}</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex flex-col gap-1">
+          <h2 className="m-0 text-mediumTitle font-semibold text-text">How it’s moving</h2>
+          <p className="m-0 text-[15px] leading-[21px] text-grey-04">{verdictText}</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -139,7 +136,7 @@ export function TopicTrendsChart({ trends, className }: TopicTrendsChartProps) {
                     setSelectedSeriesIdx(null);
                   }}
                   className={cx(
-                    'cursor-pointer rounded-full border-0 px-3 py-1 text-[13px] font-medium transition-colors',
+                    'cursor-pointer rounded-full border-0 px-3.5 py-1.5 text-[14px] font-medium transition-colors',
                     activeMode === option ? 'bg-text text-white' : 'bg-transparent text-grey-04 hover:text-text'
                   )}
                 >
@@ -166,7 +163,7 @@ export function TopicTrendsChart({ trends, className }: TopicTrendsChartProps) {
                     setSelectedSeriesIdx(null);
                   }}
                   className={cx(
-                    'cursor-pointer rounded-full border-0 px-2.5 py-1 text-[12px] font-medium transition-colors',
+                    'cursor-pointer rounded-full border-0 px-3 py-1 text-[14px] font-medium transition-colors',
                     agreementGroup === group ? 'bg-grey-01 text-text' : 'bg-transparent text-grey-04 hover:text-text'
                   )}
                 >
@@ -179,7 +176,7 @@ export function TopicTrendsChart({ trends, className }: TopicTrendsChartProps) {
       </div>
 
       {/* Interactive legend chips */}
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap gap-2">
         {activeMode === 'coverage'
           ? trends.coverageThemes.map((theme, index) => {
               const isSelected = selectedThemeIdx === index;
@@ -191,7 +188,7 @@ export function TopicTrendsChart({ trends, className }: TopicTrendsChartProps) {
                   aria-pressed={isSelected}
                   onClick={() => setSelectedThemeIdx(prev => (prev === index ? null : index))}
                   className={cx(
-                    'inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] transition-colors',
+                    'inline-flex cursor-pointer items-center gap-2 rounded-full border px-3.5 py-1.5 text-[14px] transition-colors',
                     isSelected
                       ? 'border-text bg-text text-white'
                       : 'border-grey-02 bg-white text-text hover:border-text'
@@ -199,7 +196,7 @@ export function TopicTrendsChart({ trends, className }: TopicTrendsChartProps) {
                 >
                   <span
                     aria-hidden
-                    className="inline-block h-2 w-2 rounded-full"
+                    className="inline-block size-2.5 rounded-full"
                     style={{ backgroundColor: theme.color }}
                   />
                   <span className="font-medium">{theme.name}</span>
@@ -216,7 +213,7 @@ export function TopicTrendsChart({ trends, className }: TopicTrendsChartProps) {
                   aria-pressed={isSelected}
                   onClick={() => setSelectedSeriesIdx(prev => (prev === index ? null : index))}
                   className={cx(
-                    'inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] transition-colors',
+                    'inline-flex cursor-pointer items-center gap-2 rounded-full border px-3.5 py-1.5 text-[14px] transition-colors',
                     isSelected
                       ? 'border-text bg-text text-white'
                       : 'border-grey-02 bg-white text-text hover:border-text'
@@ -224,11 +221,11 @@ export function TopicTrendsChart({ trends, className }: TopicTrendsChartProps) {
                 >
                   <span
                     aria-hidden
-                    className="inline-block h-2 w-2 rounded-full"
+                    className="inline-block size-2.5 rounded-full"
                     style={{ backgroundColor: item.series.color }}
                   />
                   <span className="font-medium">{item.series.name}</span>
-                  <span className={cx('text-[11px] tabular-nums', isSelected ? 'text-grey-03' : 'text-grey-04')}>
+                  <span className={cx('text-[13px] tabular-nums', isSelected ? 'text-grey-03' : 'text-grey-04')}>
                     {item.trendLabel}
                   </span>
                 </button>
@@ -237,9 +234,9 @@ export function TopicTrendsChart({ trends, className }: TopicTrendsChartProps) {
       </div>
 
       {/* SVG plot */}
-      <div className="relative flex flex-col gap-1.5">
-        <div className="flex items-stretch gap-2">
-          <div className="flex w-[72px] shrink-0 flex-col justify-between py-0.5 text-right text-[11px] text-grey-04 tabular-nums">
+      <div className="relative flex flex-col gap-2">
+        <div className="flex items-stretch gap-3">
+          <div className="flex w-[64px] shrink-0 flex-col justify-between py-0.5 text-right text-[13px] text-grey-04 tabular-nums">
             <span>{yLabels[0]}</span>
             <span>{yLabels[1]}</span>
             <span>{yLabels[2]}</span>
@@ -251,9 +248,8 @@ export function TopicTrendsChart({ trends, className }: TopicTrendsChartProps) {
               preserveAspectRatio="none"
               role="img"
               aria-label={activeMode === 'coverage' ? 'Weekly coverage by theme' : 'Weekly community agreement trend'}
-              className="h-[180px] w-full overflow-visible"
+              className="h-[200px] w-full overflow-visible"
             >
-              {/* Grid lines */}
               {[0, 50, 100].map(y => (
                 <line
                   key={y}
@@ -262,12 +258,11 @@ export function TopicTrendsChart({ trends, className }: TopicTrendsChartProps) {
                   y1={y}
                   y2={y}
                   stroke="#f0f0f0"
-                  strokeWidth="0.6"
+                  strokeWidth="0.7"
                   vectorEffect="non-scaling-stroke"
                 />
               ))}
 
-              {/* Event vertical markers */}
               {trends.markers.map((marker, idx) => (
                 <line
                   key={`${marker.weekIndex}-${idx}`}
@@ -292,7 +287,7 @@ export function TopicTrendsChart({ trends, className }: TopicTrendsChartProps) {
                     const height = (count / maxWeeklyCoverage) * 100;
                     const y = 100 - (acc + height);
                     acc += height;
-                    const opacity = selectedThemeIdx === null || selectedThemeIdx === themeIdx ? 0.92 : 0.18;
+                    const opacity = selectedThemeIdx === null || selectedThemeIdx === themeIdx ? 0.92 : 0.15;
                     return (
                       <rect
                         key={`${w}-${theme.id}`}
@@ -316,7 +311,7 @@ export function TopicTrendsChart({ trends, className }: TopicTrendsChartProps) {
                       <polyline
                         fill="none"
                         stroke={line.color}
-                        strokeOpacity="0.28"
+                        strokeOpacity="0.25"
                         strokeWidth="1.2"
                         vectorEffect="non-scaling-stroke"
                         points={toPolyline(line.values, weeks, v => v)}
@@ -324,7 +319,7 @@ export function TopicTrendsChart({ trends, className }: TopicTrendsChartProps) {
                       <polyline
                         fill="none"
                         stroke={line.color}
-                        strokeWidth="2.4"
+                        strokeWidth="2.5"
                         vectorEffect="non-scaling-stroke"
                         points={toPolyline(rollingAverage(line.values, 4), weeks, v => v)}
                       />
@@ -337,7 +332,7 @@ export function TopicTrendsChart({ trends, className }: TopicTrendsChartProps) {
                     <polyline
                       fill="none"
                       stroke={item.series.color}
-                      strokeOpacity="0.25"
+                      strokeOpacity="0.22"
                       strokeWidth="1"
                       vectorEffect="non-scaling-stroke"
                       points={toPolyline(item.gap, weeks, v => v)}
@@ -345,7 +340,7 @@ export function TopicTrendsChart({ trends, className }: TopicTrendsChartProps) {
                     <polyline
                       fill="none"
                       stroke={item.series.color}
-                      strokeWidth="2.4"
+                      strokeWidth="2.5"
                       vectorEffect="non-scaling-stroke"
                       points={toPolyline(item.avg, weeks, v => v)}
                     />
@@ -354,8 +349,7 @@ export function TopicTrendsChart({ trends, className }: TopicTrendsChartProps) {
               )}
             </svg>
 
-            {/* Month axis */}
-            <div className="relative mt-1 h-4 text-[11px] text-grey-04">
+            <div className="relative mt-2 h-5 text-[13px] text-grey-04">
               {trends.monthTicks.map(tick => (
                 <span
                   key={tick.label}
@@ -369,13 +363,12 @@ export function TopicTrendsChart({ trends, className }: TopicTrendsChartProps) {
           </div>
         </div>
 
-        {/* Clickable event marker legend */}
         {trends.markers.length > 0 && (
-          <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1.5 border-t border-divider pt-2.5 text-[12px] text-grey-04">
+          <div className="mt-1 flex flex-wrap gap-x-5 gap-y-2 border-t border-divider pt-3 text-[14px] text-grey-04">
             {trends.markers.map((marker, idx) => {
               const inner = (
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="inline-grid h-4 w-4 shrink-0 place-items-center rounded-full bg-grey-01 text-[10px] font-semibold text-text">
+                <span className="inline-flex items-center gap-2">
+                  <span className="inline-grid size-5 shrink-0 place-items-center rounded-full bg-grey-01 text-[12px] font-semibold text-text">
                     {idx + 1}
                   </span>
                   <span>{marker.label}</span>
@@ -394,7 +387,7 @@ export function TopicTrendsChart({ trends, className }: TopicTrendsChartProps) {
                     key={marker.label}
                     type="button"
                     onClick={marker.onSelect}
-                    className="cursor-pointer border-0 bg-transparent p-0 text-left text-[12px] text-grey-04 hover:text-text"
+                    className="cursor-pointer border-0 bg-transparent p-0 text-left text-[14px] text-grey-04 hover:text-text"
                   >
                     {inner}
                   </button>
@@ -406,7 +399,7 @@ export function TopicTrendsChart({ trends, className }: TopicTrendsChartProps) {
         )}
       </div>
 
-      <p className="m-0 text-[12px] leading-[17px] text-grey-04">
+      <p className="m-0 text-[14px] leading-[20px] text-grey-04">
         {activeMode === 'coverage'
           ? (trends.coverageCaption ??
             'Stories and sources linked to this topic each week, grouped by theme. Tap a theme to isolate it.')

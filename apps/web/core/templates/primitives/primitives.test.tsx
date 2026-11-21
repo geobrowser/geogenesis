@@ -179,6 +179,44 @@ describe('RelatedListSection', () => {
     fireEvent.click(screen.getByRole('button', { name: '+ Add a source' }));
     expect(onAdd).toHaveBeenCalledTimes(1);
   });
+
+  it('renders rich media cards for video, tweet, article, and dataset sources', () => {
+    render(
+      <RelatedListSection
+        section={{
+          id: 'rich-sources',
+          title: 'Key sources',
+          layout: 'cards',
+          items: [
+            {
+              id: 'vid-1',
+              kind: 'source',
+              kindLabel: 'Video',
+              mediaType: 'video',
+              title: 'ICJ Oral Hearing',
+              publisher: 'ICJ',
+              date: '12 Jan 2024',
+              duration: '18:40',
+            },
+            {
+              id: 'tw-1',
+              kind: 'source',
+              kindLabel: 'Post',
+              mediaType: 'tweet',
+              title: 'Official statement',
+              publisher: 'Official Account',
+              authorHandle: '@official',
+              excerpt: 'Key quote from the post.',
+            },
+          ],
+        }}
+      />
+    );
+
+    expect(screen.getByText('18:40')).toBeInTheDocument();
+    expect(screen.getByText('@official')).toBeInTheDocument();
+    expect(screen.getByText('Key quote from the post.')).toBeInTheDocument();
+  });
 });
 
 describe('TemplateBreadcrumb', () => {

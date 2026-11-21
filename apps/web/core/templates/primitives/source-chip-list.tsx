@@ -5,29 +5,49 @@ import * as React from 'react';
 import cx from 'classnames';
 import Link from 'next/link';
 
-import type { SourceChipModel } from '../models';
+import type { SourceChipModel, SourceMediaKind } from '../models';
+import { ArticleIcon, DatasetIcon, DocumentIcon, PlayIcon, TweetIcon } from './icons';
 
 export interface SourceChipListProps {
   sources: readonly SourceChipModel[];
   className?: string;
 }
 
+function MediaKindIcon({ kind }: { kind?: SourceMediaKind }) {
+  switch (kind) {
+    case 'video':
+      return <PlayIcon className="size-3.5 text-purple" />;
+    case 'tweet':
+      return <TweetIcon className="size-3.5 text-text" />;
+    case 'dataset':
+      return <DatasetIcon className="size-3.5 text-ctaPrimary" />;
+    case 'article':
+      return <ArticleIcon className="size-3.5 text-grey-04" />;
+    default:
+      return <DocumentIcon className="size-3.5 text-grey-04" />;
+  }
+}
+
 /**
- * Compact numbered citation pills (`[1] UNOSAT satellite damage assessment`).
+ * Clean, readable inline citation chips (`1 · UNOSAT satellite damage assessment`).
  */
 export function SourceChipList({ sources, className }: SourceChipListProps) {
   if (sources.length === 0) return null;
 
   const chipClasses =
-    'inline-flex max-w-full items-center gap-1.5 rounded-full border border-grey-02/80 bg-white px-2.5 py-1 text-[12px] leading-[16px] text-text no-underline transition-colors hover:border-text';
+    'inline-flex max-w-full items-center gap-2 rounded-lg border border-grey-02/80 bg-white px-3 py-1.5 text-[14px] leading-[19px] text-text no-underline transition-colors hover:border-text';
 
   return (
-    <div className={cx('flex flex-wrap items-center gap-1.5', className)}>
+    <div className={cx('flex flex-wrap items-center gap-2', className)}>
       {sources.map(source => {
         const inner = (
           <>
-            <span className="inline-grid h-[18px] min-w-[18px] shrink-0 place-items-center rounded-sm bg-ctaTertiary px-1 text-[11px] font-semibold text-ctaPrimary tabular-nums">
-              {source.index}
+            <span className="inline-flex shrink-0 items-center gap-1.5 text-grey-04">
+              {source.mediaType ? (
+                <MediaKindIcon kind={source.mediaType} />
+              ) : (
+                <span className="text-[13px] font-semibold text-ctaPrimary tabular-nums">{source.index}</span>
+              )}
             </span>
             <span className="truncate">{source.title}</span>
           </>

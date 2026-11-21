@@ -5,7 +5,14 @@ import * as React from 'react';
 import Link from 'next/link';
 
 import type { EventTemplateModel } from '../models';
-import { ClaimSummaryCard, RelatedListSection, TemplateBadge, TemplateShell } from '../primitives';
+import {
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  ClaimSummaryCard,
+  RelatedListSection,
+  TemplateBadge,
+  TemplateShell,
+} from '../primitives';
 
 export interface EventTemplateProps {
   model: EventTemplateModel;
@@ -19,10 +26,10 @@ export interface EventTemplateProps {
  */
 export function EventTemplate({ model, headerActions, footer, className }: EventTemplateProps) {
   return (
-    <TemplateShell maxWidth={840} breadcrumbs={model.breadcrumbs} className={className}>
-      <header className="flex flex-col gap-3">
+    <TemplateShell maxWidth={860} breadcrumbs={model.breadcrumbs} className={className}>
+      <header className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-2">
             <TemplateBadge tone="event">Event</TemplateBadge>
             {model.when && <TemplateBadge tone="neutral">{model.when}</TemplateBadge>}
             {model.storyCountLabel && <TemplateBadge tone="neutral">{model.storyCountLabel}</TemplateBadge>}
@@ -32,7 +39,7 @@ export function EventTemplate({ model, headerActions, footer, className }: Event
 
         <h1 className="m-0 text-entityTitle text-pretty text-text">{model.title}</h1>
 
-        {model.summary && <p className="m-0 text-[16px] leading-[25px] text-text/90">{model.summary}</p>}
+        {model.summary && <p className="m-0 text-body text-text/90">{model.summary}</p>}
       </header>
 
       {model.coverUrl && (
@@ -42,9 +49,9 @@ export function EventTemplate({ model, headerActions, footer, className }: Event
       )}
 
       {model.claims.length > 0 && (
-        <section aria-label="Agreed and split claims" className="flex flex-col gap-3">
-          <h2 className="m-0 text-smallTitle text-text">Agreed and split claims</h2>
-          <div className="grid grid-cols-1 gap-3 @[620px]:grid-cols-2">
+        <section aria-label="Agreed and split claims" className="flex flex-col gap-4">
+          <h2 className="m-0 text-mediumTitle font-semibold text-text">Agreed and split claims</h2>
+          <div className="grid grid-cols-1 gap-4 @[620px]:grid-cols-2">
             {model.claims.map(claim => (
               <ClaimSummaryCard key={claim.id} claim={claim} variant={claim.split.isSplit ? 'default' : 'agreed'} />
             ))}
@@ -53,7 +60,7 @@ export function EventTemplate({ model, headerActions, footer, className }: Event
       )}
 
       {model.sections.length > 0 && (
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-8">
           {model.sections.map(section => (
             <RelatedListSection key={section.id} section={section} />
           ))}
@@ -63,7 +70,7 @@ export function EventTemplate({ model, headerActions, footer, className }: Event
       {(model.previousEvent || model.nextEvent) && (
         <nav
           aria-label="Timeline navigation"
-          className="grid grid-cols-1 gap-3 border-t border-divider pt-5 @[560px]:grid-cols-2"
+          className="grid grid-cols-1 gap-3.5 border-t border-divider pt-6 @[560px]:grid-cols-2"
         >
           {model.previousEvent ? <EventNeighborButton direction="Earlier" event={model.previousEvent} /> : <div />}
           {model.nextEvent && <EventNeighborButton direction="Later" event={model.nextEvent} align="right" />}
@@ -84,16 +91,18 @@ function EventNeighborButton({
   event: NonNullable<EventTemplateModel['previousEvent']>;
   align?: 'left' | 'right';
 }) {
-  const classes = `flex flex-col gap-0.5 rounded-xl border border-grey-02/80 bg-white px-4 py-3 text-text no-underline transition-colors hover:border-text ${
-    align === 'right' ? 'text-right' : 'text-left'
+  const classes = `flex flex-col gap-1 rounded-xl border border-grey-02/80 bg-white px-5 py-4 text-text no-underline transition-colors hover:border-text ${
+    align === 'right' ? 'items-end text-right' : 'items-start text-left'
   }`;
 
   const inner = (
     <>
-      <span className="text-[12px] font-medium text-grey-04">
-        {direction === 'Earlier' ? `← ${direction} · ${event.when}` : `${event.when} · ${direction} →`}
+      <span className="inline-flex items-center gap-1.5 text-[14px] font-medium text-grey-04">
+        {direction === 'Earlier' && <ArrowLeftIcon className="size-3.5" />}
+        <span>{direction === 'Earlier' ? `${direction} · ${event.when}` : `${event.when} · ${direction}`}</span>
+        {direction === 'Later' && <ArrowRightIcon className="size-3.5" />}
       </span>
-      <span className="text-[14px] leading-[19px] font-semibold text-text">{event.title}</span>
+      <span className="text-[16px] leading-[22px] font-semibold text-text">{event.title}</span>
     </>
   );
 

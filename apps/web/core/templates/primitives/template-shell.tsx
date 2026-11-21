@@ -6,22 +6,27 @@ import cx from 'classnames';
 import Link from 'next/link';
 
 import type { BreadcrumbItem } from '../models';
+import { ChevronRightIcon } from './icons';
 
 export type TemplateBadgeTone =
   'neutral' | 'split' | 'agreed' | 'fact' | 'judgment' | 'value' | 'event' | 'story' | 'source' | 'post' | 'dark';
 
+/**
+ * Restrained Geo badge palette: predominantly clean white/grey/black with calm touches of
+ * Geo Blue (`ctaPrimary`) and Geo Purple (`purple`).
+ */
 const BADGE_TONE_CLASSES: Record<TemplateBadgeTone, string> = {
-  neutral: 'bg-grey-01 text-grey-04',
-  split: 'bg-pink/10 text-pink',
-  agreed: 'bg-grey-01 text-text',
-  fact: 'bg-ctaTertiary text-ctaPrimary',
-  judgment: 'bg-purple-tint text-purple',
-  value: 'bg-pink/10 text-pink',
-  event: 'bg-grey-01 text-grey-05',
-  story: 'bg-ctaTertiary text-ctaPrimary',
-  source: 'bg-grey-01 text-grey-04',
-  post: 'bg-purple-tint text-purple',
-  dark: 'bg-text text-white',
+  neutral: 'border border-divider bg-grey-01 text-grey-04',
+  split: 'border border-purple/20 bg-purple-tint/70 text-purple',
+  agreed: 'border border-grey-02 bg-white text-text',
+  fact: 'border border-ctaPrimary/15 bg-ctaTertiary text-ctaPrimary',
+  judgment: 'border border-purple/15 bg-purple-tint/60 text-purple',
+  value: 'border border-grey-02 bg-grey-01 text-text',
+  event: 'border border-divider bg-grey-01 text-grey-05',
+  story: 'border border-ctaPrimary/15 bg-ctaTertiary text-ctaPrimary',
+  source: 'border border-divider bg-grey-01 text-grey-04',
+  post: 'border border-purple/15 bg-purple-tint/60 text-purple',
+  dark: 'border border-text bg-text text-white',
 };
 
 export function TemplateBadge({
@@ -36,7 +41,7 @@ export function TemplateBadge({
   return (
     <span
       className={cx(
-        'inline-flex h-[22px] items-center rounded-sm px-2 text-[12px] leading-none font-semibold whitespace-nowrap',
+        'inline-flex h-7 items-center rounded-md px-2.5 text-[14px] leading-none font-medium whitespace-nowrap',
         BADGE_TONE_CLASSES[tone],
         className
       )}
@@ -55,27 +60,26 @@ export function TemplateBreadcrumb({ items, className }: { items: readonly Bread
         const isLast = index === items.length - 1;
         return (
           <React.Fragment key={item.id}>
-            {index > 0 && (
-              <span aria-hidden className="text-metadata text-grey-03">
-                ›
-              </span>
-            )}
+            {index > 0 && <ChevronRightIcon className="size-3.5 text-grey-03" />}
             {item.href && !isLast ? (
-              <Link href={item.href} className="text-metadata text-grey-04 transition-colors hover:text-text">
+              <Link
+                href={item.href}
+                className="text-[15px] leading-[20px] text-grey-04 no-underline transition-colors hover:text-text"
+              >
                 {item.label}
               </Link>
             ) : item.onSelect && !isLast ? (
               <button
                 type="button"
                 onClick={item.onSelect}
-                className="cursor-pointer border-0 bg-transparent p-0 text-metadata text-grey-04 transition-colors hover:text-text"
+                className="cursor-pointer border-0 bg-transparent p-0 text-[15px] leading-[20px] text-grey-04 transition-colors hover:text-text"
               >
                 {item.label}
               </button>
             ) : (
               <span
                 aria-current={isLast ? 'page' : undefined}
-                className={cx('text-metadata', isLast ? 'font-medium text-text' : 'text-grey-04')}
+                className={cx('text-[15px] leading-[20px]', isLast ? 'font-medium text-text' : 'text-grey-04')}
               >
                 {item.label}
               </span>
@@ -89,13 +93,10 @@ export function TemplateBreadcrumb({ items, className }: { items: readonly Bread
 
 /**
  * Container-query wrapper shared by every v2 entity template.
- *
- * Uses `@container` rather than viewport breakpoints so full routes, the entity side panel,
- * and mobile viewports all adapt cleanly to their actual column width.
  */
 export function TemplateShell({
   children,
-  maxWidth = 840,
+  maxWidth = 860,
   breadcrumbs,
   className,
 }: {
@@ -108,7 +109,7 @@ export function TemplateShell({
     <div className="@container">
       <div
         className={cx(
-          'mx-auto flex w-full flex-col gap-6 px-4 py-6 @[560px]:gap-8 @[560px]:px-5 @[560px]:py-8',
+          'mx-auto flex w-full flex-col gap-8 px-5 py-8 @[600px]:gap-11 @[600px]:px-6 @[600px]:py-10',
           className
         )}
         style={{ maxWidth }}

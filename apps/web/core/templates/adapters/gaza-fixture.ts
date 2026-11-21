@@ -12,6 +12,7 @@ import {
   type NewsStoryTemplateModel,
   type PostContextNoteModel,
   type PostTemplateModel,
+  type SourceMediaKind,
   type SourceTemplateModel,
   type SplitBreakdown,
   type StrongestCaseModel,
@@ -57,7 +58,10 @@ interface SeedSource {
   publisher: string;
   date: string;
   sourceType: string;
+  mediaType: SourceMediaKind;
   summary: string;
+  duration?: string;
+  authorHandle?: string;
   pickTag?: string;
   url?: string;
 }
@@ -69,6 +73,7 @@ const SEED_SOURCES: readonly SeedSource[] = [
     publisher: 'UN Human Rights Council',
     date: '16 Sep 2025',
     sourceType: 'Report',
+    mediaType: 'document',
     summary:
       'The commission, mandated by the UN Human Rights Council, concluded that Israeli authorities and forces committed four of the five acts defined as genocide in the Genocide Convention. Israel rejected the report and the commission’s mandate.',
     url: 'https://www.ohchr.org',
@@ -79,6 +84,7 @@ const SEED_SOURCES: readonly SeedSource[] = [
     publisher: 'International Court of Justice',
     date: '26 Jan 2024',
     sourceType: 'Court document',
+    mediaType: 'document',
     summary:
       'The court’s provisional measures order directed Israel to take all measures within its power to prevent acts of genocide and enable humanitarian aid. It did not rule on the merits; a final ruling is expected around 2029.',
     url: 'https://www.icj-cij.org',
@@ -86,9 +92,11 @@ const SEED_SOURCES: readonly SeedSource[] = [
   {
     id: 's-il-icj',
     title: 'Israel’s oral arguments at the ICJ',
-    publisher: 'Government of Israel',
+    publisher: 'Government of Israel · ICJ Hearing',
     date: '12 Jan 2024',
-    sourceType: 'Court document',
+    sourceType: 'Video hearing',
+    mediaType: 'video',
+    duration: '18:40',
     summary:
       'Israel’s legal team argued it is fighting Hamas in self-defence rather than targeting the Palestinian people, and asked the court to dismiss South Africa’s application.',
     url: 'https://www.icj-cij.org',
@@ -98,7 +106,8 @@ const SEED_SOURCES: readonly SeedSource[] = [
     title: 'UNOSAT satellite damage assessment',
     publisher: 'UN Satellite Centre (UNOSAT)',
     date: 'Jun 2026',
-    sourceType: 'Report',
+    sourceType: 'Dataset',
+    mediaType: 'dataset',
     summary:
       'Compares satellite imagery from before the war with mid-2026 and finds about 82% of Gaza’s structures damaged or destroyed. It records physical damage without attributing responsibility.',
     url: 'https://unosat.org',
@@ -109,6 +118,7 @@ const SEED_SOURCES: readonly SeedSource[] = [
     publisher: 'Gaza Health Ministry',
     date: '15 Nov 2026',
     sourceType: 'Dataset',
+    mediaType: 'dataset',
     summary:
       'The Hamas-run ministry’s running count of people killed, listed by name, age, and sex without distinguishing combatants: 74,702 by mid-November 2026. An IDF official accepted the January 2026 total of about 71,000.',
   },
@@ -118,6 +128,7 @@ const SEED_SOURCES: readonly SeedSource[] = [
     publisher: 'Israel Defense Forces and AP',
     date: 'Jan 2026',
     sourceType: 'Dataset',
+    mediaType: 'dataset',
     summary:
       'Records of each of the 251 people taken hostage on 7 October and their outcomes, compiled from IDF announcements and AP reporting. The last remains were returned on 26 January 2026.',
   },
@@ -127,6 +138,7 @@ const SEED_SOURCES: readonly SeedSource[] = [
     publisher: 'White House',
     date: '29 Sep 2025',
     sourceType: 'Primary document',
+    mediaType: 'document',
     summary:
       'The US framework behind the October 2025 ceasefire: hostages released within 72 hours, phased Israeli withdrawal to agreed lines, Hamas disarmament, and an international stabilisation force.',
   },
@@ -136,15 +148,18 @@ const SEED_SOURCES: readonly SeedSource[] = [
     publisher: 'AFP',
     date: '2024',
     sourceType: 'Dataset',
+    mediaType: 'dataset',
     summary:
       'Victim-by-victim tally compiled from Israeli official figures putting the 7 October death toll at about 1,200 people, most of them civilians.',
   },
   {
     id: 's-idf-est',
     title: 'IDF estimate of fighters killed in Gaza',
-    publisher: 'Israel Defense Forces, via Times of Israel',
-    date: 'Oct 2025–Jan 2026',
-    sourceType: 'Official statement',
+    publisher: 'Israel Defense Forces',
+    date: 'Jan 2026',
+    sourceType: 'Official post',
+    mediaType: 'tweet',
+    authorHandle: '@IDF',
     summary:
       'Military estimate that 24,000–25,000 fighters were killed in Gaza. The IDF has not published a full methodology or named list.',
   },
@@ -154,6 +169,7 @@ const SEED_SOURCES: readonly SeedSource[] = [
     publisher: 'IPC',
     date: '22 Aug 2025',
     sourceType: 'Report',
+    mediaType: 'article',
     summary:
       'Confirmed famine (Phase 5) in Gaza Governorate following the spring 2025 aid cutoff, before conditions eased in December 2025 under the ceasefire.',
     pickTag: 'Pro-Palestinian pick for Pro-Israel readers',
@@ -822,8 +838,27 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
           id: s.id,
           index: index + 1,
           title: `${s.title} (${s.date})`,
+          mediaType: s.mediaType,
           onSelect: () => openSource(s.id),
         })),
+    [openSource]
+  );
+
+  const toRichSourceCard = React.useCallback(
+    (s: SeedSource) => ({
+      id: s.id,
+      kind: 'source' as const,
+      kindLabel: s.sourceType,
+      title: s.title,
+      mediaType: s.mediaType,
+      publisher: s.publisher,
+      date: s.date,
+      excerpt: s.summary,
+      duration: s.duration,
+      authorHandle: s.authorHandle,
+      meta: `${s.publisher} · ${s.date} · ${s.sourceType}`,
+      onSelect: () => openSource(s.id),
+    }),
     [openSource]
   );
 
@@ -880,7 +915,7 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
         {
           id: 'cf',
           name: 'Ceasefire & strikes',
-          color: '#fe31c5',
+          color: '#202020',
           weeklyCounts: [16, 18, 12, 10, 8, 11, 16, 15, 14, 15, 12, 14, 12, 14, 22, 14, 13, 10, 12, 10, 15, 16, 24],
         },
         {
@@ -898,7 +933,7 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
         {
           id: 'pol',
           name: 'Politics & governance',
-          color: '#202020',
+          color: '#b6b6b6',
           weeklyCounts: [8, 5, 8, 4, 3, 4, 5, 6, 5, 13, 3, 8, 8, 19, 12, 10, 7, 7, 9, 6, 9, 21, 14],
         },
       ],
@@ -1132,8 +1167,30 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
       }),
       rankings,
       viralPosts,
+      sections: [
+        {
+          id: 'topic-sources',
+          title: 'Key sources & media',
+          subtitle: 'Primary documents, hearings, datasets, and reporting cited across this topic.',
+          layout: 'cards',
+          items: ['s-il-icj', 's-idf-est', 's-coi', 's-unosat']
+            .map(id => SOURCE_BY_ID[id])
+            .filter((s): s is SeedSource => Boolean(s))
+            .map(toRichSourceCard),
+        },
+      ],
     };
-  }, [activeCommunityId, joinedCommunityId, openEvent, rankings, toSourceChips, toSummary, trends, viralPosts]);
+  }, [
+    activeCommunityId,
+    joinedCommunityId,
+    openEvent,
+    rankings,
+    toRichSourceCard,
+    toSourceChips,
+    toSummary,
+    trends,
+    viralPosts,
+  ]);
 
   const activeClaimId = activeRoute.kind === 'claim' ? activeRoute.id : 'gen';
   const claimModel: ClaimTemplateModel = React.useMemo(() => {
@@ -1238,17 +1295,11 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
     sections.push({
       id: 'sources',
       title: 'Sources',
+      layout: 'cards',
       items: seed.sourceIds
         .map(id => SOURCE_BY_ID[id])
         .filter((s): s is SeedSource => Boolean(s))
-        .map(s => ({
-          id: s.id,
-          kind: 'source',
-          kindLabel: 'Source',
-          title: s.title,
-          meta: `${s.publisher} · ${s.date} · ${s.sourceType}`,
-          onSelect: () => openSource(s.id),
-        })),
+        .map(toRichSourceCard),
       emptyText: 'No sources linked yet.',
     });
 
@@ -1282,7 +1333,17 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
       strongestCases,
       sections,
     };
-  }, [activeClaimId, joinedCommunityId, openClaim, openEvent, openSource, openStory, openTopic, toSourceChips, votes]);
+  }, [
+    activeClaimId,
+    joinedCommunityId,
+    openClaim,
+    openEvent,
+    openStory,
+    openTopic,
+    toRichSourceCard,
+    toSourceChips,
+    votes,
+  ]);
 
   const activeEventId = activeRoute.kind === 'event' ? activeRoute.id : 'e71k';
   const eventModel: EventTemplateModel = React.useMemo(() => {
@@ -1315,17 +1376,11 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
     sections.push({
       id: 'sources',
       title: 'Sources',
+      layout: 'cards',
       items: ev.sourceIds
         .map(id => SOURCE_BY_ID[id])
         .filter((s): s is SeedSource => Boolean(s))
-        .map(s => ({
-          id: s.id,
-          kind: 'source',
-          kindLabel: 'Source',
-          title: s.title,
-          meta: `${s.publisher} · ${s.date} · ${s.sourceType}`,
-          onSelect: () => openSource(s.id),
-        })),
+        .map(toRichSourceCard),
     });
 
     return {
@@ -1350,7 +1405,7 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
         ? { id: nextEv.id, title: nextEv.title, when: nextEv.when, onSelect: () => openEvent(nextEv.id) }
         : undefined,
     };
-  }, [activeEventId, openEvent, openSource, openStory, openTopic, toSummary]);
+  }, [activeEventId, openEvent, openStory, openTopic, toRichSourceCard, toSummary]);
 
   const activeStoryId = activeRoute.kind === 'news-story' ? activeRoute.id : 'st-haaretz-71k';
   const storyModel: NewsStoryTemplateModel = React.useMemo(() => {
@@ -1418,21 +1473,15 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
         {
           id: 'sources',
           title: 'Primary sources',
+          layout: 'cards',
           items: st.sourceIds
             .map(id => SOURCE_BY_ID[id])
             .filter((s): s is SeedSource => Boolean(s))
-            .map(s => ({
-              id: s.id,
-              kind: 'source' as const,
-              kindLabel: 'Source',
-              title: s.title,
-              meta: `${s.publisher} · ${s.date}`,
-              onSelect: () => openSource(s.id),
-            })),
+            .map(toRichSourceCard),
         },
       ],
     };
-  }, [activeStoryId, joinedCommunityId, openEvent, openSource, openTopic, toSummary, votes]);
+  }, [activeStoryId, joinedCommunityId, openEvent, openTopic, toRichSourceCard, toSummary, votes]);
 
   const activeSourceId = activeRoute.kind === 'source' ? activeRoute.id : 's-icj';
   const sourceModel: SourceTemplateModel = React.useMemo(() => {

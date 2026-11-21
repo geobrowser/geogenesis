@@ -8,16 +8,13 @@ import { type SplitRow, formatPercentInt } from '../models';
 
 export interface SplitBarsProps {
   rows: readonly SplitRow[];
-  /** Compact mode fits inside cards/rows; full mode shows voter counts and larger tracks. */
+  /** Compact mode fits inside cards/rows; full mode shows voter counts and taller tracks. */
   density?: 'compact' | 'full';
   className?: string;
 }
 
 /**
- * Horizontal per-community agreement (or helpfulness) bars.
- *
- * Renders cleanly with 1 row (Everyone-only live data before communities exist) or N community rows
- * plus an optional Everyone summary bar.
+ * Horizontal per-community agreement (or helpfulness) bars sized to Geo's Calibre typography scale.
  */
 export function SplitBars({ rows, density = 'compact', className }: SplitBarsProps) {
   if (rows.length === 0) return null;
@@ -25,7 +22,7 @@ export function SplitBars({ rows, density = 'compact', className }: SplitBarsPro
   const isFull = density === 'full';
 
   return (
-    <div className={cx('flex min-w-0 flex-col', isFull ? 'gap-2.5' : 'gap-1.5', className)}>
+    <div className={cx('flex min-w-0 flex-col', isFull ? 'gap-3.5' : 'gap-2', className)}>
       {rows.map(row => {
         const clamped = Math.max(0, Math.min(100, row.percent));
         const percentText = formatPercentInt(clamped);
@@ -35,24 +32,20 @@ export function SplitBars({ rows, density = 'compact', className }: SplitBarsPro
           <div
             key={row.id}
             className={cx(
-              'grid items-center gap-2',
+              'grid items-center gap-3',
               isFull
-                ? 'grid-cols-[minmax(96px,132px)_minmax(0,1fr)_auto] text-[13px]'
-                : 'grid-cols-[minmax(88px,118px)_minmax(0,1fr)_38px] text-[12px]',
+                ? 'grid-cols-[minmax(112px,148px)_minmax(0,1fr)_auto] text-[15px] leading-[20px]'
+                : 'grid-cols-[minmax(108px,136px)_minmax(0,1fr)_44px] text-[14px] leading-[18px]',
               row.isEveryone ? 'text-text' : 'text-grey-04'
             )}
           >
-            <span className="flex min-w-0 items-center gap-1.5 truncate">
+            <span className="flex min-w-0 items-center gap-2 truncate">
               <span
                 aria-hidden
-                className={cx(
-                  'inline-block shrink-0 rounded-[2px]',
-                  row.isEveryone ? 'h-2 w-2 rotate-45' : 'h-2 w-2',
-                  isFull && 'h-2.5 w-2.5'
-                )}
+                className={cx('inline-block shrink-0 rounded-full', isFull ? 'size-2.5' : 'size-2')}
                 style={{ backgroundColor: row.color }}
               />
-              <span className={cx('truncate', row.isEveryone && 'font-medium')}>{row.label}</span>
+              <span className={cx('truncate', row.isEveryone && 'font-medium text-text')}>{row.label}</span>
             </span>
 
             <div
@@ -61,7 +54,7 @@ export function SplitBars({ rows, density = 'compact', className }: SplitBarsPro
               aria-valuemin={0}
               aria-valuemax={100}
               aria-valuenow={Math.round(clamped)}
-              className={cx('overflow-hidden rounded-full bg-grey-01', isFull ? 'h-2' : 'h-1.5')}
+              className={cx('overflow-hidden rounded-full bg-grey-01', isFull ? 'h-2.5' : 'h-2')}
             >
               <div
                 className="h-full rounded-full transition-[width] duration-200"
@@ -72,13 +65,13 @@ export function SplitBars({ rows, density = 'compact', className }: SplitBarsPro
               />
             </div>
 
-            <span className="flex items-center justify-end gap-1.5 whitespace-nowrap tabular-nums">
+            <span className="flex items-center justify-end gap-2 whitespace-nowrap tabular-nums">
               <strong className="font-semibold text-text">{percentText}</strong>
               {isFull && row.voterCount !== undefined && (
-                <span className="text-[12px] text-grey-04">({row.voterCount.toLocaleString('en-US')})</span>
+                <span className="text-[14px] text-grey-04">({row.voterCount.toLocaleString('en-US')})</span>
               )}
               {row.userLabel && (
-                <span className="rounded-sm bg-grey-01 px-1.5 py-0.5 text-[11px] font-medium text-text">
+                <span className="rounded-md bg-grey-01 px-2 py-0.5 text-[13px] font-medium text-text">
                   {row.userLabel}
                 </span>
               )}

@@ -76,7 +76,7 @@ export function DevTemplatesPreview() {
                     fixture.navigate(jump.route);
                   }}
                   className={cx(
-                    'inline-flex h-8 cursor-pointer items-center rounded-full border px-3 text-[13px] font-medium transition-colors',
+                    'inline-flex h-9 cursor-pointer items-center rounded-full border px-4 text-[14px] font-medium transition-colors',
                     active ? 'border-text bg-text text-white' : 'border-grey-02 bg-white text-text hover:border-text'
                   )}
                 >
@@ -89,7 +89,7 @@ export function DevTemplatesPreview() {
               aria-pressed={mode === 'primitives'}
               onClick={() => setMode('primitives')}
               className={cx(
-                'inline-flex h-8 cursor-pointer items-center rounded-full border px-3 text-[13px] font-medium transition-colors',
+                'inline-flex h-9 cursor-pointer items-center rounded-full border px-4 text-[14px] font-medium transition-colors',
                 mode === 'primitives'
                   ? 'border-ctaPrimary bg-ctaPrimary text-white'
                   : 'border-grey-02 bg-grey-01 text-grey-05 hover:border-text'
@@ -99,8 +99,8 @@ export function DevTemplatesPreview() {
             </button>
           </div>
 
-          <span className="text-[12px] text-grey-04">
-            Flag: <code className="rounded-sm bg-grey-01 px-1.5 py-0.5 text-text">entityTemplatesV2</code>
+          <span className="text-[14px] text-grey-04">
+            Flag: <code className="rounded-sm bg-grey-01 px-1.5 py-0.5 text-[13px] text-text">entityTemplatesV2</code>
           </span>
         </div>
       </div>

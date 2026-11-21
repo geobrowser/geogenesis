@@ -12,6 +12,8 @@ import {
   formatClaimKindLabel,
 } from '../models';
 import {
+  CheckCircleIcon,
+  ChevronRightIcon,
   RelatedListSection,
   SourceChipList,
   SplitBars,
@@ -39,18 +41,17 @@ export interface ClaimTemplateProps {
 /**
  * Pure, data-driven Claim page template.
  *
- * Works for both contested and agreed claims, and gracefully omits optional sections
- * (`agreedBasis`, `keyStat`, `subClaims`, `strongestCases`) when a data source doesn't provide them.
+ * Editorial white/black layout with restrained Geo blue/purple accents and Calibre-scaled typography.
  */
 export function ClaimTemplate({ model, headerActions, footer, className }: ClaimTemplateProps) {
   const isSplit = model.split.isSplit;
 
   return (
-    <TemplateShell maxWidth={840} breadcrumbs={model.breadcrumbs} className={className}>
+    <TemplateShell maxWidth={860} breadcrumbs={model.breadcrumbs} className={className}>
       {/* Header */}
-      <header className="flex flex-col gap-3">
+      <header className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-2">
             <TemplateBadge tone={isSplit ? 'split' : 'agreed'}>
               {isSplit ? 'Contested claim' : 'Agreed claim'}
             </TemplateBadge>
@@ -71,17 +72,20 @@ export function ClaimTemplate({ model, headerActions, footer, className }: Claim
       {/* Vote box + community split bars */}
       <VoteBox split={model.split} control={model.voteBox} />
 
-      {/* Agreed basis (shown on agreed claims when populated) */}
+      {/* Agreed basis (clean white editorial panel, no colored sidebar) */}
       {model.agreedBasis && (
         <section
           aria-label="What both communities agree on"
-          className="flex flex-col gap-3 rounded-xl border border-l-2 border-grey-02/80 border-l-ctaPrimary bg-white p-4 @[560px]:p-5"
+          className="flex flex-col gap-4 rounded-xl border border-grey-02/80 bg-white p-5 @[560px]:p-6"
         >
-          <h2 className="m-0 text-[15px] leading-[20px] font-semibold text-text">What both communities agree on</h2>
-          <p className="m-0 text-[15px] leading-[22px] text-text/90">{model.agreedBasis.summary}</p>
+          <div className="flex items-center gap-2 text-ctaPrimary">
+            <CheckCircleIcon className="size-5" />
+            <h2 className="m-0 text-smallTitle text-text">What both communities agree on</h2>
+          </div>
+          <p className="m-0 text-[17px] leading-[26px] text-text/90">{model.agreedBasis.summary}</p>
           {model.agreedBasis.settlingSources.length > 0 && (
-            <div className="flex flex-col gap-1.5">
-              <span className="text-[12px] font-semibold text-grey-04">The sources that settled it</span>
+            <div className="flex flex-col gap-2.5 border-t border-divider pt-4">
+              <span className="text-[14px] font-medium text-grey-04">Sources that settled it</span>
               <SourceChipList sources={model.agreedBasis.settlingSources} />
             </div>
           )}
@@ -92,21 +96,21 @@ export function ClaimTemplate({ model, headerActions, footer, className }: Claim
       {model.keyStat && (
         <section
           aria-label="Key evidence"
-          className="flex flex-col gap-2.5 rounded-xl border border-grey-02/80 bg-grey-01/50 p-4"
+          className="flex flex-col gap-3 rounded-xl border border-grey-02/80 bg-bg p-5"
         >
-          <p className="m-0 text-[15px] leading-[22px] text-text">{model.keyStat.text}</p>
+          <p className="m-0 text-[17px] leading-[25px] text-text">{model.keyStat.text}</p>
           <SourceChipList sources={model.keyStat.sources} />
         </section>
       )}
 
       {/* Underlying facts / sub-claims */}
       {model.subClaims && model.subClaims.length > 0 && (
-        <section aria-label="The facts it turns on" className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-baseline gap-2">
-            <h2 className="m-0 text-smallTitle text-text">The facts it turns on</h2>
-            <p className="m-0 text-[13px] text-grey-04">Underlying claims and the sources cited for each.</p>
+        <section aria-label="The facts it turns on" className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1">
+            <h2 className="m-0 text-mediumTitle font-semibold text-text">The facts it turns on</h2>
+            <p className="m-0 text-[15px] text-grey-04">Underlying claims and the sources cited for each.</p>
           </div>
-          <div className="flex flex-col gap-2.5">
+          <div className="flex flex-col gap-3">
             {model.subClaims.map(fact => (
               <SubClaimFactCard key={fact.id} fact={fact} />
             ))}
@@ -116,9 +120,9 @@ export function ClaimTemplate({ model, headerActions, footer, className }: Claim
 
       {/* Strongest cases */}
       {model.strongestCases && model.strongestCases.length > 0 && (
-        <section aria-label="Strongest cases" className="flex flex-col gap-3">
-          <h2 className="m-0 text-smallTitle text-text">Strongest cases</h2>
-          <div className="grid grid-cols-1 gap-3.5 @[640px]:grid-cols-2">
+        <section aria-label="Strongest cases" className="flex flex-col gap-4">
+          <h2 className="m-0 text-mediumTitle font-semibold text-text">Strongest cases</h2>
+          <div className="grid grid-cols-1 gap-4 @[640px]:grid-cols-2">
             {model.strongestCases.map(item => (
               <StrongestCaseCard key={item.id} item={item} />
             ))}
@@ -128,7 +132,7 @@ export function ClaimTemplate({ model, headerActions, footer, className }: Claim
 
       {/* Related entity lists (Parent claim, Events, In the news, Sources, Debates, Topics) */}
       {model.sections.length > 0 && (
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-8">
           {model.sections.map(section => (
             <RelatedListSection key={section.id} section={section} />
           ))}
@@ -141,38 +145,40 @@ export function ClaimTemplate({ model, headerActions, footer, className }: Claim
 }
 
 function DebateCountPill({ count, href, onSelect }: { count: number; href?: string; onSelect?: () => void }) {
-  const label = `${count} ${count === 1 ? 'debate' : 'debates'} ›`;
+  const text = `${count} ${count === 1 ? 'debate' : 'debates'}`;
   const classes =
-    'inline-flex h-[22px] items-center rounded-sm bg-ctaTertiary px-2 text-[12px] leading-none font-semibold text-ctaPrimary no-underline transition-colors hover:bg-ctaPrimary hover:text-white';
+    'inline-flex h-7 items-center gap-1 rounded-md border border-ctaPrimary/15 bg-ctaTertiary px-2.5 text-[14px] leading-none font-medium text-ctaPrimary no-underline transition-colors hover:bg-ctaPrimary hover:text-white';
 
   if (href) {
     return (
       <Link href={href} className={classes}>
-        {label}
+        <span>{text}</span>
+        <ChevronRightIcon className="size-3.5" />
       </Link>
     );
   }
 
   if (onSelect) {
     return (
-      <button type="button" onClick={onSelect} className={`${classes} cursor-pointer border-0`}>
-        {label}
+      <button type="button" onClick={onSelect} className={`${classes} cursor-pointer`}>
+        <span>{text}</span>
+        <ChevronRightIcon className="size-3.5" />
       </button>
     );
   }
 
-  return <TemplateBadge tone="neutral">{label}</TemplateBadge>;
+  return <TemplateBadge tone="neutral">{text}</TemplateBadge>;
 }
 
 function SubClaimFactCard({ fact }: { fact: SubClaimFactModel }) {
   const [open, setOpen] = React.useState(false);
 
   return (
-    <article className="flex flex-col gap-2.5 rounded-xl border border-grey-02/70 bg-white p-4">
+    <article className="flex flex-col gap-3 rounded-xl border border-grey-02/80 bg-white p-5">
       {fact.href ? (
         <Link
           href={fact.href}
-          className="text-[15px] leading-[21px] font-semibold text-text no-underline hover:text-ctaPrimary"
+          className="text-[17px] leading-[23px] font-semibold text-text no-underline hover:text-ctaPrimary"
         >
           {fact.title}
         </Link>
@@ -180,25 +186,25 @@ function SubClaimFactCard({ fact }: { fact: SubClaimFactModel }) {
         <button
           type="button"
           onClick={fact.onSelect}
-          className="cursor-pointer border-0 bg-transparent p-0 text-left text-[15px] leading-[21px] font-semibold text-text hover:text-ctaPrimary"
+          className="cursor-pointer border-0 bg-transparent p-0 text-left text-[17px] leading-[23px] font-semibold text-text hover:text-ctaPrimary"
         >
           {fact.title}
         </button>
       ) : (
-        <h3 className="m-0 text-[15px] leading-[21px] font-semibold text-text">{fact.title}</h3>
+        <h3 className="m-0 text-[17px] leading-[23px] font-semibold text-text">{fact.title}</h3>
       )}
 
       <SplitBars rows={fact.split.rows} density="compact" />
 
-      {fact.stat && <p className="m-0 text-[13px] leading-[18px] text-grey-04">{fact.stat}</p>}
+      {fact.stat && <p className="m-0 text-[15px] leading-[22px] text-grey-04">{fact.stat}</p>}
 
       {fact.sources.length > 0 && (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2.5 pt-0.5">
           <button
             type="button"
             aria-expanded={open}
             onClick={() => setOpen(prev => !prev)}
-            className="cursor-pointer self-start border-0 bg-transparent p-0 text-[12px] font-medium text-ctaPrimary hover:text-ctaHover"
+            className="cursor-pointer self-start border-0 bg-transparent p-0 text-[14px] font-medium text-ctaPrimary hover:text-ctaHover"
           >
             {open ? 'Hide sources' : `Evidence and sources (${fact.sources.length})`}
           </button>
@@ -211,31 +217,35 @@ function SubClaimFactCard({ fact }: { fact: SubClaimFactModel }) {
 
 function StrongestCaseCard({ item }: { item: StrongestCaseModel }) {
   return (
-    <article className="flex flex-col gap-3 rounded-xl border border-grey-02/80 bg-white p-4">
-      <div className="flex items-center gap-2">
-        <span
-          aria-hidden
-          className="inline-block h-3 w-1 shrink-0 rounded-full"
-          style={{ backgroundColor: item.accentColor }}
-        />
-        <h3 className="m-0 text-[15px] leading-[20px] font-semibold text-text">{item.title}</h3>
+    <article className="flex flex-col justify-between gap-4 rounded-xl border border-grey-02/80 bg-white p-5 @[560px]:p-6">
+      <div className="flex flex-col gap-3.5">
+        <div className="flex items-start gap-2.5">
+          <span
+            aria-hidden
+            className="mt-2 inline-block size-2.5 shrink-0 rounded-full"
+            style={{ backgroundColor: item.accentColor }}
+          />
+          <h3 className="m-0 text-[18px] leading-[24px] font-semibold text-text">{item.title}</h3>
+        </div>
+
+        {item.points.length > 0 && (
+          <ul className="m-0 flex list-disc flex-col gap-2 pl-5 text-[16px] leading-[24px] text-text/90">
+            {item.points.map(point => (
+              <li key={point}>{point}</li>
+            ))}
+          </ul>
+        )}
       </div>
 
-      {item.points.length > 0 && (
-        <ul className="m-0 flex list-disc flex-col gap-1.5 pl-4 text-[14px] leading-[20px] text-text/90">
-          {item.points.map(point => (
-            <li key={point}>{point}</li>
-          ))}
-        </ul>
-      )}
+      <div className="flex flex-col gap-3">
+        {item.concede && (
+          <p className="m-0 border-t border-divider pt-3 text-[15px] leading-[22px] text-grey-04">
+            <strong className="font-semibold text-text">Concedes:</strong> {item.concede}
+          </p>
+        )}
 
-      {item.concede && (
-        <p className="m-0 rounded-lg bg-grey-01 px-3 py-2 text-[13px] leading-[18px] text-grey-05">
-          <strong className="font-semibold text-text">Concedes:</strong> {item.concede}
-        </p>
-      )}
-
-      {item.sources.length > 0 && <SourceChipList sources={item.sources} />}
+        {item.sources.length > 0 && <SourceChipList sources={item.sources} />}
+      </div>
     </article>
   );
 }

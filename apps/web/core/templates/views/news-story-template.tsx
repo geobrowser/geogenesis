@@ -3,7 +3,14 @@
 import * as React from 'react';
 
 import type { NewsStoryTemplateModel } from '../models';
-import { ClaimSummaryCard, RelatedListSection, TemplateBadge, TemplateShell, VoteBox } from '../primitives';
+import {
+  ArrowUpRightIcon,
+  ClaimSummaryCard,
+  RelatedListSection,
+  TemplateBadge,
+  TemplateShell,
+  VoteBox,
+} from '../primitives';
 
 export interface NewsStoryTemplateProps {
   model: NewsStoryTemplateModel;
@@ -14,30 +21,26 @@ export interface NewsStoryTemplateProps {
 
 /**
  * Pure, data-driven News Story page template.
- *
- * Uses the outlet monogram tile (never reuses the parent event photo — Finding G10/S4),
- * a single date line, external read CTA, optional accuracy rating box, reported claims, and
- * linked event/sources/other-coverage lists.
  */
 export function NewsStoryTemplate({ model, headerActions, footer, className }: NewsStoryTemplateProps) {
   return (
-    <TemplateShell maxWidth={840} breadcrumbs={model.breadcrumbs} className={className}>
-      <header className="flex flex-col gap-3.5">
+    <TemplateShell maxWidth={860} breadcrumbs={model.breadcrumbs} className={className}>
+      <header className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3.5">
             <span
               aria-hidden
-              className="inline-grid h-10 w-10 shrink-0 place-items-center rounded-lg text-[13px] font-bold tracking-tight text-white"
+              className="inline-grid size-11 shrink-0 place-items-center rounded-lg text-[14px] font-semibold tracking-tight text-white"
               style={{ backgroundColor: model.outletColor }}
             >
               {model.outletInitials}
             </span>
-            <div className="flex flex-col">
-              <div className="flex flex-wrap items-center gap-1.5">
+            <div className="flex flex-col gap-0.5">
+              <div className="flex flex-wrap items-center gap-2">
                 <TemplateBadge tone="story">News story</TemplateBadge>
-                <span className="text-[14px] font-semibold text-text">{model.outlet}</span>
+                <span className="text-[16px] font-semibold text-text">{model.outlet}</span>
               </div>
-              <span className="text-[13px] text-grey-04">
+              <span className="text-[15px] text-grey-04">
                 {[model.date, model.authors && model.authors.length > 0 ? model.authors.join(', ') : undefined]
                   .filter(Boolean)
                   .join(' · ')}
@@ -49,18 +52,19 @@ export function NewsStoryTemplate({ model, headerActions, footer, className }: N
 
         <h1 className="m-0 text-entityTitle text-pretty text-text">{model.headline}</h1>
 
-        {model.summary && <p className="m-0 text-[16px] leading-[25px] text-text/90">{model.summary}</p>}
+        {model.summary && <p className="m-0 text-body text-text/90">{model.summary}</p>}
 
         {(model.externalUrl || model.archiveUrl) && (
-          <div className="flex flex-wrap items-center gap-2.5 pt-1">
+          <div className="flex flex-wrap items-center gap-3 pt-1">
             {model.externalUrl && (
               <a
                 href={model.externalUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex h-9 items-center rounded-full border border-text bg-text px-4 text-button text-white no-underline transition-opacity hover:opacity-90"
+                className="inline-flex h-10 items-center gap-2 rounded-full border border-text bg-text px-5 text-button text-white no-underline transition-opacity hover:opacity-90"
               >
-                Read on {model.outlet} ↗
+                <span>Read on {model.outlet}</span>
+                <ArrowUpRightIcon className="size-4" />
               </a>
             )}
             {model.archiveUrl && (
@@ -68,9 +72,10 @@ export function NewsStoryTemplate({ model, headerActions, footer, className }: N
                 href={model.archiveUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex h-9 items-center rounded-full border border-grey-02 bg-white px-4 text-button text-text no-underline transition-colors hover:border-text"
+                className="inline-flex h-10 items-center gap-2 rounded-full border border-grey-02 bg-white px-5 text-button text-text no-underline transition-colors hover:border-text"
               >
-                Archived copy ↗
+                <span>Archived copy</span>
+                <ArrowUpRightIcon className="size-4" />
               </a>
             )}
           </div>
@@ -86,11 +91,11 @@ export function NewsStoryTemplate({ model, headerActions, footer, className }: N
       )}
 
       {model.reportedClaims.length > 0 && (
-        <section aria-label="The claim it reports" className="flex flex-col gap-3">
-          <h2 className="m-0 text-smallTitle text-text">
+        <section aria-label="The claim it reports" className="flex flex-col gap-4">
+          <h2 className="m-0 text-mediumTitle font-semibold text-text">
             {model.reportedClaims.length === 1 ? 'The claim it reports' : 'Claims it reports'}
           </h2>
-          <div className="grid grid-cols-1 gap-3">
+          <div className="grid grid-cols-1 gap-4">
             {model.reportedClaims.map(claim => (
               <ClaimSummaryCard key={claim.id} claim={claim} variant={claim.split.isSplit ? 'default' : 'agreed'} />
             ))}
@@ -99,7 +104,7 @@ export function NewsStoryTemplate({ model, headerActions, footer, className }: N
       )}
 
       {model.sections.length > 0 && (
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-8">
           {model.sections.map(section => (
             <RelatedListSection key={section.id} section={section} />
           ))}

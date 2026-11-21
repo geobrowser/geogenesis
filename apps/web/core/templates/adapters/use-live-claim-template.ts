@@ -150,7 +150,7 @@ export function useLiveClaimTemplate({
         id: 'opposing-arguments',
         communityId: 'oppose',
         title: 'Opposing arguments',
-        accentColor: '#fe31c5',
+        accentColor: '#6833ff',
         points: opposingArgs.map(rel => rel.toEntity.name ?? rel.toEntity.id),
         sources: [],
       });

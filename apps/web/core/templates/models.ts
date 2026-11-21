@@ -15,6 +15,8 @@ export type ClaimKind = 'fact' | 'judgment' | 'value-judgment';
 
 export type EntityLinkKind = 'claim' | 'event' | 'news-story' | 'source' | 'post' | 'debate' | 'topic' | 'case';
 
+export type SourceMediaKind = 'article' | 'video' | 'tweet' | 'document' | 'dataset';
+
 export interface BreadcrumbItem {
   id: string;
   label: string;
@@ -73,6 +75,7 @@ export interface SourceChipModel {
   id: string;
   index: number;
   title: string;
+  mediaType?: SourceMediaKind;
   href?: string;
   onSelect?: () => void;
 }
@@ -101,6 +104,15 @@ export interface EntityLinkRowModel {
   kindLabel: string;
   title: string;
   meta?: string;
+  /** Optional rich media subtype for tailored Source / Coverage card rendering. */
+  mediaType?: SourceMediaKind;
+  publisher?: string;
+  date?: string;
+  excerpt?: string;
+  duration?: string;
+  authorHandle?: string;
+  thumbnailUrl?: string;
+  externalUrl?: string;
   href?: string;
   onSelect?: () => void;
   /** Optional side-by-side avatars (used for debate rows). */
@@ -112,6 +124,9 @@ export interface EntityLinkRowModel {
 export interface EntityListSectionModel {
   id: string;
   title: string;
+  subtitle?: string;
+  /** `'cards'` renders rich format-aware media cards (articles, videos, tweets, datasets). */
+  layout?: 'list' | 'cards';
   items: readonly EntityLinkRowModel[];
   emptyText?: string;
   action?: {

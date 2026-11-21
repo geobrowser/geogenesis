@@ -6,6 +6,7 @@ import cx from 'classnames';
 import Link from 'next/link';
 
 import { type ClaimKind, type ClaimSummaryModel, formatClaimKindLabel, formatPercentInt } from '../models';
+import { CheckCircleIcon } from './icons';
 import { SplitBars } from './split-bars';
 import { TemplateBadge, type TemplateBadgeTone } from './template-shell';
 
@@ -17,37 +18,39 @@ const CLAIM_KIND_TONE: Record<ClaimKind, TemplateBadgeTone> = {
 
 export interface ClaimSummaryCardProps {
   claim: ClaimSummaryModel;
-  /** `lead` spans wider with an emphasized headline and overall percentage; `agreed` uses the calm green tint. */
+  /** `lead` spans wider with an emphasized headline and overall percentage; `agreed` highlights consensus cleanly. */
   variant?: 'default' | 'lead' | 'agreed';
   className?: string;
 }
 
 /**
- * Clickable card summarizing a contested or agreed claim with its community split bars.
+ * Clickable editorial card summarizing a contested or agreed claim with its community split bars.
  */
 export function ClaimSummaryCard({ claim, variant = 'default', className }: ClaimSummaryCardProps) {
   const isLead = variant === 'lead';
   const isAgreed = variant === 'agreed' || (!claim.split.isSplit && variant === 'default');
 
   const cardClasses = cx(
-    'group flex w-full flex-col gap-3 rounded-xl border bg-white p-4 text-left text-text no-underline transition-colors @[560px]:p-[18px]',
-    isAgreed
-      ? 'border-grey-02/80 hover:border-text'
-      : isLead
-        ? 'border-grey-02 shadow-light hover:border-text'
-        : 'border-grey-02/80 hover:border-text',
+    'group flex w-full flex-col gap-4 rounded-xl border bg-white p-5 text-left text-text no-underline transition-colors @[560px]:p-6',
+    isLead ? 'border-grey-02 shadow-light hover:border-text' : 'border-grey-02/80 hover:border-text',
     className
   );
 
   const content = (
     <>
-      {(claim.kind || claim.badgeLabel || (claim.split.isSplit && claim.split.gapPoints !== undefined)) && (
-        <div className="flex flex-wrap items-center gap-1.5">
-          {claim.kind && (
+      {(claim.kind || claim.badgeLabel || (claim.split.isSplit && claim.split.gapPoints !== undefined) || isAgreed) && (
+        <div className="flex flex-wrap items-center gap-2">
+          {isAgreed && (
+            <span className="inline-flex items-center gap-1.5 text-[14px] font-medium text-ctaPrimary">
+              <CheckCircleIcon className="size-4" />
+              <span>Agreed</span>
+            </span>
+          )}
+          {!isAgreed && claim.kind && (
             <TemplateBadge tone={CLAIM_KIND_TONE[claim.kind]}>{formatClaimKindLabel(claim.kind)}</TemplateBadge>
           )}
           {claim.split.isSplit && claim.split.gapPoints !== undefined && (
-            <TemplateBadge tone="split">{Math.round(claim.split.gapPoints)} pts apart</TemplateBadge>
+            <TemplateBadge tone="neutral">{Math.round(claim.split.gapPoints)} pts apart</TemplateBadge>
           )}
           {claim.badgeLabel && <TemplateBadge tone="dark">{claim.badgeLabel}</TemplateBadge>}
         </div>
@@ -55,31 +58,33 @@ export function ClaimSummaryCard({ claim, variant = 'default', className }: Clai
 
       <h3
         className={cx(
-          'm-0 font-semibold text-pretty text-text',
+          'm-0 font-semibold text-pretty text-text transition-colors group-hover:text-ctaPrimary',
           isLead
-            ? 'text-[22px] leading-[28px] @[560px]:text-[26px] @[560px]:leading-[31px]'
-            : 'text-[17px] leading-[22px]'
+            ? 'text-[24px] leading-[30px] tracking-[-0.02em] @[560px]:text-[28px] @[560px]:leading-[34px]'
+            : 'text-[19px] leading-[25px] tracking-[-0.01em]'
         )}
       >
         {claim.title}
       </h3>
 
-      {claim.basisSummary && <p className="m-0 text-[13px] leading-[18px] text-grey-04">{claim.basisSummary}</p>}
+      {claim.basisSummary && <p className="m-0 text-[15px] leading-[21px] text-grey-04">{claim.basisSummary}</p>}
 
-      <div className={cx('flex gap-4', isLead ? 'flex-col @[560px]:flex-row @[560px]:items-end' : 'flex-col')}>
-        {isLead && claim.overallPercent !== undefined && (
-          <div className="shrink-0">
-            <span className="text-[32px] leading-none font-bold text-text tabular-nums">
-              {formatPercentInt(claim.overallPercent)}
-            </span>
-            <span className="ml-1 text-[13px] font-medium text-grey-04">agree</span>
-          </div>
-        )}
-        <SplitBars rows={claim.split.rows} density="compact" className="min-w-0 flex-1" />
-      </div>
+      {claim.split.rows.length > 0 && (
+        <div className={cx('flex gap-5 pt-0.5', isLead ? 'flex-col @[560px]:flex-row @[560px]:items-end' : 'flex-col')}>
+          {isLead && claim.overallPercent !== undefined && (
+            <div className="shrink-0">
+              <span className="text-[36px] leading-none font-semibold tracking-[-0.03em] text-text tabular-nums">
+                {formatPercentInt(claim.overallPercent)}
+              </span>
+              <span className="ml-1.5 text-[15px] font-medium text-grey-04">agree</span>
+            </div>
+          )}
+          <SplitBars rows={claim.split.rows} density="compact" className="min-w-0 flex-1" />
+        </div>
+      )}
 
       {((claim.meta && claim.meta.length > 0) || claim.userVote) && (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-grey-04">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[14px] text-grey-04">
           {claim.meta?.map(entry => (
             <span key={entry}>{entry}</span>
           ))}

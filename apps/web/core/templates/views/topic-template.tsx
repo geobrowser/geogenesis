@@ -13,6 +13,7 @@ import type {
   TopicViralPostPreviewModel,
 } from '../models';
 import {
+  ArrowRightIcon,
   ClaimSummaryCard,
   RelatedListSection,
   SourceChipList,
@@ -37,10 +38,7 @@ const DEFAULT_AGREED_PREVIEW = 4;
 /**
  * Pure, data-driven Topic page template.
  *
- * Renders only the sections populated on `model`:
- * - Live Tier-1 Geo topics render header, breadcrumbs, stats, claims, and coverage/debates sections.
- * - Full-featured topics (or prototype fixtures) additionally render community perspective chips,
- *   community cases, and timeline highlights.
+ * Clean, spacious white/black Geo layout sized to Calibre typography with restrained blue/purple touches.
  */
 export function TopicTemplate({ model, headerActions, footer, className }: TopicTemplateProps) {
   const [showAllContested, setShowAllContested] = React.useState(false);
@@ -59,9 +57,9 @@ export function TopicTemplate({ model, headerActions, footer, className }: Topic
   return (
     <TemplateShell maxWidth={1120} breadcrumbs={model.breadcrumbs} className={className}>
       {/* Hero header */}
-      <header className="flex flex-col gap-4">
+      <header className="flex flex-col gap-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-2">
             <TemplateBadge tone="neutral">Topic</TemplateBadge>
             {model.tags?.map(tag => (
               <TemplateBadge key={tag} tone="neutral">
@@ -74,14 +72,14 @@ export function TopicTemplate({ model, headerActions, footer, className }: Topic
 
         <h1 className="m-0 text-entityTitle text-pretty text-text">{model.title}</h1>
 
-        {model.lede && <p className="m-0 max-w-[760px] text-[18px] leading-[28px] text-text/90">{model.lede}</p>}
+        {model.lede && <p className="m-0 max-w-[800px] text-body text-text/90">{model.lede}</p>}
 
         {model.stats && model.stats.length > 0 && (
-          <dl className="m-0 mt-1 flex flex-wrap gap-x-7 gap-y-3">
+          <dl className="m-0 mt-1 grid grid-cols-2 gap-x-8 gap-y-4 border-y border-divider py-5 @[600px]:flex @[600px]:flex-wrap @[600px]:gap-x-12">
             {model.stats.map(stat => (
-              <div key={stat.label} className="flex flex-col">
-                <dt className="order-2 text-[13px] text-grey-04">{stat.label}</dt>
-                <dd className="order-1 m-0 text-[22px] leading-[26px] font-semibold text-text tabular-nums">
+              <div key={stat.label} className="flex flex-col gap-0.5">
+                <dt className="order-2 text-[14px] text-grey-04">{stat.label}</dt>
+                <dd className="order-1 m-0 text-[26px] leading-[30px] font-semibold tracking-[-0.02em] text-text tabular-nums">
                   {stat.value}
                 </dd>
               </div>
@@ -90,16 +88,16 @@ export function TopicTemplate({ model, headerActions, footer, className }: Topic
         )}
       </header>
 
-      {/* Community perspective filter bar (rendered only when communities exist) */}
+      {/* Community perspective filter bar */}
       {communities.length > 0 && (
-        <section aria-label="Community view" className="flex flex-col gap-2 border-y border-divider bg-white/95 py-3">
+        <section aria-label="Community view" className="flex flex-col gap-2.5">
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               aria-pressed={activeCommunityId === 'all'}
               onClick={() => model.onSelectCommunity?.('all')}
               className={cx(
-                'inline-flex h-9 cursor-pointer items-center gap-2 rounded-full border px-3.5 text-[14px] whitespace-nowrap transition-colors',
+                'inline-flex h-10 cursor-pointer items-center gap-2 rounded-full border px-4 text-[15px] font-medium whitespace-nowrap transition-colors',
                 activeCommunityId === 'all'
                   ? 'border-text bg-text text-white'
                   : 'border-grey-02 bg-white text-text hover:border-text'
@@ -117,7 +115,7 @@ export function TopicTemplate({ model, headerActions, footer, className }: Topic
                   aria-pressed={isSelected}
                   onClick={() => model.onSelectCommunity?.(community.id)}
                   className={cx(
-                    'inline-flex h-9 cursor-pointer items-center gap-2 rounded-full border px-3.5 text-[14px] whitespace-nowrap transition-colors',
+                    'inline-flex h-10 cursor-pointer items-center gap-2 rounded-full border px-4 text-[15px] font-medium whitespace-nowrap transition-colors',
                     isSelected
                       ? 'border-text bg-text text-white'
                       : 'border-grey-02 bg-white text-text hover:border-text'
@@ -125,12 +123,12 @@ export function TopicTemplate({ model, headerActions, footer, className }: Topic
                 >
                   <span
                     aria-hidden
-                    className="inline-block h-2.5 w-2.5 shrink-0 rounded-[3px]"
+                    className="inline-block size-2.5 shrink-0 rounded-full"
                     style={{ backgroundColor: community.color }}
                   />
                   <span>{community.name}</span>
                   {community.memberCount !== undefined && (
-                    <span className={cx('text-[12px] tabular-nums', isSelected ? 'text-grey-03' : 'text-grey-04')}>
+                    <span className={cx('text-[14px] tabular-nums', isSelected ? 'text-grey-03' : 'text-grey-04')}>
                       {community.memberCount.toLocaleString('en-US')}
                     </span>
                   )}
@@ -138,7 +136,7 @@ export function TopicTemplate({ model, headerActions, footer, className }: Topic
               );
             })}
           </div>
-          <p className="m-0 text-[13px] leading-[18px] text-grey-04">
+          <p className="m-0 text-[15px] leading-[21px] text-grey-04">
             {activeCommunity
               ? `Viewing ${activeCommunity.name}: claims ordered by what this community pins first.`
               : 'Every number is split by community so turnout alone cannot decide a claim.'}
@@ -148,13 +146,13 @@ export function TopicTemplate({ model, headerActions, footer, className }: Topic
 
       {/* Contested claims ("Where they split" / "Claims") */}
       {contested.length > 0 && (
-        <section aria-label="Contested claims" className="flex flex-col gap-3.5">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <div className="flex flex-wrap items-baseline gap-2.5">
-              <h2 className="m-0 text-mediumTitle text-text">
+        <section aria-label="Contested claims" className="flex flex-col gap-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-3">
+            <div className="flex flex-col gap-1">
+              <h2 className="m-0 text-mediumTitle font-semibold text-text">
                 {communities.length > 0 ? 'Where they split' : 'Claims'}
               </h2>
-              <p className="m-0 text-[14px] text-grey-04">
+              <p className="m-0 text-[15px] text-grey-04">
                 {communities.length > 0
                   ? 'Claims where communities disagree most sharply.'
                   : 'Claims linked to this topic.'}
@@ -164,14 +162,14 @@ export function TopicTemplate({ model, headerActions, footer, className }: Topic
               <button
                 type="button"
                 onClick={() => setShowAllContested(prev => !prev)}
-                className="cursor-pointer border-0 bg-transparent p-0 text-[13px] font-medium text-ctaPrimary hover:text-ctaHover"
+                className="cursor-pointer border-0 bg-transparent p-0 text-[15px] font-medium text-ctaPrimary hover:text-ctaHover"
               >
                 {showAllContested ? 'Show fewer' : `Show all ${contested.length}`}
               </button>
             )}
           </div>
 
-          <div className="grid grid-cols-1 gap-3.5 @[680px]:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 @[680px]:grid-cols-2">
             {visibleContested.map((claim, index) => (
               <ClaimSummaryCard
                 key={claim.id}
@@ -186,24 +184,24 @@ export function TopicTemplate({ model, headerActions, footer, className }: Topic
 
       {/* Agreed claims ("Common ground") */}
       {agreed.length > 0 && (
-        <section aria-label="Common ground" className="flex flex-col gap-3.5">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <div className="flex flex-wrap items-baseline gap-2.5">
-              <h2 className="m-0 text-mediumTitle text-text">Common ground</h2>
-              <p className="m-0 text-[14px] text-grey-04">Claims where a strong majority of each community agrees.</p>
+        <section aria-label="Common ground" className="flex flex-col gap-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-3">
+            <div className="flex flex-col gap-1">
+              <h2 className="m-0 text-mediumTitle font-semibold text-text">Common ground</h2>
+              <p className="m-0 text-[15px] text-grey-04">Claims where a strong majority of each community agrees.</p>
             </div>
             {agreed.length > DEFAULT_AGREED_PREVIEW && (
               <button
                 type="button"
                 onClick={() => setShowAllAgreed(prev => !prev)}
-                className="cursor-pointer border-0 bg-transparent p-0 text-[13px] font-medium text-ctaPrimary hover:text-ctaHover"
+                className="cursor-pointer border-0 bg-transparent p-0 text-[15px] font-medium text-ctaPrimary hover:text-ctaHover"
               >
                 {showAllAgreed ? 'Show fewer' : `Show all ${agreed.length}`}
               </button>
             )}
           </div>
 
-          <div className="grid grid-cols-1 gap-3 @[680px]:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 @[680px]:grid-cols-2">
             {visibleAgreed.map(claim => (
               <ClaimSummaryCard key={claim.id} claim={claim} variant="agreed" />
             ))}
@@ -213,10 +211,10 @@ export function TopicTemplate({ model, headerActions, footer, className }: Topic
 
       {/* In each community's own words */}
       {model.communityCases && model.communityCases.length > 0 && (
-        <section id="cases" aria-label="In each community’s own words" className="flex flex-col gap-3.5">
-          <div className="flex flex-wrap items-baseline gap-2.5">
-            <h2 className="m-0 text-mediumTitle text-text">In each community’s own words</h2>
-            <p className="m-0 text-[14px] text-grey-04">
+        <section id="cases" aria-label="In each community’s own words" className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1">
+            <h2 className="m-0 text-mediumTitle font-semibold text-text">In each community’s own words</h2>
+            <p className="m-0 text-[15px] text-grey-04">
               The strongest framing each community puts forward, plus what it concedes.
             </p>
           </div>
@@ -233,22 +231,23 @@ export function TopicTemplate({ model, headerActions, footer, className }: Topic
 
       {/* How we got here (timeline highlights) */}
       {model.timelineHighlights && model.timelineHighlights.length > 0 && (
-        <section aria-label="How we got here" className="flex flex-col gap-3.5">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <div className="flex flex-wrap items-baseline gap-2.5">
-              <h2 className="m-0 text-mediumTitle text-text">How we got here</h2>
-              <p className="m-0 text-[14px] text-grey-04">Key turns and the claims attached to each.</p>
+        <section aria-label="How we got here" className="flex flex-col gap-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-3">
+            <div className="flex flex-col gap-1">
+              <h2 className="m-0 text-mediumTitle font-semibold text-text">How we got here</h2>
+              <p className="m-0 text-[15px] text-grey-04">Key turns and the claims attached to each.</p>
             </div>
             {model.timelineHref && (
               <Link
                 href={model.timelineHref}
-                className="text-[14px] font-medium text-ctaPrimary no-underline hover:text-ctaHover"
+                className="inline-flex items-center gap-1.5 text-[15px] font-medium text-ctaPrimary no-underline hover:text-ctaHover"
               >
-                Full timeline →
+                <span>Full timeline</span>
+                <ArrowRightIcon className="size-4" />
               </Link>
             )}
           </div>
-          <div className="divide-y divide-divider overflow-hidden rounded-xl border border-grey-02/70 bg-white">
+          <div className="divide-y divide-divider overflow-hidden rounded-xl border border-grey-02/80 bg-white">
             {model.timelineHighlights.map(turn => (
               <TimelineHighlightRow key={turn.id} turn={turn} />
             ))}
@@ -256,17 +255,17 @@ export function TopicTemplate({ model, headerActions, footer, className }: Topic
         </section>
       )}
 
-      {/* Rankings (Best reads, Bridging picks, Top debates) */}
+      {/* Rankings (Best reads, Bridging picks) */}
       {model.rankings && model.rankings.length > 0 && (
         <TopicRankingsSection rankings={model.rankings} communities={communities} />
       )}
 
       {/* What's spreading (viral posts with bridging context notes) */}
       {model.viralPosts && model.viralPosts.length > 0 && (
-        <section aria-label="What’s spreading" className="flex flex-col gap-3.5">
-          <div className="flex flex-wrap items-baseline gap-2.5">
-            <h2 className="m-0 text-mediumTitle text-text">What’s spreading</h2>
-            <p className="m-0 text-[14px] text-grey-04">
+        <section aria-label="What’s spreading" className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1">
+            <h2 className="m-0 text-mediumTitle font-semibold text-text">What’s spreading</h2>
+            <p className="m-0 text-[15px] text-grey-04">
               Viral posts linked to this topic and context notes rated helpful across communities.
             </p>
           </div>
@@ -278,9 +277,9 @@ export function TopicTemplate({ model, headerActions, footer, className }: Topic
         </section>
       )}
 
-      {/* Additional structured sections (Coverage, Debates, Sources, Subtopics) */}
+      {/* Additional structured sections (Rich Sources, Coverage, Debates, Subtopics) */}
       {model.sections && model.sections.length > 0 && (
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-8">
           {model.sections.map(section => (
             <RelatedListSection key={section.id} section={section} />
           ))}
@@ -296,60 +295,64 @@ function CommunityCaseCard({ item }: { item: TopicCommunityCaseModel }) {
   const [sourcesOpen, setSourcesOpen] = React.useState(false);
 
   return (
-    <article className="flex flex-col gap-3 rounded-xl border border-grey-02/80 bg-white p-4 @[560px]:p-5">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <span
-            aria-hidden
-            className="inline-block h-3 w-3 shrink-0 rounded-[3px]"
-            style={{ backgroundColor: item.community.color }}
-          />
-          <h3 className="m-0 text-[17px] leading-[22px] font-semibold text-text">{item.community.name}</h3>
-          {item.community.memberCount !== undefined && (
-            <span className="text-[13px] text-grey-04">
-              {item.community.memberCount.toLocaleString('en-US')}
-              {item.isMember ? ', including you' : ''}
-            </span>
+    <article className="flex flex-col justify-between gap-4 rounded-xl border border-grey-02/80 bg-white p-5 @[560px]:p-6">
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <span
+              aria-hidden
+              className="inline-block size-3 shrink-0 rounded-full"
+              style={{ backgroundColor: item.community.color }}
+            />
+            <h3 className="m-0 text-[19px] leading-[24px] font-semibold text-text">{item.community.name}</h3>
+            {item.community.memberCount !== undefined && (
+              <span className="text-[14px] text-grey-04 tabular-nums">
+                {item.community.memberCount.toLocaleString('en-US')}
+                {item.isMember ? ', including you' : ''}
+              </span>
+            )}
+          </div>
+
+          {item.onToggleMembership && (
+            <button
+              type="button"
+              onClick={item.onToggleMembership}
+              className={cx(
+                'inline-flex h-9 cursor-pointer items-center rounded-full border px-4 text-[14px] font-medium transition-colors',
+                item.isMember
+                  ? 'border-grey-02 bg-white text-text hover:border-text'
+                  : 'border-text bg-text text-white hover:opacity-90'
+              )}
+            >
+              {item.isMember ? 'Leave' : `Join ${item.community.shortName}`}
+            </button>
           )}
         </div>
 
-        {item.onToggleMembership && (
-          <button
-            type="button"
-            onClick={item.onToggleMembership}
-            className={cx(
-              'inline-flex h-8 cursor-pointer items-center rounded-full border px-3 text-[13px] font-medium transition-colors',
-              item.isMember
-                ? 'border-grey-02 bg-white text-text hover:border-text'
-                : 'border-text bg-text text-white hover:opacity-90'
-            )}
-          >
-            {item.isMember ? 'Leave' : `Join ${item.community.shortName}`}
-          </button>
-        )}
+        <p className="m-0 text-[16px] leading-[25px] text-text/90">{item.summary}</p>
       </div>
 
-      <p className="m-0 text-[15px] leading-[22px] text-text">{item.summary}</p>
+      <div className="flex flex-col gap-3">
+        {item.concede && (
+          <p className="m-0 border-t border-divider pt-3 text-[15px] leading-[22px] text-grey-04">
+            <strong className="font-semibold text-text">Concedes:</strong> {item.concede}
+          </p>
+        )}
 
-      {item.concede && (
-        <p className="m-0 rounded-lg bg-grey-01 px-3 py-2 text-[13px] leading-[18px] text-grey-05">
-          <strong className="font-semibold text-text">Concedes:</strong> {item.concede}
-        </p>
-      )}
-
-      {item.sources.length > 0 && (
-        <div className="flex flex-col gap-2">
-          <button
-            type="button"
-            aria-expanded={sourcesOpen}
-            onClick={() => setSourcesOpen(prev => !prev)}
-            className="cursor-pointer self-start border-0 bg-transparent p-0 text-[13px] font-medium text-ctaPrimary hover:text-ctaHover"
-          >
-            {sourcesOpen ? 'Hide sources' : `Sources this case cites (${item.sources.length})`}
-          </button>
-          {sourcesOpen && <SourceChipList sources={item.sources} />}
-        </div>
-      )}
+        {item.sources.length > 0 && (
+          <div className="flex flex-col gap-2.5">
+            <button
+              type="button"
+              aria-expanded={sourcesOpen}
+              onClick={() => setSourcesOpen(prev => !prev)}
+              className="cursor-pointer self-start border-0 bg-transparent p-0 text-[14px] font-medium text-ctaPrimary hover:text-ctaHover"
+            >
+              {sourcesOpen ? 'Hide sources' : `Sources this case cites (${item.sources.length})`}
+            </button>
+            {sourcesOpen && <SourceChipList sources={item.sources} />}
+          </div>
+        )}
+      </div>
     </article>
   );
 }
@@ -357,13 +360,13 @@ function CommunityCaseCard({ item }: { item: TopicCommunityCaseModel }) {
 function TimelineHighlightRow({ turn }: { turn: TopicTimelineHighlightModel }) {
   const header = (
     <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-      <span className="text-[12px] font-semibold tracking-wide text-grey-04 uppercase">{turn.when}</span>
-      <span className="text-[16px] leading-[22px] font-semibold text-text">{turn.title}</span>
+      <span className="text-[14px] font-medium text-grey-04">{turn.when}</span>
+      <span className="text-[18px] leading-[24px] font-semibold text-text">{turn.title}</span>
     </div>
   );
 
   return (
-    <div className="flex flex-col gap-3 px-4 py-3.5 @[560px]:px-5">
+    <div className="flex flex-col gap-3.5 px-5 py-5 @[560px]:px-6">
       {turn.href ? (
         <Link href={turn.href} className="text-text no-underline hover:text-ctaPrimary">
           {header}
@@ -381,13 +384,13 @@ function TimelineHighlightRow({ turn }: { turn: TopicTimelineHighlightModel }) {
       )}
 
       {turn.claims.length > 0 && (
-        <div className="grid grid-cols-1 gap-2 @[680px]:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 @[680px]:grid-cols-2">
           {turn.claims.map(claim => (
-            <div key={claim.id} className="flex flex-col gap-1.5 rounded-lg bg-grey-01/70 p-2.5">
+            <div key={claim.id} className="flex flex-col gap-2 rounded-lg border border-divider bg-bg p-3.5">
               {claim.href ? (
                 <Link
                   href={claim.href}
-                  className="text-[13px] leading-[18px] font-medium text-text no-underline hover:text-ctaPrimary"
+                  className="text-[15px] leading-[21px] font-medium text-text no-underline hover:text-ctaPrimary"
                 >
                   {claim.title}
                 </Link>
@@ -395,12 +398,12 @@ function TimelineHighlightRow({ turn }: { turn: TopicTimelineHighlightModel }) {
                 <button
                   type="button"
                   onClick={claim.onSelect}
-                  className="cursor-pointer border-0 bg-transparent p-0 text-left text-[13px] leading-[18px] font-medium text-text hover:text-ctaPrimary"
+                  className="cursor-pointer border-0 bg-transparent p-0 text-left text-[15px] leading-[21px] font-medium text-text hover:text-ctaPrimary"
                 >
                   {claim.title}
                 </button>
               ) : (
-                <span className="text-[13px] leading-[18px] font-medium text-text">{claim.title}</span>
+                <span className="text-[15px] leading-[21px] font-medium text-text">{claim.title}</span>
               )}
               <SplitBars rows={claim.split.rows} density="compact" />
             </div>
@@ -427,17 +430,16 @@ function TopicRankingsSection({
   const availableScopes = Object.keys(ranking.itemsByCommunity);
   const effectiveScope = availableScopes.includes(activeScope) ? activeScope : (availableScopes[0] ?? 'all');
   const items = ranking.itemsByCommunity[effectiveScope] ?? [];
-  // Finding T6: only show community scope pills when a ranking actually has multiple community orderings.
   const showScopePills = availableScopes.length > 1;
 
   return (
-    <section id="rankings" aria-label="Rankings" className="flex flex-col gap-3.5">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <div className="flex flex-wrap items-baseline gap-2.5">
-          <h2 className="m-0 text-mediumTitle text-text">Rankings</h2>
-          <p className="m-0 text-[14px] text-grey-04">{ranking.subtitle}</p>
+    <section id="rankings" aria-label="Rankings" className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex flex-col gap-1">
+          <h2 className="m-0 text-mediumTitle font-semibold text-text">Rankings</h2>
+          <p className="m-0 text-[15px] text-grey-04">{ranking.subtitle}</p>
         </div>
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-2">
           {rankings.map(item => (
             <button
               key={item.id}
@@ -448,7 +450,7 @@ function TopicRankingsSection({
                 setActiveScope('all');
               }}
               className={cx(
-                'cursor-pointer rounded-full border px-3 py-1 text-[13px] font-medium transition-colors',
+                'cursor-pointer rounded-full border px-4 py-1.5 text-[14px] font-medium transition-colors',
                 item.id === ranking.id
                   ? 'border-text bg-text text-white'
                   : 'border-grey-02 bg-white text-text hover:border-text'
@@ -461,7 +463,7 @@ function TopicRankingsSection({
       </div>
 
       {showScopePills && (
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-2">
           {availableScopes.map(scopeKey => {
             const community = communities.find(c => c.id === scopeKey);
             const label = scopeKey === 'all' ? 'Everyone' : (community?.name ?? scopeKey);
@@ -472,16 +474,16 @@ function TopicRankingsSection({
                 aria-pressed={effectiveScope === scopeKey}
                 onClick={() => setActiveScope(scopeKey)}
                 className={cx(
-                  'inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-[12px] font-medium transition-colors',
+                  'inline-flex cursor-pointer items-center gap-2 rounded-full border px-3.5 py-1.5 text-[14px] font-medium transition-colors',
                   effectiveScope === scopeKey
-                    ? 'border-grey-01 bg-grey-01 text-text'
-                    : 'border-grey-02 bg-white text-grey-04 hover:text-text'
+                    ? 'border-grey-02 bg-grey-01 text-text'
+                    : 'border-divider bg-white text-grey-04 hover:border-grey-02 hover:text-text'
                 )}
               >
                 {community && (
                   <span
                     aria-hidden
-                    className="inline-block h-2 w-2 rounded-[2px]"
+                    className="inline-block size-2 rounded-full"
                     style={{ backgroundColor: community.color }}
                   />
                 )}
@@ -492,26 +494,26 @@ function TopicRankingsSection({
         </div>
       )}
 
-      <div className="divide-y divide-divider overflow-hidden rounded-xl border border-grey-02/70 bg-white">
+      <div className="divide-y divide-divider overflow-hidden rounded-xl border border-grey-02/80 bg-white">
         {items.map(item => {
           const rowInner = (
             <>
-              <span className="inline-grid h-6 w-6 shrink-0 place-items-center rounded-md bg-grey-01 text-[12px] font-semibold text-grey-04 tabular-nums">
+              <span className="inline-grid size-7 shrink-0 place-items-center rounded-md bg-grey-01 text-[14px] font-semibold text-grey-04 tabular-nums">
                 {item.rank}
               </span>
               <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span className="text-[15px] leading-[20px] font-medium text-text">{item.title}</span>
-                {item.subtitle && <span className="text-[13px] text-grey-04">{item.subtitle}</span>}
+                <span className="text-[17px] leading-[23px] font-medium text-text">{item.title}</span>
+                {item.subtitle && <span className="text-[15px] text-grey-04">{item.subtitle}</span>}
               </span>
               {item.tag && <TemplateBadge tone="fact">{item.tag}</TemplateBadge>}
               {item.metric && (
-                <span className="shrink-0 text-[12px] font-medium text-grey-04 tabular-nums">{item.metric}</span>
+                <span className="shrink-0 text-[14px] font-medium text-grey-04 tabular-nums">{item.metric}</span>
               )}
             </>
           );
 
           const classes =
-            'flex w-full items-center gap-3 px-4 py-3 text-left text-text no-underline transition-colors hover:bg-grey-01/70';
+            'flex w-full items-center gap-3.5 px-5 py-4 text-left text-text no-underline transition-colors hover:bg-bg';
 
           if (item.href) {
             return (
@@ -545,40 +547,40 @@ function TopicRankingsSection({
 
 function ViralPostPreviewCard({ post }: { post: TopicViralPostPreviewModel }) {
   const classes =
-    'flex w-full flex-col gap-3 rounded-xl border border-grey-02/80 bg-white p-4 text-left text-text no-underline transition-colors hover:border-text';
+    'group flex h-full w-full flex-col justify-between gap-4 rounded-xl border border-grey-02/80 bg-white p-5 text-left text-text no-underline transition-colors hover:border-text';
 
   const inner = (
     <>
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <span className="text-[14px] font-semibold text-text">{post.authorName}</span>
-          {post.authorHandle && <span className="text-[12px] text-grey-04">{post.authorHandle}</span>}
+      <div className="flex flex-col gap-3.5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="text-[16px] font-semibold text-text">{post.authorName}</span>
+            {post.authorHandle && <span className="text-[14px] text-grey-04">{post.authorHandle}</span>}
+          </div>
+          <span className="text-[14px] text-grey-04">
+            {[post.platform, post.viewsLabel].filter(Boolean).join(' · ')}
+          </span>
         </div>
-        <span className="text-[12px] text-grey-04">{[post.platform, post.viewsLabel].filter(Boolean).join(' · ')}</span>
+
+        <p className="m-0 text-[16px] leading-[24px] text-text/90">{post.body}</p>
+
+        {post.topNote ? (
+          <div className="flex flex-col gap-1.5 rounded-lg border border-divider bg-bg p-3.5 text-[15px] leading-[22px]">
+            <span className="text-[13px] font-semibold text-purple">{post.topNote.tag}</span>
+            <span className="text-text">{post.topNote.text}</span>
+          </div>
+        ) : (
+          <span className="text-[14px] text-grey-04">No context note shown yet</span>
+        )}
       </div>
 
-      <p className="m-0 text-[14px] leading-[20px] text-text/90">{post.body}</p>
-
-      {post.topNote ? (
-        <div
-          className={cx(
-            'flex flex-col gap-1 rounded-lg border p-3 text-[13px] leading-[18px]',
-            post.topNote.status === 'shown'
-              ? 'border-l-2 border-grey-02/80 border-l-purple bg-bg'
-              : 'border-dashed border-grey-02 bg-white'
-          )}
-        >
-          <span className="text-[11px] font-semibold tracking-wide text-purple uppercase">{post.topNote.tag}</span>
-          <span className="text-text">{post.topNote.text}</span>
-        </div>
-      ) : (
-        <span className="text-[12px] text-grey-04">No context note shown yet · Add context →</span>
-      )}
-
-      <span className="text-[12px] font-medium text-ctaPrimary">
-        {post.noteCount === 0
-          ? 'Open post to add context →'
-          : `Read ${post.noteCount} context ${post.noteCount === 1 ? 'note' : 'notes'} & ratings →`}
+      <span className="inline-flex items-center gap-1.5 text-[14px] font-medium text-ctaPrimary group-hover:text-ctaHover">
+        <span>
+          {post.noteCount === 0
+            ? 'Open post to add context'
+            : `Read ${post.noteCount} context ${post.noteCount === 1 ? 'note' : 'notes'} & ratings`}
+        </span>
+        <ArrowRightIcon className="size-4" />
       </span>
     </>
   );
