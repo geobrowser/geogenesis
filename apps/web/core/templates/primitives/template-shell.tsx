@@ -6,6 +6,7 @@ import cx from 'classnames';
 import Link from 'next/link';
 
 import type { BreadcrumbItem } from '../models';
+import { EntityActionProvider } from './entity-overflow-menu';
 import { ChevronRightIcon } from './icons';
 
 /**
@@ -128,17 +129,19 @@ export function TemplateShell({
   className?: string;
 }) {
   return (
-    <div className="@container">
-      <div
-        className={cx(
-          'mx-auto flex w-full flex-col gap-8 px-5 py-8 @[600px]:gap-11 @[600px]:px-6 @[600px]:py-10',
-          className
-        )}
-        style={{ maxWidth }}
-      >
-        {breadcrumbs && breadcrumbs.length > 0 && <TemplateBreadcrumb items={breadcrumbs} />}
-        {children}
+    <EntityActionProvider>
+      <div className="@container">
+        <div
+          className={cx(
+            'mx-auto flex w-full flex-col gap-8 px-5 py-8 @[600px]:gap-11 @[600px]:px-6 @[600px]:py-10',
+            className
+          )}
+          style={{ maxWidth }}
+        >
+          {breadcrumbs && breadcrumbs.length > 0 && <TemplateBreadcrumb items={breadcrumbs} />}
+          {children}
+        </div>
       </div>
-    </div>
+    </EntityActionProvider>
   );
 }

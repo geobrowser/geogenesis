@@ -290,3 +290,49 @@ export function ThumbDownIcon({ className = 'size-4' }: IconProps) {
     </svg>
   );
 }
+
+export function MoreHorizontalIcon({ className = 'size-4' }: IconProps) {
+  return (
+    <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden className={`shrink-0 ${className}`}>
+      <circle cx="3.2" cy="8" r="1.25" />
+      <circle cx="8" cy="8" r="1.25" />
+      <circle cx="12.8" cy="8" r="1.25" />
+    </svg>
+  );
+}
+
+export function FlagIcon({ className = 'size-4' }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      className={`shrink-0 ${className}`}
+    >
+      <path d="M3.2 14V2.8" />
+      <path d="M3.2 3.2h8.6l-1.7 3 1.7 3H3.2" />
+    </svg>
+  );
+}
+
+export function MessagePlusIcon({ className = 'size-4' }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      className={`shrink-0 ${className}`}
+    >
+      <path d="M2.5 4.2A1.7 1.7 0 0 1 4.2 2.5h7.6a1.7 1.7 0 0 1 1.7 1.7v5.6a1.7 1.7 0 0 1-1.7 1.7H6.6L3.4 13.8v-2.3H4.2a1.7 1.7 0 0 1-1.7-1.7V4.2Z" />
+      <path d="M8 5v4M6 7h4" />
+    </svg>
+  );
+}

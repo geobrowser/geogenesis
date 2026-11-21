@@ -2,6 +2,13 @@ export { ClaimExplorer, type ClaimExplorerProps } from './claim-explorer';
 export { ClaimSummaryCard, type ClaimSummaryCardProps } from './claim-summary-card';
 export { ContextPeekDrawer, type ContextPeekDrawerProps } from './context-peek-drawer';
 export { EntityGraphExplorer, type EntityGraphExplorerProps } from './entity-graph-explorer';
+export {
+  EntityActionProvider,
+  EntityOverflowMenu,
+  type EntityActionKind,
+  type EntityActionTarget,
+  type EntityOverflowMenuProps,
+} from './entity-overflow-menu';
 export { GraphConnectionsStrip, type GraphConnectionsStripProps } from './graph-connections-strip';
 export {
   ArrowLeftIcon,
@@ -14,6 +21,9 @@ export {
   CloseIcon,
   DatasetIcon,
   DocumentIcon,
+  FlagIcon,
+  MessagePlusIcon,
+  MoreHorizontalIcon,
   NetworkIcon,
   PlayIcon,
   PlusIcon,
@@ -22,6 +32,7 @@ export {
   ThumbUpIcon,
   TweetIcon,
 } from './icons';
+export { RecentDebatesGallery, type RecentDebatesGalleryProps } from './recent-debates-gallery';
 export { RelatedListSection, type RelatedListSectionProps } from './related-list-section';
 export { SourceChipList, type SourceChipListProps } from './source-chip-list';
 export { SplitBars, type SplitBarsProps } from './split-bars';

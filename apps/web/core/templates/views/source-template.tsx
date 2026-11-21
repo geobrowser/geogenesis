@@ -2,12 +2,16 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import type { SourceTemplateModel } from '../models';
 import {
   ArrowUpRightIcon,
   ClaimSummaryCard,
+  EntityOverflowMenu,
   GraphConnectionsStrip,
   RelatedListSection,
+  TEMPLATE_CARD_SURFACE,
   TemplateBadge,
   TemplateShell,
 } from '../primitives';
@@ -38,7 +42,13 @@ export function SourceTemplate({ model, headerActions, footer, className }: Sour
               </TemplateBadge>
             ))}
           </div>
-          {headerActions}
+          <div className="flex shrink-0 items-center gap-2">
+            {headerActions}
+            <EntityOverflowMenu
+              target={{ id: model.id, kind: model.sourceType ?? 'Source', title: model.title }}
+              size="md"
+            />
+          </div>
         </div>
 
         <h1 className="m-0 text-entityTitle text-pretty text-text">{model.title}</h1>
@@ -75,6 +85,29 @@ export function SourceTemplate({ model, headerActions, footer, className }: Sour
             </div>
           ))}
         </dl>
+      )}
+
+      {model.quotes && model.quotes.length > 0 && (
+        <section aria-label="Quotes" className="flex flex-col gap-3.5">
+          <h2 className="m-0 text-mediumTitle font-semibold text-text">Quotes</h2>
+          <div className="flex flex-col gap-3">
+            {model.quotes.map(quote => {
+              const attribution = [quote.speaker, quote.location].filter(Boolean).join(', ');
+              return (
+                <blockquote
+                  key={quote.id}
+                  className={cx('m-0 flex items-start justify-between gap-4 p-5', TEMPLATE_CARD_SURFACE)}
+                >
+                  <div className="flex flex-col gap-2">
+                    <p className="m-0 text-[16px] leading-[24px] text-text">“{quote.text}”</p>
+                    {attribution && <footer className="text-[14px] text-grey-04">— {attribution}</footer>}
+                  </div>
+                  <EntityOverflowMenu target={{ id: quote.id, kind: 'Quote', title: quote.text.slice(0, 80) }} />
+                </blockquote>
+              );
+            })}
+          </div>
+        </section>
       )}
 
       {model.graphConnections && model.graphConnections.length > 0 && (

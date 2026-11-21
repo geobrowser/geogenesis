@@ -127,6 +127,23 @@ export function ContextPeekDrawer({ item, canGoBack, backLabel, onBack, onClose 
 
           {item.summary && <p className="m-0 text-[15px] leading-[23px] text-text/85">{item.summary}</p>}
 
+          {item.quotes && item.quotes.length > 0 && (
+            <div className="flex flex-col gap-2.5">
+              {item.quotes.map(quote => {
+                const attribution = [quote.speaker, quote.location].filter(Boolean).join(', ');
+                return (
+                  <blockquote
+                    key={quote.id}
+                    className="m-0 rounded-xl bg-grey-01/75 px-4 py-3 text-[14.5px] leading-[21px] text-text/90"
+                  >
+                    <p className="m-0">“{quote.text}”</p>
+                    {attribution && <footer className="mt-1.5 text-[13px] text-grey-04">— {attribution}</footer>}
+                  </blockquote>
+                );
+              })}
+            </div>
+          )}
+
           {item.settlingSources && item.settlingSources.length > 0 && <SourceChipList sources={item.settlingSources} />}
 
           {item.externalUrl && (

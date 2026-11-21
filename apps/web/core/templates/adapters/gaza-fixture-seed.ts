@@ -86,6 +86,20 @@ export const SEED_DEBATES: readonly SeedDebate[] = [
     piBeforeAfter: [93, 94],
     allBeforeAfter: [51, 54],
   },
+  {
+    id: 'd-aid',
+    claimId: 'aid',
+    date: '9 Nov 2026',
+    duration: '17:50',
+    votesLabel: '5.6k votes',
+    ppDebater: 'Nadia M.',
+    piDebater: 'Eitan G.',
+    ppPosition: 'Agree',
+    piPosition: 'Disagree',
+    ppBeforeAfter: [93, 95],
+    piBeforeAfter: [10, 13],
+    allBeforeAfter: [52, 55],
+  },
 ];
 
 export const DEBATE_BY_ID: Readonly<Record<string, SeedDebate>> = Object.fromEntries(SEED_DEBATES.map(d => [d.id, d]));

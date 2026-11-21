@@ -5,20 +5,15 @@ import * as React from 'react';
 import cx from 'classnames';
 import Link from 'next/link';
 
-import type {
-  TopicCommunityCaseModel,
-  TopicRankingModel,
-  TopicTemplateModel,
-  TopicTimelineHighlightModel,
-} from '../models';
+import type { TopicTemplateModel, TopicTimelineHighlightModel } from '../models';
 import {
   ArrowRightIcon,
   ChevronRightIcon,
   ClaimExplorer,
+  EntityOverflowMenu,
+  RecentDebatesGallery,
   RelatedListSection,
-  SourceChipList,
   TEMPLATE_CARD_SURFACE,
-  TEMPLATE_INTERACTIVE_CARD_SURFACE,
   TemplateBadge,
   TemplateShell,
 } from '../primitives';
@@ -70,26 +65,15 @@ export function TopicTemplate({ model, headerActions, footer, className }: Topic
               </span>
             )}
           </div>
-          {headerActions}
+          <div className="flex shrink-0 items-center gap-2">
+            {headerActions}
+            <EntityOverflowMenu target={{ id: model.id, kind: 'Topic', title: model.title }} size="md" />
+          </div>
         </div>
 
         <h1 className="m-0 text-entityTitle text-pretty text-text">{model.title}</h1>
 
         {model.lede && <p className="m-0 max-w-[780px] text-[16.5px] leading-[25px] text-text/85">{model.lede}</p>}
-
-        {/* In each community's own words — placed right up top so the page immediately frames both perspectives */}
-        {model.communityCases && model.communityCases.length > 0 && (
-          <section id="cases" aria-label="In each community’s own words" className="mt-2 flex flex-col gap-3">
-            <span className="text-[13px] font-semibold tracking-[0.04em] text-grey-04 uppercase">
-              In each community’s own words
-            </span>
-            <div className="grid grid-cols-1 gap-4 @[680px]:grid-cols-2">
-              {model.communityCases.map(item => (
-                <CommunityCaseCard key={item.community.id} item={item} />
-              ))}
-            </div>
-          </section>
-        )}
       </header>
 
       {/* Community perspective filter bar */}
@@ -144,7 +128,10 @@ export function TopicTemplate({ model, headerActions, footer, className }: Topic
         <ClaimExplorer contestedClaims={contested} agreedClaims={agreed} title="Claims" />
       )}
 
-      {/* Timeline (rendered open directly on the page, above trends) */}
+      {/* Recent debates gallery (horizontal snap-scroll cards matching Genesis's debate gallery) */}
+      {model.recentDebates && model.recentDebates.length > 0 && <RecentDebatesGallery debates={model.recentDebates} />}
+
+      {/* Timeline (rendered open directly on the page) */}
       {model.timelineHighlights && model.timelineHighlights.length > 0 && (
         <section id="timeline" aria-label="Timeline" className="flex flex-col gap-4">
           <div className="flex flex-wrap items-baseline justify-between gap-3">
@@ -190,92 +177,8 @@ export function TopicTemplate({ model, headerActions, footer, className }: Topic
         </div>
       )}
 
-      {/* Rankings (Best reads, Best debates, Bridging picks) */}
-      {model.rankings && model.rankings.length > 0 && (
-        <TopicRankingsSection rankings={model.rankings} communities={communities} />
-      )}
-
       {footer}
     </TemplateShell>
-  );
-}
-
-function CommunityCaseCard({ item }: { item: TopicCommunityCaseModel }) {
-  const [sourcesOpen, setSourcesOpen] = React.useState(false);
-
-  return (
-    <article
-      className={cx(
-        'relative flex flex-col justify-between gap-4 overflow-hidden p-5 @[560px]:p-6',
-        TEMPLATE_CARD_SURFACE
-      )}
-    >
-      {/* Subtle 2.5px top accent bar */}
-      <span
-        aria-hidden
-        className="absolute inset-x-0 top-0 h-[3px]"
-        style={{ backgroundColor: item.community.color }}
-      />
-
-      <div className="flex flex-col gap-3.5 pt-0.5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <span
-              aria-hidden
-              className="inline-block size-3 shrink-0 rounded-full"
-              style={{ backgroundColor: item.community.color }}
-            />
-            <h3 className="m-0 text-[19px] leading-[24px] font-semibold text-text">{item.community.name}</h3>
-            {item.community.memberCount !== undefined && (
-              <span className="text-[14px] text-grey-04 tabular-nums">
-                {item.community.memberCount.toLocaleString('en-US')}
-                {item.isMember ? ', including you' : ''}
-              </span>
-            )}
-          </div>
-
-          {item.onToggleMembership && (
-            <button
-              type="button"
-              onClick={item.onToggleMembership}
-              className={cx(
-                'inline-flex h-9 cursor-pointer items-center rounded-full border px-4 text-[14px] font-medium transition-colors',
-                item.isMember
-                  ? 'border-grey-02 bg-white text-text hover:border-text'
-                  : 'border-text bg-text text-white hover:opacity-90'
-              )}
-            >
-              {item.isMember ? 'Leave' : `Join ${item.community.shortName}`}
-            </button>
-          )}
-        </div>
-
-        <p className="m-0 text-[15px] leading-[23px] text-text/85">{item.summary}</p>
-      </div>
-
-      <div className="flex flex-col gap-3">
-        {item.sources.length > 0 && (
-          <div className="flex flex-col gap-2.5">
-            <button
-              type="button"
-              aria-expanded={sourcesOpen}
-              onClick={() => setSourcesOpen(prev => !prev)}
-              className="cursor-pointer self-start border-0 bg-transparent p-0 text-[14px] font-medium text-ctaPrimary hover:text-ctaHover"
-            >
-              {sourcesOpen ? 'Hide sources' : `Sources this case cites (${item.sources.length})`}
-            </button>
-            {sourcesOpen && <SourceChipList sources={item.sources} />}
-          </div>
-        )}
-
-        {item.concede && (
-          <div className="flex flex-col gap-1 rounded-lg bg-grey-01/80 px-4 py-3 text-[14.5px] leading-[21px] text-text/85">
-            <span className="text-[12px] font-semibold tracking-[0.04em] text-grey-04 uppercase">They’d concede</span>
-            <span>{item.concede}</span>
-          </div>
-        )}
-      </div>
-    </article>
   );
 }
 
@@ -325,240 +228,31 @@ function TimelineHighlightRow({
         />
       </div>
 
-      {/* Right: event milestone headline + concise summary */}
-      <div className={cx('min-w-0 py-4 @[680px]:py-5', !isLast && 'border-b border-divider/90')}>
+      {/* Right: event milestone headline + concise summary + overflow menu */}
+      <div
+        className={cx(
+          'flex min-w-0 items-start justify-between gap-3 py-4 @[680px]:py-5',
+          !isLast && 'border-b border-divider/90'
+        )}
+      >
         {turn.href ? (
-          <Link href={turn.href} className="group flex w-full text-left text-text no-underline">
+          <Link href={turn.href} className="group flex min-w-0 flex-1 text-left text-text no-underline">
             {body}
           </Link>
         ) : turn.onSelect ? (
           <button
             type="button"
             onClick={turn.onSelect}
-            className="group flex w-full cursor-pointer border-0 bg-transparent p-0 text-left text-text"
+            className="group flex min-w-0 flex-1 cursor-pointer border-0 bg-transparent p-0 text-left text-text"
           >
             {body}
           </button>
         ) : (
-          <div className="flex w-full">{body}</div>
+          <div className="flex min-w-0 flex-1">{body}</div>
         )}
+
+        <EntityOverflowMenu target={{ id: turn.id, kind: 'Event', title: turn.title }} className="mt-0.5" />
       </div>
     </li>
-  );
-}
-
-function TopicRankingsSection({
-  rankings,
-  communities,
-}: {
-  rankings: readonly TopicRankingModel[];
-  communities: NonNullable<TopicTemplateModel['communities']>;
-}) {
-  const [activeRankingId, setActiveRankingId] = React.useState(rankings[0]?.id ?? '');
-  const [activeScope, setActiveScope] = React.useState<string>('all');
-  const [suggestOpen, setSuggestOpen] = React.useState(false);
-  const [suggestText, setSuggestText] = React.useState('');
-
-  const ranking = rankings.find(item => item.id === activeRankingId) ?? rankings[0];
-  if (!ranking) return null;
-
-  const availableScopes = Object.keys(ranking.itemsByCommunity);
-  const effectiveScope = availableScopes.includes(activeScope) ? activeScope : (availableScopes[0] ?? 'all');
-  const items = ranking.itemsByCommunity[effectiveScope] ?? [];
-  const showScopePills = availableScopes.length > 1;
-
-  const handleSuggestSubmit = (event: React.FormEvent) => {
-    event.preventDefault();
-    if (suggestText.trim().length < 3) return;
-    ranking.onSuggestItem?.(suggestText.trim());
-    setSuggestText('');
-    setSuggestOpen(false);
-  };
-
-  return (
-    <section id="rankings" aria-label="Rankings" className="flex flex-col gap-4">
-      <h2 className="m-0 text-mediumTitle font-semibold text-text">Rankings</h2>
-
-      {/* 3-across visual ranking deck selector cards */}
-      {rankings.length > 1 && (
-        <div className="grid grid-cols-1 gap-3.5 @[680px]:grid-cols-3">
-          {rankings.map(item => {
-            const isActive = item.id === ranking.id;
-            const totalItems = item.itemsByCommunity.all?.length ?? 0;
-            const isMulti = Object.keys(item.itemsByCommunity).length > 1;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                aria-pressed={isActive}
-                onClick={() => {
-                  setActiveRankingId(item.id);
-                  setActiveScope('all');
-                  setSuggestOpen(false);
-                }}
-                className={cx(
-                  'flex cursor-pointer flex-col justify-between gap-2.5 p-4 text-left transition-all',
-                  isActive
-                    ? 'rounded-xl border border-black/[0.14] bg-white shadow-[0_14px_38px_-6px_rgba(0,0,0,0.1),0_3px_10px_-2px_rgba(0,0,0,0.04)]'
-                    : TEMPLATE_INTERACTIVE_CARD_SURFACE
-                )}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <TemplateBadge tone={isActive ? 'dark' : 'neutral'}>{item.title}</TemplateBadge>
-                  <span className="text-[13.5px] font-medium text-grey-04 tabular-nums">{totalItems} items</span>
-                </div>
-                <p className="m-0 line-clamp-2 text-[14.5px] leading-[20px] text-grey-04">{item.subtitle}</p>
-                <span className="text-[13px] font-medium text-text/70">
-                  {isMulti ? 'Everyone & by community' : 'Ranked across communities'}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Selected ranking panel */}
-      <div className={cx('flex flex-col overflow-hidden', TEMPLATE_CARD_SURFACE)}>
-        {(showScopePills || ranking.onSuggestItem) && (
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-divider px-5 py-3.5">
-            <div className="flex flex-wrap items-center gap-2">
-              {showScopePills &&
-                availableScopes.map(scopeKey => {
-                  const community = communities.find(c => c.id === scopeKey);
-                  const label = scopeKey === 'all' ? 'Everyone' : (community?.name ?? scopeKey);
-                  return (
-                    <button
-                      key={scopeKey}
-                      type="button"
-                      aria-pressed={effectiveScope === scopeKey}
-                      onClick={() => setActiveScope(scopeKey)}
-                      className={cx(
-                        'inline-flex cursor-pointer items-center gap-2 rounded-full border px-3.5 py-1.5 text-[14px] font-medium transition-colors',
-                        effectiveScope === scopeKey
-                          ? 'border-text bg-text text-white'
-                          : 'border-grey-02 bg-white text-text hover:border-text'
-                      )}
-                    >
-                      {community && (
-                        <span
-                          aria-hidden
-                          className="inline-block size-2 rounded-full"
-                          style={{ backgroundColor: community.color }}
-                        />
-                      )}
-                      {label}
-                    </button>
-                  );
-                })}
-            </div>
-
-            {ranking.onSuggestItem && !suggestOpen && (
-              <button
-                type="button"
-                onClick={() => setSuggestOpen(true)}
-                className="inline-flex h-9 cursor-pointer items-center rounded-full border border-text bg-text px-4 text-[14px] font-medium text-white hover:opacity-90"
-              >
-                + Add to this ranking
-              </button>
-            )}
-          </div>
-        )}
-
-        {suggestOpen && ranking.onSuggestItem && (
-          <form
-            onSubmit={handleSuggestSubmit}
-            className="flex flex-col gap-2.5 border-b border-divider bg-bg px-5 py-4 @[560px]:flex-row @[560px]:items-center"
-          >
-            <input
-              type="text"
-              value={suggestText}
-              onChange={e => setSuggestText(e.target.value)}
-              placeholder={ranking.suggestPlaceholder ?? 'Paste a link or type a title...'}
-              className="flex-1 rounded-lg border border-grey-02 bg-white px-3 py-2 text-[15px] text-text focus:border-text focus:outline-hidden"
-            />
-            <div className="flex items-center gap-2">
-              <button
-                type="submit"
-                className="inline-flex h-9 cursor-pointer items-center rounded-full border border-text bg-text px-4 text-[14px] font-medium text-white hover:opacity-90"
-              >
-                Suggest
-              </button>
-              <button
-                type="button"
-                onClick={() => setSuggestOpen(false)}
-                className="cursor-pointer border-0 bg-transparent px-2 text-[14px] text-grey-04 hover:text-text"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        )}
-
-        <div className="divide-y divide-divider">
-          {items.map(item => {
-            const isUp = item.rankDelta?.startsWith('▲');
-            const isDown = item.rankDelta?.startsWith('▼');
-
-            const rowInner = (
-              <>
-                <span className="w-6 shrink-0 text-center text-[15px] font-semibold text-grey-04 tabular-nums">
-                  {item.rank > 0 ? item.rank : '+'}
-                </span>
-                <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <span className="text-[16px] leading-[22px] font-medium text-text">{item.title}</span>
-                  {item.subtitle && <span className="text-[14.5px] text-grey-04">{item.subtitle}</span>}
-                </span>
-                {item.rankDelta && (
-                  <span
-                    className={cx(
-                      'shrink-0 rounded-full px-2.5 py-0.5 text-[13px] font-semibold tabular-nums',
-                      isUp
-                        ? 'bg-ctaTertiary text-ctaPrimary'
-                        : isDown
-                          ? 'bg-grey-01 text-grey-04'
-                          : 'bg-purple-tint text-purple'
-                    )}
-                  >
-                    {item.rankDelta}
-                  </span>
-                )}
-                {item.tag && <TemplateBadge tone="fact">{item.tag}</TemplateBadge>}
-                {item.metric && (
-                  <span className="shrink-0 text-[14px] font-medium text-grey-04 tabular-nums">{item.metric}</span>
-                )}
-              </>
-            );
-
-            const classes =
-              'flex w-full items-center gap-3.5 px-5 py-4 text-left text-text no-underline transition-colors hover:bg-bg';
-
-            if (item.href) {
-              return (
-                <Link key={item.id} href={item.href} className={classes}>
-                  {rowInner}
-                </Link>
-              );
-            }
-            if (item.onSelect) {
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={item.onSelect}
-                  className={`${classes} cursor-pointer border-0 bg-transparent`}
-                >
-                  {rowInner}
-                </button>
-              );
-            }
-            return (
-              <div key={item.id} className={classes}>
-                {rowInner}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </section>
   );
 }

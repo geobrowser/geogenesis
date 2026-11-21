@@ -100,6 +100,13 @@ export interface ClaimSummaryModel {
   onSelect?: () => void;
 }
 
+export interface SourceQuoteModel {
+  id: string;
+  text: string;
+  speaker?: string;
+  location?: string;
+}
+
 export interface EntityLinkRowModel {
   id: string;
   kind: EntityLinkKind;
@@ -112,6 +119,8 @@ export interface EntityLinkRowModel {
   publisher?: string;
   date?: string;
   excerpt?: string;
+  /** Direct verbatim quotes extracted from this source (`QUOTE_TYPE_ID`). */
+  quotes?: readonly SourceQuoteModel[];
   duration?: string;
   authorHandle?: string;
   thumbnailUrl?: string;
@@ -188,6 +197,7 @@ export interface ContextPeekItemModel {
   mediaType?: SourceMediaKind;
   tags?: readonly string[];
   summary?: string;
+  quotes?: readonly SourceQuoteModel[];
   metadata?: readonly { label: string; value: string }[];
   externalUrl?: string;
   externalLabel?: string;
@@ -362,6 +372,30 @@ export interface TopicViralPostPreviewModel {
   onSelect?: () => void;
 }
 
+export interface TopicRecentDebateParticipantModel {
+  name: string;
+  position: 'Agree' | 'Disagree';
+  communityColor: string;
+  avatarUrl?: string;
+}
+
+export interface TopicRecentDebateModel {
+  id: string;
+  claimId: string;
+  claimTitle: string;
+  date: string;
+  duration: string;
+  votesLabel: string;
+  participants: readonly [TopicRecentDebateParticipantModel, TopicRecentDebateParticipantModel];
+  /** Optional community agreement percentages shown in the card's summary band. */
+  split?: SplitBreakdown;
+  userVote?: VoteChoice;
+  onVote?: (choice: Exclude<VoteChoice, null>) => void;
+  onClearVote?: () => void;
+  href?: string;
+  onSelect?: () => void;
+}
+
 export interface TopicTemplateModel {
   id: string;
   title: string;
@@ -381,6 +415,7 @@ export interface TopicTemplateModel {
    * (allowing voting, fact inspection, strongest cases, and source verification without leaving the topic).
    */
   claimDetailsById?: Readonly<Record<string, ClaimTemplateModel>>;
+  recentDebates?: readonly TopicRecentDebateModel[];
   communityCases?: readonly TopicCommunityCaseModel[];
   trends?: TopicTrendsModel;
   timelineHighlights?: readonly TopicTimelineHighlightModel[];
@@ -468,6 +503,7 @@ export interface EventTemplateModel {
   title: string;
   when: string;
   summary?: string;
+  quotes?: readonly SourceQuoteModel[];
   coverUrl?: string | null;
   breadcrumbs?: readonly BreadcrumbItem[];
   storyCountLabel?: string;
@@ -507,6 +543,7 @@ export interface SourceTemplateModel {
   date?: string;
   sourceType?: string;
   summary?: string;
+  quotes?: readonly SourceQuoteModel[];
   coverUrl?: string | null;
   externalUrl?: string;
   externalLabel?: string;

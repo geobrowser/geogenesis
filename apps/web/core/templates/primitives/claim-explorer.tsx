@@ -6,6 +6,7 @@ import cx from 'classnames';
 import Link from 'next/link';
 
 import type { ClaimSummaryModel } from '../models';
+import { EntityOverflowMenu } from './entity-overflow-menu';
 import { CheckCircleIcon, ThumbDownIcon, ThumbUpIcon } from './icons';
 import { SplitBars } from './split-bars';
 import { TEMPLATE_CARD_SURFACE } from './template-shell';
@@ -237,16 +238,18 @@ function RankedClaimRow({ rank, claim, isAgreed }: { rank: number; claim: ClaimS
         </div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-4 pl-10 @[760px]:pl-0">
+      <div className="flex shrink-0 items-center gap-3 pl-10 @[760px]:pl-0">
         {claim.split.rows.length > 0 && (
-          <SplitBars rows={claim.split.rows} density="compact" className="w-[256px] shrink-0" />
+          <SplitBars rows={claim.split.rows} density="compact" className="w-[244px] shrink-0" />
         )}
 
         {voteCountLabel && (
-          <span className="w-[78px] shrink-0 text-right text-[13px] whitespace-nowrap text-grey-04 tabular-nums">
+          <span className="w-[76px] shrink-0 text-right text-[13px] whitespace-nowrap text-grey-04 tabular-nums">
             {voteCountLabel}
           </span>
         )}
+
+        <EntityOverflowMenu target={{ id: claim.id, kind: 'Claim', title: claim.title }} />
       </div>
     </div>
   );

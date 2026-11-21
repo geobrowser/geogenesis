@@ -19,6 +19,7 @@ import {
   type SourceLibraryItemModel,
   type SourceLibraryTemplateModel,
   type SourceMediaKind,
+  type SourceQuoteModel,
   type SourceTemplateModel,
   type SplitBreakdown,
   type StrongestCaseModel,
@@ -81,6 +82,7 @@ interface SeedSource {
   sourceType: string;
   mediaType: SourceMediaKind;
   summary: string;
+  quotes?: readonly SourceQuoteModel[];
   duration?: string;
   authorHandle?: string;
   pickTag?: string;
@@ -97,6 +99,14 @@ const SEED_SOURCES: readonly SeedSource[] = [
     mediaType: 'document',
     summary:
       'The commission, mandated by the UN Human Rights Council, concluded that Israeli authorities and forces committed four of the five acts defined as genocide in the Genocide Convention. Israel rejected the report and the commission’s mandate.',
+    quotes: [
+      {
+        id: 'q-coi-1',
+        text: 'The Commission concludes that Israeli authorities and security forces have committed four of the five genocidal acts defined under the 1948 Convention, including killing and inflicting conditions of life calculated to bring about physical destruction.',
+        speaker: 'UN Independent International Commission of Inquiry',
+        location: 'Report A/HRC/60, §142',
+      },
+    ],
     url: 'https://www.ohchr.org',
   },
   {
@@ -108,6 +118,20 @@ const SEED_SOURCES: readonly SeedSource[] = [
     mediaType: 'document',
     summary:
       'The court’s provisional measures order directed Israel to take all measures within its power to prevent acts of genocide and enable humanitarian aid. It did not rule on the merits; a final ruling is expected around 2029.',
+    quotes: [
+      {
+        id: 'q-icj-1',
+        text: 'The State of Israel shall, in accordance with its obligations under the Convention on the Prevention and Punishment of the Crime of Genocide, take all measures within its power to prevent the commission of all acts within the scope of Article II.',
+        speaker: 'International Court of Justice',
+        location: 'Provisional Measures Order, §86(1)',
+      },
+      {
+        id: 'q-icj-2',
+        text: 'At the present stage of the proceedings, the Court is not called upon to determine definitively whether the rights which South Africa wishes to see protected exist.',
+        speaker: 'International Court of Justice',
+        location: 'Provisional Measures Order, §30',
+      },
+    ],
     url: 'https://www.icj-cij.org',
   },
   {
@@ -120,6 +144,14 @@ const SEED_SOURCES: readonly SeedSource[] = [
     duration: '18:40',
     summary:
       'Israel’s legal team argued it is fighting Hamas in self-defence rather than targeting the Palestinian people, and asked the court to dismiss South Africa’s application.',
+    quotes: [
+      {
+        id: 'q-il-icj-1',
+        text: 'The key component of genocide—the intention to destroy a people, in whole or in part—is totally lacking. What Israel seeks by operating in Gaza is not to destroy a people, but to protect a people, its own people.',
+        speaker: 'Tal Becker, Legal Adviser',
+        location: 'ICJ Oral Proceedings, 07:12',
+      },
+    ],
     url: 'https://www.icj-cij.org',
   },
   {
@@ -131,6 +163,14 @@ const SEED_SOURCES: readonly SeedSource[] = [
     mediaType: 'dataset',
     summary:
       'Compares satellite imagery from before the war with mid-2026 and finds about 82% of Gaza’s structures damaged or destroyed. It records physical damage without attributing responsibility.',
+    quotes: [
+      {
+        id: 'q-unosat-1',
+        text: 'Satellite-detected damage analysis indicates approximately 82 per cent of all structures across the Gaza Strip have been destroyed, severely damaged, or moderately affected relative to pre-October 2023 baseline imagery.',
+        speaker: 'UNOSAT Damage Assessment',
+        location: 'Executive Summary, Jun 2026',
+      },
+    ],
     url: 'https://unosat.org',
   },
   {
@@ -142,6 +182,14 @@ const SEED_SOURCES: readonly SeedSource[] = [
     mediaType: 'dataset',
     summary:
       'The Hamas-run ministry’s running count of people killed, listed by name, age, and sex without distinguishing combatants: 74,702 by mid-November 2026. An IDF official accepted the January 2026 total of about 71,000.',
+    quotes: [
+      {
+        id: 'q-moh-1',
+        text: 'Identified fatalities recorded in hospital morgues and verified family submissions stand at 74,702, excluding missing persons believed buried beneath collapsed structures.',
+        speaker: 'Gaza Health Ministry',
+        location: 'Monthly Registry Update, Nov 2026',
+      },
+    ],
   },
   {
     id: 's-hostages',
@@ -152,6 +200,14 @@ const SEED_SOURCES: readonly SeedSource[] = [
     mediaType: 'dataset',
     summary:
       'Records of each of the 251 people taken hostage on 7 October and their outcomes, compiled from IDF announcements and AP reporting. The last remains were returned on 26 January 2026.',
+    quotes: [
+      {
+        id: 'q-hostages-1',
+        text: 'With the recovery and identification of the final remains on 26 January 2026, all 251 individuals abducted during the 7 October attack have been accounted for.',
+        speaker: 'IDF & AP Joint Tally',
+        location: 'Jan 2026',
+      },
+    ],
   },
   {
     id: 's-plan',
@@ -162,6 +218,14 @@ const SEED_SOURCES: readonly SeedSource[] = [
     mediaType: 'document',
     summary:
       'The US framework behind the October 2025 ceasefire: hostages released within 72 hours, phased Israeli withdrawal to agreed lines, Hamas disarmament, and an international stabilisation force.',
+    quotes: [
+      {
+        id: 'q-plan-1',
+        text: 'Within 72 hours of Israel publicly accepting this agreement, all hostages—alive and deceased—will be returned, followed by phased redeployment to agreed perimeter lines tied to verified demilitarisation.',
+        speaker: 'White House',
+        location: '20-Point Framework, Points 4–7',
+      },
+    ],
   },
   {
     id: 's-afp',
@@ -172,6 +236,14 @@ const SEED_SOURCES: readonly SeedSource[] = [
     mediaType: 'dataset',
     summary:
       'Victim-by-victim tally compiled from Israeli official figures putting the 7 October death toll at about 1,200 people, most of them civilians.',
+    quotes: [
+      {
+        id: 'q-afp-1',
+        text: 'An AFP tally based on official Israeli figures records 1,195 people killed in the 7 October attack, including 815 civilians.',
+        speaker: 'Agence France-Presse',
+        location: 'Verified Casualty Tally',
+      },
+    ],
   },
   {
     id: 's-idf-est',
@@ -183,6 +255,14 @@ const SEED_SOURCES: readonly SeedSource[] = [
     authorHandle: '@IDF',
     summary:
       'Military estimate that 24,000–25,000 fighters were killed in Gaza. The IDF has not published a full methodology or named list.',
+    quotes: [
+      {
+        id: 'q-idf-1',
+        text: 'Our operational assessments indicate approximately 24,000 to 25,000 Hamas and allied operatives have been eliminated across Gaza since October 2023.',
+        speaker: 'IDF Spokesperson',
+        location: 'Jan 2026 briefing',
+      },
+    ],
   },
   {
     id: 's-ipc',
@@ -193,6 +273,14 @@ const SEED_SOURCES: readonly SeedSource[] = [
     mediaType: 'article',
     summary:
       'Confirmed famine (Phase 5) in Gaza Governorate following the spring 2025 aid cutoff, before conditions eased in December 2025 under the ceasefire.',
+    quotes: [
+      {
+        id: 'q-ipc-1',
+        text: 'The Famine Review Committee determines that thresholds for IPC Phase 5 (Famine) have been surpassed in Gaza Governorate following prolonged disruption of food, water, and medical supplies.',
+        speaker: 'IPC Famine Review Committee',
+        location: 'Special Snapshot, Aug 2025',
+      },
+    ],
     pickTag: 'Pro-Palestinian pick for Pro-Israel readers',
   },
 ];
@@ -1123,6 +1211,7 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
       publisher: s.publisher,
       date: s.date,
       excerpt: s.summary,
+      quotes: s.quotes,
       duration: s.duration,
       authorHandle: s.authorHandle,
       meta: `${s.publisher} · ${s.date} · ${s.sourceType}`,
@@ -1704,6 +1793,27 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
       contestedClaims,
       agreedClaims,
       claimDetailsById,
+      recentDebates: SEED_DEBATES.map(debate => {
+        const claim = CLAIM_BY_ID[debate.claimId] ?? SEED_CLAIMS[0];
+        const summary = toSummary(claim);
+        return {
+          id: debate.id,
+          claimId: claim.id,
+          claimTitle: claim.title,
+          date: debate.date,
+          duration: debate.duration,
+          votesLabel: debate.votesLabel,
+          participants: [
+            { name: debate.ppDebater, position: debate.ppPosition, communityColor: '#6833ff' },
+            { name: debate.piDebater, position: debate.piPosition, communityColor: '#3963fe' },
+          ] as const,
+          split: summary.split,
+          userVote: summary.userVote,
+          onVote: summary.onVote,
+          onClearVote: summary.onClearVote,
+          onSelect: () => openDebate(debate.id),
+        };
+      }),
       communityCases: [
         {
           community: { ...GAZA_COMMUNITIES[0], memberCount: 4812 + (joinedCommunityId === 'pp' ? 1 : 0) },
@@ -1759,6 +1869,7 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
     activeCommunityId,
     claimDetailsById,
     joinedCommunityId,
+    openDebate,
     openEvent,
     openSources,
     openTimeline,
@@ -1945,6 +2056,7 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
       date: src.date,
       sourceType: src.sourceType,
       summary: src.summary,
+      quotes: src.quotes,
       externalUrl: src.url,
       tags: src.pickTag ? [src.pickTag] : undefined,
       breadcrumbs: [
@@ -2303,6 +2415,7 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
         mediaType: src.mediaType,
         tags: src.pickTag ? [src.pickTag] : undefined,
         summary: src.summary,
+        quotes: src.quotes,
         metadata: [
           { label: 'Publisher', value: src.publisher },
           { label: 'Date', value: src.date },
