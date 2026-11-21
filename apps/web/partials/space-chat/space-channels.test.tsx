@@ -117,6 +117,12 @@ describe('SpaceChannels', () => {
     expect(within(list()).queryByText('# old')).not.toBeInTheDocument();
   });
 
+  it.each(['%', '%E0%A4%A', '100%'])('shows no channel for %s in the route, without throwing', channel => {
+    mocks.channel = channel;
+    render(<SpaceChannels spaceId={SPACE} />);
+    expect(screen.getByText(SPACE_CHANNELS_COPY.notFound(channel.toLowerCase()))).toBeInTheDocument();
+  });
+
   it('says so for a channel that is not there', () => {
     mocks.channel = 'nope';
     render(<SpaceChannels spaceId={SPACE} />);

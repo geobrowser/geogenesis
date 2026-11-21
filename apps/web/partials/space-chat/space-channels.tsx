@@ -54,11 +54,14 @@ export const SPACE_CHANNELS_COPY = {
 
 const NOTICE_MS = 8_000;
 
-/** The route's channel name; #general without one. */
+/**
+ * The route's channel name; #general without one. Next has decoded it already, and channel names
+ * have nothing to encode, so anything else just finds no channel.
+ */
 function useRouteChannel() {
   const params = useParams<{ channel?: string | string[] }>();
   const raw = Array.isArray(params?.channel) ? params.channel[0] : params?.channel;
-  return raw ? decodeURIComponent(raw).toLowerCase() : GENERAL_CHANNEL;
+  return raw ? raw.toLowerCase() : GENERAL_CHANNEL;
 }
 
 type DialogState = { kind: 'new' } | { kind: 'settings' } | { kind: 'people' } | null;
