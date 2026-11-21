@@ -81,6 +81,11 @@ export function isValidChannelName(name: string) {
 }
 
 /** geo-chat caps counts at 100. */
+/** Unread messages across the space's live channels: the Chat tab's badge. */
+export function spaceUnreadCount(rooms: readonly Pick<SpaceChatRoom, 'archived' | 'unread_count'>[]) {
+  return rooms.reduce((total, room) => total + (room.archived ? 0 : (room.unread_count ?? 0)), 0);
+}
+
 export function unreadLabel(count: number | null | undefined): string | null {
   if (!count || count <= 0) return null;
   return count > 99 ? '99+' : String(count);

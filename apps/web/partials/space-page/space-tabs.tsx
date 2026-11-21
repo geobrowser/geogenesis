@@ -10,6 +10,7 @@ import { profileDebateNavigationCount } from '~/core/profile/profile-debate-visi
 import { hasRecordToShow } from '~/core/profile/profile-proposer';
 import { useSpaceCalls } from '~/core/space-calls/hooks';
 import { spaceCallsTabPath } from '~/core/space-calls/routes';
+import { spaceUnreadCount, unreadLabel } from '~/core/space-chat/channels';
 import { useSpaceChatRooms } from '~/core/space-chat/hooks';
 import { spaceChatTabPath } from '~/core/space-chat/routes';
 import { useEditable } from '~/core/state/editable-store';
@@ -281,6 +282,7 @@ export function SpaceTabs({
   const isDebugDebatesPageEnabled = useDebugDebatesPageEnabled();
   const isSpaceCallsEnabled = useFeatureFlag('spaceCalls');
   const isSpaceChatEnabled = useFeatureFlag('spaceChat');
+  const isSpaceChannelsEnabled = useFeatureFlag('spaceChannels');
   const { personalSpaceId } = usePersonalSpaceId();
   const isOwner = Boolean(personalSpaceId && ID.equals(personalSpaceId, spaceId));
 
@@ -334,7 +336,13 @@ export function SpaceTabs({
   // Chat follows Calls (GEO-3422), except where geo-chat says the space has no rooms.
   const chatRooms = useSpaceChatRooms(spaceId, showCommunity && isSpaceChatEnabled);
   const showChat = showCommunity && isSpaceChatEnabled && chatRooms.data?.supported !== false;
-  const chatTab = showChat ? [{ label: 'Chat', href: spaceChatTabPath(spaceId) }] : [];
+  const chatUnread =
+    isSpaceChannelsEnabled && chatRooms.data?.channelsEnabled
+      ? unreadLabel(spaceUnreadCount(chatRooms.data.rooms))
+      : null;
+  const chatTab = showChat
+    ? [{ label: 'Chat', href: spaceChatTabPath(spaceId), ...(chatUnread ? { badge: chatUnread } : {}) }]
+    : [];
   systemTabsBefore.push(...chatTab);
 
   const systemTabsAfter: SystemTab[] = [];

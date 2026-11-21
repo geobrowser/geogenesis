@@ -10,6 +10,7 @@ import {
   normalizeChannelName,
   permissionsLine,
   sortChannels,
+  spaceUnreadCount,
   unreadLabel,
 } from './channels';
 
@@ -96,5 +97,14 @@ describe('channel locks', () => {
     expect(lockedChannelSettings({ kind: 'channel' }).size).toBe(0);
     expect([canArchiveChannel({ kind: 'member' }), canArchiveChannel({ kind: 'editor' })]).toEqual([false, false]);
     expect(canArchiveChannel({ kind: 'channel' })).toBe(true);
+  });
+});
+
+describe('spaceUnreadCount', () => {
+  it('adds the live channels’ unread counts, skipping archived ones', () => {
+    expect(
+      spaceUnreadCount([{ unread_count: 3 }, { unread_count: 120 }, { unread_count: 5, archived: true }, {}])
+    ).toBe(123);
+    expect(unreadLabel(spaceUnreadCount([{ unread_count: 3 }, { unread_count: 120 }]))).toBe('99+');
   });
 });
