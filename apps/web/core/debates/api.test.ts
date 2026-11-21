@@ -1159,7 +1159,7 @@ describe('GEO-3553 session codes and profile state', () => {
       profile: 'pending',
       pendingSince: '2026-11-03T18:00:04Z',
       retryAfterMs: 5000,
-      viewer: { profileSpaceId: 'space-a', displayName: null, avatarCid: null },
+      viewer: { profileSpaceId: 'space-a', personId: null, displayName: null, avatarCid: null },
     });
   });
 

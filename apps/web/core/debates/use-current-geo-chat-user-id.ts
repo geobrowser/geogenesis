@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { getCurrentGeoChatUserId, resolveCurrentGeoChatUserId } from './api';
+import { getCurrentGeoChatUserId, resolveCurrentGeoChatUserId, subscribeGeoChatSession } from './api';
 import { useGeoChatAuth } from './hooks';
 
 /**
@@ -19,7 +19,8 @@ import { useGeoChatAuth } from './hooks';
  */
 export function useCurrentGeoChatUserId(): string | null {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
-  const stored = getCurrentGeoChatUserId();
+  // Subscribed, so a session written or cleared after mount reaches every caller.
+  const stored = React.useSyncExternalStore(subscribeGeoChatSession, getCurrentGeoChatUserId, () => null);
   // Kept with the account it was resolved for. Switching accounts clears the stored session, so a
   // bare id would go on answering for the account the viewer just left.
   const [resolved, setResolved] = React.useState<{ accountKey: string | null; id: string } | null>(null);

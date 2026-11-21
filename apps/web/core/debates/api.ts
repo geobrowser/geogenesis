@@ -4672,13 +4672,34 @@ function saveSession(session: GeoChatSession, accountKey: string | null) {
       geoChatSessionStorageKey,
       JSON.stringify({ account_key: accountKey, session } satisfies StoredGeoChatSession)
     );
+    notifySessionListeners();
   }
 }
 
 function removeStoredSession() {
   if (typeof window !== 'undefined') {
     window.localStorage.removeItem(geoChatSessionStorageKey);
+    notifySessionListeners();
   }
+}
+
+const sessionListeners = new Set<() => void>();
+
+function notifySessionListeners() {
+  for (const listener of sessionListeners) listener();
+}
+
+/** Calls `listener` whenever the stored session changes, here or in another tab. */
+export function subscribeGeoChatSession(listener: () => void) {
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === geoChatSessionStorageKey) listener();
+  };
+  sessionListeners.add(listener);
+  window.addEventListener('storage', onStorage);
+  return () => {
+    sessionListeners.delete(listener);
+    window.removeEventListener('storage', onStorage);
+  };
 }
 
 function assertCurrentGeoChatSessionEpoch(issuedForEpoch: number) {

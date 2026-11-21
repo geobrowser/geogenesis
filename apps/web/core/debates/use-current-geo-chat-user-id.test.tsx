@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -51,6 +51,18 @@ describe('useCurrentGeoChatUserId', () => {
 
     expect(readId()).toBe('user-a');
     expect(mocks.resolve).not.toHaveBeenCalled();
+  });
+
+  it('follows the stored session when it changes after mount', () => {
+    mocks.stored = 'user-a';
+    render(<Probe />);
+    expect(readId()).toBe('user-a');
+
+    mocks.stored = 'user-b';
+    act(() => {
+      window.dispatchEvent(new StorageEvent('storage', { key: 'geo:chat-session' }));
+    });
+    expect(readId()).toBe('user-b');
   });
 
   it('resolves the id when the session has not been written yet', async () => {
