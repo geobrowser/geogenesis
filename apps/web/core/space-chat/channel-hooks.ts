@@ -17,6 +17,7 @@ import {
   updateSpaceChannel,
 } from './api';
 import { useSpaceChatAuth } from './hooks';
+import { showChatRoom } from './shown-room';
 import { type SpaceChatRoomsData, sameMessageId, spaceChatQueryKeys, withChannelUpdate } from './state';
 
 function signInError() {
@@ -174,6 +175,12 @@ export function useMarkChannelRead(room: SpaceChatRoom | null, newestId: string 
     pending.current = { roomId, messageId: newestId, auth };
     timer.current ??= setTimeout(flush, READ_CURSOR_DELAY_MS);
   }, [auth, flush, lastRead, newestId, queryClient, roomId, showing, spaceId, visible]);
+
+  // While shown in a visible tab, `space.channel_activity` leaves this channel's badge alone.
+  React.useEffect(() => {
+    if (!roomId || !showing || !visible) return;
+    return showChatRoom(roomId);
+  }, [roomId, showing, visible]);
 
   // Hiding or leaving the tab, or another channel, writes what is pending now.
   React.useEffect(() => {

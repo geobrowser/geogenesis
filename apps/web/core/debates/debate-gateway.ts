@@ -21,13 +21,16 @@ import {
   spaceCallsRefetch,
   withSpaceCallPatch,
 } from '~/core/space-calls/space-calls-patch';
+import { getShownChatRoom } from '~/core/space-chat/shown-room';
 import {
   type SpaceChannelRoomEvent,
   type SpaceChatRoomsData,
   type SpaceChatState,
+  parseSpaceChannelActivity,
   parseSpaceChannelRoomEvent,
   parseSpaceChatRoomEvent,
   spaceChatQueryKeys,
+  withChannelActivity,
   withChannelUpdate,
   withRoomEvent,
 } from '~/core/space-chat/state';
@@ -145,6 +148,7 @@ const DEBATE_EVENT_AUDIENCE = {
   'debate.lobby_guests_changed': 'participants',
   'debate.space_calls_changed': 'broadcast',
   'space.channels_changed': 'broadcast',
+  'space.channel_activity': 'participants',
 } as const satisfies Record<string, 'broadcast' | 'participants'>;
 
 type DebateEventType = keyof typeof DEBATE_EVENT_AUDIENCE;
@@ -914,6 +918,18 @@ export class DebateGatewayClient {
       case 'space.channels_changed':
         if (identifiers.space_id) this.queueChannelList(identifiers.space_id);
         break;
+      // GEO-3818. A hint, counted into the cached list; the list itself is re-read on focus and lag.
+      case 'space.channel_activity': {
+        const activity = parseSpaceChannelActivity(identifiers);
+        if (!activity || this.anonymous) break;
+        const viewer = currentChatViewer();
+        const shown = getShownChatRoom();
+        this.queryClient.setQueriesData<SpaceChatRoomsData>(
+          { queryKey: spaceChatQueryKeys.roomsRoot(activity.spaceId, this.accountKey) },
+          current => (current ? withChannelActivity(current, activity, viewer, shown) : current)
+        );
+        break;
+      }
       case 'debate.space_calls_changed': {
         if (!identifiers.space_id) break;
         const listKey = spaceCallKeys.list(identifiers.space_id);

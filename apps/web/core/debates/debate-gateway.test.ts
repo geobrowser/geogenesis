@@ -9,6 +9,7 @@ import {
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { showChatRoom } from '~/core/space-chat/shown-room';
 import type { SpaceChatState } from '~/core/space-chat/state';
 
 import { GeoChatRequestError, getStoredGeoChatAccessToken, resetGeoChatSession } from './api';
@@ -1732,6 +1733,47 @@ describe('DebateGatewayClient', () => {
 
       release();
       expect(client.isRoomRevoked(roomId)).toBe(false);
+    });
+
+    it('counts space.channel_activity into the cached list, not the shown channel, with no refetch', async () => {
+      const row = { id: dashless, space_id: 'space-1', kind: 'channel', unread_count: 1, last_read_message_id: null };
+      queryClient.setQueryData(roomsKey, {
+        supported: true,
+        rooms: [row],
+        channelsEnabled: true,
+        canManageChannels: false,
+      });
+      await connected();
+      const activity = (eventId: string, messageId: string) =>
+        sockets[0]!.receive('EVENT', {
+          event_id: eventId,
+          event_type: 'space.channel_activity',
+          payload: { space_id: 'space-1', room_id: dashless, message_id: messageId, author_id: 'someone' },
+        });
+      const unread = () =>
+        queryClient.getQueryData<{ rooms: { unread_count: number }[] }>(roomsKey)?.rooms[0]?.unread_count;
+
+      activity('activity-1', '0195000000007000800000000000000a');
+      expect(unread()).toBe(2);
+      const hide = showChatRoom(roomId);
+      activity('activity-2', '0195000000007000800000000000000b');
+      expect(unread()).toBe(2);
+      hide();
+      activity('activity-3', '0195000000007000800000000000000c');
+      expect(unread()).toBe(3);
+      await flushInvalidations();
+      expect(invalidateQueries).not.toHaveBeenCalled();
+    });
+
+    it('re-reads the room list after events_lagged', async () => {
+      await connected();
+      sockets[0]!.receive('ERROR', { code: 'events_lagged' });
+      await vi.advanceTimersByTimeAsync(5_000);
+      await flushInvalidations();
+      const predicate = (
+        invalidateQueries.mock.calls[0]?.[0] as { predicate?: (q: { queryKey: unknown[] }) => boolean }
+      )?.predicate;
+      expect(predicate?.({ queryKey: roomsKey })).toBe(true);
     });
 
     it('subscribes a revoked channel again when readmitted', async () => {

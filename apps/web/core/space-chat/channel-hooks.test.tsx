@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { SpaceChatRoom } from './api';
 import { READ_CURSOR_DELAY_MS, useMarkChannelRead, withWrittenRoom } from './channel-hooks';
+import { getShownChatRoom } from './shown-room';
 
 const mocks = vi.hoisted(() => ({ markRead: vi.fn() }));
 vi.mock('./api', async importOriginal => ({
@@ -80,6 +81,17 @@ describe('useMarkChannelRead', () => {
       vi.advanceTimersByTime(READ_CURSOR_DELAY_MS);
     });
     expect(mocks.markRead).toHaveBeenLastCalledWith('r1', '02', expect.anything());
+  });
+
+  it('marks the channel shown while its tab is visible, and clears it on hide and unmount', () => {
+    const { unmount } = renderRead({ newestId: '01' });
+    expect(getShownChatRoom()).toBe('r1');
+    setHidden(true);
+    expect(getShownChatRoom()).toBeNull();
+    setHidden(false);
+    expect(getShownChatRoom()).toBe('r1');
+    unmount();
+    expect(getShownChatRoom()).toBeNull();
   });
 
   it('writes at once when the window loses focus or the channel closes', () => {
