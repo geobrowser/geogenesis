@@ -97,6 +97,34 @@ describe('useCurrentGeoChatUserId', () => {
     await waitFor(() => expect(readId()).toBe('unknown'));
   });
 
+  it('keeps the last id through a session reset for the same account', async () => {
+    mocks.stored = 'user-a';
+    mocks.resolve.mockReturnValue(new Promise(() => {}));
+    const view = render(<Probe />);
+    expect(readId()).toBe('user-a');
+
+    mocks.stored = null;
+    view.rerender(<Probe />);
+    expect(readId()).toBe('user-a');
+
+    mocks.authenticated = false;
+    view.rerender(<Probe />);
+    expect(readId()).toBe('unknown');
+  });
+
+  it('answers with the new account’s id after a switch, never the old one', async () => {
+    mocks.stored = 'user-a';
+    const view = render(<Probe />);
+    expect(readId()).toBe('user-a');
+
+    mocks.stored = null;
+    mocks.accountKey = 'account-b';
+    mocks.resolve.mockResolvedValue('user-b');
+    view.rerender(<Probe />);
+    expect(readId()).toBe('unknown');
+    await waitFor(() => expect(readId()).toBe('user-b'));
+  });
+
   it('lets the stored session take over from a resolved id', async () => {
     const view = render(<Probe />);
     await waitFor(() => expect(readId()).toBe('user-a'));

@@ -26,10 +26,12 @@ export function useCurrentGeoChatUserId(): string | null {
   const [resolved, setResolved] = React.useState<{ accountKey: string | null; id: string } | null>(null);
 
   React.useEffect(() => {
-    // The stored session already answers it, and it stays authoritative — a resolved id from an
-    // earlier account must never outlive it.
+    // Held for this account, so a session reset (expiry, failed refresh) keeps answering with it
+    // until the new session lands, instead of reading as nobody: voice, for one, unmounts on null.
     if (stored) {
-      setResolved(current => (current === null ? current : null));
+      setResolved(current =>
+        current?.accountKey === accountKey && current.id === stored ? current : { accountKey, id: stored }
+      );
       return;
     }
     if (!authenticated) {
@@ -52,5 +54,5 @@ export function useCurrentGeoChatUserId(): string | null {
   }, [accountKey, authenticated, getPrivyIdentityToken, stored]);
 
   if (stored) return stored;
-  return resolved && resolved.accountKey === accountKey ? resolved.id : null;
+  return authenticated && resolved && resolved.accountKey === accountKey ? resolved.id : null;
 }
