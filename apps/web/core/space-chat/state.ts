@@ -84,6 +84,48 @@ const CHANNEL_FIELDS = [
   'version',
 ] as const satisfies readonly (keyof SpaceChatRoom)[];
 
+/** `space.channel_activity`: a message landed in a channel the viewer reads (GEO-3818). */
+export type SpaceChannelActivity = { spaceId: string; roomId: string; messageId: string; authorId: string };
+
+/** Local unread counts stop here; the badge reads 99+ above 99. */
+export const UNREAD_COUNT_CAP = 100;
+
+export function parseSpaceChannelActivity(payload: unknown): SpaceChannelActivity | null {
+  if (!isRecord(payload)) return null;
+  const { space_id, room_id, message_id, author_id } = payload;
+  if (typeof space_id !== 'string' || typeof room_id !== 'string') return null;
+  if (typeof message_id !== 'string' || typeof author_id !== 'string') return null;
+  return { spaceId: space_id, roomId: room_id, messageId: message_id, authorId: author_id };
+}
+
+/**
+ * One more unread message on the channel's row, unless the viewer wrote it, the channel is the one
+ * showing (its own messages arrive there), or the message is at or before the read cursor or one
+ * already counted. Message ids are v7, so they sort by time.
+ */
+export function withChannelActivity(
+  current: SpaceChatRoomsData,
+  activity: SpaceChannelActivity,
+  viewer: ChatViewer | null,
+  shownRoomId: string | null
+): SpaceChatRoomsData {
+  if (isViewerId(viewer, activity.authorId)) return current;
+  if (shownRoomId && dashlessId(shownRoomId) === dashlessId(activity.roomId)) return current;
+  const index = current.rooms.findIndex(row => dashlessId(row.id) === dashlessId(activity.roomId));
+  if (index === -1) return current;
+  const row = current.rooms[index]!;
+  const messageId = dashlessId(activity.messageId);
+  const seen = [row.last_read_message_id, row.counted_message_id].filter((id): id is string => !!id).map(dashlessId);
+  if (seen.some(id => id >= messageId)) return current;
+  const rooms = [...current.rooms];
+  rooms[index] = {
+    ...row,
+    unread_count: Math.min((row.unread_count ?? 0) + 1, UNREAD_COUNT_CAP),
+    counted_message_id: activity.messageId,
+  };
+  return { ...current, rooms };
+}
+
 /** A channel's newer settings laid over its cached row; stale versions and unknown rooms change nothing. */
 export function withChannelUpdate(current: SpaceChatRoomsData, room: SpaceChatRoom): SpaceChatRoomsData {
   const index = current.rooms.findIndex(held => sameMessageId(held.id, room.id));

@@ -30,6 +30,8 @@ export type SpaceChatRoom = {
   /** Capped at 100; `null` signed out. */
   unread_count?: number | null;
   last_read_message_id?: string | null;
+  /** Local only: the newest `space.channel_activity` counted into `unread_count`; a refetch drops it. */
+  counted_message_id?: string;
 };
 
 export type SpaceChatRoomList = {

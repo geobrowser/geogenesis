@@ -4,10 +4,13 @@ import type { SpaceChatMessage, SpaceChatPage, SpaceChatRoom } from './api';
 import {
   type SpaceChatRoomsData,
   type SpaceChatState,
+  UNREAD_COUNT_CAP,
+  parseSpaceChannelActivity,
   parseSpaceChannelRoomEvent,
   parseSpaceChatRoomEvent,
   shownReactions,
   spaceChatQueryKeys,
+  withChannelActivity,
   withChannelUpdate,
   withChatMessage,
   withChatPage,
@@ -469,5 +472,70 @@ describe('channels (GEO-3818)', () => {
     expect(spaceChatQueryKeys.rooms('s', 'acct').slice(0, root.length)).toEqual(root);
     expect(spaceChatQueryKeys.rooms('s', 'acct', true).slice(0, root.length)).toEqual(root);
     expect(spaceChatQueryKeys.rooms('s', 'acct', true)).not.toEqual(spaceChatQueryKeys.rooms('s', 'acct'));
+  });
+});
+
+describe('channel activity (GEO-3818)', () => {
+  const ROOM = '0192aaaa000070008000000000000003';
+  const row = (extra: Partial<SpaceChatRoom> = {}): SpaceChatRoom => ({
+    id: ROOM,
+    public_dao_space_id: 'p',
+    space_id: 'space-1',
+    kind: 'channel',
+    key: 'k',
+    unread_count: 2,
+    last_read_message_id: '0195000000007000800000000000000a',
+    ...extra,
+  });
+  const list = (rooms: SpaceChatRoom[]) => ({
+    supported: true,
+    rooms,
+    channelsEnabled: true,
+    canManageChannels: false,
+  });
+  const activity = (messageId: string, authorId = 'other') =>
+    parseSpaceChannelActivity({ space_id: 'space-1', room_id: ROOM, message_id: messageId, author_id: authorId })!;
+  const viewer = { userId: 'user', personId: 'person' };
+  const unread = (data: ReturnType<typeof list>) => data.rooms[0]!.unread_count;
+
+  it('reads the event, and nothing else', () => {
+    expect(activity('0195000000007000800000000000000b')).toEqual({
+      spaceId: 'space-1',
+      roomId: ROOM,
+      messageId: '0195000000007000800000000000000b',
+      authorId: 'other',
+    });
+    expect(parseSpaceChannelActivity({ space_id: 'space-1', room_id: ROOM })).toBeNull();
+  });
+
+  it('counts a new message once, past the read cursor', () => {
+    let data = withChannelActivity(list([row()]), activity('0195000000007000800000000000000b'), viewer, null);
+    expect(unread(data)).toBe(3);
+    data = withChannelActivity(data, activity('0195000000007000800000000000000b'), viewer, null);
+    expect(unread(data)).toBe(3);
+    data = withChannelActivity(data, activity('0195000000007000800000000000000a'), viewer, null);
+    expect(unread(data)).toBe(3);
+    data = withChannelActivity(data, activity('0195000000007000800000000000000c'), viewer, null);
+    expect(unread(data)).toBe(4);
+  });
+
+  it('skips the viewer’s own message under either id, the channel showing, and unknown rooms', () => {
+    const fresh = '0195000000007000800000000000000b';
+    const start = list([row()]);
+    expect(withChannelActivity(start, activity(fresh, 'person'), viewer, null)).toBe(start);
+    expect(withChannelActivity(start, activity(fresh, 'user'), viewer, null)).toBe(start);
+    expect(withChannelActivity(start, activity(fresh), viewer, '0192aaaa-0000-7000-8000-000000000003')).toBe(start);
+    const other = list([row({ id: '0192aaaa000070008000000000000004' })]);
+    expect(withChannelActivity(other, activity(fresh), viewer, null)).toBe(other);
+  });
+
+  it('stops at the cap', () => {
+    const data = withChannelActivity(
+      list([row({ unread_count: UNREAD_COUNT_CAP })]),
+      activity('0195000000007000800000000000000b'),
+      viewer,
+      null
+    );
+    expect(unread(data)).toBe(UNREAD_COUNT_CAP);
   });
 });
