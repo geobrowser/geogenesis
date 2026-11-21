@@ -334,14 +334,14 @@ function TimelineTurnItem({
         </div>
 
         {turn.href ? (
-          <Link href={turn.href} className="text-text no-underline hover:text-ctaPrimary">
+          <Link href={turn.href} className="text-text no-underline hover:text-[#4c1fd4]">
             {titleNode}
           </Link>
         ) : turn.onSelect ? (
           <button
             type="button"
             onClick={turn.onSelect}
-            className="cursor-pointer border-0 bg-transparent p-0 text-left text-text hover:text-ctaPrimary"
+            className="cursor-pointer border-0 bg-transparent p-0 text-left text-text hover:text-[#4c1fd4]"
           >
             {titleNode}
           </button>
@@ -405,7 +405,7 @@ function TimelineTurnItem({
                   <Link
                     key={claim.id}
                     href={claim.href}
-                    className="inline-flex items-center rounded-full border border-black/[0.06] bg-white px-3 py-1 text-[13.5px] font-medium text-text no-underline shadow-[0_1px_4px_rgba(0,0,0,0.04)] transition-colors hover:border-text hover:text-ctaPrimary"
+                    className="inline-flex items-center rounded-full border border-black/[0.06] bg-white px-3 py-1 text-[13.5px] font-medium text-text no-underline shadow-[0_1px_4px_rgba(0,0,0,0.04)] transition-colors hover:border-text hover:text-[#4c1fd4]"
                   >
                     {claim.title}
                   </Link>
@@ -414,7 +414,7 @@ function TimelineTurnItem({
                     key={claim.id}
                     type="button"
                     onClick={claim.onSelect}
-                    className="inline-flex cursor-pointer items-center rounded-full border border-black/[0.06] bg-white px-3 py-1 text-[13.5px] font-medium text-text shadow-[0_1px_4px_rgba(0,0,0,0.04)] transition-colors hover:border-text hover:text-ctaPrimary"
+                    className="inline-flex cursor-pointer items-center rounded-full border border-black/[0.06] bg-white px-3 py-1 text-[13.5px] font-medium text-text shadow-[0_1px_4px_rgba(0,0,0,0.04)] transition-colors hover:border-text hover:text-[#4c1fd4]"
                   >
                     {claim.title}
                   </button>

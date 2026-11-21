@@ -9,6 +9,7 @@ import {
   type CommunityDefinition,
   type ContextPeekItemModel,
   type DebateTemplateModel,
+  type EntityContextDataModel,
   type EntityListSectionModel,
   type EventTemplateModel,
   type GraphConnectionGroupModel,
@@ -33,6 +34,7 @@ import {
   type TopicViralPostPreviewModel,
   type VoteChoice,
   computeSplitGap,
+  formatCompactCount,
   isClaimSplit,
 } from '../models';
 import { outletColorFrom, outletInitialsFrom } from '../ontology';
@@ -975,6 +977,270 @@ const PIN_ORDER: Record<string, readonly string[]> = {
   pi: ['gov', 'shields', 'unrwa', 'cf', 'civ', 'two-state', 'us-arms', 'aid', 'icc', 'gen'],
 };
 
+const SEED_ENTITY_CONTEXT: Readonly<Record<string, EntityContextDataModel>> = {
+  gen: {
+    triples: [
+      {
+        id: 't-gen-status',
+        predicate: 'Legal status',
+        values: [
+          { id: 'v-gen-icj', label: 'ICJ provisional measures (Jan 2024)' },
+          { id: 'v-gen-merits', label: 'Merits ruling pending (~2029)' },
+        ],
+      },
+      {
+        id: 't-gen-supporting',
+        predicate: 'Supporting reports',
+        values: [
+          { id: 'v-gen-coi', label: 'UN Commission of Inquiry' },
+          { id: 'v-gen-amnesty', label: 'Amnesty International' },
+          { id: 'v-gen-btselem', label: 'B’Tselem' },
+        ],
+      },
+      {
+        id: 't-gen-actors',
+        predicate: 'Related actors',
+        values: [
+          { id: 'v-gen-court', label: 'International Court of Justice' },
+          { id: 'v-gen-il', label: 'Israel’s government' },
+          { id: 'v-gen-sa', label: 'South Africa' },
+        ],
+      },
+    ],
+    flags: [
+      {
+        id: 'flg-gen-1',
+        reason: 'Missing framing',
+        body: 'Legal scholars split on whether the high threshold of specific intent (dolus specialis) under the 1948 Convention is established alongside military objectives.',
+        helpfulPercent: 84,
+        bridging: true,
+      },
+    ],
+  },
+  civ: {
+    triples: [
+      {
+        id: 't-civ-sources',
+        predicate: 'Datasets cited',
+        values: [
+          { id: 'v-civ-moh', label: 'Gaza Health Ministry (74,702)' },
+          { id: 'v-civ-idf', label: 'IDF fighter estimate (24k–25k)' },
+        ],
+      },
+      {
+        id: 't-civ-ratio',
+        predicate: 'Implied ratio',
+        values: [{ id: 'v-civ-two-thirds', label: '~65–70% civilians using IDF upper bound' }],
+      },
+    ],
+  },
+  cf: {
+    triples: [
+      {
+        id: 't-cf-framework',
+        predicate: 'Framework',
+        values: [
+          { id: 'v-cf-plan', label: 'US 20-point plan' },
+          { id: 'v-cf-line', label: 'Yellow Line perimeter' },
+        ],
+      },
+    ],
+    flags: [
+      {
+        id: 'flg-cf-1',
+        reason: 'Disputed fact',
+        body: 'Both sides accuse the other of repeated ceasefire violations since October 2025, with hundreds killed in strikes near the Yellow Line.',
+        helpfulPercent: 88,
+        bridging: true,
+      },
+    ],
+  },
+  'd-gen': {
+    triples: [
+      {
+        id: 't-dgen-refs',
+        predicate: 'Sources cited',
+        values: [
+          { id: 'v-dgen-icj', label: 'ICJ Order (Jan 2024)' },
+          { id: 'v-dgen-coi', label: 'UN Commission of Inquiry' },
+        ],
+      },
+      {
+        id: 't-dgen-context',
+        predicate: 'Recorded after',
+        values: [{ id: 'v-dgen-ev', label: 'UN inquiry follow-up (Oct 2026)' }],
+      },
+    ],
+  },
+  e71k: {
+    triples: [
+      {
+        id: 't-e71k-actors',
+        predicate: 'Actors',
+        values: [
+          { id: 'v-e71k-idf', label: 'Israel Defense Forces' },
+          { id: 'v-e71k-moh', label: 'Gaza Health Ministry' },
+        ],
+      },
+      {
+        id: 't-e71k-clarif',
+        predicate: 'Clarifications',
+        values: [
+          { id: 'v-e71k-1', label: 'Not an official army count (IDF spokesperson)' },
+          { id: 'v-e71k-2', label: 'Combatant breakdown under analysis' },
+        ],
+      },
+    ],
+  },
+  ecoi: {
+    triples: [
+      {
+        id: 't-ecoi-body',
+        predicate: 'Mandated by',
+        values: [{ id: 'v-ecoi-hrc', label: 'UN Human Rights Council' }],
+      },
+      {
+        id: 't-ecoi-scope',
+        predicate: 'Period covered',
+        values: [{ id: 'v-ecoi-yr', label: 'Oct 2025 – Oct 2026 (post-ceasefire)' }],
+      },
+    ],
+    flags: [
+      {
+        id: 'flg-ecoi-1',
+        reason: 'Missing framing',
+        body: 'Israel declined to cooperate with the Commission of Inquiry and rejected the report as politically biased.',
+        helpfulPercent: 82,
+        bridging: true,
+      },
+    ],
+  },
+  's-il-icj': {
+    triples: [
+      {
+        id: 't-sil-speaker',
+        predicate: 'Speaker',
+        values: [{ id: 'v-sil-becker', label: 'Tal Becker (Legal Adviser)' }],
+      },
+      {
+        id: 't-sil-proc',
+        predicate: 'Proceeding',
+        values: [
+          { id: 'v-sil-case', label: 'South Africa v. Israel' },
+          { id: 'v-sil-court', label: 'International Court of Justice' },
+        ],
+      },
+      {
+        id: 't-sil-outcome',
+        predicate: 'Outcome',
+        values: [
+          { id: 'v-sil-dismiss', label: 'Court declined dismissal' },
+          { id: 'v-sil-pm', label: 'Provisional measures ordered (26 Jan 2024)' },
+        ],
+      },
+    ],
+  },
+  's-idf-est': {
+    triples: [
+      {
+        id: 't-sidf-pub',
+        predicate: 'Published by',
+        values: [{ id: 'v-sidf-idf', label: 'Israel Defense Forces (@IDF)' }],
+      },
+      {
+        id: 't-sidf-fig',
+        predicate: 'Figures',
+        values: [
+          { id: 'v-sidf-f1', label: '24,000–25,000 fighters estimated' },
+          { id: 'v-sidf-f2', label: '~71,000 overall toll accepted (Jan 2026)' },
+        ],
+      },
+      {
+        id: 't-sidf-method',
+        predicate: 'Methodology',
+        values: [{ id: 'v-sidf-m', label: 'No named list or methodology published' }],
+      },
+    ],
+    flags: [
+      {
+        id: 'flg-sidf-1',
+        reason: 'Missing methodology',
+        body: 'The IDF has not released a named list or methodology distinguishing Hamas fighters from police, civil defence personnel, or military-age civilians.',
+        helpfulPercent: 86,
+        bridging: true,
+      },
+    ],
+  },
+  's-coi': {
+    triples: [
+      {
+        id: 't-scoi-mandate',
+        predicate: 'Mandated by',
+        values: [{ id: 'v-scoi-hrc', label: 'UN Human Rights Council' }],
+      },
+      {
+        id: 't-scoi-finding',
+        predicate: 'Findings',
+        values: [
+          { id: 'v-scoi-f1', label: '4 of 5 Genocide Convention acts' },
+          { id: 'v-scoi-f2', label: 'Follow-up report (Oct 2026)' },
+        ],
+      },
+      {
+        id: 't-scoi-disputed',
+        predicate: 'Disputed by',
+        values: [
+          { id: 'v-scoi-il', label: 'Israel’s government' },
+          { id: 'v-scoi-scholars', label: 'Legal scholars (intent standard)' },
+        ],
+      },
+    ],
+    flags: [
+      {
+        id: 'flg-scoi-1',
+        reason: 'Disputed mandate',
+        body: 'Israel and several Western legal scholars dispute the Commission’s open-ended mandate and argue its legal standard for genocidal intent departs from ICJ precedent.',
+        helpfulPercent: 79,
+        bridging: true,
+      },
+    ],
+  },
+  's-unosat': {
+    triples: [
+      {
+        id: 't-sunosat-method',
+        predicate: 'Method',
+        values: [
+          { id: 'v-sunosat-m1', label: 'Pre-war vs Jun 2026 satellite imagery' },
+          { id: 'v-sunosat-m2', label: 'Roof & facade damage detection' },
+        ],
+      },
+      {
+        id: 't-sunosat-limit',
+        predicate: 'Limitations',
+        values: [{ id: 'v-sunosat-l1', label: 'Records physical damage without attributing cause' }],
+      },
+    ],
+  },
+  'q-icj-1': {
+    triples: [
+      {
+        id: 't-qicj-court',
+        predicate: 'Issued by',
+        values: [{ id: 'v-qicj-c', label: 'International Court of Justice' }],
+      },
+      {
+        id: 't-qicj-effect',
+        predicate: 'Legal effect',
+        values: [
+          { id: 'v-qicj-e1', label: 'Binding under Article 41' },
+          { id: 'v-qicj-e2', label: 'Does not prejudge final merits' },
+        ],
+      },
+    ],
+  },
+};
+
 const WEEK_LABELS = [
   '5 Jan',
   '19 Jan',
@@ -1234,6 +1500,7 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
         joinedCommunityId,
         false
       );
+      const matchingDebate = SEED_DEBATES.find(debate => debate.claimId === claim.id);
       return {
         id: claim.id,
         title: claim.title,
@@ -1242,17 +1509,19 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
         overallPercent: eff.overallPercent,
         basisSummary: claim.basisSummary,
         badgeLabel: claim.badgeLabel,
-        meta: [
-          `${eff.totalVotes.toLocaleString('en-US')} votes`,
-          ...(claim.debatesCount > 0 ? [`${claim.debatesCount} debates`] : []),
-        ],
+        meta: [`${formatCompactCount(eff.totalVotes)} votes`],
+        debateCount: claim.debatesCount > 0 ? claim.debatesCount : undefined,
+        onOpenDebates:
+          claim.debatesCount > 0
+            ? () => (matchingDebate ? openDebate(matchingDebate.id) : openClaim(claim.id))
+            : undefined,
         userVote,
         onVote: choice => setVotes(prev => ({ ...prev, [claim.id]: choice })),
         onClearVote: () => setVotes(prev => ({ ...prev, [claim.id]: null })),
         onSelect: () => openClaim(claim.id),
       };
     },
-    [joinedCommunityId, openClaim, votes]
+    [joinedCommunityId, openClaim, openDebate, votes]
   );
 
   const trends: TopicTrendsModel = React.useMemo(
@@ -1849,6 +2118,7 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
       rankings,
       viralPosts,
       onOpenSources: openSources,
+      contextByEntityId: SEED_ENTITY_CONTEXT,
       sections: [
         {
           id: 'topic-sources',
@@ -2069,6 +2339,7 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
         { label: 'Type', value: src.sourceType },
       ],
       supportedClaims,
+      contextByEntityId: SEED_ENTITY_CONTEXT,
       sections: citedByItems.length > 0 ? [{ id: 'cited-by', title: 'Cited by', items: citedByItems }] : [],
     };
   }, [activeSourceId, openEvent, openStory, openTopic, toSummary]);

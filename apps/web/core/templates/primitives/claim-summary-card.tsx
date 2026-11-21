@@ -58,7 +58,7 @@ export function ClaimSummaryCard({ claim, variant = 'default', className }: Clai
 
       <h3
         className={cx(
-          'm-0 font-semibold text-pretty text-text transition-colors group-hover:text-ctaPrimary',
+          'm-0 font-semibold text-pretty text-text transition-colors group-hover:text-[#4c1fd4]',
           isLead
             ? 'text-[24px] leading-[30px] tracking-[-0.02em] @[560px]:text-[28px] @[560px]:leading-[34px]'
             : 'text-[19px] leading-[25px] tracking-[-0.01em]'

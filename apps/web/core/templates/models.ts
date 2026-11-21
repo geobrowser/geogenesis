@@ -91,6 +91,9 @@ export interface ClaimSummaryModel {
   basisSummary?: string;
   /** Optional metadata items (e.g. "2,418 votes", "7 debates"). */
   meta?: readonly string[];
+  debateCount?: number;
+  debatesHref?: string;
+  onOpenDebates?: () => void;
   badgeLabel?: string;
   userVote?: VoteChoice;
   /** Optional inline Agree / Disagree voting directly from a claim list row. */
@@ -105,6 +108,40 @@ export interface SourceQuoteModel {
   text: string;
   speaker?: string;
   location?: string;
+}
+
+export interface EntityTripleValueModel {
+  id: string;
+  label: string;
+  kind?: EntityLinkKind | 'entity' | 'text';
+  href?: string;
+  onSelect?: () => void;
+  /** Optional link/handler for the relation entity itself (opened from the pill hover toolbar). */
+  relationHref?: string;
+  onOpenRelation?: () => void;
+}
+
+export interface EntityTripleModel {
+  id: string;
+  /** Property / relation predicate (e.g. "Legal status", "Supporting reports", "Actors"). */
+  predicate: string;
+  /** One or more values / related entities attached under this property. */
+  values: readonly EntityTripleValueModel[];
+}
+
+export interface EntityFlagModel {
+  id: string;
+  reason?: string;
+  body: string;
+  sourceUrl?: string;
+  sourceLabel?: string;
+  helpfulPercent?: number;
+  bridging?: boolean;
+}
+
+export interface EntityContextDataModel {
+  triples?: readonly EntityTripleModel[];
+  flags?: readonly EntityFlagModel[];
 }
 
 export interface EntityLinkRowModel {
@@ -426,6 +463,8 @@ export interface TopicTemplateModel {
   onOpenTimeline?: () => void;
   sourcesHref?: string;
   onOpenSources?: () => void;
+  /** Attached knowledge graph triples & flags keyed by entity ID (claim, source, quote, event, debate). */
+  contextByEntityId?: Readonly<Record<string, EntityContextDataModel>>;
   /** Additional structured sections (coverage, rankings, debates, etc.). */
   sections?: readonly EntityListSectionModel[];
 }
@@ -552,6 +591,7 @@ export interface SourceTemplateModel {
   graphConnections?: readonly GraphConnectionGroupModel[];
   metadata: readonly { label: string; value: string }[];
   supportedClaims: readonly ClaimSummaryModel[];
+  contextByEntityId?: Readonly<Record<string, EntityContextDataModel>>;
   sections: readonly EntityListSectionModel[];
 }
 
@@ -664,6 +704,19 @@ export function isClaimSplit(gapPoints: number | undefined, threshold = CLAIM_SP
 
 export function formatPercentInt(value: number): string {
   return `${Math.round(Math.max(0, Math.min(100, value)))}%`;
+}
+
+export function formatCompactCount(value: number): string {
+  const abs = Math.abs(value);
+  if (abs >= 1_000_000) {
+    const formatted = (value / 1_000_000).toFixed(1).replace(/\.0$/, '');
+    return `${formatted}M`;
+  }
+  if (abs >= 1_000) {
+    const formatted = (value / 1_000).toFixed(1).replace(/\.0$/, '');
+    return `${formatted}k`;
+  }
+  return value.toLocaleString('en-US');
 }
 
 export function formatClaimKindLabel(kind: ClaimKind): string {

@@ -143,7 +143,7 @@ export function PostTemplate({ model, headerActions, footer, className }: PostTe
                       {claim.href ? (
                         <Link
                           href={claim.href}
-                          className="text-[17px] leading-[23px] font-semibold text-text no-underline hover:text-ctaPrimary"
+                          className="text-[17px] leading-[23px] font-semibold text-text no-underline hover:text-[#4c1fd4]"
                         >
                           {claim.title}
                         </Link>
@@ -151,7 +151,7 @@ export function PostTemplate({ model, headerActions, footer, className }: PostTe
                         <button
                           type="button"
                           onClick={claim.onSelect}
-                          className="cursor-pointer border-0 bg-transparent p-0 text-left text-[17px] leading-[23px] font-semibold text-text hover:text-ctaPrimary"
+                          className="cursor-pointer border-0 bg-transparent p-0 text-left text-[17px] leading-[23px] font-semibold text-text hover:text-[#4c1fd4]"
                         >
                           {claim.title}
                         </button>

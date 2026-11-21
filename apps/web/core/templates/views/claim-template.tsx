@@ -178,7 +178,7 @@ function SubClaimFactRow({ fact }: { fact: SubClaimFactModel }) {
         {fact.href ? (
           <Link
             href={fact.href}
-            className="text-[17px] leading-[23px] font-semibold text-text no-underline hover:text-ctaPrimary"
+            className="text-[17px] leading-[23px] font-semibold text-text no-underline hover:text-[#4c1fd4]"
           >
             {fact.title}
           </Link>
@@ -186,7 +186,7 @@ function SubClaimFactRow({ fact }: { fact: SubClaimFactModel }) {
           <button
             type="button"
             onClick={fact.onSelect}
-            className="cursor-pointer border-0 bg-transparent p-0 text-left text-[17px] leading-[23px] font-semibold text-text hover:text-ctaPrimary"
+            className="cursor-pointer border-0 bg-transparent p-0 text-left text-[17px] leading-[23px] font-semibold text-text hover:text-[#4c1fd4]"
           >
             {fact.title}
           </button>

@@ -4,6 +4,8 @@ export { ContextPeekDrawer, type ContextPeekDrawerProps } from './context-peek-d
 export { EntityGraphExplorer, type EntityGraphExplorerProps } from './entity-graph-explorer';
 export {
   EntityActionProvider,
+  EntityContextTogglePill,
+  EntityInlineContext,
   EntityOverflowMenu,
   type EntityActionKind,
   type EntityActionTarget,

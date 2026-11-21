@@ -5,7 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 import Link from 'next/link';
 
-import type { BreadcrumbItem } from '../models';
+import type { BreadcrumbItem, EntityContextDataModel } from '../models';
 import { EntityActionProvider } from './entity-overflow-menu';
 import { ChevronRightIcon } from './icons';
 
@@ -121,15 +121,17 @@ export function TemplateShell({
   children,
   maxWidth = 860,
   breadcrumbs,
+  contextByEntityId,
   className,
 }: {
   children: React.ReactNode;
   maxWidth?: number;
   breadcrumbs?: readonly BreadcrumbItem[];
+  contextByEntityId?: Readonly<Record<string, EntityContextDataModel>>;
   className?: string;
 }) {
   return (
-    <EntityActionProvider>
+    <EntityActionProvider initialContextByTarget={contextByEntityId}>
       <div className="@container">
         <div
           className={cx(

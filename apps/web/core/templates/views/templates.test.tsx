@@ -111,13 +111,9 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     render(<FixtureHarness />);
 
     expect(screen.getByRole('heading', { name: 'Israel–Gaza war' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Community view' })).toBeNull();
 
-    // Switch community view, vote inline on a claim, and open it via the Claim Peek Drawer
-    const communityBar = screen.getByRole('region', { name: 'Community view' });
-    const proIsraelFilter = within(communityBar).getByRole('button', { name: /Pro-Israel/i });
-    fireEvent.click(proIsraelFilter);
-    expect(proIsraelFilter).toHaveAttribute('aria-pressed', 'true');
-
+    // Vote inline on a claim and open it via the Claim Peek Drawer
     const claimsSection = screen.getByRole('region', { name: 'Claims' });
     const genVoteGroup = within(claimsSection).getByRole('group', {
       name: /Vote on Israel is committing genocide in Gaza/i,
@@ -215,6 +211,8 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     expect(screen.queryByRole('region', { name: 'Rankings' })).toBeNull();
     expect(screen.queryByRole('region', { name: 'Coverage and agreement over time' })).toBeNull();
     expect(screen.queryByRole('region', { name: 'What’s spreading' })).toBeNull();
+    expect(screen.queryByText(/members in communities/i)).toBeNull();
+    expect(screen.queryByText(/pts apart/i)).toBeNull();
 
     const claims = screen.getByRole('region', { name: 'Claims' });
     const recentDebates = screen.getByRole('region', { name: 'Recent debates' });
@@ -222,6 +220,8 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     const sources = screen.getByRole('region', { name: 'Sources & evidence' });
 
     expect(within(claims).getAllByRole('group', { name: /^Vote on /i })).toHaveLength(10);
+    expect(within(claims).getByText('18.2k votes')).toBeInTheDocument();
+    expect(within(claims).getByRole('button', { name: '11 debates' })).toBeInTheDocument();
     expect(within(recentDebates).getAllByRole('article')).toHaveLength(6);
     expect(within(timeline).getAllByRole('listitem')).toHaveLength(8);
     expect(claims.compareDocumentPosition(recentDebates) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -234,21 +234,64 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
       within(timeline).getByText(/An Israeli military official accepted the Gaza Health Ministry/i)
     ).toBeInTheDocument();
 
-    // Sources render verbatim quotes and `...` Challenge / Add context overflow menus
+    // Sources render verbatim quotes, graph/flag count chips, and `...` Flag / Add context menus
     expect(within(sources).getByText(/The key component of genocide/i)).toBeInTheDocument();
+
+    // Clicking the graph chip opens the Context drawer showing "Added context" key-value relation pills
+    fireEvent.click(
+      within(sources).getByRole('button', {
+        name: /Show 5 context relations for Israel’s oral arguments at the ICJ/i,
+      })
+    );
+    const viewerDrawer = screen.getByRole('dialog', {
+      name: /Context for Israel’s oral arguments at the ICJ/i,
+    });
+    expect(within(viewerDrawer).getByText(/Added context \(5\)/i)).toBeInTheDocument();
+    expect(within(viewerDrawer).getByText('Outcome')).toBeInTheDocument();
+    expect(within(viewerDrawer).getByText('Court declined dismissal')).toBeInTheDocument();
+
+    // Clicking the relation pill two-dot trigger opens the Genesis-style hover toolbar (Go to relation + Delete)
+    fireEvent.click(
+      within(viewerDrawer).getByRole('button', { name: 'Relation actions for Court declined dismissal' })
+    );
+    expect(
+      screen.getByRole('button', { name: /Go to relation: Outcome → Court declined dismissal/i })
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Delete relation: Court declined dismissal' }));
+    expect(within(viewerDrawer).queryByText('Court declined dismissal')).toBeNull();
+    expect(within(viewerDrawer).getByText(/Added context \(4\)/i)).toBeInTheDocument();
+    fireEvent.click(within(viewerDrawer).getByRole('button', { name: 'Close' }));
+
+    // Adding a new key-value triple via `...` -> Add context increments the graph chip count (4 -> 6)
     const sourceMenuTrigger = within(sources).getByRole('button', {
       name: /More actions for Israel’s oral arguments at the ICJ/i,
     });
     fireEvent.click(sourceMenuTrigger);
-    expect(screen.getByRole('menuitem', { name: 'Challenge' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /Show context/i })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Flag' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Challenge' })).toBeNull();
     fireEvent.click(screen.getByRole('menuitem', { name: 'Add context' }));
 
     const contextDialog = screen.getByRole('dialog');
-    fireEvent.change(within(contextDialog).getByLabelText(/Context for readers/i), {
-      target: { value: 'Presented on day two of the January 2024 provisional measures hearings.' },
+    fireEvent.change(within(contextDialog).getByLabelText(/Property \(relation key\)/i), {
+      target: { value: 'Hearing day' },
+    });
+    fireEvent.change(within(contextDialog).getByLabelText(/Values \(comma-separated for multiple\)/i), {
+      target: { value: 'Day 2, Peace Palace (The Hague)' },
     });
     fireEvent.click(within(contextDialog).getByRole('button', { name: 'Add context' }));
-    expect(within(sources).getByText('1 context')).toBeInTheDocument();
+    expect(
+      within(sources).getByRole('button', {
+        name: /Show 6 context relations for Israel’s oral arguments at the ICJ/i,
+      })
+    ).toBeInTheDocument();
+
+    // Topic header `...` menu toggles Show all context (key-value triples inline across the page)
+    fireEvent.click(screen.getByRole('button', { name: /More actions for Israel–Gaza war/i }));
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: /Show all context/i }));
+    expect(screen.getByRole('button', { name: /Showing context/i })).toBeInTheDocument();
+    expect(within(claims).getByText('Supporting reports')).toBeInTheDocument();
+    expect(within(claims).getByText('Amnesty International')).toBeInTheDocument();
   });
 
   it('navigates from Recent debates gallery to DebateTemplate and renders vote shifts', () => {

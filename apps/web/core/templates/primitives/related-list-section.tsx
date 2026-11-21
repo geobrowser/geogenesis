@@ -12,7 +12,7 @@ import type {
   SourceMediaKind,
   SourceQuoteModel,
 } from '../models';
-import { EntityOverflowMenu } from './entity-overflow-menu';
+import { EntityInlineContext, EntityOverflowMenu } from './entity-overflow-menu';
 import {
   ArrowUpRightIcon,
   ArticleIcon,
@@ -238,7 +238,7 @@ function RichMediaCard({ item }: { item: EntityLinkRowModel }) {
             </div>
 
             <CardClickable item={item}>
-              <h3 className="m-0 text-[18px] leading-[24px] font-semibold text-text transition-colors group-hover/link:text-ctaPrimary">
+              <h3 className="m-0 text-[18px] leading-[24px] font-semibold text-text transition-colors group-hover/link:text-[#4c1fd4]">
                 {item.title}
               </h3>
               {item.excerpt && (
@@ -248,6 +248,7 @@ function RichMediaCard({ item }: { item: EntityLinkRowModel }) {
           </div>
 
           {leadQuote && <SourceQuoteBlock quote={leadQuote} />}
+          <EntityInlineContext targetId={item.id} targetTitle={item.title} targetKind={item.kindLabel || 'Source'} />
         </div>
       </article>
     );
@@ -264,7 +265,7 @@ function RichMediaCard({ item }: { item: EntityLinkRowModel }) {
                   <TweetIcon className="size-4" />
                 </span>
                 <div className="flex min-w-0 flex-col">
-                  <span className="truncate text-[15px] leading-[19px] font-semibold text-text group-hover/link:text-ctaPrimary">
+                  <span className="truncate text-[15px] leading-[19px] font-semibold text-text group-hover/link:text-[#4c1fd4]">
                     {item.publisher ?? item.title}
                   </span>
                   {item.authorHandle && (
@@ -285,6 +286,7 @@ function RichMediaCard({ item }: { item: EntityLinkRowModel }) {
           </CardClickable>
 
           {leadQuote && <SourceQuoteBlock quote={leadQuote} />}
+          <EntityInlineContext targetId={item.id} targetTitle={item.title} targetKind={item.kindLabel || 'Source'} />
         </div>
 
         <div className="flex items-center justify-between border-t border-divider pt-2.5 text-[14px] text-grey-04">
@@ -319,7 +321,7 @@ function RichMediaCard({ item }: { item: EntityLinkRowModel }) {
         </div>
 
         <CardClickable item={item}>
-          <h3 className="m-0 text-[18px] leading-[24px] font-semibold text-text transition-colors group-hover/link:text-ctaPrimary">
+          <h3 className="m-0 text-[18px] leading-[24px] font-semibold text-text transition-colors group-hover/link:text-[#4c1fd4]">
             {item.title}
           </h3>
           {item.excerpt && (
@@ -328,6 +330,7 @@ function RichMediaCard({ item }: { item: EntityLinkRowModel }) {
         </CardClickable>
 
         {leadQuote && <SourceQuoteBlock quote={leadQuote} />}
+        <EntityInlineContext targetId={item.id} targetTitle={item.title} targetKind={item.kindLabel || 'Source'} />
       </div>
 
       {!item.excerpt && !leadQuote && item.meta && item.publisher && (
@@ -355,7 +358,7 @@ function RelatedListRow({ item, showKindBadge }: { item: EntityLinkRowModel; sho
       {showKindBadge && <TemplateBadge tone={LINK_KIND_TONE[item.kind]}>{item.kindLabel}</TemplateBadge>}
 
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="text-[17px] leading-[23px] font-medium text-text transition-colors group-hover/row:text-ctaPrimary">
+        <span className="text-[17px] leading-[23px] font-medium text-text transition-colors group-hover/row:text-[#4c1fd4]">
           {item.title}
         </span>
         {item.meta && <span className="text-[15px] leading-[20px] text-grey-04">{item.meta}</span>}

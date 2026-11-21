@@ -7,7 +7,7 @@ import Link from 'next/link';
 
 import type { TopicRecentDebateModel, TopicRecentDebateParticipantModel } from '../models';
 import { formatPercentInt } from '../models';
-import { EntityOverflowMenu } from './entity-overflow-menu';
+import { EntityInlineContext, EntityOverflowMenu } from './entity-overflow-menu';
 import { ArrowLeftIcon, ArrowRightIcon, ArrowUpRightIcon, PlayIcon, ThumbDownIcon, ThumbUpIcon } from './icons';
 import { TEMPLATE_CARD_SURFACE } from './template-shell';
 
@@ -182,7 +182,7 @@ function RecentDebateGalleryCard({ debate }: { debate: TopicRecentDebateModel })
   );
 
   const titleContent = (
-    <span className="line-clamp-2 min-h-[42px] text-[15.5px] leading-[21px] font-semibold text-pretty text-text transition-colors group-hover/title:text-ctaPrimary">
+    <span className="line-clamp-2 min-h-[42px] text-[15.5px] leading-[21px] font-semibold text-pretty text-text transition-colors group-hover/title:text-[#4c1fd4]">
       {debate.claimTitle}
     </span>
   );
@@ -309,6 +309,8 @@ function RecentDebateGalleryCard({ debate }: { debate: TopicRecentDebateModel })
             ))}
           </div>
         )}
+
+        <EntityInlineContext targetId={debate.id} targetTitle={debate.claimTitle} targetKind="Debate" />
       </div>
     </article>
   );

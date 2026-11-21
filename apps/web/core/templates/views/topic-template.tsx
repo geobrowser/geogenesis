@@ -10,6 +10,8 @@ import {
   ArrowRightIcon,
   ChevronRightIcon,
   ClaimExplorer,
+  EntityContextTogglePill,
+  EntityInlineContext,
   EntityOverflowMenu,
   RecentDebatesGallery,
   RelatedListSection,
@@ -36,13 +38,13 @@ export function TopicTemplate({ model, headerActions, footer, className }: Topic
   const contested = model.contestedClaims ?? [];
   const agreed = model.agreedClaims ?? [];
 
-  const communities = model.communities ?? [];
-  const activeCommunityId = model.activeCommunityId ?? 'all';
-
-  const inlineStats = model.stats?.filter(stat => Boolean(stat.value)) ?? [];
-
   return (
-    <TemplateShell maxWidth={1120} breadcrumbs={model.breadcrumbs} className={className}>
+    <TemplateShell
+      maxWidth={1120}
+      breadcrumbs={model.breadcrumbs}
+      contextByEntityId={model.contextByEntityId}
+      className={className}
+    >
       {/* Hero header */}
       <header className="flex flex-col gap-5">
         {model.coverUrl && (
@@ -59,15 +61,11 @@ export function TopicTemplate({ model, headerActions, footer, className }: Topic
                 {tag}
               </TemplateBadge>
             ))}
-            {inlineStats.length > 0 && (
-              <span className="text-[14px] text-grey-04">
-                {inlineStats.map(stat => `${stat.value} ${stat.label.toLowerCase()}`).join(' · ')}
-              </span>
-            )}
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            <EntityContextTogglePill />
             {headerActions}
-            <EntityOverflowMenu target={{ id: model.id, kind: 'Topic', title: model.title }} size="md" />
+            <EntityOverflowMenu target={{ id: model.id, kind: 'Topic', title: model.title }} isPageRoot size="md" />
           </div>
         </div>
 
@@ -75,53 +73,6 @@ export function TopicTemplate({ model, headerActions, footer, className }: Topic
 
         {model.lede && <p className="m-0 max-w-[780px] text-[16.5px] leading-[25px] text-text/85">{model.lede}</p>}
       </header>
-
-      {/* Community perspective filter bar */}
-      {communities.length > 0 && (
-        <section aria-label="Community view" className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            aria-pressed={activeCommunityId === 'all'}
-            onClick={() => model.onSelectCommunity?.('all')}
-            className={cx(
-              'inline-flex h-10 cursor-pointer items-center gap-2 rounded-full border px-4 text-[15px] font-medium whitespace-nowrap transition-colors',
-              activeCommunityId === 'all'
-                ? 'border-text bg-text text-white'
-                : 'border-grey-02 bg-white text-text hover:border-text'
-            )}
-          >
-            <span>Everyone</span>
-          </button>
-
-          {communities.map(community => {
-            const isSelected = activeCommunityId === community.id;
-            return (
-              <button
-                key={community.id}
-                type="button"
-                aria-pressed={isSelected}
-                onClick={() => model.onSelectCommunity?.(community.id)}
-                className={cx(
-                  'inline-flex h-10 cursor-pointer items-center gap-2 rounded-full border px-4 text-[15px] font-medium whitespace-nowrap transition-colors',
-                  isSelected ? 'border-text bg-text text-white' : 'border-grey-02 bg-white text-text hover:border-text'
-                )}
-              >
-                <span
-                  aria-hidden
-                  className="inline-block size-2.5 shrink-0 rounded-full"
-                  style={{ backgroundColor: community.color }}
-                />
-                <span>{community.name}</span>
-                {community.memberCount !== undefined && (
-                  <span className={cx('text-[14px] tabular-nums', isSelected ? 'text-grey-03' : 'text-grey-04')}>
-                    {community.memberCount.toLocaleString('en-US')}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </section>
-      )}
 
       {/* Calm single-column Claims list with 2-tab switch (Where they split | Common ground) */}
       {(contested.length > 0 || agreed.length > 0) && (
@@ -199,7 +150,7 @@ function TimelineHighlightRow({
         <span
           className={cx(
             'text-[17px] leading-[23px] font-semibold text-pretty text-text transition-colors',
-            isInteractive && 'group-hover:text-ctaPrimary'
+            isInteractive && 'group-hover:text-[#4c1fd4]'
           )}
         >
           {turn.title}
@@ -208,7 +159,7 @@ function TimelineHighlightRow({
       </span>
 
       {isInteractive && (
-        <ChevronRightIcon className="mt-1 size-4 shrink-0 text-grey-03 transition-transform group-hover:translate-x-0.5 group-hover:text-ctaPrimary" />
+        <ChevronRightIcon className="mt-1 size-4 shrink-0 text-grey-03 transition-transform group-hover:translate-x-0.5 group-hover:text-[#4c1fd4]" />
       )}
     </span>
   );
@@ -229,29 +180,28 @@ function TimelineHighlightRow({
       </div>
 
       {/* Right: event milestone headline + concise summary + overflow menu */}
-      <div
-        className={cx(
-          'flex min-w-0 items-start justify-between gap-3 py-4 @[680px]:py-5',
-          !isLast && 'border-b border-divider/90'
-        )}
-      >
-        {turn.href ? (
-          <Link href={turn.href} className="group flex min-w-0 flex-1 text-left text-text no-underline">
-            {body}
-          </Link>
-        ) : turn.onSelect ? (
-          <button
-            type="button"
-            onClick={turn.onSelect}
-            className="group flex min-w-0 flex-1 cursor-pointer border-0 bg-transparent p-0 text-left text-text"
-          >
-            {body}
-          </button>
-        ) : (
-          <div className="flex min-w-0 flex-1">{body}</div>
-        )}
+      <div className={cx('flex min-w-0 flex-col gap-2.5 py-4 @[680px]:py-5', !isLast && 'border-b border-divider/90')}>
+        <div className="flex min-w-0 items-start justify-between gap-3">
+          {turn.href ? (
+            <Link href={turn.href} className="group flex min-w-0 flex-1 text-left text-text no-underline">
+              {body}
+            </Link>
+          ) : turn.onSelect ? (
+            <button
+              type="button"
+              onClick={turn.onSelect}
+              className="group flex min-w-0 flex-1 cursor-pointer border-0 bg-transparent p-0 text-left text-text"
+            >
+              {body}
+            </button>
+          ) : (
+            <div className="flex min-w-0 flex-1">{body}</div>
+          )}
 
-        <EntityOverflowMenu target={{ id: turn.id, kind: 'Event', title: turn.title }} className="mt-0.5" />
+          <EntityOverflowMenu target={{ id: turn.id, kind: 'Event', title: turn.title }} className="mt-0.5" />
+        </div>
+
+        <EntityInlineContext targetId={turn.id} targetTitle={turn.title} targetKind="Event" className="max-w-[740px]" />
       </div>
     </li>
   );

@@ -5,8 +5,8 @@ import * as React from 'react';
 import cx from 'classnames';
 import Link from 'next/link';
 
-import type { ClaimSummaryModel } from '../models';
-import { EntityOverflowMenu } from './entity-overflow-menu';
+import { type ClaimSummaryModel, formatCompactCount } from '../models';
+import { EntityInlineContext, EntityOverflowMenu } from './entity-overflow-menu';
 import { CheckCircleIcon, ThumbDownIcon, ThumbUpIcon } from './icons';
 import { SplitBars } from './split-bars';
 import { TEMPLATE_CARD_SURFACE } from './template-shell';
@@ -122,20 +122,26 @@ export function ClaimExplorer({ contestedClaims, agreedClaims, title = 'Claims',
 
 function RankedClaimRow({ rank, claim, isAgreed }: { rank: number; claim: ClaimSummaryModel; isAgreed: boolean }) {
   const voteMetaIndex = claim.meta?.findIndex(part => /\bvotes?\b/i.test(part)) ?? -1;
+  const debateMetaIndex = claim.meta?.findIndex(part => /\bdebates?\b/i.test(part)) ?? -1;
+
   const voteCountLabel =
     claim.split.totalVotes !== undefined
-      ? `${claim.split.totalVotes.toLocaleString('en-US')} ${claim.split.totalVotes === 1 ? 'vote' : 'votes'}`
+      ? `${formatCompactCount(claim.split.totalVotes)} ${claim.split.totalVotes === 1 ? 'vote' : 'votes'}`
       : voteMetaIndex >= 0
         ? claim.meta?.[voteMetaIndex]
         : undefined;
 
+  const debateLabel =
+    claim.debateCount && claim.debateCount > 0
+      ? `${claim.debateCount} ${claim.debateCount === 1 ? 'debate' : 'debates'}`
+      : debateMetaIndex >= 0
+        ? claim.meta?.[debateMetaIndex]
+        : undefined;
+
   const metaParts: string[] = [];
-  if (!isAgreed && claim.split.gapPoints !== undefined) {
-    metaParts.push(`${Math.round(claim.split.gapPoints)} pts apart`);
-  }
   if (claim.meta && claim.meta.length > 0) {
     for (let i = 0; i < claim.meta.length; i++) {
-      if (i !== voteMetaIndex) metaParts.push(claim.meta[i]);
+      if (i !== voteMetaIndex && i !== debateMetaIndex) metaParts.push(claim.meta[i]);
     }
   }
 
@@ -149,7 +155,7 @@ function RankedClaimRow({ rank, claim, isAgreed }: { rank: number; claim: ClaimS
   };
 
   const titleNode = (
-    <span className="block text-[16px] leading-[22px] font-medium text-pretty text-text transition-colors group-hover/claim:text-ctaPrimary">
+    <span className="block text-[16px] leading-[22px] font-medium text-pretty text-text transition-colors group-hover/claim:text-[#4c1fd4]">
       {claim.title}
       {isAgreed && <CheckCircleIcon className="ml-1.5 inline-block size-3.5 align-[-0.15em] text-ctaPrimary" />}
     </span>
@@ -179,7 +185,7 @@ function RankedClaimRow({ rank, claim, isAgreed }: { rank: number; claim: ClaimS
             titleNode
           )}
 
-          {(claim.onVote || metaParts.length > 0 || (claim.userVote && !claim.onVote)) && (
+          {(claim.onVote || debateLabel || metaParts.length > 0 || (claim.userVote && !claim.onVote)) && (
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
               {claim.onVote && (
                 <div className="flex shrink-0 items-center gap-1.5" role="group" aria-label={`Vote on ${claim.title}`}>
@@ -215,17 +221,36 @@ function RankedClaimRow({ rank, claim, isAgreed }: { rank: number; claim: ClaimS
                 </div>
               )}
 
-              {(metaParts.length > 0 || (claim.userVote && !claim.onVote)) && (
+              {(debateLabel || metaParts.length > 0 || (claim.userVote && !claim.onVote)) && (
                 <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[13.5px] text-grey-04">
+                  {debateLabel &&
+                    (claim.debatesHref ? (
+                      <Link
+                        href={claim.debatesHref}
+                        className="font-medium text-grey-04 underline decoration-grey-02 underline-offset-2 transition-colors hover:text-[#4c1fd4] hover:decoration-[#4c1fd4]"
+                      >
+                        {debateLabel}
+                      </Link>
+                    ) : claim.onOpenDebates ? (
+                      <button
+                        type="button"
+                        onClick={claim.onOpenDebates}
+                        className="cursor-pointer border-0 bg-transparent p-0 font-medium text-grey-04 underline decoration-grey-02 underline-offset-2 transition-colors hover:text-[#4c1fd4] hover:decoration-[#4c1fd4]"
+                      >
+                        {debateLabel}
+                      </button>
+                    ) : (
+                      <span>{debateLabel}</span>
+                    ))}
                   {metaParts.map((part, i) => (
                     <React.Fragment key={part}>
-                      {i > 0 && <span aria-hidden>·</span>}
+                      {(debateLabel || i > 0) && <span aria-hidden>·</span>}
                       <span>{part}</span>
                     </React.Fragment>
                   ))}
                   {claim.userVote && !claim.onVote && (
                     <>
-                      {metaParts.length > 0 && <span aria-hidden>·</span>}
+                      {(debateLabel || metaParts.length > 0) && <span aria-hidden>·</span>}
                       <span className="font-medium text-text">
                         {claim.userVote === 'agree' ? 'You agreed' : 'You disagreed'}
                       </span>
@@ -235,6 +260,8 @@ function RankedClaimRow({ rank, claim, isAgreed }: { rank: number; claim: ClaimS
               )}
             </div>
           )}
+
+          <EntityInlineContext targetId={claim.id} targetTitle={claim.title} targetKind="Claim" className="mt-0.5" />
         </div>
       </div>
 
@@ -249,7 +276,10 @@ function RankedClaimRow({ rank, claim, isAgreed }: { rank: number; claim: ClaimS
           </span>
         )}
 
-        <EntityOverflowMenu target={{ id: claim.id, kind: 'Claim', title: claim.title }} />
+        <EntityOverflowMenu
+          target={{ id: claim.id, kind: 'Claim', title: claim.title }}
+          className="@[760px]:w-[120px] @[760px]:justify-end"
+        />
       </div>
     </div>
   );

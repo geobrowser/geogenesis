@@ -8,6 +8,8 @@ import type { SourceTemplateModel } from '../models';
 import {
   ArrowUpRightIcon,
   ClaimSummaryCard,
+  EntityContextTogglePill,
+  EntityInlineContext,
   EntityOverflowMenu,
   GraphConnectionsStrip,
   RelatedListSection,
@@ -30,7 +32,12 @@ export function SourceTemplate({ model, headerActions, footer, className }: Sour
   const ctaLabel = (model.externalLabel ?? 'Open source').replace(/\s*↗\s*$/, '');
 
   return (
-    <TemplateShell maxWidth={860} breadcrumbs={model.breadcrumbs} className={className}>
+    <TemplateShell
+      maxWidth={860}
+      breadcrumbs={model.breadcrumbs}
+      contextByEntityId={model.contextByEntityId}
+      className={className}
+    >
       <header className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
@@ -43,9 +50,11 @@ export function SourceTemplate({ model, headerActions, footer, className }: Sour
             ))}
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            <EntityContextTogglePill />
             {headerActions}
             <EntityOverflowMenu
               target={{ id: model.id, kind: model.sourceType ?? 'Source', title: model.title }}
+              isPageRoot
               size="md"
             />
           </div>
@@ -98,9 +107,15 @@ export function SourceTemplate({ model, headerActions, footer, className }: Sour
                   key={quote.id}
                   className={cx('m-0 flex items-start justify-between gap-4 p-5', TEMPLATE_CARD_SURFACE)}
                 >
-                  <div className="flex flex-col gap-2">
+                  <div className="flex min-w-0 flex-1 flex-col gap-2">
                     <p className="m-0 text-[16px] leading-[24px] text-text">“{quote.text}”</p>
                     {attribution && <footer className="text-[14px] text-grey-04">— {attribution}</footer>}
+                    <EntityInlineContext
+                      targetId={quote.id}
+                      targetTitle={quote.text.slice(0, 80)}
+                      targetKind="Quote"
+                      className="mt-1"
+                    />
                   </div>
                   <EntityOverflowMenu target={{ id: quote.id, kind: 'Quote', title: quote.text.slice(0, 80) }} />
                 </blockquote>
