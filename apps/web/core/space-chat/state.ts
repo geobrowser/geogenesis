@@ -98,11 +98,7 @@ export function parseSpaceChannelActivity(payload: unknown): SpaceChannelActivit
   return { spaceId: space_id, roomId: room_id, messageId: message_id, authorId: author_id };
 }
 
-/**
- * One more unread message on the channel's row, unless the viewer wrote it, the channel is the one
- * showing (its own messages arrive there), or the message is at or before the read cursor or one
- * already counted. Message ids are v7, so they sort by time.
- */
+/** One more unread on the channel's row, skipping the viewer's own, the shown channel, and ids not past the cursor (v7 ids sort by time). */
 export function withChannelActivity(
   current: SpaceChatRoomsData,
   activity: SpaceChannelActivity,
