@@ -5,6 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import type { SplitBreakdown, VoteControlModel } from '../models';
+import { ThumbDownIcon, ThumbUpIcon } from './icons';
 import { SplitBars } from './split-bars';
 import { TEMPLATE_CARD_SURFACE } from './template-shell';
 
@@ -47,13 +48,14 @@ export function VoteBox({ prompt, split, control, className }: VoteBoxProps) {
               aria-pressed={userVote === 'agree'}
               onClick={() => onVote('agree')}
               className={cx(
-                'inline-flex h-10 flex-1 cursor-pointer items-center justify-center rounded-full border px-5 text-button transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+                'inline-flex h-10 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-full border px-4 text-button transition-colors disabled:cursor-not-allowed disabled:opacity-50',
                 userVote === 'agree'
                   ? 'border-text bg-text text-white'
                   : 'border-grey-02 bg-white text-text hover:border-text'
               )}
             >
-              Agree
+              <ThumbUpIcon className="size-4" />
+              <span>Agree</span>
             </button>
 
             <button
@@ -62,13 +64,14 @@ export function VoteBox({ prompt, split, control, className }: VoteBoxProps) {
               aria-pressed={userVote === 'disagree'}
               onClick={() => onVote('disagree')}
               className={cx(
-                'inline-flex h-10 flex-1 cursor-pointer items-center justify-center rounded-full border px-5 text-button transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+                'inline-flex h-10 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-full border px-4 text-button transition-colors disabled:cursor-not-allowed disabled:opacity-50',
                 userVote === 'disagree'
                   ? 'border-text bg-text text-white'
                   : 'border-grey-02 bg-white text-text hover:border-text'
               )}
             >
-              Disagree
+              <ThumbDownIcon className="size-4" />
+              <span>Disagree</span>
             </button>
           </div>
 

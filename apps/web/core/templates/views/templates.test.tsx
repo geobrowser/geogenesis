@@ -107,28 +107,33 @@ describe('TopicTemplate progressive disclosure', () => {
 });
 
 describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Post graph', () => {
-  it('renders trends chart, rankings, and navigates Topic -> Claim -> Event -> Story -> Source', () => {
+  it('renders rankings and navigates Topic -> Claim -> Event -> Story -> Source', () => {
     render(<FixtureHarness />);
 
     expect(screen.getByRole('heading', { name: 'Israel–Gaza war' })).toBeInTheDocument();
-
-    // Switch Coverage -> Agreement on TopicTrendsChart
-    const chart = screen.getByRole('region', { name: 'Coverage and agreement over time' });
-    fireEvent.click(within(chart).getByRole('button', { name: 'Agreement' }));
-    expect(within(chart).getByRole('button', { name: 'Where they split' })).toHaveAttribute('aria-pressed', 'true');
 
     // Switch Rankings tab: Bridging picks hides single-scope community pills (Finding T6)
     const rankings = screen.getByRole('region', { name: 'Rankings' });
     fireEvent.click(within(rankings).getByRole('button', { name: /Bridging picks/i }));
     expect(within(rankings).queryByRole('button', { name: 'Everyone' })).toBeNull();
 
-    // Switch community view and open a contested claim via the master-detail Claim Explorer
+    // Switch community view, vote inline on a claim, and open it via the Claim Peek Drawer
     const communityBar = screen.getByRole('region', { name: 'Community view' });
     const proIsraelFilter = within(communityBar).getByRole('button', { name: /Pro-Israel/i });
     fireEvent.click(proIsraelFilter);
     expect(proIsraelFilter).toHaveAttribute('aria-pressed', 'true');
 
     const claimsSection = screen.getByRole('region', { name: 'Claims' });
+    const genVoteGroup = within(claimsSection).getByRole('group', {
+      name: /Vote on Israel is committing genocide in Gaza/i,
+    });
+    const inlineAgree = within(genVoteGroup).getByRole('button', { name: 'Agree' });
+    fireEvent.click(inlineAgree);
+    expect(inlineAgree).toHaveAttribute('aria-pressed', 'true');
+    // Toggle off so downstream Vote Agree assertion starts clean
+    fireEvent.click(inlineAgree);
+    expect(inlineAgree).toHaveAttribute('aria-pressed', 'false');
+
     fireEvent.click(within(claimsSection).getByRole('button', { name: /Israel is committing genocide in Gaza/i }));
     const claimDrawer = screen.getByRole('dialog');
     expect(within(claimDrawer).getByText('Contested claim')).toBeInTheDocument();
@@ -205,17 +210,29 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     expect(screen.getByRole('heading', { name: 'Where they split next' })).toBeInTheDocument();
   });
 
-  it('orders Timeline -> Sources & evidence -> How it’s moving cleanly without Who’s who on TopicTemplate', () => {
+  it('renders 10 claims, 8 timeline items, and orders Claims -> Timeline -> Sources -> Rankings cleanly', () => {
     render(<FixtureHarness />);
 
     expect(screen.queryByRole('region', { name: 'Who’s who' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Coverage and agreement over time' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'What’s spreading' })).toBeNull();
 
+    const claims = screen.getByRole('region', { name: 'Claims' });
     const timeline = screen.getByRole('region', { name: 'Timeline' });
     const sources = screen.getByRole('region', { name: 'Sources & evidence' });
-    const trends = screen.getByRole('region', { name: 'Coverage and agreement over time' });
+    const rankings = screen.getByRole('region', { name: 'Rankings' });
 
+    expect(within(claims).getAllByRole('group', { name: /^Vote on /i })).toHaveLength(10);
+    expect(within(timeline).getAllByRole('listitem')).toHaveLength(8);
+    expect(claims.compareDocumentPosition(timeline) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(timeline.compareDocumentPosition(sources) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(sources.compareDocumentPosition(trends) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(sources.compareDocumentPosition(rankings) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    // Timeline shows concise event summaries without duplicating claim vote bars
+    expect(within(timeline).queryAllByRole('meter')).toHaveLength(0);
+    expect(
+      within(timeline).getByText(/An Israeli military official accepted the Gaza Health Ministry/i)
+    ).toBeInTheDocument();
   });
 
   it('navigates from Topic rankings to DebateTemplate and renders vote shifts', () => {

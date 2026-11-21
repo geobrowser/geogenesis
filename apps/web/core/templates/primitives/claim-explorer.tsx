@@ -6,7 +6,7 @@ import cx from 'classnames';
 import Link from 'next/link';
 
 import type { ClaimSummaryModel } from '../models';
-import { CheckCircleIcon, ChevronRightIcon } from './icons';
+import { CheckCircleIcon, ThumbDownIcon, ThumbUpIcon } from './icons';
 import { SplitBars } from './split-bars';
 import { TEMPLATE_CARD_SURFACE } from './template-shell';
 
@@ -17,7 +17,7 @@ export interface ClaimExplorerProps {
   className?: string;
 }
 
-const DEFAULT_VISIBLE = 5;
+const DEFAULT_VISIBLE = 10;
 
 /**
  * Calm ranked Claims list styled identically to the Rankings panel: soft-shadow card container,
@@ -138,70 +138,116 @@ function RankedClaimRow({ rank, claim, isAgreed }: { rank: number; claim: ClaimS
     }
   }
 
-  const inner = (
-    <>
-      <span className="w-6 shrink-0 text-center text-[15px] font-semibold text-grey-04 tabular-nums">{rank}</span>
+  const handleVoteClick = (choice: 'agree' | 'disagree') => {
+    if (!claim.onVote) return;
+    if (claim.userVote === choice && claim.onClearVote) {
+      claim.onClearVote();
+      return;
+    }
+    claim.onVote(choice);
+  };
 
-      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="inline-flex flex-wrap items-center gap-1.5 text-[16px] leading-[22px] font-medium text-pretty text-text transition-colors group-hover:text-ctaPrimary">
-          <span>{claim.title}</span>
-          {isAgreed && <CheckCircleIcon className="size-3.5 shrink-0 text-ctaPrimary" />}
-        </span>
-
-        {(metaParts.length > 0 || claim.userVote) && (
-          <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[14px] text-grey-04">
-            {metaParts.map((part, i) => (
-              <React.Fragment key={part}>
-                {i > 0 && <span aria-hidden>·</span>}
-                <span>{part}</span>
-              </React.Fragment>
-            ))}
-            {claim.userVote && (
-              <>
-                {metaParts.length > 0 && <span aria-hidden>·</span>}
-                <span className="font-medium text-text">
-                  {claim.userVote === 'agree' ? 'You agreed' : 'You disagreed'}
-                </span>
-              </>
-            )}
-          </span>
-        )}
-      </span>
-
-      <span className="flex w-full items-center gap-3.5 pl-9 @[720px]:w-[280px] @[720px]:shrink-0 @[720px]:pl-0">
-        <span className="flex min-w-0 flex-1 flex-col gap-1.5">
-          {claim.split.rows.length > 0 && <SplitBars rows={claim.split.rows} density="compact" />}
-          {voteCountLabel && (
-            <span className="text-right text-[13px] leading-[16px] text-grey-04 tabular-nums">{voteCountLabel}</span>
-          )}
-        </span>
-        <ChevronRightIcon className="size-4 shrink-0 text-grey-03 transition-transform group-hover:translate-x-0.5 group-hover:text-ctaPrimary" />
-      </span>
-    </>
+  const titleNode = (
+    <span className="block text-[16px] leading-[22px] font-medium text-pretty text-text transition-colors group-hover/claim:text-ctaPrimary">
+      {claim.title}
+      {isAgreed && <CheckCircleIcon className="ml-1.5 inline-block size-3.5 align-[-0.15em] text-ctaPrimary" />}
+    </span>
   );
 
-  const rowClasses =
-    'group flex w-full flex-col gap-2.5 px-5 py-4 text-left text-text no-underline transition-colors hover:bg-bg @[720px]:flex-row @[720px]:items-center @[720px]:gap-4';
+  return (
+    <div className="flex flex-col gap-3 px-5 py-4 transition-colors hover:bg-bg @[760px]:flex-row @[760px]:items-center @[760px]:gap-6">
+      <div className="flex min-w-0 flex-1 items-start gap-4">
+        <span className="w-6 shrink-0 pt-0.5 text-center text-[15px] font-semibold text-grey-04 tabular-nums">
+          {rank}
+        </span>
 
-  if (claim.href) {
-    return (
-      <Link href={claim.href} className={rowClasses}>
-        {inner}
-      </Link>
-    );
-  }
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
+          {claim.href ? (
+            <Link href={claim.href} className="group/claim self-start text-left text-text no-underline">
+              {titleNode}
+            </Link>
+          ) : claim.onSelect ? (
+            <button
+              type="button"
+              onClick={claim.onSelect}
+              className="group/claim cursor-pointer self-start border-0 bg-transparent p-0 text-left text-text"
+            >
+              {titleNode}
+            </button>
+          ) : (
+            titleNode
+          )}
 
-  if (claim.onSelect) {
-    return (
-      <button
-        type="button"
-        onClick={claim.onSelect}
-        className={cx(rowClasses, 'cursor-pointer border-0 bg-transparent')}
-      >
-        {inner}
-      </button>
-    );
-  }
+          {(claim.onVote || metaParts.length > 0 || (claim.userVote && !claim.onVote)) && (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+              {claim.onVote && (
+                <div className="flex shrink-0 items-center gap-1.5" role="group" aria-label={`Vote on ${claim.title}`}>
+                  <button
+                    type="button"
+                    aria-pressed={claim.userVote === 'agree'}
+                    onClick={() => handleVoteClick('agree')}
+                    className={cx(
+                      'inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full border px-2.5 text-[13px] font-medium whitespace-nowrap transition-colors',
+                      claim.userVote === 'agree'
+                        ? 'border-text bg-text text-white'
+                        : 'border-grey-02 bg-white text-text hover:border-text'
+                    )}
+                  >
+                    <ThumbUpIcon className="size-3.5 shrink-0" />
+                    <span>Agree</span>
+                  </button>
 
-  return <div className={rowClasses}>{inner}</div>;
+                  <button
+                    type="button"
+                    aria-pressed={claim.userVote === 'disagree'}
+                    onClick={() => handleVoteClick('disagree')}
+                    className={cx(
+                      'inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full border px-2.5 text-[13px] font-medium whitespace-nowrap transition-colors',
+                      claim.userVote === 'disagree'
+                        ? 'border-text bg-text text-white'
+                        : 'border-grey-02 bg-white text-text hover:border-text'
+                    )}
+                  >
+                    <ThumbDownIcon className="size-3.5 shrink-0" />
+                    <span>Disagree</span>
+                  </button>
+                </div>
+              )}
+
+              {(metaParts.length > 0 || (claim.userVote && !claim.onVote)) && (
+                <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[13.5px] text-grey-04">
+                  {metaParts.map((part, i) => (
+                    <React.Fragment key={part}>
+                      {i > 0 && <span aria-hidden>·</span>}
+                      <span>{part}</span>
+                    </React.Fragment>
+                  ))}
+                  {claim.userVote && !claim.onVote && (
+                    <>
+                      {metaParts.length > 0 && <span aria-hidden>·</span>}
+                      <span className="font-medium text-text">
+                        {claim.userVote === 'agree' ? 'You agreed' : 'You disagreed'}
+                      </span>
+                    </>
+                  )}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="flex shrink-0 items-center gap-4 pl-10 @[760px]:pl-0">
+        {claim.split.rows.length > 0 && (
+          <SplitBars rows={claim.split.rows} density="compact" className="w-[256px] shrink-0" />
+        )}
+
+        {voteCountLabel && (
+          <span className="w-[78px] shrink-0 text-right text-[13px] whitespace-nowrap text-grey-04 tabular-nums">
+            {voteCountLabel}
+          </span>
+        )}
+      </div>
+    </div>
+  );
 }

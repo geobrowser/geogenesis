@@ -93,6 +93,9 @@ export interface ClaimSummaryModel {
   meta?: readonly string[];
   badgeLabel?: string;
   userVote?: VoteChoice;
+  /** Optional inline Agree / Disagree voting directly from a claim list row. */
+  onVote?: (choice: Exclude<VoteChoice, null>) => void;
+  onClearVote?: () => void;
   href?: string;
   onSelect?: () => void;
 }
@@ -235,7 +238,7 @@ export interface TopicTimelineHighlightModel {
   id: string;
   when: string;
   title: string;
-  claims: readonly ClaimSummaryModel[];
+  summary?: string;
   href?: string;
   onSelect?: () => void;
 }

@@ -10,21 +10,17 @@ import type {
   TopicRankingModel,
   TopicTemplateModel,
   TopicTimelineHighlightModel,
-  TopicViralPostPreviewModel,
 } from '../models';
 import {
   ArrowRightIcon,
-  CheckCircleIcon,
+  ChevronRightIcon,
   ClaimExplorer,
   RelatedListSection,
   SourceChipList,
-  SplitBars,
   TEMPLATE_CARD_SURFACE,
   TEMPLATE_INTERACTIVE_CARD_SURFACE,
   TemplateBadge,
   TemplateShell,
-  TopicTrendsChart,
-  TweetIcon,
 } from '../primitives';
 
 export interface TopicTemplateProps {
@@ -194,20 +190,10 @@ export function TopicTemplate({ model, headerActions, footer, className }: Topic
         </div>
       )}
 
-      {/* Trends chart (Coverage & Agreement over time) */}
-      {model.trends && (
-        <div id="trends">
-          <TopicTrendsChart trends={model.trends} />
-        </div>
-      )}
-
       {/* Rankings (Best reads, Best debates, Bridging picks) */}
       {model.rankings && model.rankings.length > 0 && (
         <TopicRankingsSection rankings={model.rankings} communities={communities} />
       )}
-
-      {/* What's spreading (viral posts with bridging context notes) */}
-      {model.viralPosts && model.viralPosts.length > 0 && <ViralPostsSection posts={model.viralPosts} />}
 
       {footer}
     </TemplateShell>
@@ -302,7 +288,27 @@ function TimelineHighlightRow({
   isFirst: boolean;
   isLast: boolean;
 }) {
-  const titleNode = <span className="text-[17px] leading-[23px] font-semibold text-text">{turn.title}</span>;
+  const isInteractive = Boolean(turn.href || turn.onSelect);
+
+  const body = (
+    <span className="flex min-w-0 flex-1 items-start justify-between gap-4">
+      <span className="flex max-w-[740px] min-w-0 flex-col gap-1">
+        <span
+          className={cx(
+            'text-[17px] leading-[23px] font-semibold text-pretty text-text transition-colors',
+            isInteractive && 'group-hover:text-ctaPrimary'
+          )}
+        >
+          {turn.title}
+        </span>
+        {turn.summary && <span className="text-[15px] leading-[22px] text-grey-04">{turn.summary}</span>}
+      </span>
+
+      {isInteractive && (
+        <ChevronRightIcon className="mt-1 size-4 shrink-0 text-grey-03 transition-transform group-hover:translate-x-0.5 group-hover:text-ctaPrimary" />
+      )}
+    </span>
+  );
 
   return (
     <li className="grid grid-cols-1 gap-2 @[680px]:grid-cols-[118px_28px_minmax(0,1fr)] @[680px]:gap-4">
@@ -319,68 +325,22 @@ function TimelineHighlightRow({
         />
       </div>
 
-      {/* Right: event title + clean stacked claim rows with aligned right bars */}
-      <div className={cx('flex min-w-0 flex-col gap-3 py-4 @[680px]:py-5', !isLast && 'border-b border-divider/90')}>
+      {/* Right: event milestone headline + concise summary */}
+      <div className={cx('min-w-0 py-4 @[680px]:py-5', !isLast && 'border-b border-divider/90')}>
         {turn.href ? (
-          <Link href={turn.href} className="text-text no-underline hover:text-ctaPrimary">
-            {titleNode}
+          <Link href={turn.href} className="group flex w-full text-left text-text no-underline">
+            {body}
           </Link>
         ) : turn.onSelect ? (
           <button
             type="button"
             onClick={turn.onSelect}
-            className="cursor-pointer border-0 bg-transparent p-0 text-left text-text hover:text-ctaPrimary"
+            className="group flex w-full cursor-pointer border-0 bg-transparent p-0 text-left text-text"
           >
-            {titleNode}
+            {body}
           </button>
         ) : (
-          titleNode
-        )}
-
-        {turn.claims.length > 0 && (
-          <div className="flex flex-col divide-y divide-divider/80">
-            {turn.claims.map(claim => {
-              const isAgreed = !claim.split.isSplit;
-              return (
-                <div
-                  key={claim.id}
-                  className="grid grid-cols-1 items-center gap-2.5 py-2.5 first:pt-0.5 last:pb-0 @[740px]:grid-cols-[minmax(0,1fr)_270px] @[740px]:gap-5"
-                >
-                  <div className="flex flex-wrap items-center gap-2">
-                    {claim.href ? (
-                      <Link
-                        href={claim.href}
-                        className="text-[15.5px] leading-[22px] font-medium text-text no-underline hover:text-ctaPrimary"
-                      >
-                        {claim.title}
-                      </Link>
-                    ) : claim.onSelect ? (
-                      <button
-                        type="button"
-                        onClick={claim.onSelect}
-                        className="cursor-pointer border-0 bg-transparent p-0 text-left text-[15.5px] leading-[22px] font-medium text-text hover:text-ctaPrimary"
-                      >
-                        {claim.title}
-                      </button>
-                    ) : (
-                      <span className="text-[15.5px] leading-[22px] font-medium text-text">{claim.title}</span>
-                    )}
-                    {isAgreed ? (
-                      <span className="inline-flex items-center gap-1 rounded-md bg-ctaTertiary px-2 py-0.5 text-[12.5px] font-medium text-ctaPrimary">
-                        <CheckCircleIcon className="size-3.5" />
-                        <span>Both agree</span>
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center rounded-md bg-purple-tint/70 px-2 py-0.5 text-[12.5px] font-medium text-purple">
-                        Communities split
-                      </span>
-                    )}
-                  </div>
-                  <SplitBars rows={claim.split.rows} density="compact" />
-                </div>
-              );
-            })}
-          </div>
+          <div className="flex w-full">{body}</div>
         )}
       </div>
     </li>
@@ -601,141 +561,4 @@ function TopicRankingsSection({
       </div>
     </section>
   );
-}
-
-function ViralPostsSection({ posts }: { posts: readonly TopicViralPostPreviewModel[] }) {
-  const [filter, setFilter] = React.useState<'all' | 'need' | 'wait'>('all');
-  const hasFilters = posts.some(post => post.needsContext || post.waitingForRatings);
-
-  const visible = React.useMemo(() => {
-    if (filter === 'need') return posts.filter(post => post.needsContext);
-    if (filter === 'wait') return posts.filter(post => post.waitingForRatings);
-    return posts;
-  }, [filter, posts]);
-
-  return (
-    <section id="spreading" aria-label="What’s spreading" className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="m-0 text-mediumTitle font-semibold text-text">What’s spreading</h2>
-
-        {hasFilters && (
-          <div className="flex flex-wrap gap-2">
-            {(
-              [
-                { id: 'all', label: 'All' },
-                { id: 'need', label: 'No context yet' },
-                { id: 'wait', label: 'Needs ratings' },
-              ] as const
-            ).map(option => (
-              <button
-                key={option.id}
-                type="button"
-                aria-pressed={filter === option.id}
-                onClick={() => setFilter(option.id)}
-                className={cx(
-                  'cursor-pointer rounded-full border px-3.5 py-1.5 text-[14px] font-medium transition-colors',
-                  filter === option.id
-                    ? 'border-text bg-text text-white'
-                    : 'border-grey-02 bg-white text-text hover:border-text'
-                )}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {visible.length === 0 ? (
-        <p className="m-0 rounded-xl border border-dashed border-grey-02 p-5 text-[15px] text-grey-04">
-          No posts match this filter right now.
-        </p>
-      ) : (
-        <div className="grid grid-cols-1 gap-4 @[680px]:grid-cols-2">
-          {visible.map(post => (
-            <ViralPostPreviewCard key={post.id} post={post} />
-          ))}
-        </div>
-      )}
-    </section>
-  );
-}
-
-function ViralPostPreviewCard({ post }: { post: TopicViralPostPreviewModel }) {
-  const classes = cx(
-    'group flex h-full w-full flex-col justify-between gap-4 p-5 text-left text-text no-underline',
-    TEMPLATE_INTERACTIVE_CARD_SURFACE
-  );
-
-  const initials = post.authorName
-    .split(/\s+/)
-    .slice(0, 2)
-    .map(w => w[0] ?? '')
-    .join('')
-    .toUpperCase();
-
-  const inner = (
-    <>
-      <div className="flex flex-col gap-3.5">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <span className="inline-grid size-9 shrink-0 place-items-center rounded-full bg-grey-01 text-[13px] font-semibold text-text">
-              {initials}
-            </span>
-            <div className="flex min-w-0 flex-col">
-              <span className="truncate text-[15.5px] leading-[19px] font-semibold text-text">{post.authorName}</span>
-              {post.authorHandle && (
-                <span className="truncate text-[13.5px] leading-[17px] text-grey-04">{post.authorHandle}</span>
-              )}
-            </div>
-          </div>
-          <span className="inline-flex shrink-0 items-center gap-1.5 text-[13.5px] text-grey-04">
-            {post.platform === 'X' ? <TweetIcon className="size-3.5 text-text" /> : null}
-            <span>{[post.platform !== 'X' ? post.platform : null, post.viewsLabel].filter(Boolean).join(' · ')}</span>
-          </span>
-        </div>
-
-        <p className="m-0 text-[15px] leading-[23px] text-text">{post.body}</p>
-
-        {post.topNote ? (
-          <div className="flex flex-col gap-1.5 rounded-lg bg-grey-01/80 p-3.5 text-[14.5px] leading-[21px]">
-            <div className="flex items-center gap-2">
-              <span className="text-[13px] font-semibold text-purple">{post.topNote.tag}</span>
-              <span className="text-[13px] text-grey-04">Shown to everyone</span>
-            </div>
-            <span className="text-text/90">{post.topNote.text}</span>
-          </div>
-        ) : (
-          <div className="rounded-lg bg-grey-01/60 px-3.5 py-2.5 text-[14px] text-grey-04">
-            No context note shown yet · be the first to add one
-          </div>
-        )}
-      </div>
-
-      <span className="inline-flex items-center gap-1.5 text-[14px] font-medium text-ctaPrimary group-hover:text-ctaHover">
-        <span>
-          {post.noteCount === 0
-            ? 'Open post to add context'
-            : `Read ${post.noteCount} context ${post.noteCount === 1 ? 'note' : 'notes'} & ratings`}
-        </span>
-        <ArrowRightIcon className="size-4" />
-      </span>
-    </>
-  );
-
-  if (post.href) {
-    return (
-      <Link href={post.href} className={classes}>
-        {inner}
-      </Link>
-    );
-  }
-  if (post.onSelect) {
-    return (
-      <button type="button" onClick={post.onSelect} className={`${classes} cursor-pointer`}>
-        {inner}
-      </button>
-    );
-  }
-  return <article className={classes}>{inner}</article>;
 }

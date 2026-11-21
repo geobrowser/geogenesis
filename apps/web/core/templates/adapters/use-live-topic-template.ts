@@ -199,7 +199,7 @@ export function useLiveTopicTemplate({
           when:
             formatOntologyDate(readEntityTextValue(eventEntity, TEMPLATE_ONTOLOGY.EVENT_DATE_PROPERTY_ID)) ?? 'Event',
           title: eventEntity.name ?? eventEntity.id,
-          claims: [],
+          summary: eventEntity.description ?? undefined,
           href: NavUtils.toEntity(eventSpaceId, eventEntity.id),
         };
       });

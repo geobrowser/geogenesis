@@ -18,6 +18,8 @@ export {
   PlayIcon,
   PlusIcon,
   SearchIcon,
+  ThumbDownIcon,
+  ThumbUpIcon,
   TweetIcon,
 } from './icons';
 export { RelatedListSection, type RelatedListSectionProps } from './related-list-section';

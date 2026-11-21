@@ -254,3 +254,39 @@ export function NetworkIcon({ className = 'size-4' }: IconProps) {
     </svg>
   );
 }
+
+export function ThumbUpIcon({ className = 'size-4' }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      className={`shrink-0 ${className}`}
+    >
+      <path d="M5 7.2V13H3.2A1.2 1.2 0 0 1 2 11.8V8.4A1.2 1.2 0 0 1 3.2 7.2H5Z" />
+      <path d="M5 7.2 7.3 2.8a1.1 1.1 0 0 1 2 .5v3.2h3.1a1.3 1.3 0 0 1 1.27 1.58l-.8 3.6a1.4 1.4 0 0 1-1.37 1.12H5" />
+    </svg>
+  );
+}
+
+export function ThumbDownIcon({ className = 'size-4' }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      className={`shrink-0 ${className}`}
+    >
+      <path d="M5 8.8V3H3.2A1.2 1.2 0 0 0 2 4.2v3.4A1.2 1.2 0 0 0 3.2 8.8H5Z" />
+      <path d="M5 8.8 7.3 13.2a1.1 1.1 0 0 0 2-.5V9.5h3.1a1.3 1.3 0 0 0 1.27-1.58l-.8-3.6A1.4 1.4 0 0 0 11.5 3.2H5" />
+    </svg>
+  );
+}

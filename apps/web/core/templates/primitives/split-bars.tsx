@@ -32,10 +32,10 @@ export function SplitBars({ rows, density = 'compact', className }: SplitBarsPro
           <div
             key={row.id}
             className={cx(
-              'grid items-center gap-3',
+              'grid items-center',
               isFull
-                ? 'grid-cols-[minmax(112px,148px)_minmax(0,1fr)_auto] text-[15px] leading-[20px]'
-                : 'grid-cols-[minmax(108px,136px)_minmax(0,1fr)_44px] text-[14px] leading-[18px]',
+                ? 'grid-cols-[minmax(112px,148px)_minmax(0,1fr)_auto] gap-3 text-[15px] leading-[20px]'
+                : 'grid-cols-[minmax(96px,114px)_minmax(0,1fr)_36px] gap-2.5 text-[14px] leading-[18px]',
               row.isEveryone ? 'text-text' : 'text-grey-04'
             )}
           >
