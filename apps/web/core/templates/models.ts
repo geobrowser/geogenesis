@@ -253,6 +253,8 @@ export interface TopicRankingItemModel {
   subtitle?: string;
   tag?: string;
   metric?: string;
+  /** Optional rank movement relative to Everyone's ranking (e.g. '▲ 4', '▼ 2', 'new'). */
+  rankDelta?: string;
   href?: string;
   onSelect?: () => void;
 }
@@ -262,6 +264,34 @@ export interface TopicRankingModel {
   title: string;
   subtitle: string;
   itemsByCommunity: Readonly<Record<string, readonly TopicRankingItemModel[]>>;
+  suggestPlaceholder?: string;
+  onSuggestItem?: (input: string) => void;
+}
+
+export interface TopicGraphRelationModel {
+  targetId: string;
+  label: string;
+  sourceNote?: string;
+}
+
+export interface TopicGraphNodeModel {
+  id: string;
+  name: string;
+  kind: string;
+  tags?: readonly string[];
+  summary: string;
+  featured?: boolean;
+  relations: readonly TopicGraphRelationModel[];
+  claims?: readonly ClaimSummaryModel[];
+  href?: string;
+  onSelect?: () => void;
+}
+
+export interface TopicEntityGraphModel {
+  title?: string;
+  subtitle?: string;
+  initialNodeId?: string;
+  nodes: readonly TopicGraphNodeModel[];
 }
 
 export interface TopicViralPostPreviewModel {
@@ -278,6 +308,8 @@ export interface TopicViralPostPreviewModel {
     text: string;
   };
   noteCount: number;
+  needsContext?: boolean;
+  waitingForRatings?: boolean;
   href?: string;
   onSelect?: () => void;
 }
@@ -299,12 +331,83 @@ export interface TopicTemplateModel {
   communityCases?: readonly TopicCommunityCaseModel[];
   trends?: TopicTrendsModel;
   timelineHighlights?: readonly TopicTimelineHighlightModel[];
+  entityGraph?: TopicEntityGraphModel;
   rankings?: readonly TopicRankingModel[];
   viralPosts?: readonly TopicViralPostPreviewModel[];
   timelineHref?: string;
+  onOpenTimeline?: () => void;
   sourcesHref?: string;
+  onOpenSources?: () => void;
   /** Additional structured sections (coverage, rankings, debates, etc.). */
   sections?: readonly EntityListSectionModel[];
+}
+
+export interface TimelineEraModel {
+  id: string;
+  years: string;
+  name: string;
+  blurb: string;
+}
+
+export interface TimelineTurnModel {
+  id: string;
+  eraId: string;
+  when: string;
+  title: string;
+  why: string;
+  isKey?: boolean;
+  sourceLabel?: string;
+  communityFramings?: readonly {
+    communityId: string;
+    communityName: string;
+    color: string;
+    text: string;
+  }[];
+  knownDisputedUnknown?: {
+    known: string;
+    disputed: string;
+    unknown: string;
+  };
+  claims?: readonly {
+    id: string;
+    title: string;
+    href?: string;
+    onSelect?: () => void;
+  }[];
+  href?: string;
+  onSelect?: () => void;
+}
+
+export interface TimelineTemplateModel {
+  id: string;
+  title: string;
+  lede?: string;
+  breadcrumbs?: readonly BreadcrumbItem[];
+  eras: readonly TimelineEraModel[];
+  turns: readonly TimelineTurnModel[];
+  keyNumbers?: readonly {
+    label: string;
+    value: string;
+    attribution: string;
+  }[];
+  onSuggestTurn?: (draft: { date: string; summary: string; source: string }) => void;
+}
+
+export type SourceLibraryGroup = 'primary' | 'reporting' | 'data' | 'statement';
+
+export interface SourceLibraryItemModel extends EntityLinkRowModel {
+  group: SourceLibraryGroup;
+  citationCount?: number;
+}
+
+export interface SourceLibraryTemplateModel {
+  id: string;
+  title: string;
+  lede?: string;
+  totalCountLabel?: string;
+  breadcrumbs?: readonly BreadcrumbItem[];
+  sources: readonly SourceLibraryItemModel[];
+  onAddSource?: (draft: { title: string; url: string }) => void;
 }
 
 export interface EventTemplateModel {
@@ -363,6 +466,8 @@ export interface DebateTemplateModel {
   id: string;
   claimId: string;
   claimTitle: string;
+  claimHref?: string;
+  onOpenClaim?: () => void;
   date?: string;
   duration?: string;
   voteCountLabel?: string;
@@ -403,6 +508,13 @@ export interface PostContextNoteModel {
   onRate?: (rating: 'helpful' | 'not-helpful') => void;
 }
 
+export interface PostSuggestedEvidenceModel {
+  id: string;
+  title: string;
+  meta: string;
+  mediaType?: SourceMediaKind;
+}
+
 export interface PostTemplateModel {
   id: string;
   authorName: string;
@@ -421,8 +533,14 @@ export interface PostTemplateModel {
     stanceLabel: string;
   }[];
   notes: readonly PostContextNoteModel[];
+  suggestedEvidence?: readonly PostSuggestedEvidenceModel[];
   bridgingRule?: string;
-  onAddNote?: (draft: { tag: string; text: string; sourceUrl: string }) => void;
+  onAddNote?: (draft: {
+    tag: string;
+    text: string;
+    sourceUrl: string;
+    selectedEvidenceIds?: readonly string[];
+  }) => void;
   sections: readonly EntityListSectionModel[];
 }
 

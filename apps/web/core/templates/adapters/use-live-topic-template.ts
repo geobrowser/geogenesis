@@ -5,6 +5,8 @@ import * as React from 'react';
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { CURATED_TOPIC_TAG_ID, NEWS_STORY_TYPE_ID, TAG_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/constants';
 import { ID } from '~/core/id';
+import { claimResponseTargetKey } from '~/core/responses/claim-response-summaries';
+import { useClaimResponseSummaryBatch } from '~/core/responses/use-claim-response-summaries';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { useTopicAncestors } from '~/core/topics/browse/use-topic-ancestors';
 import { useTopicConnectionCounts } from '~/core/topics/browse/use-topic-connection-counts';
@@ -67,6 +69,17 @@ export function useLiveTopicTemplate({
     spaceIds,
   });
 
+  const claimBatchTargets = React.useMemo(
+    () => linkedClaims.map(claim => ({ entityId: claim.id, responseKind: 'stance' as const })),
+    [linkedClaims]
+  );
+
+  const responseBatch = useClaimResponseSummaryBatch({
+    spaceId,
+    targets: claimBatchTargets,
+    enabled: claimBatchTargets.length > 0,
+  });
+
   const { entities: linkedEvents } = useTopicLinkedEntities({
     topicId: entityId,
     typeIds: [TEMPLATE_ONTOLOGY.NEWS_EVENT_TYPE_ID],
@@ -112,10 +125,44 @@ export function useLiveTopicTemplate({
       .filter(claim => Boolean(claim.name))
       .map(claim => {
         const claimSpaceId = resolveEntitySpaceId(claim, spaceId);
+        const batchSummary = responseBatch.data?.get(
+          claimResponseTargetKey({ entityId: claim.id, responseKind: 'stance' })
+        );
+        const positive = batchSummary?.counts.positive ?? 0;
+        const negative = batchSummary?.counts.negative ?? 0;
+        const total = positive + negative;
+        const percent = total > 0 ? Math.round((positive / total) * 100) : undefined;
+        const viewerVote =
+          batchSummary?.viewerResponse === 'positive'
+            ? 'agree'
+            : batchSummary?.viewerResponse === 'negative'
+              ? 'disagree'
+              : null;
+
         return {
           id: claim.id,
           title: claim.name ?? claim.id,
-          split: { rows: [], isSplit: true },
+          overallPercent: percent,
+          userVote: viewerVote,
+          meta: total > 0 ? [`${total.toLocaleString('en-US')} ${total === 1 ? 'vote' : 'votes'}`] : undefined,
+          split: {
+            rows:
+              total > 0 && percent !== undefined
+                ? [
+                    {
+                      id: 'all',
+                      label: 'Everyone',
+                      color: '#202020',
+                      percent,
+                      voterCount: total,
+                      isEveryone: true,
+                      userLabel: viewerVote ? `You: ${viewerVote === 'agree' ? 'Agree' : 'Disagree'}` : undefined,
+                    },
+                  ]
+                : [],
+            isSplit: true,
+            totalVotes: total > 0 ? total : undefined,
+          },
           href: NavUtils.toEntity(claimSpaceId, claim.id),
         };
       });
@@ -172,7 +219,17 @@ export function useLiveTopicTemplate({
       timelineHighlights: timelineHighlights.length > 0 ? timelineHighlights : undefined,
       sections: sections.length > 0 ? sections : undefined,
     };
-  }, [ancestors, countsByTopicId, coverage.page.rows, entity, entityId, linkedClaims, linkedEvents, spaceId]);
+  }, [
+    ancestors,
+    countsByTopicId,
+    coverage.page.rows,
+    entity,
+    entityId,
+    linkedClaims,
+    linkedEvents,
+    responseBatch.data,
+    spaceId,
+  ]);
 
   return {
     data: model,

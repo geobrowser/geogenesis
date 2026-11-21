@@ -10,6 +10,7 @@ import {
   ArrowRightIcon,
   ClaimSummaryCard,
   RelatedListSection,
+  TEMPLATE_INTERACTIVE_CARD_SURFACE,
   TemplateBadge,
   TemplateShell,
 } from '../primitives';
@@ -91,7 +92,7 @@ function EventNeighborButton({
   event: NonNullable<EventTemplateModel['previousEvent']>;
   align?: 'left' | 'right';
 }) {
-  const classes = `flex flex-col gap-1 rounded-xl border border-grey-02/80 bg-white px-5 py-4 text-text no-underline transition-colors hover:border-text ${
+  const classes = `flex flex-col gap-1 px-5 py-4 text-text no-underline ${TEMPLATE_INTERACTIVE_CARD_SURFACE} ${
     align === 'right' ? 'items-end text-right' : 'items-start text-left'
   }`;
 

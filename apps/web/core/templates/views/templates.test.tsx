@@ -8,10 +8,13 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { type GazaFixtureRoute, useGazaFixtureTemplates } from '../adapters/gaza-fixture';
 import type { TopicTemplateModel } from '../models';
 import { ClaimTemplate } from './claim-template';
+import { DebateTemplate } from './debate-template';
 import { EventTemplate } from './event-template';
 import { NewsStoryTemplate } from './news-story-template';
 import { PostTemplate } from './post-template';
+import { SourceLibraryTemplate } from './source-library-template';
 import { SourceTemplate } from './source-template';
+import { TimelineTemplate } from './timeline-template';
 import { TopicTemplate } from './topic-template';
 
 afterEach(cleanup);
@@ -39,6 +42,14 @@ function FixtureHarness({ initialRoute }: { initialRoute?: GazaFixtureRoute }) {
       return fixture.sourceSource.data ? <SourceTemplate model={fixture.sourceSource.data} /> : null;
     case 'post':
       return fixture.postSource.data ? <PostTemplate model={fixture.postSource.data} /> : null;
+    case 'debate':
+      return fixture.debateSource.data ? <DebateTemplate model={fixture.debateSource.data} /> : null;
+    case 'timeline':
+      return fixture.timelineSource.data ? <TimelineTemplate model={fixture.timelineSource.data} /> : null;
+    case 'sources':
+      return fixture.sourceLibrarySource.data ? (
+        <SourceLibraryTemplate model={fixture.sourceLibrarySource.data} />
+      ) : null;
   }
 }
 
@@ -84,7 +95,7 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
 
     // Switch Rankings tab: Bridging picks hides single-scope community pills (Finding T6)
     const rankings = screen.getByRole('region', { name: 'Rankings' });
-    fireEvent.click(within(rankings).getByRole('button', { name: 'Bridging picks' }));
+    fireEvent.click(within(rankings).getByRole('button', { name: /Bridging picks/i }));
     expect(within(rankings).queryByRole('button', { name: 'Everyone' })).toBeNull();
 
     // Switch community view and open a contested claim
@@ -145,5 +156,64 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     expect(screen.getByRole('heading', { name: 'What both communities agree on' })).toBeInTheDocument();
     expect(screen.getByText(/UNOSAT satellite damage assessment \(Jun 2026\)/)).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Where they split next' })).toBeInTheDocument();
+  });
+
+  it('supports Who’s who entity graph navigation, tabs, and back history on TopicTemplate', () => {
+    render(<FixtureHarness />);
+
+    const graph = screen.getByRole('region', { name: 'Who’s who' });
+    expect(within(graph).getByRole('heading', { name: 'Hamas' })).toBeInTheDocument();
+
+    // Switch to Relationships tab and click into Gaza Health Ministry
+    fireEvent.click(within(graph).getByRole('tab', { name: /Relationships/i }));
+    fireEvent.click(within(graph).getByRole('button', { name: /runs.*Gaza Health Ministry/i }));
+    expect(within(graph).getByRole('heading', { name: 'Gaza Health Ministry' })).toBeInTheDocument();
+
+    // Back button returns to Hamas
+    fireEvent.click(within(graph).getByRole('button', { name: /Back to Hamas/i }));
+    expect(within(graph).getByRole('heading', { name: 'Hamas' })).toBeInTheDocument();
+  });
+
+  it('navigates from Topic rankings to DebateTemplate and renders vote shifts', () => {
+    render(<FixtureHarness />);
+
+    const rankings = screen.getByRole('region', { name: 'Rankings' });
+    fireEvent.click(within(rankings).getByRole('button', { name: /Best debates/i }));
+    fireEvent.click(within(rankings).getByRole('button', { name: /Israel is committing genocide in Gaza/i }));
+
+    expect(screen.getByText('Debate')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'How the vote moved' })).toBeInTheDocument();
+    expect(screen.getAllByText('+3 pts').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Amira H.').length).toBeGreaterThan(0);
+  });
+
+  it('renders TimelineTemplate with era filtering, framing toggle, and Known/Disputed/Unknown', () => {
+    render(<FixtureHarness />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Full timeline/i }));
+    expect(screen.getByRole('heading', { name: 'Israel–Gaza war: Timeline' })).toBeInTheDocument();
+    expect(screen.getByText('Known')).toBeInTheDocument();
+    expect(screen.getByText('Disputed')).toBeInTheDocument();
+    expect(screen.getByText('Unknown')).toBeInTheDocument();
+
+    // Toggle community framings on
+    fireEvent.click(screen.getByRole('button', { name: /Show how each community tells it/i }));
+    expect(screen.getAllByText('Pro-Palestinian framing').length).toBeGreaterThan(0);
+
+    // Filter to 1947–2004 era
+    fireEvent.click(screen.getByRole('button', { name: /1947–2004/i }));
+    expect(screen.getByText(/Six-Day War/i)).toBeInTheDocument();
+  });
+
+  it('renders SourceLibraryTemplate with live search and category filtering', () => {
+    render(<FixtureHarness />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Browse all 10 sources/i }));
+    expect(screen.getByRole('heading', { name: 'Sources on the Israel–Gaza war' })).toBeInTheDocument();
+
+    const search = screen.getByRole('searchbox', { name: 'Search sources' });
+    fireEvent.change(search, { target: { value: 'UNOSAT' } });
+    expect(screen.getByText('UNOSAT satellite damage assessment')).toBeInTheDocument();
+    expect(screen.queryByText('ICJ order in South Africa v. Israel')).toBeNull();
   });
 });

@@ -8,9 +8,12 @@ import Link from 'next/link';
 import type { PostContextNoteModel, PostTemplateModel } from '../models';
 import {
   ArrowUpRightIcon,
+  CheckIcon,
+  PlusIcon,
   RelatedListSection,
   SourceChipList,
   SplitBars,
+  TEMPLATE_CARD_SURFACE,
   TemplateBadge,
   TemplateShell,
 } from '../primitives';
@@ -23,6 +26,7 @@ export interface PostTemplateProps {
 }
 
 const NOTE_TAGS = ['Old footage', 'Missing context', 'Disputed figure', 'Verified context'] as const;
+const MAX_NOTE_LENGTH = 280;
 
 /**
  * Pure, data-driven Post template for viral / external social posts with bridging Community Notes.
@@ -32,7 +36,13 @@ export function PostTemplate({ model, headerActions, footer, className }: PostTe
   const [draftTag, setDraftTag] = React.useState<string>('');
   const [draftText, setDraftText] = React.useState('');
   const [draftSource, setDraftSource] = React.useState('');
+  const [selectedEvidenceIds, setSelectedEvidenceIds] = React.useState<string[]>([]);
   const [draftError, setDraftError] = React.useState<string | null>(null);
+
+  const toggleEvidence = (id: string) => {
+    setSelectedEvidenceIds(prev => (prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]));
+    setDraftError(null);
+  };
 
   const handleSubmitNote = (event: React.FormEvent) => {
     event.preventDefault();
@@ -44,10 +54,16 @@ export function PostTemplate({ model, headerActions, footer, className }: PostTe
       setDraftError('Write at least a sentence explaining what the sources show.');
       return;
     }
-    model.onAddNote?.({ tag: draftTag, text: draftText.trim(), sourceUrl: draftSource.trim() });
+    model.onAddNote?.({
+      tag: draftTag,
+      text: draftText.trim(),
+      sourceUrl: draftSource.trim(),
+      selectedEvidenceIds,
+    });
     setDraftTag('');
     setDraftText('');
     setDraftSource('');
+    setSelectedEvidenceIds([]);
     setDraftError(null);
     setComposing(false);
   };
@@ -71,7 +87,7 @@ export function PostTemplate({ model, headerActions, footer, className }: PostTe
 
       <div className="grid grid-cols-1 items-start gap-7 @[780px]:grid-cols-[minmax(0,410px)_minmax(0,1fr)]">
         {/* Left: post card */}
-        <article className="flex flex-col gap-4 rounded-xl border border-grey-02/80 bg-white p-5 @[780px]:sticky @[780px]:top-20">
+        <article className={cx('flex flex-col gap-4 p-5 @[780px]:sticky @[780px]:top-20', TEMPLATE_CARD_SURFACE)}>
           <div className="flex items-center justify-between gap-2">
             <div className="flex flex-col gap-0.5">
               <span className="text-[17px] font-semibold text-text">{model.authorName}</span>
@@ -118,10 +134,7 @@ export function PostTemplate({ model, headerActions, footer, className }: PostTe
         {/* Right: claims + bridging context notes */}
         <div className="flex min-w-0 flex-col gap-6">
           {model.claims.length > 0 && (
-            <section
-              aria-label="Claims in this post"
-              className="flex flex-col gap-3 rounded-xl border border-grey-02/80 bg-white p-5"
-            >
+            <section aria-label="Claims in this post" className={cx('flex flex-col gap-3 p-5', TEMPLATE_CARD_SURFACE)}>
               <h2 className="m-0 text-smallTitle text-text">Claims in this post</h2>
               <div className="divide-y divide-divider">
                 {model.claims.map(({ claim, stanceLabel }) => (
@@ -212,19 +225,67 @@ export function PostTemplate({ model, headerActions, footer, className }: PostTe
                   ))}
                 </div>
 
-                <label className="flex flex-col gap-1.5 text-[15px] font-medium text-text">
-                  What do the sources show?
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <label htmlFor="post-context-note-body" className="text-[15px] font-medium text-text">
+                      What do the sources show?
+                    </label>
+                    <span className="text-[13px] font-normal text-grey-04 tabular-nums">
+                      {draftText.length} / {MAX_NOTE_LENGTH}
+                    </span>
+                  </div>
                   <textarea
+                    id="post-context-note-body"
                     value={draftText}
-                    onChange={e => setDraftText(e.target.value)}
+                    onChange={e => setDraftText(e.target.value.slice(0, MAX_NOTE_LENGTH))}
                     rows={3}
                     placeholder="Write a concise, sourced explanation..."
                     className="w-full rounded-lg border border-grey-02 p-3 text-[16px] font-normal text-text focus:border-text focus:outline-hidden"
                   />
-                </label>
+                </div>
+
+                {model.suggestedEvidence && model.suggestedEvidence.length > 0 && (
+                  <div className="flex flex-col gap-2">
+                    <span className="text-[15px] font-medium text-text">Attach suggested evidence</span>
+                    <div className="flex flex-col gap-2">
+                      {model.suggestedEvidence.map(item => {
+                        const isSelected = selectedEvidenceIds.includes(item.id);
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            aria-pressed={isSelected}
+                            onClick={() => toggleEvidence(item.id)}
+                            className={cx(
+                              'flex w-full cursor-pointer items-center justify-between gap-3 rounded-lg border px-3.5 py-2.5 text-left transition-colors',
+                              isSelected
+                                ? 'border-ctaPrimary bg-ctaTertiary/40 text-text'
+                                : 'border-divider bg-bg text-text hover:border-grey-02'
+                            )}
+                          >
+                            <span className="flex min-w-0 flex-col gap-0.5">
+                              <span className="text-[15px] font-medium text-text">{item.title}</span>
+                              <span className="text-[13.5px] text-grey-04">{item.meta}</span>
+                            </span>
+                            <span
+                              className={cx(
+                                'grid size-7 shrink-0 place-items-center rounded-full border',
+                                isSelected
+                                  ? 'border-ctaPrimary bg-ctaPrimary text-white'
+                                  : 'border-grey-02 bg-white text-grey-04'
+                              )}
+                            >
+                              {isSelected ? <CheckIcon className="size-3.5" /> : <PlusIcon className="size-3.5" />}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 <label className="flex flex-col gap-1.5 text-[15px] font-medium text-text">
-                  Source link (optional)
+                  Additional source link (optional)
                   <input
                     type="url"
                     value={draftSource}
@@ -233,6 +294,25 @@ export function PostTemplate({ model, headerActions, footer, className }: PostTe
                     className="w-full rounded-lg border border-grey-02 px-3 py-2.5 text-[16px] font-normal text-text focus:border-text focus:outline-hidden"
                   />
                 </label>
+
+                {draftTag && (
+                  <div className="flex flex-col gap-2 rounded-lg border border-divider bg-bg p-3.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[13px] font-semibold text-grey-04 uppercase">Live preview</span>
+                      <span className="text-[13px] text-grey-04">
+                        {selectedEvidenceIds.length + (draftSource.trim() ? 1 : 0)}{' '}
+                        {selectedEvidenceIds.length + (draftSource.trim() ? 1 : 0) === 1 ? 'source' : 'sources'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <TemplateBadge tone="post">{draftTag}</TemplateBadge>
+                      <span className="text-[14px] text-grey-04">Needs ratings from both communities</span>
+                    </div>
+                    <p className="m-0 text-[15px] leading-[22px] text-text">
+                      {draftText.trim() || 'Your explanation will appear here as you type.'}
+                    </p>
+                  </div>
+                )}
 
                 {draftError && <p className="m-0 text-[14px] font-medium text-red-01">{draftError}</p>}
 
@@ -281,12 +361,12 @@ function ContextNoteCard({ note }: { note: PostContextNoteModel }) {
   return (
     <article
       className={cx(
-        'flex flex-col gap-3.5 rounded-xl border p-5 text-[16px] leading-[24px]',
+        'flex flex-col gap-3.5 p-5 text-[16px] leading-[24px]',
         isShown
-          ? 'border-grey-02 bg-white shadow-light'
+          ? TEMPLATE_CARD_SURFACE
           : note.status === 'mine'
-            ? 'border-ctaPrimary/30 bg-ctaTertiary/25'
-            : 'border-dashed border-grey-02 bg-white'
+            ? 'rounded-xl border border-ctaPrimary/25 bg-ctaTertiary/25 shadow-[0_2px_10px_rgba(57,99,254,0.06)]'
+            : 'rounded-xl border border-dashed border-grey-02 bg-white shadow-[0_1px_6px_rgba(0,0,0,0.03)]'
       )}
     >
       <div className="flex flex-wrap items-center gap-2.5">

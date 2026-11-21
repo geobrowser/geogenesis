@@ -25,10 +25,13 @@ import {
 } from '~/core/templates/primitives';
 import {
   ClaimTemplate,
+  DebateTemplate,
   EventTemplate,
   NewsStoryTemplate,
   PostTemplate,
+  SourceLibraryTemplate,
   SourceTemplate,
+  TimelineTemplate,
   TopicTemplate,
 } from '~/core/templates/views';
 
@@ -38,6 +41,9 @@ const QUICK_JUMPS: readonly { label: string; route: GazaFixtureRoute }[] = [
   { label: 'Topic', route: { kind: 'topic' } },
   { label: 'Contested claim', route: { kind: 'claim', id: 'gen' } },
   { label: 'Agreed claim', route: { kind: 'claim', id: 'build' } },
+  { label: 'Debate', route: { kind: 'debate', id: 'd-gen' } },
+  { label: 'Timeline', route: { kind: 'timeline' } },
+  { label: 'Sources', route: { kind: 'sources' } },
   { label: 'Event', route: { kind: 'event', id: 'e71k' } },
   { label: 'News story', route: { kind: 'news-story', id: 'st-haaretz-71k' } },
   { label: 'Source', route: { kind: 'source', id: 's-icj' } },
@@ -46,9 +52,9 @@ const QUICK_JUMPS: readonly { label: string; route: GazaFixtureRoute }[] = [
 
 function routeMatches(a: GazaFixtureRoute, b: GazaFixtureRoute): boolean {
   if (a.kind !== b.kind) return false;
-  if (a.kind === 'topic' && b.kind === 'topic') return true;
-  if (a.kind !== 'topic' && b.kind !== 'topic') return a.id === b.id;
-  return false;
+  if (a.kind === 'topic' || a.kind === 'timeline' || a.kind === 'sources') return true;
+  if (b.kind === 'topic' || b.kind === 'timeline' || b.kind === 'sources') return false;
+  return a.id === b.id;
 }
 
 /**
@@ -60,9 +66,9 @@ export function DevTemplatesPreview() {
   const fixture = useGazaFixtureTemplates();
 
   return (
-    <div className="min-h-screen bg-white">
-      <div className="sticky top-0 z-20 border-b border-divider bg-white/95 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-[1120px] flex-wrap items-center justify-between gap-2 px-4 py-2.5">
+    <div className="min-h-screen bg-bg/40">
+      <div className="border-b border-divider bg-white">
+        <div className="mx-auto flex max-w-[1120px] flex-wrap items-center justify-between gap-2 px-5 py-3">
           <div className="flex flex-wrap items-center gap-1.5">
             {QUICK_JUMPS.map(jump => {
               const active = mode === 'prototype' && routeMatches(fixture.activeRoute, jump.route);
@@ -119,6 +125,12 @@ export function DevTemplatesPreview() {
         <SourceTemplate model={fixture.sourceSource.data} />
       ) : fixture.activeRoute.kind === 'post' && fixture.postSource.data ? (
         <PostTemplate model={fixture.postSource.data} />
+      ) : fixture.activeRoute.kind === 'debate' && fixture.debateSource.data ? (
+        <DebateTemplate model={fixture.debateSource.data} />
+      ) : fixture.activeRoute.kind === 'timeline' && fixture.timelineSource.data ? (
+        <TimelineTemplate model={fixture.timelineSource.data} />
+      ) : fixture.activeRoute.kind === 'sources' && fixture.sourceLibrarySource.data ? (
+        <SourceLibraryTemplate model={fixture.sourceLibrarySource.data} />
       ) : null}
     </div>
   );

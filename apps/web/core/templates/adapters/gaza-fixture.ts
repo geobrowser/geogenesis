@@ -7,17 +7,24 @@ import {
   type ClaimSummaryModel,
   type ClaimTemplateModel,
   type CommunityDefinition,
+  type DebateTemplateModel,
   type EntityListSectionModel,
   type EventTemplateModel,
   type NewsStoryTemplateModel,
   type PostContextNoteModel,
+  type PostSuggestedEvidenceModel,
   type PostTemplateModel,
+  type SourceLibraryItemModel,
+  type SourceLibraryTemplateModel,
   type SourceMediaKind,
   type SourceTemplateModel,
   type SplitBreakdown,
   type StrongestCaseModel,
   type SubClaimFactModel,
   type TemplateDataSource,
+  type TimelineTemplateModel,
+  type TopicEntityGraphModel,
+  type TopicRankingItemModel,
   type TopicRankingModel,
   type TopicTemplateModel,
   type TopicTrendsModel,
@@ -27,10 +34,20 @@ import {
   isClaimSplit,
 } from '../models';
 import { outletColorFrom, outletInitialsFrom } from '../ontology';
+import {
+  DEBATE_BY_ID,
+  SEED_DEBATES,
+  SEED_GRAPH_NODES,
+  SEED_TIMELINE_ERAS,
+  SEED_TIMELINE_NUMBERS,
+  SEED_TIMELINE_TURNS,
+  classifySourceLibraryGroup,
+} from './gaza-fixture-seed';
 
 /**
- * Full cross-linked Israel–Gaza option-C prototype dataset implementing all six Phase 1–3
- * template view-model contracts (`Topic`, `Claim`, `Event`, `NewsStory`, `Source`, `Post`).
+ * Full cross-linked Israel–Gaza prototype dataset implementing all nine template view-model
+ * contracts (`Topic`, `Claim`, `Event`, `NewsStory`, `Source`, `Post`, `Debate`, `Timeline`,
+ * `SourceLibrary`).
  */
 
 export const GAZA_COMMUNITIES: readonly CommunityDefinition[] = [
@@ -44,7 +61,10 @@ export type GazaFixtureRoute =
   | { kind: 'event'; id: string }
   | { kind: 'news-story'; id: string }
   | { kind: 'source'; id: string }
-  | { kind: 'post'; id: string };
+  | { kind: 'post'; id: string }
+  | { kind: 'debate'; id: string }
+  | { kind: 'timeline' }
+  | { kind: 'sources' };
 
 const TOPIC_LEDE_BY_COMMUNITY: Record<string, string> = {
   all: 'A Hamas-led attack on 7 October 2023 killed about 1,200 people in Israel and took 251 hostages. Israel’s war in Gaza has since killed more than 70,000 Palestinians, by the Gaza Health Ministry’s count; in January 2026 an Israeli military official accepted the total as it stood then, about 71,000. A ceasefire has held in name since October 2025: every hostage is home, but strikes continue, Israel holds more than half of Gaza, and Hamas hasn’t disarmed.',
@@ -377,6 +397,7 @@ interface SeedPost {
     ratingCount: string;
     shown: boolean;
   }[];
+  suggestedEvidence: readonly PostSuggestedEvidenceModel[];
   eventIds: readonly string[];
 }
 
@@ -406,6 +427,21 @@ const SEED_POSTS: readonly SeedPost[] = [
         piHelp: 96,
         ratingCount: '2,140 ratings',
         shown: true,
+      },
+    ],
+    suggestedEvidence: [
+      {
+        id: 'ev-aleppo-yt',
+        title: 'Original upload: Aleppo hospital, 2016',
+        meta: 'YouTube · 2016',
+        mediaType: 'video',
+      },
+      { id: 'ev-lens', title: 'Reverse image search match', meta: 'Google Lens', mediaType: 'document' },
+      {
+        id: 'ev-bellingcat',
+        title: 'Syrian war images reused in Gaza coverage',
+        meta: 'Bellingcat · Dec 2023',
+        mediaType: 'article',
       },
     ],
     eventIds: ['ecf'],
@@ -439,8 +475,65 @@ const SEED_POSTS: readonly SeedPost[] = [
         ratingCount: '1,680 ratings',
         shown: true,
       },
+      {
+        id: 'n-lancet',
+        tag: 'Disputed figure',
+        by: 'pp',
+        text: '“Every number is fake” goes further than any dataset. Even the IDF’s own estimates put total casualties in the tens of thousands.',
+        sourceIds: ['s-moh'],
+        ppHelp: 92,
+        piHelp: 24,
+        ratingCount: '640 ratings',
+        shown: false,
+      },
+    ],
+    suggestedEvidence: [
+      {
+        id: 'ev-haaretz',
+        title: 'IDF official accepts about 71,000 killed',
+        meta: 'Haaretz · Jan 2026',
+        mediaType: 'article',
+      },
+      {
+        id: 'ev-moh',
+        title: 'Gaza Health Ministry named casualty list',
+        meta: 'Gaza Health Ministry · Nov 2026',
+        mediaType: 'dataset',
+      },
     ],
     eventIds: ['e71k'],
+  },
+  {
+    id: 'p-aid',
+    authorName: 'Mideast Unfiltered',
+    authorHandle: '@mideast_unfiltered',
+    platform: 'Instagram',
+    viewsLabel: '880k views',
+    when: '5 hours ago',
+    body: 'Not one aid truck has entered Gaza this month. Not one.',
+    engagement: [
+      { label: 'Comments', value: '3,208' },
+      { label: 'Shares', value: '21.5K' },
+      { label: 'Likes', value: '64.1K' },
+    ],
+    claims: [{ claimId: 'cf', stanceLabel: 'Post says false' }],
+    notes: [],
+    suggestedEvidence: [
+      {
+        id: 'ev-ocha',
+        title: 'Humanitarian situation report: Kerem Shalom crossings',
+        meta: 'UN OCHA · Sep 2026',
+        mediaType: 'document',
+      },
+      { id: 'ev-cogat', title: 'Daily aid truck crossings log', meta: 'COGAT · 2026', mediaType: 'dataset' },
+      {
+        id: 'ev-ri',
+        title: 'Six months into the ceasefire: the record on aid',
+        meta: 'Refugees International · 2026',
+        mediaType: 'article',
+      },
+    ],
+    eventIds: ['ecf'],
   },
 ];
 
@@ -789,19 +882,26 @@ export interface GazaFixtureController {
   openStory: (id: string) => void;
   openSource: (id: string) => void;
   openPost: (id: string) => void;
+  openDebate: (id: string) => void;
+  openTimeline: () => void;
+  openSources: () => void;
   topicSource: TemplateDataSource<TopicTemplateModel>;
   claimSource: TemplateDataSource<ClaimTemplateModel>;
   eventSource: TemplateDataSource<EventTemplateModel>;
   storySource: TemplateDataSource<NewsStoryTemplateModel>;
   sourceSource: TemplateDataSource<SourceTemplateModel>;
   postSource: TemplateDataSource<PostTemplateModel>;
+  debateSource: TemplateDataSource<DebateTemplateModel>;
+  timelineSource: TemplateDataSource<TimelineTemplateModel>;
+  sourceLibrarySource: TemplateDataSource<SourceLibraryTemplateModel>;
   joinedCommunityId: 'pp' | 'pi' | null;
   setJoinedCommunityId: (id: 'pp' | 'pi' | null) => void;
 }
 
 /**
- * Interactive fixture controller producing live-updating `TemplateDataSource` objects for all six
- * templates (`Topic`, `Claim`, `Event`, `NewsStory`, `Source`, `Post`).
+ * Interactive fixture controller producing live-updating `TemplateDataSource` objects for all nine
+ * templates (`Topic`, `Claim`, `Event`, `NewsStory`, `Source`, `Post`, `Debate`, `Timeline`,
+ * `SourceLibrary`).
  */
 export function useGazaFixtureTemplates(): GazaFixtureController {
   const [activeRoute, setActiveRoute] = React.useState<GazaFixtureRoute>({ kind: 'topic' });
@@ -810,6 +910,8 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
   const [votes, setVotes] = React.useState<Record<string, VoteChoice>>({});
   const [noteRatings, setNoteRatings] = React.useState<Record<string, 'helpful' | 'not-helpful' | null>>({});
   const [userNotes, setUserNotes] = React.useState<Record<string, PostContextNoteModel[]>>({});
+  const [rankingSuggestions, setRankingSuggestions] = React.useState<Record<string, TopicRankingItemModel[]>>({});
+  const [userSources, setUserSources] = React.useState<SourceLibraryItemModel[]>([]);
 
   const navigate = React.useCallback((route: GazaFixtureRoute) => setActiveRoute(route), []);
   const openTopic = React.useCallback(() => setActiveRoute({ kind: 'topic' }), []);
@@ -828,6 +930,11 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
   const openPost = React.useCallback((id: string) => {
     if (POST_BY_ID[id]) setActiveRoute({ kind: 'post', id });
   }, []);
+  const openDebate = React.useCallback((id: string) => {
+    if (DEBATE_BY_ID[id]) setActiveRoute({ kind: 'debate', id });
+  }, []);
+  const openTimeline = React.useCallback(() => setActiveRoute({ kind: 'timeline' }), []);
+  const openSources = React.useCallback(() => setActiveRoute({ kind: 'sources' }), []);
 
   const toSourceChips = React.useCallback(
     (ids: readonly string[]) =>
@@ -992,12 +1099,35 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
   );
 
   const rankings = React.useMemo<readonly TopicRankingModel[]>(() => {
+    const appendSuggestions = (rankingId: string, base: readonly TopicRankingItemModel[]) => [
+      ...base,
+      ...(rankingSuggestions[rankingId] ?? []),
+    ];
+
+    const addSuggestion = (rankingId: string, title: string) => {
+      setRankingSuggestions(prev => ({
+        ...prev,
+        [rankingId]: [
+          ...(prev[rankingId] ?? []),
+          {
+            id: `sug-${Date.now()}`,
+            rank: 0,
+            title,
+            subtitle: 'Your suggestion · in review until members of both communities rank it',
+            rankDelta: 'new',
+          },
+        ],
+      }));
+    };
+
     const bestReads: TopicRankingModel = {
       id: 'read',
       title: 'Best reads',
       subtitle: 'Primary documents and reporting ranked by everyone and by each community.',
+      suggestPlaceholder: 'Paste a link or type a source’s title',
+      onSuggestItem: value => addSuggestion('read', value),
       itemsByCommunity: {
-        all: [
+        all: appendSuggestions('read', [
           {
             id: 'r-icj',
             rank: 1,
@@ -1022,13 +1152,14 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
             metric: '86% worth reading',
             onSelect: () => openStory('st-haaretz-71k'),
           },
-        ],
-        pp: [
+        ]),
+        pp: appendSuggestions('read', [
           {
             id: 'r-pp-coi',
             rank: 1,
             title: SOURCE_BY_ID['s-coi'].title,
             subtitle: 'UN Human Rights Council · 16 Sep 2025',
+            rankDelta: '▲ 4',
             metric: '97% Pro-Palestinian',
             onSelect: () => openSource('s-coi'),
           },
@@ -1037,16 +1168,27 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
             rank: 2,
             title: SOURCE_BY_ID['s-ipc'].title,
             subtitle: 'IPC · 22 Aug 2025',
+            rankDelta: 'new',
             metric: '95% Pro-Palestinian',
             onSelect: () => openSource('s-ipc'),
           },
-        ],
-        pi: [
+          {
+            id: 'r-pp-icj',
+            rank: 3,
+            title: SOURCE_BY_ID['s-icj'].title,
+            subtitle: 'International Court of Justice · 26 Jan 2024',
+            rankDelta: '▼ 2',
+            metric: '91% Pro-Palestinian',
+            onSelect: () => openSource('s-icj'),
+          },
+        ]),
+        pi: appendSuggestions('read', [
           {
             id: 'r-pi-il',
             rank: 1,
             title: SOURCE_BY_ID['s-il-icj'].title,
             subtitle: 'Government of Israel · 12 Jan 2024',
+            rankDelta: 'new',
             metric: '95% Pro-Israel',
             onSelect: () => openSource('s-il-icj'),
           },
@@ -1055,12 +1197,39 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
             rank: 2,
             title: SOURCE_BY_ID['s-afp'].title,
             subtitle: 'AFP · 2024',
+            rankDelta: '▲ 2',
             metric: '94% Pro-Israel',
             onSelect: () => openSource('s-afp'),
           },
-        ],
+        ]),
       },
     };
+
+    const bestDebates: TopicRankingModel = {
+      id: 'debates',
+      title: 'Best debates',
+      subtitle: 'Timed debates pairing one Pro-Palestinian and one Pro-Israel member, ranked by both communities.',
+      suggestPlaceholder: 'Paste a link to a debate on Geo',
+      onSuggestItem: value => addSuggestion('debates', value),
+      itemsByCommunity: {
+        all: appendSuggestions(
+          'debates',
+          ['d-gen', 'd-cf', 'd-civ', 'd-gov'].map((id, index) => {
+            const debate = DEBATE_BY_ID[id];
+            const claim = CLAIM_BY_ID[debate.claimId];
+            return {
+              id: debate.id,
+              rank: index + 1,
+              title: claim.title,
+              subtitle: `${debate.ppDebater} vs ${debate.piDebater} · ${debate.duration}`,
+              metric: debate.votesLabel,
+              onSelect: () => openDebate(debate.id),
+            };
+          })
+        ),
+      },
+    };
+
     const bridging: TopicRankingModel = {
       id: 'bridging',
       title: 'Bridging picks',
@@ -1086,14 +1255,38 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
         ],
       },
     };
-    return [bestReads, bridging];
-  }, [openSource, openStory]);
+
+    return [bestReads, bestDebates, bridging];
+  }, [openDebate, openSource, openStory, rankingSuggestions]);
+
+  const entityGraph: TopicEntityGraphModel = React.useMemo(
+    () => ({
+      title: 'Who’s who',
+      initialNodeId: 'hamas',
+      nodes: SEED_GRAPH_NODES.map(node => ({
+        id: node.id,
+        name: node.name,
+        kind: node.kind,
+        tags: node.tags,
+        summary: node.summary,
+        featured: node.featured,
+        relations: node.relations,
+        claims: node.claimIds
+          ?.map(cid => CLAIM_BY_ID[cid])
+          .filter((c): c is SeedClaim => Boolean(c))
+          .map(toSummary),
+        onSelect: node.eventId ? () => openEvent(node.eventId!) : undefined,
+      })),
+    }),
+    [openEvent, toSummary]
+  );
 
   const viralPosts: readonly TopicViralPostPreviewModel[] = React.useMemo(
     () =>
       SEED_POSTS.map(post => {
         const extra = userNotes[post.id] ?? [];
         const shown = post.notes.find(n => n.shown);
+        const pendingCount = post.notes.filter(n => !n.shown).length + extra.length;
         return {
           id: post.id,
           authorName: post.authorName,
@@ -1104,6 +1297,8 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
           body: post.body,
           topNote: shown ? { tag: shown.tag, status: 'shown', text: shown.text } : undefined,
           noteCount: post.notes.length + extra.length,
+          needsContext: !shown,
+          waitingForRatings: pendingCount > 0,
           onSelect: () => openPost(post.id),
         };
       }),
@@ -1165,25 +1360,34 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
           onSelect: () => openEvent(ev.id),
         };
       }),
+      onOpenTimeline: openTimeline,
+      entityGraph,
       rankings,
       viralPosts,
+      onOpenSources: openSources,
       sections: [
         {
           id: 'topic-sources',
           title: 'Key sources & media',
-          subtitle: 'Primary documents, hearings, datasets, and reporting cited across this topic.',
           layout: 'cards',
           items: ['s-il-icj', 's-idf-est', 's-coi', 's-unosat']
             .map(id => SOURCE_BY_ID[id])
             .filter((s): s is SeedSource => Boolean(s))
             .map(toRichSourceCard),
+          action: {
+            label: `Browse all ${SEED_SOURCES.length} sources`,
+            onClick: openSources,
+          },
         },
       ],
     };
   }, [
     activeCommunityId,
+    entityGraph,
     joinedCommunityId,
     openEvent,
+    openSources,
+    openTimeline,
     rankings,
     toRichSourceCard,
     toSourceChips,
@@ -1292,6 +1496,8 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
       });
     }
 
+    const claimDebates = SEED_DEBATES.filter(d => d.claimId === seed.id);
+
     sections.push({
       id: 'sources',
       title: 'Sources',
@@ -1303,6 +1509,21 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
       emptyText: 'No sources linked yet.',
     });
 
+    if (claimDebates.length > 0) {
+      sections.push({
+        id: 'debates',
+        title: claimDebates.length > 1 ? `Debates on this claim (${claimDebates.length})` : 'Debate on this claim',
+        items: claimDebates.map(debate => ({
+          id: debate.id,
+          kind: 'debate',
+          kindLabel: 'Debate',
+          title: `${debate.ppDebater} vs ${debate.piDebater}`,
+          meta: `${debate.date} · ${debate.duration} · ${debate.votesLabel}`,
+          onSelect: () => openDebate(debate.id),
+        })),
+      });
+    }
+
     return {
       id: seed.id,
       title: seed.title,
@@ -1313,6 +1534,7 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
       kind: seed.kind,
       split: eff.split,
       debateCount: seed.debatesCount,
+      onOpenDebates: claimDebates[0] ? () => openDebate(claimDebates[0].id) : undefined,
       voteBox: {
         userVote,
         countSummary: `${eff.totalVotes.toLocaleString('en-US')} votes in all · ${(seed.npp + seed.npi).toLocaleString('en-US')} from community members`,
@@ -1337,6 +1559,7 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
     activeClaimId,
     joinedCommunityId,
     openClaim,
+    openDebate,
     openEvent,
     openStory,
     openTopic,
@@ -1581,9 +1804,23 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
         stanceLabel: c.stanceLabel,
       })),
       notes: builtNotes,
+      suggestedEvidence: post.suggestedEvidence,
       bridgingRule:
         'A note shows on the post once most raters in each community find it helpful, so neither community can push one through alone.',
       onAddNote: draft => {
+        const pickedEvidenceChips = (draft.selectedEvidenceIds ?? [])
+          .map(id => post.suggestedEvidence.find(item => item.id === id))
+          .filter((item): item is PostSuggestedEvidenceModel => Boolean(item))
+          .map((item, idx) => ({
+            id: item.id,
+            index: idx + 1,
+            title: `${item.title} (${item.meta})`,
+            mediaType: item.mediaType,
+          }));
+        const customChip = draft.sourceUrl
+          ? [{ id: 'custom-src', index: pickedEvidenceChips.length + 1, title: draft.sourceUrl, href: draft.sourceUrl }]
+          : [];
+
         const newNote: PostContextNoteModel = {
           id: `mine-${Date.now()}`,
           tag: draft.tag,
@@ -1594,9 +1831,7 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
             ? `Written by you (${joinedCommunityId === 'pp' ? 'Pro-Palestinian' : 'Pro-Israel'})`
             : 'Written by you (independent)',
           authorColor: joinedCommunityId === 'pp' ? '#6833ff' : joinedCommunityId === 'pi' ? '#3963fe' : '#202020',
-          sources: draft.sourceUrl
-            ? [{ id: 'custom-src', index: 1, title: draft.sourceUrl, href: draft.sourceUrl }]
-            : [],
+          sources: [...pickedEvidenceChips, ...customChip],
           waitReason: 'No ratings yet. It shows on the post once most raters in both communities find it helpful.',
         };
         setUserNotes(prev => ({ ...prev, [post.id]: [...(prev[post.id] ?? []), newNote] }));
@@ -1624,6 +1859,226 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
     };
   }, [activePostId, joinedCommunityId, noteRatings, openEvent, openTopic, toSourceChips, toSummary, userNotes]);
 
+  const activeDebateId = activeRoute.kind === 'debate' ? activeRoute.id : 'd-gen';
+  const debateModel: DebateTemplateModel = React.useMemo(() => {
+    const debate = DEBATE_BY_ID[activeDebateId] ?? SEED_DEBATES[0];
+    const claim = CLAIM_BY_ID[debate.claimId] ?? CLAIM_BY_ID.gen;
+    const userVote = votes[claim.id] ?? null;
+    const eff = computeEffectiveSplit(
+      claim.pp,
+      claim.pi,
+      claim.all,
+      claim.npp,
+      claim.npi,
+      claim.nall,
+      userVote,
+      joinedCommunityId,
+      true
+    );
+
+    const shifts = [
+      {
+        label: 'Pro-Palestinian viewers',
+        color: '#6833ff',
+        beforePercent: debate.ppBeforeAfter[0],
+        afterPercent: debate.ppBeforeAfter[1],
+        deltaPoints: debate.ppBeforeAfter[1] - debate.ppBeforeAfter[0],
+      },
+      {
+        label: 'Pro-Israel viewers',
+        color: '#3963fe',
+        beforePercent: debate.piBeforeAfter[0],
+        afterPercent: debate.piBeforeAfter[1],
+        deltaPoints: debate.piBeforeAfter[1] - debate.piBeforeAfter[0],
+      },
+      {
+        label: 'Everyone who watched',
+        color: '#202020',
+        beforePercent: debate.allBeforeAfter[0],
+        afterPercent: debate.allBeforeAfter[1],
+        deltaPoints: debate.allBeforeAfter[1] - debate.allBeforeAfter[0],
+      },
+    ];
+
+    const biggest = [...shifts.slice(0, 2)].sort((a, b) => Math.abs(b.deltaPoints) - Math.abs(a.deltaPoints))[0];
+    const shiftVerdict =
+      biggest && biggest.deltaPoints !== 0
+        ? `Biggest shift: ${biggest.label}, ${Math.abs(biggest.deltaPoints)} pts toward ${biggest.deltaPoints > 0 ? 'Agree' : 'Disagree'}. Counts viewers who voted before and after watching.`
+        : 'Neither community’s viewers shifted significantly. Counts viewers who voted before and after watching.';
+
+    const otherDebates = SEED_DEBATES.filter(d => d.id !== debate.id);
+
+    return {
+      id: debate.id,
+      claimId: claim.id,
+      claimTitle: claim.title,
+      onOpenClaim: () => openClaim(claim.id),
+      date: debate.date,
+      duration: debate.duration,
+      voteCountLabel: debate.votesLabel,
+      summary: `${debate.ppDebater} (Pro-Palestinian) and ${debate.piDebater} (Pro-Israel) debated this claim on camera in timed turns. Viewers voted on the claim before and after.`,
+      breadcrumbs: [
+        { id: 'topic', label: 'Israel–Gaza war', onSelect: openTopic },
+        { id: claim.id, label: claim.title, onSelect: () => openClaim(claim.id) },
+        { id: debate.id, label: `${debate.ppDebater} vs ${debate.piDebater}` },
+      ],
+      participants: [
+        {
+          name: debate.ppDebater,
+          communityLabel: 'Pro-Palestinian member',
+          communityColor: '#6833ff',
+          positionLabel: `Argued: ${debate.ppPosition}`,
+        },
+        {
+          name: debate.piDebater,
+          communityLabel: 'Pro-Israel member',
+          communityColor: '#3963fe',
+          positionLabel: `Argued: ${debate.piPosition}`,
+        },
+      ],
+      voteBox: {
+        userVote,
+        countSummary: `${eff.totalVotes.toLocaleString('en-US')} votes on this claim`,
+        hint: 'Vote on the claim itself. The shift table below counts viewers who voted before and after watching.',
+        impactNote: eff.impactNote,
+        onVote: choice => setVotes(prev => ({ ...prev, [claim.id]: choice })),
+        onClear: () => setVotes(prev => ({ ...prev, [claim.id]: null })),
+      },
+      shifts,
+      shiftVerdict,
+      sections:
+        otherDebates.length > 0
+          ? [
+              {
+                id: 'more-debates',
+                title: 'More debates on this topic',
+                items: otherDebates.map(other => {
+                  const otherClaim = CLAIM_BY_ID[other.claimId];
+                  return {
+                    id: other.id,
+                    kind: 'debate',
+                    kindLabel: 'Debate',
+                    title: `${otherClaim.title} (${other.ppDebater} vs ${other.piDebater})`,
+                    meta: `${other.date} · ${other.duration} · ${other.votesLabel}`,
+                    onSelect: () => openDebate(other.id),
+                  };
+                }),
+              },
+            ]
+          : [],
+    };
+  }, [activeDebateId, joinedCommunityId, openClaim, openDebate, openTopic, votes]);
+
+  const timelineModel: TimelineTemplateModel = React.useMemo(
+    () => ({
+      id: 'gaza-timeline',
+      title: 'Israel–Gaza war: Timeline',
+      lede: 'Newest first. How far back you start is often the first disagreement, so you choose the era. Where communities tell a turn differently, toggle their framings side by side.',
+      breadcrumbs: [
+        { id: 'topic', label: 'Israel–Gaza war', onSelect: openTopic },
+        { id: 'timeline', label: 'Timeline' },
+      ],
+      eras: SEED_TIMELINE_ERAS,
+      turns: SEED_TIMELINE_TURNS.map(turn => ({
+        id: turn.id,
+        eraId: turn.eraId,
+        when: turn.when,
+        title: turn.title,
+        why: turn.why,
+        isKey: turn.isKey,
+        sourceLabel: turn.sourceLabel,
+        knownDisputedUnknown: turn.knownDisputedUnknown,
+        communityFramings:
+          turn.ppFraming && turn.piFraming
+            ? [
+                {
+                  communityId: 'pp',
+                  communityName: 'Pro-Palestinian framing',
+                  color: '#6833ff',
+                  text: turn.ppFraming,
+                },
+                {
+                  communityId: 'pi',
+                  communityName: 'Pro-Israel framing',
+                  color: '#3963fe',
+                  text: turn.piFraming,
+                },
+              ]
+            : undefined,
+        claims: turn.claimIds
+          ?.map(cid => CLAIM_BY_ID[cid])
+          .filter((c): c is SeedClaim => Boolean(c))
+          .map(c => ({
+            id: c.id,
+            title: c.title,
+            onSelect: () => openClaim(c.id),
+          })),
+        onSelect: turn.eventId ? () => openEvent(turn.eventId!) : undefined,
+      })),
+      keyNumbers: SEED_TIMELINE_NUMBERS,
+      onSuggestTurn: () => {},
+    }),
+    [openClaim, openEvent, openTopic]
+  );
+
+  const sourceLibraryModel: SourceLibraryTemplateModel = React.useMemo(() => {
+    const baseSources: SourceLibraryItemModel[] = SEED_SOURCES.map(src => {
+      const citationCount =
+        SEED_CLAIMS.filter(c => c.sourceIds.includes(src.id)).length +
+        SEED_EVENTS.filter(ev => ev.sourceIds.includes(src.id)).length +
+        SEED_STORIES.filter(st => st.sourceIds.includes(src.id)).length;
+      return {
+        ...toRichSourceCard(src),
+        group: classifySourceLibraryGroup(src.sourceType),
+        citationCount,
+      };
+    });
+
+    const storySources: SourceLibraryItemModel[] = SEED_STORIES.map(story => ({
+      id: story.id,
+      kind: 'news-story',
+      kindLabel: 'News reporting',
+      mediaType: 'article',
+      title: story.headline,
+      publisher: story.outlet,
+      date: story.date,
+      excerpt: story.summary,
+      meta: `${story.outlet} · ${story.date}`,
+      group: 'reporting',
+      citationCount: 2,
+      onSelect: () => openStory(story.id),
+    }));
+
+    return {
+      id: 'gaza-sources',
+      title: 'Sources on the Israel–Gaza war',
+      lede: 'Primary documents, court filings, datasets, official statements, and news reporting cited across this topic.',
+      totalCountLabel: `${baseSources.length + storySources.length + userSources.length} sources loaded`,
+      breadcrumbs: [
+        { id: 'topic', label: 'Israel–Gaza war', onSelect: openTopic },
+        { id: 'sources', label: 'Source library' },
+      ],
+      sources: [...baseSources, ...storySources, ...userSources],
+      onAddSource: draft => {
+        setUserSources(prev => [
+          ...prev,
+          {
+            id: `user-src-${Date.now()}`,
+            kind: 'source',
+            kindLabel: 'Submitted source',
+            mediaType: 'article',
+            title: draft.title,
+            publisher: 'Community submission',
+            date: 'Just added',
+            externalUrl: draft.url || undefined,
+            group: 'primary',
+            citationCount: 1,
+          },
+        ]);
+      },
+    };
+  }, [openStory, openTopic, toRichSourceCard, userSources]);
+
   return {
     activeRoute,
     navigate,
@@ -1633,12 +2088,18 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
     openStory,
     openSource,
     openPost,
+    openDebate,
+    openTimeline,
+    openSources,
     topicSource: { data: topicModel, isLoading: false, source: 'fixture' },
     claimSource: { data: claimModel, isLoading: false, source: 'fixture' },
     eventSource: { data: eventModel, isLoading: false, source: 'fixture' },
     storySource: { data: storyModel, isLoading: false, source: 'fixture' },
     sourceSource: { data: sourceModel, isLoading: false, source: 'fixture' },
     postSource: { data: postModel, isLoading: false, source: 'fixture' },
+    debateSource: { data: debateModel, isLoading: false, source: 'fixture' },
+    timelineSource: { data: timelineModel, isLoading: false, source: 'fixture' },
+    sourceLibrarySource: { data: sourceLibraryModel, isLoading: false, source: 'fixture' },
     joinedCommunityId,
     setJoinedCommunityId,
   };

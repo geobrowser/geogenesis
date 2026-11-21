@@ -165,3 +165,55 @@ export function CheckCircleIcon({ className = 'size-4' }: IconProps) {
     </svg>
   );
 }
+
+export function SearchIcon({ className = 'size-4' }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      className={`shrink-0 ${className}`}
+    >
+      <circle cx="7.2" cy="7.2" r="4.7" />
+      <path d="M10.8 10.8L13.8 13.8" />
+    </svg>
+  );
+}
+
+export function CheckIcon({ className = 'size-4' }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      className={`shrink-0 ${className}`}
+    >
+      <path d="M3.5 8.3L6.6 11.4 12.6 4.8" />
+    </svg>
+  );
+}
+
+export function PlusIcon({ className = 'size-4' }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      className={`shrink-0 ${className}`}
+    >
+      <path d="M8 3.5v9M3.5 8h9" />
+    </svg>
+  );
+}

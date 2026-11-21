@@ -8,7 +8,7 @@ import Link from 'next/link';
 import { type ClaimKind, type ClaimSummaryModel, formatClaimKindLabel, formatPercentInt } from '../models';
 import { CheckCircleIcon } from './icons';
 import { SplitBars } from './split-bars';
-import { TemplateBadge, type TemplateBadgeTone } from './template-shell';
+import { TEMPLATE_INTERACTIVE_CARD_SURFACE, TemplateBadge, type TemplateBadgeTone } from './template-shell';
 
 const CLAIM_KIND_TONE: Record<ClaimKind, TemplateBadgeTone> = {
   fact: 'fact',
@@ -31,8 +31,8 @@ export function ClaimSummaryCard({ claim, variant = 'default', className }: Clai
   const isAgreed = variant === 'agreed' || (!claim.split.isSplit && variant === 'default');
 
   const cardClasses = cx(
-    'group flex w-full flex-col gap-4 rounded-xl border bg-white p-5 text-left text-text no-underline transition-colors @[560px]:p-6',
-    isLead ? 'border-grey-02 shadow-light hover:border-text' : 'border-grey-02/80 hover:border-text',
+    'group flex w-full flex-col gap-4 p-5 text-left text-text no-underline @[560px]:p-6',
+    TEMPLATE_INTERACTIVE_CARD_SURFACE,
     className
   );
 

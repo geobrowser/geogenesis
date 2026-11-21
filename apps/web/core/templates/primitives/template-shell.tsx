@@ -8,8 +8,29 @@ import Link from 'next/link';
 import type { BreadcrumbItem } from '../models';
 import { ChevronRightIcon } from './icons';
 
+/**
+ * Shared Geo card surfaces: barely-there border + wide, silky ambient shadow
+ * so cards float softly on white without harsh outlines.
+ */
+export const TEMPLATE_CARD_SURFACE =
+  'rounded-xl border border-black/[0.025] bg-white shadow-[0_10px_36px_-6px_rgba(0,0,0,0.065),0_2px_10px_-2px_rgba(0,0,0,0.03)]';
+
+export const TEMPLATE_INTERACTIVE_CARD_SURFACE =
+  'rounded-xl border border-black/[0.025] bg-white shadow-[0_10px_36px_-6px_rgba(0,0,0,0.065),0_2px_10px_-2px_rgba(0,0,0,0.03)] transition-all duration-200 hover:-translate-y-[1.5px] hover:border-black/[0.05] hover:shadow-[0_18px_44px_-8px_rgba(0,0,0,0.095),0_4px_14px_-2px_rgba(0,0,0,0.04)]';
+
 export type TemplateBadgeTone =
-  'neutral' | 'split' | 'agreed' | 'fact' | 'judgment' | 'value' | 'event' | 'story' | 'source' | 'post' | 'dark';
+  | 'neutral'
+  | 'split'
+  | 'agreed'
+  | 'fact'
+  | 'judgment'
+  | 'value'
+  | 'event'
+  | 'story'
+  | 'source'
+  | 'post'
+  | 'debate'
+  | 'dark';
 
 /**
  * Restrained Geo badge palette: predominantly clean white/grey/black with calm touches of
@@ -26,6 +47,7 @@ const BADGE_TONE_CLASSES: Record<TemplateBadgeTone, string> = {
   story: 'border border-ctaPrimary/15 bg-ctaTertiary text-ctaPrimary',
   source: 'border border-divider bg-grey-01 text-grey-04',
   post: 'border border-purple/15 bg-purple-tint/60 text-purple',
+  debate: 'border border-purple/15 bg-purple-tint/60 text-purple',
   dark: 'border border-text bg-text text-white',
 };
 

@@ -6,6 +6,7 @@ import cx from 'classnames';
 import Link from 'next/link';
 
 import type { TopicAgreementSeriesModel, TopicTrendsModel } from '../models';
+import { TEMPLATE_CARD_SURFACE } from './template-shell';
 
 export interface TopicTrendsChartProps {
   trends: TopicTrendsModel;
@@ -114,7 +115,7 @@ export function TopicTrendsChart({ trends, className }: TopicTrendsChartProps) {
   return (
     <section
       aria-label="Coverage and agreement over time"
-      className={cx('flex flex-col gap-5 rounded-xl border border-grey-02/80 bg-white p-5 @[560px]:p-6', className)}
+      className={cx('flex flex-col gap-5 p-5 @[560px]:p-6', TEMPLATE_CARD_SURFACE, className)}
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex flex-col gap-1">

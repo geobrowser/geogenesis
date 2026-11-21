@@ -15,7 +15,12 @@ import {
   PlayIcon,
   TweetIcon,
 } from './icons';
-import { TemplateBadge, type TemplateBadgeTone } from './template-shell';
+import {
+  TEMPLATE_CARD_SURFACE,
+  TEMPLATE_INTERACTIVE_CARD_SURFACE,
+  TemplateBadge,
+  type TemplateBadgeTone,
+} from './template-shell';
 
 const LINK_KIND_TONE: Record<EntityLinkKind, TemplateBadgeTone> = {
   claim: 'neutral',
@@ -103,13 +108,13 @@ export function RelatedListSection({ section, className }: RelatedListSectionPro
           {emptyText}
         </p>
       ) : useCards ? (
-        <div className="grid grid-cols-1 gap-3.5 @[640px]:grid-cols-2">
+        <div className="grid grid-cols-1 items-start gap-4 @[640px]:grid-cols-2">
           {items.map(item => (
             <RichMediaCard key={item.id} item={item} />
           ))}
         </div>
       ) : (
-        <div className="divide-y divide-divider overflow-hidden rounded-xl border border-grey-02/80 bg-white">
+        <div className={cx('divide-y divide-divider overflow-hidden', TEMPLATE_CARD_SURFACE)}>
           {items.map(item => (
             <RelatedListRow key={item.id} item={item} showKindBadge={isMixedList && !item.avatarPair} />
           ))}
@@ -121,8 +126,10 @@ export function RelatedListSection({ section, className }: RelatedListSectionPro
 
 function RichMediaCard({ item }: { item: EntityLinkRowModel }) {
   const mediaType = inferMediaType(item);
-  const cardClasses =
-    'group flex h-full w-full flex-col justify-between gap-3.5 rounded-xl border border-grey-02/80 bg-white p-5 text-left text-text no-underline transition-colors hover:border-text';
+  const cardClasses = cx(
+    'group flex w-full flex-col justify-between gap-3.5 p-5 text-left text-text no-underline',
+    TEMPLATE_INTERACTIVE_CARD_SURFACE
+  );
 
   let body: React.ReactNode;
 
