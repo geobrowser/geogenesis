@@ -12,6 +12,7 @@ import { useSpace } from '~/core/hooks/use-space';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 import { useQueryEntity } from '~/core/sync/use-store';
+import { LiveClaimTemplateView, LiveTopicTemplateView } from '~/core/templates/views';
 import {
   TOPIC_PAGE_CONTENT_INSET_CLASS,
   TOPIC_PAGE_CONTENT_MAX_WIDTH,
@@ -214,7 +215,7 @@ function useCustomBrowseView(entityId: string, spaceId: string, isEditing: boole
 export function EntityPageBody(props: EntityPageBodyProps) {
   const { entityId, spaceId, initialTabRelations, tabEntities } = props;
   const isEditing = useUserIsEditing(spaceId);
-  const { customView, entity } = useCustomBrowseView(entityId, spaceId, isEditing);
+  const { customView, enableV2Templates, entity } = useCustomBrowseView(entityId, spaceId, isEditing);
   const targetEntityType = commentTargetEntityType(entity);
 
   const previewImageUrl = props.variant === 'sidePanel' ? props.previewImageUrl : undefined;
@@ -272,14 +273,18 @@ export function EntityPageBody(props: EntityPageBodyProps) {
           )
         ) : null}
         {routeEditInitializer}
-        <ClaimPageView
-          entityId={entityId}
-          spaceId={spaceId}
-          initialTabRelations={initialTabRelations}
-          tabEntities={tabEntities}
-          isEditing={isEditing}
-          footer={customViewFooter}
-        />
+        {enableV2Templates && !isEditing ? (
+          <LiveClaimTemplateView entityId={entityId} spaceId={spaceId} footer={customViewFooter} />
+        ) : (
+          <ClaimPageView
+            entityId={entityId}
+            spaceId={spaceId}
+            initialTabRelations={initialTabRelations}
+            tabEntities={tabEntities}
+            isEditing={isEditing}
+            footer={customViewFooter}
+          />
+        )}
       </>
     );
   }
@@ -304,14 +309,18 @@ export function EntityPageBody(props: EntityPageBodyProps) {
           )
         ) : null}
         {routeEditInitializer}
-        <TopicPageView
-          entityId={entityId}
-          spaceId={spaceId}
-          initialTabRelations={initialTabRelations}
-          tabEntities={tabEntities}
-          isEditing={isEditing}
-          footer={customViewFooter}
-        />
+        {enableV2Templates && !isEditing ? (
+          <LiveTopicTemplateView entityId={entityId} spaceId={spaceId} footer={customViewFooter} />
+        ) : (
+          <TopicPageView
+            entityId={entityId}
+            spaceId={spaceId}
+            initialTabRelations={initialTabRelations}
+            tabEntities={tabEntities}
+            isEditing={isEditing}
+            footer={customViewFooter}
+          />
+        )}
       </>
     );
   }

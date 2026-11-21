@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import {
   type ClaimSummaryModel,
   ENTITY_TEMPLATE_REGISTRY,
@@ -10,6 +12,7 @@ import {
   type VoteChoice,
   computeSplitGap,
   isClaimSplit,
+  useGazaFixtureTemplates,
 } from '~/core/templates';
 import {
   ClaimSummaryCard,
@@ -19,14 +22,90 @@ import {
   TemplateShell,
   VoteBox,
 } from '~/core/templates/primitives';
+import { ClaimTemplate, TopicTemplate } from '~/core/templates/views';
+
+type PreviewTab = 'prototype' | 'primitives';
 
 /**
- * Interactive Phase 1 sandbox for the template registry and shared UI primitives.
+ * Interactive sandbox for Phase 1 & Phase 2 entity templates.
  *
- * Uses pure view-model objects (no backend calls) so designers and engineers can verify
- * spacing, container-query responsiveness, and interactive voting states in isolation.
+ * - "Topic ↔ Claim prototype": full clickable TopicTemplate & ClaimTemplate backed by the Gaza
+ *   fixture adapter (community switching, Agree/Disagree voting, joining a community, breadcrumb nav).
+ * - "Registry & primitives": isolated view of template precedence and shared UI primitives.
  */
 export function DevTemplatesPreview() {
+  const [tab, setTab] = React.useState<PreviewTab>('prototype');
+  const fixture = useGazaFixtureTemplates();
+
+  return (
+    <div className="min-h-screen bg-white">
+      <div className="sticky top-0 z-20 border-b border-divider bg-white/95 backdrop-blur-sm">
+        <div className="mx-auto flex max-w-[1120px] flex-wrap items-center justify-between gap-3 px-4 py-2.5">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              aria-pressed={tab === 'prototype'}
+              onClick={() => setTab('prototype')}
+              className={cx(
+                'inline-flex h-8 cursor-pointer items-center rounded-full border px-3 text-[13px] font-medium transition-colors',
+                tab === 'prototype'
+                  ? 'border-text bg-text text-white'
+                  : 'border-grey-02 bg-white text-text hover:border-text'
+              )}
+            >
+              Topic ↔ Claim prototype
+            </button>
+            <button
+              type="button"
+              aria-pressed={tab === 'primitives'}
+              onClick={() => setTab('primitives')}
+              className={cx(
+                'inline-flex h-8 cursor-pointer items-center rounded-full border px-3 text-[13px] font-medium transition-colors',
+                tab === 'primitives'
+                  ? 'border-text bg-text text-white'
+                  : 'border-grey-02 bg-white text-text hover:border-text'
+              )}
+            >
+              Registry &amp; primitives
+            </button>
+          </div>
+
+          {tab === 'prototype' && (
+            <div className="flex flex-wrap items-center gap-2 text-[12px] text-grey-04">
+              <span>
+                Route:{' '}
+                <code className="rounded-sm bg-grey-01 px-1.5 py-0.5 text-text">
+                  {fixture.activeRoute.kind === 'topic' ? 'topic/israel-gaza-war' : `claim/${fixture.activeRoute.id}`}
+                </code>
+              </span>
+              {fixture.activeRoute.kind === 'claim' && (
+                <button
+                  type="button"
+                  onClick={fixture.openTopic}
+                  className="cursor-pointer border-0 bg-transparent p-0 font-medium text-ctaPrimary hover:text-ctaHover"
+                >
+                  ← Back to topic
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {tab === 'prototype' ? (
+        fixture.activeRoute.kind === 'topic' && fixture.topicSource.data ? (
+          <TopicTemplate model={fixture.topicSource.data} />
+        ) : fixture.claimSource.data ? (
+          <ClaimTemplate model={fixture.claimSource.data} />
+        ) : null
+      ) : (
+        <PrimitivesGallery />
+      )}
+    </div>
+  );
+}
+
+function PrimitivesGallery() {
   const [userVote, setUserVote] = React.useState<VoteChoice>(null);
   const [lastSelected, setLastSelected] = React.useState<string | null>(null);
 
@@ -138,19 +217,18 @@ export function DevTemplatesPreview() {
       maxWidth={900}
       breadcrumbs={[
         { id: 'dev', label: 'Dev previews' },
-        { id: 'templates', label: 'Entity templates (Phase 1)' },
+        { id: 'templates', label: 'Registry & primitives' },
       ]}
     >
       <header className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <TemplateBadge tone="dark">Phase 1 foundation</TemplateBadge>
+          <TemplateBadge tone="dark">Template registry</TemplateBadge>
           <TemplateBadge tone="neutral">Feature flag: entityTemplatesV2</TemplateBadge>
         </div>
         <h1 className="m-0 text-entityTitle text-text">Entity template registry &amp; primitives</h1>
         <p className="m-0 text-body text-grey-04">
-          Shared UI primitives and view-model contracts backing Topic, Claim, Event, News story, Source, and Post
-          templates. Toggle <code className="rounded-sm bg-grey-01 px-1.5 py-0.5 text-[13px]">entityTemplatesV2</code>{' '}
-          in Feature flags (<kbd>Cmd/Ctrl+Shift+F</kbd>) to enable v2 template resolution.
+          Toggle <code className="rounded-sm bg-grey-01 px-1.5 py-0.5 text-[13px]">entityTemplatesV2</code> in Feature
+          flags (<kbd>Cmd/Ctrl+Shift+F</kbd>) to render live Topic and Claim entities with these templates.
         </p>
         {lastSelected && (
           <p className="m-0 rounded-md bg-ctaTertiary px-3 py-1.5 text-[13px] font-medium text-ctaPrimary">
