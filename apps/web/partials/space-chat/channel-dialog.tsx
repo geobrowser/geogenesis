@@ -6,6 +6,7 @@ import * as React from 'react';
 
 import { Avatar } from '~/design-system/avatar';
 import { SquareButton } from '~/design-system/button';
+import { ElevatedPopoverPortalContext } from '~/design-system/elevated-popover-portal-context';
 import { Close } from '~/design-system/icons/close';
 import { Input } from '~/design-system/input';
 
@@ -25,11 +26,16 @@ export function ChannelDialog({
   description: string;
   children: React.ReactNode;
 }) {
+  // Selects and menus open inside the dialog, above its overlay.
+  const [popoverContainer, setPopoverContainer] = React.useState<HTMLDivElement | null>(null);
   return (
     <Root open={open} onOpenChange={onOpenChange}>
       <Portal>
         <Overlay className="fixed inset-0 z-100 bg-text/20" />
-        <Content className="fixed inset-0 z-101 flex items-center justify-center px-4 py-8 focus:outline-hidden mobile:items-end mobile:px-0 mobile:pb-0">
+        <Content
+          ref={setPopoverContainer}
+          className="fixed inset-0 z-101 flex items-center justify-center px-4 py-8 focus:outline-hidden mobile:items-end mobile:px-0 mobile:pb-0"
+        >
           <div className="flex max-h-full w-[520px] max-w-full flex-col gap-4 overflow-y-auto rounded-xl bg-white p-4 shadow-lg mobile:w-full mobile:rounded-b-none">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
@@ -38,7 +44,9 @@ export function ChannelDialog({
               </div>
               <SquareButton onClick={() => onOpenChange(false)} icon={<Close />} aria-label="Close" />
             </div>
-            {children}
+            <ElevatedPopoverPortalContext.Provider value={popoverContainer}>
+              {children}
+            </ElevatedPopoverPortalContext.Provider>
           </div>
         </Content>
       </Portal>
