@@ -1,16 +1,6 @@
-import { SystemIds } from '@geoprotocol/geo-sdk/lite';
-
-import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
-import { NEWS_STORY_TYPE_ID, TOPIC_TYPE_ID } from '~/core/constants';
 import { ID } from '~/core/id';
-import {
-  ARTICLE_TYPE_ID,
-  DATASET_TYPE_ID,
-  OFFICIAL_DOCUMENT_TYPE_ID,
-  PAPER_TYPE_ID,
-  POST_TYPE_ID,
-  TWEET_TYPE_ID,
-} from '~/core/topics/ontology';
+
+import { TEMPLATE_ONTOLOGY } from './ontology';
 
 /**
  * All entity template identifiers supported by the Geo entity rendering pipeline.
@@ -58,14 +48,17 @@ export interface EntityTemplateDefinition {
  * Keeps documents, datasets, papers, and articles sharing one structured source view.
  */
 export const SOURCE_TEMPLATE_TYPE_IDS: readonly string[] = [
-  OFFICIAL_DOCUMENT_TYPE_ID,
-  DATASET_TYPE_ID,
-  PAPER_TYPE_ID,
-  ARTICLE_TYPE_ID,
+  TEMPLATE_ONTOLOGY.OFFICIAL_DOCUMENT_TYPE_ID,
+  TEMPLATE_ONTOLOGY.DATASET_TYPE_ID,
+  TEMPLATE_ONTOLOGY.PAPER_TYPE_ID,
+  TEMPLATE_ONTOLOGY.ARTICLE_TYPE_ID,
 ];
 
 /** Social / viral post type IDs grouped under the `post` template. */
-export const SOCIAL_POST_TEMPLATE_TYPE_IDS: readonly string[] = [TWEET_TYPE_ID, POST_TYPE_ID];
+export const SOCIAL_POST_TEMPLATE_TYPE_IDS: readonly string[] = [
+  TEMPLATE_ONTOLOGY.TWEET_TYPE_ID,
+  TEMPLATE_ONTOLOGY.POST_TYPE_ID,
+];
 
 /**
  * Precedence-ordered registry of entity templates.
@@ -80,7 +73,7 @@ export const ENTITY_TEMPLATE_REGISTRY: readonly EntityTemplateDefinition[] = [
   {
     id: 'claim',
     label: 'Claim',
-    typeIds: [CLAIM_TYPE_ID],
+    typeIds: [TEMPLATE_ONTOLOGY.CLAIM_TYPE_ID],
     keepInEditMode: true,
     requiresSpaceCheck: false,
     requiresV2Flag: false,
@@ -89,7 +82,7 @@ export const ENTITY_TEMPLATE_REGISTRY: readonly EntityTemplateDefinition[] = [
   {
     id: 'topic',
     label: 'Topic',
-    typeIds: [TOPIC_TYPE_ID],
+    typeIds: [TEMPLATE_ONTOLOGY.TOPIC_TYPE_ID],
     keepInEditMode: true,
     requiresSpaceCheck: false,
     requiresV2Flag: false,
@@ -98,8 +91,7 @@ export const ENTITY_TEMPLATE_REGISTRY: readonly EntityTemplateDefinition[] = [
   {
     id: 'event',
     label: 'Event',
-    // Reserved slot: bind once the canonical Event entity type ID is finalized in ontology.
-    typeIds: [],
+    typeIds: [TEMPLATE_ONTOLOGY.NEWS_EVENT_TYPE_ID],
     keepInEditMode: false,
     requiresSpaceCheck: false,
     requiresV2Flag: true,
@@ -108,7 +100,7 @@ export const ENTITY_TEMPLATE_REGISTRY: readonly EntityTemplateDefinition[] = [
   {
     id: 'news-story',
     label: 'News story',
-    typeIds: [NEWS_STORY_TYPE_ID],
+    typeIds: [TEMPLATE_ONTOLOGY.NEWS_STORY_TYPE_ID],
     keepInEditMode: false,
     requiresSpaceCheck: false,
     requiresV2Flag: true,
@@ -135,7 +127,7 @@ export const ENTITY_TEMPLATE_REGISTRY: readonly EntityTemplateDefinition[] = [
   {
     id: 'person',
     label: 'Person',
-    typeIds: [SystemIds.PERSON_TYPE],
+    typeIds: [TEMPLATE_ONTOLOGY.PERSON_TYPE_ID],
     keepInEditMode: false,
     requiresSpaceCheck: true,
     requiresV2Flag: false,

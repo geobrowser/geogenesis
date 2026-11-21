@@ -5,7 +5,13 @@ import * as React from 'react';
 import cx from 'classnames';
 import Link from 'next/link';
 
-import type { TopicCommunityCaseModel, TopicTemplateModel, TopicTimelineHighlightModel } from '../models';
+import type {
+  TopicCommunityCaseModel,
+  TopicRankingModel,
+  TopicTemplateModel,
+  TopicTimelineHighlightModel,
+  TopicViralPostPreviewModel,
+} from '../models';
 import {
   ClaimSummaryCard,
   RelatedListSection,
@@ -13,6 +19,7 @@ import {
   SplitBars,
   TemplateBadge,
   TemplateShell,
+  TopicTrendsChart,
 } from '../primitives';
 
 export interface TopicTemplateProps {
@@ -221,6 +228,9 @@ export function TopicTemplate({ model, headerActions, footer, className }: Topic
         </section>
       )}
 
+      {/* Trends chart (Coverage & Agreement over time) */}
+      {model.trends && <TopicTrendsChart trends={model.trends} />}
+
       {/* How we got here (timeline highlights) */}
       {model.timelineHighlights && model.timelineHighlights.length > 0 && (
         <section aria-label="How we got here" className="flex flex-col gap-3.5">
@@ -241,6 +251,28 @@ export function TopicTemplate({ model, headerActions, footer, className }: Topic
           <div className="divide-y divide-divider overflow-hidden rounded-xl border border-grey-02/70 bg-white">
             {model.timelineHighlights.map(turn => (
               <TimelineHighlightRow key={turn.id} turn={turn} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Rankings (Best reads, Bridging picks, Top debates) */}
+      {model.rankings && model.rankings.length > 0 && (
+        <TopicRankingsSection rankings={model.rankings} communities={communities} />
+      )}
+
+      {/* What's spreading (viral posts with bridging context notes) */}
+      {model.viralPosts && model.viralPosts.length > 0 && (
+        <section aria-label="What’s spreading" className="flex flex-col gap-3.5">
+          <div className="flex flex-wrap items-baseline gap-2.5">
+            <h2 className="m-0 text-mediumTitle text-text">What’s spreading</h2>
+            <p className="m-0 text-[14px] text-grey-04">
+              Viral posts linked to this topic and context notes rated helpful across communities.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 gap-4 @[680px]:grid-cols-2">
+            {model.viralPosts.map(post => (
+              <ViralPostPreviewCard key={post.id} post={post} />
             ))}
           </div>
         </section>
@@ -377,4 +409,193 @@ function TimelineHighlightRow({ turn }: { turn: TopicTimelineHighlightModel }) {
       )}
     </div>
   );
+}
+
+function TopicRankingsSection({
+  rankings,
+  communities,
+}: {
+  rankings: readonly TopicRankingModel[];
+  communities: NonNullable<TopicTemplateModel['communities']>;
+}) {
+  const [activeRankingId, setActiveRankingId] = React.useState(rankings[0]?.id ?? '');
+  const [activeScope, setActiveScope] = React.useState<string>('all');
+
+  const ranking = rankings.find(item => item.id === activeRankingId) ?? rankings[0];
+  if (!ranking) return null;
+
+  const availableScopes = Object.keys(ranking.itemsByCommunity);
+  const effectiveScope = availableScopes.includes(activeScope) ? activeScope : (availableScopes[0] ?? 'all');
+  const items = ranking.itemsByCommunity[effectiveScope] ?? [];
+  // Finding T6: only show community scope pills when a ranking actually has multiple community orderings.
+  const showScopePills = availableScopes.length > 1;
+
+  return (
+    <section id="rankings" aria-label="Rankings" className="flex flex-col gap-3.5">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div className="flex flex-wrap items-baseline gap-2.5">
+          <h2 className="m-0 text-mediumTitle text-text">Rankings</h2>
+          <p className="m-0 text-[14px] text-grey-04">{ranking.subtitle}</p>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {rankings.map(item => (
+            <button
+              key={item.id}
+              type="button"
+              aria-pressed={item.id === ranking.id}
+              onClick={() => {
+                setActiveRankingId(item.id);
+                setActiveScope('all');
+              }}
+              className={cx(
+                'cursor-pointer rounded-full border px-3 py-1 text-[13px] font-medium transition-colors',
+                item.id === ranking.id
+                  ? 'border-text bg-text text-white'
+                  : 'border-grey-02 bg-white text-text hover:border-text'
+              )}
+            >
+              {item.title}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {showScopePills && (
+        <div className="flex flex-wrap gap-1.5">
+          {availableScopes.map(scopeKey => {
+            const community = communities.find(c => c.id === scopeKey);
+            const label = scopeKey === 'all' ? 'Everyone' : (community?.name ?? scopeKey);
+            return (
+              <button
+                key={scopeKey}
+                type="button"
+                aria-pressed={effectiveScope === scopeKey}
+                onClick={() => setActiveScope(scopeKey)}
+                className={cx(
+                  'inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-[12px] font-medium transition-colors',
+                  effectiveScope === scopeKey
+                    ? 'border-grey-01 bg-grey-01 text-text'
+                    : 'border-grey-02 bg-white text-grey-04 hover:text-text'
+                )}
+              >
+                {community && (
+                  <span
+                    aria-hidden
+                    className="inline-block h-2 w-2 rounded-[2px]"
+                    style={{ backgroundColor: community.color }}
+                  />
+                )}
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="divide-y divide-divider overflow-hidden rounded-xl border border-grey-02/70 bg-white">
+        {items.map(item => {
+          const rowInner = (
+            <>
+              <span className="inline-grid h-6 w-6 shrink-0 place-items-center rounded-md bg-grey-01 text-[12px] font-semibold text-grey-04 tabular-nums">
+                {item.rank}
+              </span>
+              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span className="text-[15px] leading-[20px] font-medium text-text">{item.title}</span>
+                {item.subtitle && <span className="text-[13px] text-grey-04">{item.subtitle}</span>}
+              </span>
+              {item.tag && <TemplateBadge tone="fact">{item.tag}</TemplateBadge>}
+              {item.metric && (
+                <span className="shrink-0 text-[12px] font-medium text-grey-04 tabular-nums">{item.metric}</span>
+              )}
+            </>
+          );
+
+          const classes =
+            'flex w-full items-center gap-3 px-4 py-3 text-left text-text no-underline transition-colors hover:bg-grey-01/70';
+
+          if (item.href) {
+            return (
+              <Link key={item.id} href={item.href} className={classes}>
+                {rowInner}
+              </Link>
+            );
+          }
+          if (item.onSelect) {
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={item.onSelect}
+                className={`${classes} cursor-pointer border-0 bg-transparent`}
+              >
+                {rowInner}
+              </button>
+            );
+          }
+          return (
+            <div key={item.id} className={classes}>
+              {rowInner}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function ViralPostPreviewCard({ post }: { post: TopicViralPostPreviewModel }) {
+  const classes =
+    'flex w-full flex-col gap-3 rounded-xl border border-grey-02/80 bg-white p-4 text-left text-text no-underline transition-colors hover:border-text';
+
+  const inner = (
+    <>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span className="text-[14px] font-semibold text-text">{post.authorName}</span>
+          {post.authorHandle && <span className="text-[12px] text-grey-04">{post.authorHandle}</span>}
+        </div>
+        <span className="text-[12px] text-grey-04">{[post.platform, post.viewsLabel].filter(Boolean).join(' · ')}</span>
+      </div>
+
+      <p className="m-0 text-[14px] leading-[20px] text-text/90">{post.body}</p>
+
+      {post.topNote ? (
+        <div
+          className={cx(
+            'flex flex-col gap-1 rounded-lg border p-2.5 text-[13px] leading-[18px]',
+            post.topNote.status === 'shown'
+              ? 'border-[#f5d76e] bg-[#fff7e0]'
+              : 'border-dashed border-grey-03 bg-grey-01/50'
+          )}
+        >
+          <span className="text-[11px] font-bold tracking-wide text-text uppercase">{post.topNote.tag}</span>
+          <span className="text-text">{post.topNote.text}</span>
+        </div>
+      ) : (
+        <span className="text-[12px] text-grey-04">No context note shown yet · Add context →</span>
+      )}
+
+      <span className="text-[12px] font-medium text-ctaPrimary">
+        {post.noteCount === 0
+          ? 'Open post to add context →'
+          : `Read ${post.noteCount} context ${post.noteCount === 1 ? 'note' : 'notes'} & ratings →`}
+      </span>
+    </>
+  );
+
+  if (post.href) {
+    return (
+      <Link href={post.href} className={classes}>
+        {inner}
+      </Link>
+    );
+  }
+  if (post.onSelect) {
+    return (
+      <button type="button" onClick={post.onSelect} className={`${classes} cursor-pointer`}>
+        {inner}
+      </button>
+    );
+  }
+  return <article className={classes}>{inner}</article>;
 }

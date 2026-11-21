@@ -19,9 +19,12 @@ import type {
   ClaimTemplateModel,
   EntityListSectionModel,
   SplitRow,
+  StrongestCaseModel,
+  SubClaimFactModel,
   TemplateDataSource,
   VoteChoice,
 } from '../models';
+import { TEMPLATE_ONTOLOGY, readEntityRelations } from '../ontology';
 
 function readClaimKind(values: readonly { property: { id: string }; value: string }[]): ClaimKind {
   const factual = values.find(entry => ID.equals(entry.property.id, CLAIM_IS_FACTUAL_PROPERTY_ID));
@@ -116,8 +119,84 @@ export function useLiveClaimTemplate({
         ]
       : undefined;
 
+    const broaderClaims = readEntityRelations(entity, TEMPLATE_ONTOLOGY.BROADER_CLAIMS_PROPERTY_ID);
+    const subClaimRelations = readEntityRelations(entity, TEMPLATE_ONTOLOGY.SUBCLAIMS_PROPERTY_ID);
+    const supportingArgs = readEntityRelations(entity, TEMPLATE_ONTOLOGY.SUPPORTING_ARGUMENTS_PROPERTY_ID);
+    const opposingArgs = readEntityRelations(entity, TEMPLATE_ONTOLOGY.OPPOSING_ARGUMENTS_PROPERTY_ID);
+    const supportsClaims = readEntityRelations(entity, TEMPLATE_ONTOLOGY.CLAIM_SUPPORTS_PROPERTY_ID);
+    const opposesClaims = readEntityRelations(entity, TEMPLATE_ONTOLOGY.CLAIM_OPPOSES_PROPERTY_ID);
+
+    const subClaims: SubClaimFactModel[] = subClaimRelations.map(rel => ({
+      id: rel.toEntity.id,
+      title: rel.toEntity.name ?? rel.toEntity.id,
+      split: { rows: [], isSplit: false },
+      sources: [],
+      href: NavUtils.toEntity(spaceId, rel.toEntity.id),
+    }));
+
+    const strongestCases: StrongestCaseModel[] = [];
+    if (supportingArgs.length > 0) {
+      strongestCases.push({
+        id: 'supporting-arguments',
+        communityId: 'support',
+        title: 'Supporting arguments',
+        accentColor: '#127a5b',
+        points: supportingArgs.map(rel => rel.toEntity.name ?? rel.toEntity.id),
+        sources: [],
+      });
+    }
+    if (opposingArgs.length > 0) {
+      strongestCases.push({
+        id: 'opposing-arguments',
+        communityId: 'oppose',
+        title: 'Opposing arguments',
+        accentColor: '#d9341c',
+        points: opposingArgs.map(rel => rel.toEntity.name ?? rel.toEntity.id),
+        sources: [],
+      });
+    }
+
     const overviewHref = NavUtils.toEntity(spaceId, entityId);
     const sections: EntityListSectionModel[] = [];
+
+    if (broaderClaims.length > 0) {
+      sections.push({
+        id: 'broader-claims',
+        title: 'Part of a bigger claim',
+        items: broaderClaims.map(rel => ({
+          id: rel.toEntity.id,
+          kind: 'claim',
+          kindLabel: 'Claim',
+          title: rel.toEntity.name ?? rel.toEntity.id,
+          href: NavUtils.toEntity(spaceId, rel.toEntity.id),
+        })),
+      });
+    }
+
+    if (supportsClaims.length > 0 || opposesClaims.length > 0) {
+      sections.push({
+        id: 'stance-links',
+        title: 'Connected claims',
+        items: [
+          ...supportsClaims.map(rel => ({
+            id: `supports-${rel.toEntity.id}`,
+            kind: 'claim' as const,
+            kindLabel: 'Supports',
+            title: rel.toEntity.name ?? rel.toEntity.id,
+            meta: 'Supports this claim',
+            href: NavUtils.toEntity(spaceId, rel.toEntity.id),
+          })),
+          ...opposesClaims.map(rel => ({
+            id: `opposes-${rel.toEntity.id}`,
+            kind: 'claim' as const,
+            kindLabel: 'Opposes',
+            title: rel.toEntity.name ?? rel.toEntity.id,
+            meta: 'Opposes this claim',
+            href: NavUtils.toEntity(spaceId, rel.toEntity.id),
+          })),
+        ],
+      });
+    }
 
     if (record.claimRows.length > 0) {
       sections.push({
@@ -218,6 +297,8 @@ export function useLiveClaimTemplate({
           }
         },
       },
+      subClaims: subClaims.length > 0 ? subClaims : undefined,
+      strongestCases: strongestCases.length > 0 ? strongestCases : undefined,
       sections,
     };
   }, [

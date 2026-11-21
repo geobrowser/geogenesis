@@ -23,7 +23,9 @@ import type {
   TemplateDataSource,
   TopicStatModel,
   TopicTemplateModel,
+  TopicTimelineHighlightModel,
 } from '../models';
+import { TEMPLATE_ONTOLOGY, formatOntologyDate, readEntityTextValue } from '../ontology';
 
 const LIVE_CLAIMS_LIMIT = 8;
 const LIVE_COVERAGE_LIMIT = 12;
@@ -62,6 +64,13 @@ export function useLiveTopicTemplate({
     typeIds: [CLAIM_TYPE_ID],
     first: LIVE_CLAIMS_LIMIT,
     rankInSpaceId: spaceId,
+    spaceIds,
+  });
+
+  const { entities: linkedEvents } = useTopicLinkedEntities({
+    topicId: entityId,
+    typeIds: [TEMPLATE_ONTOLOGY.NEWS_EVENT_TYPE_ID],
+    first: 6,
     spaceIds,
   });
 
@@ -134,6 +143,20 @@ export function useLiveTopicTemplate({
       });
     }
 
+    const timelineHighlights: TopicTimelineHighlightModel[] = linkedEvents
+      .filter(eventEntity => Boolean(eventEntity.name))
+      .map(eventEntity => {
+        const eventSpaceId = resolveEntitySpaceId(eventEntity, spaceId);
+        return {
+          id: eventEntity.id,
+          when:
+            formatOntologyDate(readEntityTextValue(eventEntity, TEMPLATE_ONTOLOGY.EVENT_DATE_PROPERTY_ID)) ?? 'Event',
+          title: eventEntity.name ?? eventEntity.id,
+          claims: [],
+          href: NavUtils.toEntity(eventSpaceId, eventEntity.id),
+        };
+      });
+
     const extraTypeLabels = entity.types
       .filter(type => !ID.equals(type.id, TOPIC_TYPE_ID) && Boolean(type.name))
       .map(type => type.name as string);
@@ -146,9 +169,10 @@ export function useLiveTopicTemplate({
       tags: [...extraTypeLabels, ...(isCurated ? ['Curated'] : [])],
       stats: stats.length > 0 ? stats : undefined,
       contestedClaims: contestedClaims.length > 0 ? contestedClaims : undefined,
+      timelineHighlights: timelineHighlights.length > 0 ? timelineHighlights : undefined,
       sections: sections.length > 0 ? sections : undefined,
     };
-  }, [ancestors, countsByTopicId, coverage.page.rows, entity, entityId, linkedClaims, spaceId]);
+  }, [ancestors, countsByTopicId, coverage.page.rows, entity, entityId, linkedClaims, linkedEvents, spaceId]);
 
   return {
     data: model,

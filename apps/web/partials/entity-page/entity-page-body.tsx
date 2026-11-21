@@ -12,7 +12,14 @@ import { useSpace } from '~/core/hooks/use-space';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 import { useQueryEntity } from '~/core/sync/use-store';
-import { LiveClaimTemplateView, LiveTopicTemplateView } from '~/core/templates/views';
+import {
+  LiveClaimTemplateView,
+  LiveEventTemplateView,
+  LiveNewsStoryTemplateView,
+  LivePostTemplateView,
+  LiveSourceTemplateView,
+  LiveTopicTemplateView,
+} from '~/core/templates/views';
 import {
   TOPIC_PAGE_CONTENT_INSET_CLASS,
   TOPIC_PAGE_CONTENT_MAX_WIDTH,
@@ -323,6 +330,41 @@ export function EntityPageBody(props: EntityPageBodyProps) {
         )}
       </>
     );
+  }
+
+  if (enableV2Templates && !isEditing) {
+    if (customView === 'event') {
+      return (
+        <>
+          {routeEditInitializer}
+          <LiveEventTemplateView entityId={entityId} spaceId={spaceId} footer={customViewFooter} />
+        </>
+      );
+    }
+    if (customView === 'news-story') {
+      return (
+        <>
+          {routeEditInitializer}
+          <LiveNewsStoryTemplateView entityId={entityId} spaceId={spaceId} footer={customViewFooter} />
+        </>
+      );
+    }
+    if (customView === 'source') {
+      return (
+        <>
+          {routeEditInitializer}
+          <LiveSourceTemplateView entityId={entityId} spaceId={spaceId} footer={customViewFooter} />
+        </>
+      );
+    }
+    if (customView === 'post') {
+      return (
+        <>
+          {routeEditInitializer}
+          <LivePostTemplateView entityId={entityId} spaceId={spaceId} footer={customViewFooter} />
+        </>
+      );
+    }
   }
 
   /*

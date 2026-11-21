@@ -1,4 +1,4 @@
-import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { describe, expect, it } from 'vitest';
 
@@ -31,10 +31,12 @@ describe('ENTITY_TEMPLATE_REGISTRY', () => {
   });
 
   it('withholds v2 templates unless includeV2 is enabled', () => {
+    expect(resolveEntityTemplateFromTypes([{ id: ContentIds.NEWS_EVENT_TYPE }])).toBeNull();
     expect(resolveEntityTemplateFromTypes([{ id: NEWS_STORY_TYPE_ID }])).toBeNull();
     expect(resolveEntityTemplateFromTypes([{ id: OFFICIAL_DOCUMENT_TYPE_ID }])).toBeNull();
     expect(resolveEntityTemplateFromTypes([{ id: TWEET_TYPE_ID }])).toBeNull();
 
+    expect(resolveEntityTemplateFromTypes([{ id: ContentIds.NEWS_EVENT_TYPE }], { includeV2: true })?.id).toBe('event');
     expect(resolveEntityTemplateFromTypes([{ id: NEWS_STORY_TYPE_ID }], { includeV2: true })?.id).toBe('news-story');
     expect(resolveEntityTemplateFromTypes([{ id: OFFICIAL_DOCUMENT_TYPE_ID }], { includeV2: true })?.id).toBe('source');
     expect(resolveEntityTemplateFromTypes([{ id: DATASET_TYPE_ID }], { includeV2: true })?.id).toBe('source');

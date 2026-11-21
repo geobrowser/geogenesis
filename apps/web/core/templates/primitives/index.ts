@@ -3,4 +3,5 @@ export { RelatedListSection, type RelatedListSectionProps } from './related-list
 export { SourceChipList, type SourceChipListProps } from './source-chip-list';
 export { SplitBars, type SplitBarsProps } from './split-bars';
 export { TemplateBadge, TemplateBreadcrumb, TemplateShell, type TemplateBadgeTone } from './template-shell';
+export { TopicTrendsChart, type TopicTrendsChartProps } from './topic-trends-chart';
 export { VoteBox, type VoteBoxProps } from './vote-box';

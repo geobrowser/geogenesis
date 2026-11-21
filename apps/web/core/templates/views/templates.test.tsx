@@ -5,22 +5,41 @@ import * as React from 'react';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { useGazaFixtureTemplates } from '../adapters/gaza-fixture';
+import { type GazaFixtureRoute, useGazaFixtureTemplates } from '../adapters/gaza-fixture';
 import type { TopicTemplateModel } from '../models';
 import { ClaimTemplate } from './claim-template';
+import { EventTemplate } from './event-template';
+import { NewsStoryTemplate } from './news-story-template';
+import { PostTemplate } from './post-template';
+import { SourceTemplate } from './source-template';
 import { TopicTemplate } from './topic-template';
 
 afterEach(cleanup);
 
-function FixtureHarness() {
+function FixtureHarness({ initialRoute }: { initialRoute?: GazaFixtureRoute }) {
   const fixture = useGazaFixtureTemplates();
-  if (fixture.activeRoute.kind === 'topic' && fixture.topicSource.data) {
-    return <TopicTemplate model={fixture.topicSource.data} />;
+  const initialized = React.useRef(false);
+  React.useEffect(() => {
+    if (!initialized.current && initialRoute) {
+      initialized.current = true;
+      fixture.navigate(initialRoute);
+    }
+  }, [fixture, initialRoute]);
+
+  switch (fixture.activeRoute.kind) {
+    case 'topic':
+      return fixture.topicSource.data ? <TopicTemplate model={fixture.topicSource.data} /> : null;
+    case 'claim':
+      return fixture.claimSource.data ? <ClaimTemplate model={fixture.claimSource.data} /> : null;
+    case 'event':
+      return fixture.eventSource.data ? <EventTemplate model={fixture.eventSource.data} /> : null;
+    case 'news-story':
+      return fixture.storySource.data ? <NewsStoryTemplate model={fixture.storySource.data} /> : null;
+    case 'source':
+      return fixture.sourceSource.data ? <SourceTemplate model={fixture.sourceSource.data} /> : null;
+    case 'post':
+      return fixture.postSource.data ? <PostTemplate model={fixture.postSource.data} /> : null;
   }
-  if (fixture.claimSource.data) {
-    return <ClaimTemplate model={fixture.claimSource.data} />;
-  }
-  return null;
 }
 
 describe('TopicTemplate progressive disclosure', () => {
@@ -44,43 +63,77 @@ describe('TopicTemplate progressive disclosure', () => {
     expect(screen.getByRole('heading', { name: 'Renewable energy' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Claims' })).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Community view' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Coverage and agreement over time' })).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Common ground' })).toBeNull();
     expect(screen.queryByRole('heading', { name: 'In each community’s own words' })).toBeNull();
-    expect(screen.queryByRole('heading', { name: 'How we got here' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Rankings' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'What’s spreading' })).toBeNull();
   });
 });
 
-describe('TopicTemplate ↔ ClaimTemplate fixture round-trip', () => {
-  it('navigates from a contested claim card into ClaimTemplate, votes, and returns via breadcrumb', () => {
+describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Post graph', () => {
+  it('renders trends chart, rankings, and navigates Topic -> Claim -> Event -> Story -> Source', () => {
     render(<FixtureHarness />);
 
     expect(screen.getByRole('heading', { name: 'Israel–Gaza war' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Where they split' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Common ground' })).toBeInTheDocument();
 
-    // Switch community view and verify lede + pressed state update
+    // Switch Coverage -> Agreement on TopicTrendsChart
+    const chart = screen.getByRole('region', { name: 'Coverage and agreement over time' });
+    fireEvent.click(within(chart).getByRole('button', { name: 'Agreement' }));
+    expect(within(chart).getByRole('button', { name: 'Where they split' })).toHaveAttribute('aria-pressed', 'true');
+
+    // Switch Rankings tab: Bridging picks hides single-scope community pills (Finding T6)
+    const rankings = screen.getByRole('region', { name: 'Rankings' });
+    fireEvent.click(within(rankings).getByRole('button', { name: 'Bridging picks' }));
+    expect(within(rankings).queryByRole('button', { name: 'Everyone' })).toBeNull();
+
+    // Switch community view and open a contested claim
     const communityBar = screen.getByRole('region', { name: 'Community view' });
     const proIsraelFilter = within(communityBar).getByRole('button', { name: /Pro-Israel/i });
     fireEvent.click(proIsraelFilter);
     expect(proIsraelFilter).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByText(/claims ordered by what this community pins first/i)).toBeInTheDocument();
 
-    // Open lead claim ("Israel is committing genocide in Gaza")
-    fireEvent.click(screen.getByRole('button', { name: /Israel is committing genocide in Gaza/i }));
-
-    expect(screen.getByRole('heading', { name: 'Israel is committing genocide in Gaza' })).toBeInTheDocument();
+    const contestedSection = screen.getByRole('region', { name: 'Contested claims' });
+    fireEvent.click(within(contestedSection).getByRole('button', { name: /Israel is committing genocide in Gaza/i }));
     expect(screen.getByText('Contested claim')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Strongest cases' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'The facts it turns on' })).toBeInTheDocument();
 
-    // Vote Agree and verify live feedback
+    // Vote Agree
     fireEvent.click(screen.getByRole('button', { name: 'Agree' }));
     expect(screen.getByText('You agreed.')).toBeInTheDocument();
-    expect(screen.getByText(/Counted in Everyone/i)).toBeInTheDocument();
 
-    // Return to topic via breadcrumb
-    fireEvent.click(screen.getByRole('button', { name: 'Israel–Gaza war' }));
-    expect(screen.getByRole('heading', { name: 'Israel–Gaza war' })).toBeInTheDocument();
+    // Navigate from Claim -> Event -> News Story -> Source
+    fireEvent.click(screen.getByRole('button', { name: /ICJ orders Israel to prevent genocidal acts/i }));
+    expect(screen.getByRole('heading', { name: 'ICJ orders Israel to prevent genocidal acts' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /World court orders Israel to prevent genocidal acts/i }));
+    expect(screen.getByText('News story')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Read on NPR/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /ICJ order in South Africa v\. Israel/i }));
+    expect(screen.getByText('Source')).toBeInTheDocument();
+    expect(screen.getByText('International Court of Justice')).toBeInTheDocument();
+  });
+
+  it('supports rating bridging notes and submitting a new context note on PostTemplate', () => {
+    render(<FixtureHarness initialRoute={{ kind: 'post', id: 'p-camps' }} />);
+
+    expect(screen.getByRole('heading', { name: 'Free Voices on X' })).toBeInTheDocument();
+    expect(screen.getByText('Old footage')).toBeInTheDocument();
+
+    const helpfulBtn = screen.getByRole('button', { name: 'Helpful' });
+    fireEvent.click(helpfulBtn);
+    expect(helpfulBtn).toHaveAttribute('aria-pressed', 'true');
+
+    // Open composer and submit a new context note
+    fireEvent.click(screen.getByRole('button', { name: '+ Add context' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Missing context' }));
+    fireEvent.change(screen.getByLabelText(/What do the sources show/i), {
+      target: { value: 'Reverse image search confirms this footage was filmed in Aleppo in 2016.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Submit note' }));
+
+    expect(screen.getByText('Your note · needs ratings')).toBeInTheDocument();
+    expect(screen.getByText(/Reverse image search confirms this footage/i)).toBeInTheDocument();
   });
 
   it('renders agreed claim basis and settling sources when opening a common-ground claim', () => {

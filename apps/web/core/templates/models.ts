@@ -189,6 +189,84 @@ export interface TopicCommunityCaseModel {
   onToggleMembership?: () => void;
 }
 
+export interface TopicTrendMarkerModel {
+  weekIndex: number;
+  label: string;
+  eventId?: string;
+  href?: string;
+  onSelect?: () => void;
+}
+
+export interface TopicCoverageThemeModel {
+  id: string;
+  name: string;
+  color: string;
+  /** Weekly story counts, aligned across all themes. */
+  weeklyCounts: readonly number[];
+}
+
+export interface TopicAgreementSeriesModel {
+  id: string;
+  name: string;
+  color: string;
+  group: 'split' | 'common';
+  /** Weekly percentage agree (0–100) for each of the two primary communities. */
+  communityAWeekly: readonly number[];
+  communityBWeekly: readonly number[];
+  /** Optional weekly voter counts for vote-volume bars and confidence shading. */
+  communityAVotes?: readonly number[];
+  communityBVotes?: readonly number[];
+}
+
+export interface TopicTrendsModel {
+  weekLabels: readonly string[];
+  monthTicks: readonly { weekIndex: number; label: string }[];
+  markers: readonly TopicTrendMarkerModel[];
+  coverageThemes: readonly TopicCoverageThemeModel[];
+  coverageCaption?: string;
+  agreementSeries?: readonly TopicAgreementSeriesModel[];
+  communityALabel?: string;
+  communityAColor?: string;
+  communityBLabel?: string;
+  communityBColor?: string;
+}
+
+export interface TopicRankingItemModel {
+  id: string;
+  rank: number;
+  title: string;
+  subtitle?: string;
+  tag?: string;
+  metric?: string;
+  href?: string;
+  onSelect?: () => void;
+}
+
+export interface TopicRankingModel {
+  id: string;
+  title: string;
+  subtitle: string;
+  itemsByCommunity: Readonly<Record<string, readonly TopicRankingItemModel[]>>;
+}
+
+export interface TopicViralPostPreviewModel {
+  id: string;
+  authorName: string;
+  authorHandle?: string;
+  platform: string;
+  viewsLabel?: string;
+  when?: string;
+  body: string;
+  topNote?: {
+    tag: string;
+    status: 'shown' | 'pending';
+    text: string;
+  };
+  noteCount: number;
+  href?: string;
+  onSelect?: () => void;
+}
+
 export interface TopicTemplateModel {
   id: string;
   title: string;
@@ -204,7 +282,10 @@ export interface TopicTemplateModel {
   contestedClaims?: readonly ClaimSummaryModel[];
   agreedClaims?: readonly ClaimSummaryModel[];
   communityCases?: readonly TopicCommunityCaseModel[];
+  trends?: TopicTrendsModel;
   timelineHighlights?: readonly TopicTimelineHighlightModel[];
+  rankings?: readonly TopicRankingModel[];
+  viralPosts?: readonly TopicViralPostPreviewModel[];
   timelineHref?: string;
   sourcesHref?: string;
   /** Additional structured sections (coverage, rankings, debates, etc.). */
@@ -231,9 +312,11 @@ export interface NewsStoryTemplateModel {
   outlet: string;
   outletInitials: string;
   outletColor: string;
+  authors?: readonly string[];
   date?: string;
   summary?: string;
   externalUrl?: string;
+  archiveUrl?: string;
   breadcrumbs?: readonly BreadcrumbItem[];
   accuracyRating?: {
     prompt: string;
@@ -313,13 +396,18 @@ export interface PostTemplateModel {
   viewsLabel?: string;
   when?: string;
   body: string;
+  externalUrl?: string;
   mediaUrl?: string | null;
+  mediaAlt?: string;
+  engagement?: readonly { label: string; value: string }[];
   breadcrumbs?: readonly BreadcrumbItem[];
   claims: readonly {
     claim: ClaimSummaryModel;
     stanceLabel: string;
   }[];
   notes: readonly PostContextNoteModel[];
+  bridgingRule?: string;
+  onAddNote?: (draft: { tag: string; text: string; sourceUrl: string }) => void;
   sections: readonly EntityListSectionModel[];
 }
 

@@ -8,6 +8,7 @@ import {
   type ClaimSummaryModel,
   ENTITY_TEMPLATE_REGISTRY,
   type EntityListSectionModel,
+  type GazaFixtureRoute,
   type SplitBreakdown,
   type VoteChoice,
   computeSplitGap,
@@ -22,85 +23,103 @@ import {
   TemplateShell,
   VoteBox,
 } from '~/core/templates/primitives';
-import { ClaimTemplate, TopicTemplate } from '~/core/templates/views';
+import {
+  ClaimTemplate,
+  EventTemplate,
+  NewsStoryTemplate,
+  PostTemplate,
+  SourceTemplate,
+  TopicTemplate,
+} from '~/core/templates/views';
 
-type PreviewTab = 'prototype' | 'primitives';
+type PreviewMode = 'prototype' | 'primitives';
+
+const QUICK_JUMPS: readonly { label: string; route: GazaFixtureRoute }[] = [
+  { label: 'Topic', route: { kind: 'topic' } },
+  { label: 'Contested claim', route: { kind: 'claim', id: 'gen' } },
+  { label: 'Agreed claim', route: { kind: 'claim', id: 'build' } },
+  { label: 'Event', route: { kind: 'event', id: 'e71k' } },
+  { label: 'News story', route: { kind: 'news-story', id: 'st-haaretz-71k' } },
+  { label: 'Source', route: { kind: 'source', id: 's-icj' } },
+  { label: 'Post', route: { kind: 'post', id: 'p-camps' } },
+];
+
+function routeMatches(a: GazaFixtureRoute, b: GazaFixtureRoute): boolean {
+  if (a.kind !== b.kind) return false;
+  if (a.kind === 'topic' && b.kind === 'topic') return true;
+  if (a.kind !== 'topic' && b.kind !== 'topic') return a.id === b.id;
+  return false;
+}
 
 /**
- * Interactive sandbox for Phase 1 & Phase 2 entity templates.
- *
- * - "Topic ↔ Claim prototype": full clickable TopicTemplate & ClaimTemplate backed by the Gaza
- *   fixture adapter (community switching, Agree/Disagree voting, joining a community, breadcrumb nav).
- * - "Registry & primitives": isolated view of template precedence and shared UI primitives.
+ * Interactive sandbox covering all six entity templates (`Topic`, `Claim`, `Event`, `NewsStory`,
+ * `Source`, `Post`) backed by the cross-linked Gaza fixture adapter, plus the Registry & primitives view.
  */
 export function DevTemplatesPreview() {
-  const [tab, setTab] = React.useState<PreviewTab>('prototype');
+  const [mode, setMode] = React.useState<PreviewMode>('prototype');
   const fixture = useGazaFixtureTemplates();
 
   return (
     <div className="min-h-screen bg-white">
       <div className="sticky top-0 z-20 border-b border-divider bg-white/95 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-[1120px] flex-wrap items-center justify-between gap-3 px-4 py-2.5">
-          <div className="flex items-center gap-2">
+        <div className="mx-auto flex max-w-[1120px] flex-wrap items-center justify-between gap-2 px-4 py-2.5">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {QUICK_JUMPS.map(jump => {
+              const active = mode === 'prototype' && routeMatches(fixture.activeRoute, jump.route);
+              return (
+                <button
+                  key={jump.label}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => {
+                    setMode('prototype');
+                    fixture.navigate(jump.route);
+                  }}
+                  className={cx(
+                    'inline-flex h-8 cursor-pointer items-center rounded-full border px-3 text-[13px] font-medium transition-colors',
+                    active ? 'border-text bg-text text-white' : 'border-grey-02 bg-white text-text hover:border-text'
+                  )}
+                >
+                  {jump.label}
+                </button>
+              );
+            })}
             <button
               type="button"
-              aria-pressed={tab === 'prototype'}
-              onClick={() => setTab('prototype')}
+              aria-pressed={mode === 'primitives'}
+              onClick={() => setMode('primitives')}
               className={cx(
                 'inline-flex h-8 cursor-pointer items-center rounded-full border px-3 text-[13px] font-medium transition-colors',
-                tab === 'prototype'
-                  ? 'border-text bg-text text-white'
-                  : 'border-grey-02 bg-white text-text hover:border-text'
-              )}
-            >
-              Topic ↔ Claim prototype
-            </button>
-            <button
-              type="button"
-              aria-pressed={tab === 'primitives'}
-              onClick={() => setTab('primitives')}
-              className={cx(
-                'inline-flex h-8 cursor-pointer items-center rounded-full border px-3 text-[13px] font-medium transition-colors',
-                tab === 'primitives'
-                  ? 'border-text bg-text text-white'
-                  : 'border-grey-02 bg-white text-text hover:border-text'
+                mode === 'primitives'
+                  ? 'border-ctaPrimary bg-ctaPrimary text-white'
+                  : 'border-grey-02 bg-grey-01 text-grey-05 hover:border-text'
               )}
             >
               Registry &amp; primitives
             </button>
           </div>
 
-          {tab === 'prototype' && (
-            <div className="flex flex-wrap items-center gap-2 text-[12px] text-grey-04">
-              <span>
-                Route:{' '}
-                <code className="rounded-sm bg-grey-01 px-1.5 py-0.5 text-text">
-                  {fixture.activeRoute.kind === 'topic' ? 'topic/israel-gaza-war' : `claim/${fixture.activeRoute.id}`}
-                </code>
-              </span>
-              {fixture.activeRoute.kind === 'claim' && (
-                <button
-                  type="button"
-                  onClick={fixture.openTopic}
-                  className="cursor-pointer border-0 bg-transparent p-0 font-medium text-ctaPrimary hover:text-ctaHover"
-                >
-                  ← Back to topic
-                </button>
-              )}
-            </div>
-          )}
+          <span className="text-[12px] text-grey-04">
+            Flag: <code className="rounded-sm bg-grey-01 px-1.5 py-0.5 text-text">entityTemplatesV2</code>
+          </span>
         </div>
       </div>
 
-      {tab === 'prototype' ? (
-        fixture.activeRoute.kind === 'topic' && fixture.topicSource.data ? (
-          <TopicTemplate model={fixture.topicSource.data} />
-        ) : fixture.claimSource.data ? (
-          <ClaimTemplate model={fixture.claimSource.data} />
-        ) : null
-      ) : (
+      {mode === 'primitives' ? (
         <PrimitivesGallery />
-      )}
+      ) : fixture.activeRoute.kind === 'topic' && fixture.topicSource.data ? (
+        <TopicTemplate model={fixture.topicSource.data} />
+      ) : fixture.activeRoute.kind === 'claim' && fixture.claimSource.data ? (
+        <ClaimTemplate model={fixture.claimSource.data} />
+      ) : fixture.activeRoute.kind === 'event' && fixture.eventSource.data ? (
+        <EventTemplate model={fixture.eventSource.data} />
+      ) : fixture.activeRoute.kind === 'news-story' && fixture.storySource.data ? (
+        <NewsStoryTemplate model={fixture.storySource.data} />
+      ) : fixture.activeRoute.kind === 'source' && fixture.sourceSource.data ? (
+        <SourceTemplate model={fixture.sourceSource.data} />
+      ) : fixture.activeRoute.kind === 'post' && fixture.postSource.data ? (
+        <PostTemplate model={fixture.postSource.data} />
+      ) : null}
     </div>
   );
 }
@@ -228,7 +247,8 @@ function PrimitivesGallery() {
         <h1 className="m-0 text-entityTitle text-text">Entity template registry &amp; primitives</h1>
         <p className="m-0 text-body text-grey-04">
           Toggle <code className="rounded-sm bg-grey-01 px-1.5 py-0.5 text-[13px]">entityTemplatesV2</code> in Feature
-          flags (<kbd>Cmd/Ctrl+Shift+F</kbd>) to render live Topic and Claim entities with these templates.
+          flags (<kbd>Cmd/Ctrl+Shift+F</kbd>) to render live Topic, Claim, Event, News story, Source, and Post entities
+          with these templates.
         </p>
         {lastSelected && (
           <p className="m-0 rounded-md bg-ctaTertiary px-3 py-1.5 text-[13px] font-medium text-ctaPrimary">
