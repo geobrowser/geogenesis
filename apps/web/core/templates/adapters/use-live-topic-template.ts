@@ -54,6 +54,7 @@ import {
   readEntityTextValue,
   resolveTemplateImageUrl,
 } from '../ontology';
+import { resolveDebateStillSrc, useDebateParticipantsBatch } from './use-debate-participants-batch';
 import { useLiveEntityActions } from './use-live-entity-actions';
 
 const LIVE_CLAIMS_LIMIT = 40;
@@ -356,6 +357,12 @@ export function useLiveTopicTemplate({
     },
     staleTime: 60_000,
   });
+
+  const debateIdsForParticipants = React.useMemo(
+    () => (bestDebatesQuery.data ?? []).slice(0, 8).map(item => item.entityId),
+    [bestDebatesQuery.data]
+  );
+  const debateParticipantsQuery = useDebateParticipantsBatch(debateIdsForParticipants);
 
   const bestNewsQuery = useQuery({
     queryKey: ['live-topic-template', 'best-news', ID.uuidToHex(entityId), ID.uuidToHex(spaceId), isSpaceHome],
@@ -827,14 +834,16 @@ export function useLiveTopicTemplate({
     agreedClaims.sort(byEngagement);
 
     // 2. Live Recent Debates gallery
+    const debateParticipantsByHex = debateParticipantsQuery.data;
     const recentDebates: TopicRecentDebateModel[] = (bestDebatesQuery.data ?? []).slice(0, 8).map(item => {
       const { claimTitle, speakers } = parseDebateTitle(item.title, item.debateClaim?.name);
       const claimId = item.debateClaim?.entityId ?? item.entityId;
       const claimHex = ID.uuidToHex(claimId);
       const claimSplit = buildSplitForClaim(claimId, item.spaceName);
       const normDebateId = ID.uuidToHex(item.entityId).toLowerCase();
-      const slot1Avatar = resolveTemplateImageUrl(item.debatePosters?.slot1) ?? `/api/debates/still/${normDebateId}/1`;
-      const slot2Avatar = resolveTemplateImageUrl(item.debatePosters?.slot2) ?? `/api/debates/still/${normDebateId}/2`;
+      const slot1Avatar = resolveDebateStillSrc(item.debatePosters?.slot1, normDebateId, 1);
+      const slot2Avatar = resolveDebateStillSrc(item.debatePosters?.slot2, normDebateId, 2);
+      const livePair = debateParticipantsByHex?.[normDebateId];
       const dateStr = formatUnixSecDate(item.createdAtSec) ?? 'Debate';
       const votesLabel =
         claimSplit.total > 0
@@ -855,16 +864,18 @@ export function useLiveTopicTemplate({
         onClearVote: () => setLocalVotes(prev => ({ ...prev, [claimHex]: null })),
         participants: [
           {
-            name: speakers[0],
-            position: 'Agree',
+            name: livePair?.slot1?.name ?? speakers[0],
+            position: livePair?.slot1?.position ?? 'Agree',
             communityColor: '#3963fe',
             avatarUrl: slot1Avatar,
+            profileAvatarUrl: livePair?.slot1?.avatarUrl ?? null,
           },
           {
-            name: speakers[1],
-            position: 'Disagree',
+            name: livePair?.slot2?.name ?? speakers[1],
+            position: livePair?.slot2?.position ?? 'Disagree',
             communityColor: '#6833ff',
             avatarUrl: slot2Avatar,
+            profileAvatarUrl: livePair?.slot2?.avatarUrl ?? null,
           },
         ],
         split:
@@ -1034,6 +1045,7 @@ export function useLiveTopicTemplate({
     bestNewsQuery.data,
     countsByTopicId,
     coverage.page.rows,
+    debateParticipantsQuery.data,
     entity,
     entityId,
     hydratedClaimKindByHex,

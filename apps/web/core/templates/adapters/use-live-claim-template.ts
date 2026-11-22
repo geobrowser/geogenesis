@@ -49,6 +49,7 @@ import {
   readEntityRelations,
   resolveTemplateImageUrl,
 } from '../ontology';
+import { resolveDebateStillSrc, useDebateParticipantsBatch } from './use-debate-participants-batch';
 import { useLiveEntityActions } from './use-live-entity-actions';
 
 const CLAIM_TOPIC_MEDIA_QUERY = parse(/* GraphQL */ `
@@ -272,6 +273,12 @@ export function useLiveClaimTemplate({
   const sources = React.useMemo(() => getClaimSources(entity?.relations ?? []), [entity?.relations]);
   const record = useClaimRecord({ claimId: entityId, spaceId, topicIds });
 
+  const debateIdsForParticipants = React.useMemo(
+    () => record.debateRows.slice(0, 8).map(item => item.entityId),
+    [record.debateRows]
+  );
+  const debateParticipantsQuery = useDebateParticipantsBatch(debateIdsForParticipants);
+
   // Collect all subclaim IDs (Supporting, Opposing, Related)
   const subClaimSeedList = React.useMemo(() => {
     if (!entity) return [];
@@ -486,12 +493,14 @@ export function useLiveClaimTemplate({
 
     const overviewHref = NavUtils.toEntity(spaceId, entityId);
 
-    // Debates gallery cards (with speaker stills & vote actions synced to this claim)
+    // Debates gallery cards (with speaker stills, profile avatars & vote actions synced to this claim)
+    const debateParticipantsByHex = debateParticipantsQuery.data;
     const debates: TopicRecentDebateModel[] = record.debateRows.slice(0, 8).map(item => {
       const { claimTitle, speakers } = parseDebateTitle(item.title || title, title);
       const normDebateId = ID.uuidToHex(item.entityId).toLowerCase();
-      const slot1Avatar = resolveTemplateImageUrl(item.debatePosters?.slot1) ?? `/api/debates/still/${normDebateId}/1`;
-      const slot2Avatar = resolveTemplateImageUrl(item.debatePosters?.slot2) ?? `/api/debates/still/${normDebateId}/2`;
+      const slot1Avatar = resolveDebateStillSrc(item.debatePosters?.slot1, normDebateId, 1);
+      const slot2Avatar = resolveDebateStillSrc(item.debatePosters?.slot2, normDebateId, 2);
+      const livePair = debateParticipantsByHex?.[normDebateId];
       const dateStr = formatUnixSecDate(item.createdAtSec) ?? 'Debate';
       const votesLabel =
         summary.total > 0
@@ -520,16 +529,18 @@ export function useLiveClaimTemplate({
         },
         participants: [
           {
-            name: speakers[0],
-            position: 'Agree',
+            name: livePair?.slot1?.name ?? speakers[0],
+            position: livePair?.slot1?.position ?? 'Agree',
             communityColor: '#3963fe',
             avatarUrl: slot1Avatar,
+            profileAvatarUrl: livePair?.slot1?.avatarUrl ?? null,
           },
           {
-            name: speakers[1],
-            position: 'Disagree',
+            name: livePair?.slot2?.name ?? speakers[1],
+            position: livePair?.slot2?.position ?? 'Disagree',
             communityColor: '#6833ff',
             avatarUrl: slot2Avatar,
+            profileAvatarUrl: livePair?.slot2?.avatarUrl ?? null,
           },
         ],
         split: rows.length > 0 ? { rows, isSplit: summary.isControversial, totalVotes: summary.total } : undefined,
@@ -700,6 +711,7 @@ export function useLiveClaimTemplate({
     };
   }, [
     control,
+    debateParticipantsQuery.data,
     entity,
     entityId,
     hydratedSubClaimKindByHex,

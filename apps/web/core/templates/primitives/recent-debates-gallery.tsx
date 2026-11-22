@@ -213,13 +213,13 @@ function RecentDebateGalleryCard({ debate }: { debate: TopicRecentDebateModel })
       {/* Centered Play trigger across the two-speaker seam (matches Genesis debate cards) */}
       <span
         aria-hidden
-        className="pointer-events-none absolute top-1/2 left-1/2 grid size-11 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-white/95 text-text shadow-[0_6px_20px_rgba(0,0,0,0.28)] transition-transform duration-150 group-hover/media:scale-105"
+        className="pointer-events-none absolute top-1/2 left-1/2 z-[4] grid size-11 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-white/95 text-text shadow-[0_6px_20px_rgba(0,0,0,0.28)] transition-transform duration-150 group-hover/media:scale-105"
       >
         <PlayIcon className="ml-0.5 size-4" />
       </span>
 
       {debate.duration && (
-        <span className="pointer-events-none absolute right-2.5 bottom-2.5 rounded-md bg-black/70 px-1.5 py-0.5 text-[12px] leading-[15px] font-medium text-white tabular-nums backdrop-blur-xs">
+        <span className="pointer-events-none absolute right-2.5 bottom-2.5 z-[4] rounded-md bg-black/70 px-1.5 py-0.5 text-[12px] leading-[15px] font-medium text-white tabular-nums backdrop-blur-xs">
           {debate.duration}
         </span>
       )}
@@ -381,6 +381,60 @@ function RecentDebateGalleryCard({ debate }: { debate: TopicRecentDebateModel })
   );
 }
 
+function SpeakerProfileAvatar({
+  name,
+  avatarUrl,
+  communityColor,
+  size = 'sm',
+}: {
+  name: string;
+  avatarUrl?: string | null;
+  communityColor: string;
+  size?: 'sm' | 'lg';
+}) {
+  const [failed, setFailed] = React.useState(false);
+
+  React.useEffect(() => {
+    setFailed(false);
+  }, [avatarUrl]);
+
+  const showPhoto = Boolean(avatarUrl) && !failed;
+  const isLarge = size === 'lg';
+
+  if (showPhoto) {
+    return (
+      <img
+        src={avatarUrl ?? undefined}
+        alt=""
+        aria-hidden
+        onError={() => setFailed(true)}
+        className={cx(
+          'shrink-0 rounded-full object-cover',
+          isLarge
+            ? 'size-15 border border-white/20 shadow-[0_6px_20px_rgba(0,0,0,0.35)]'
+            : 'size-4.5 ring-1 ring-white/25'
+        )}
+        draggable={false}
+      />
+    );
+  }
+
+  return (
+    <span
+      aria-hidden
+      className={cx(
+        'inline-grid shrink-0 place-items-center rounded-full font-semibold text-white/95',
+        isLarge
+          ? 'size-15 border border-white/15 bg-white/10 text-[16px] tracking-[0.02em] backdrop-blur-xs'
+          : 'size-4.5 bg-white/15 text-[9px] ring-1 ring-white/20'
+      )}
+      style={isLarge ? { boxShadow: `0 0 0 2px ${communityColor}66` } : undefined}
+    >
+      {initialsFrom(name)}
+    </span>
+  );
+}
+
 function SpeakerVideoStill({
   participant,
   tone,
@@ -389,9 +443,11 @@ function SpeakerVideoStill({
   tone: 'top' | 'bottom';
 }) {
   const [imgFailed, setImgFailed] = React.useState(false);
+  const [imgLoaded, setImgLoaded] = React.useState(false);
 
   React.useEffect(() => {
     setImgFailed(false);
+    setImgLoaded(false);
   }, [participant.avatarUrl]);
 
   const showImage = Boolean(participant.avatarUrl) && !imgFailed;
@@ -406,31 +462,38 @@ function SpeakerVideoStill({
             : `radial-gradient(circle at 50% 42%, ${participant.communityColor}2e 0%, #1f2228 56%, #131417 100%)`,
       }}
     >
-      {showImage ? (
-        <img
-          src={participant.avatarUrl}
-          alt={participant.name}
-          loading="lazy"
-          onError={() => setImgFailed(true)}
-          className="h-full w-full object-cover"
-          draggable={false}
-        />
-      ) : (
-        <div className="grid h-full w-full place-items-center">
-          <span
-            className="grid size-13 place-items-center rounded-full border border-white/15 bg-white/10 text-[16px] font-semibold tracking-[0.02em] text-white/90 backdrop-blur-xs"
-            style={{ boxShadow: `0 0 0 2px ${participant.communityColor}66` }}
-          >
-            {initialsFrom(participant.name)}
-          </span>
+      {/* Portrait fallback shown while still loads or whenever a debate has no cut speaker still */}
+      {(!showImage || !imgLoaded) && (
+        <div className="absolute inset-0 grid place-items-center">
+          <SpeakerProfileAvatar
+            name={participant.name}
+            avatarUrl={participant.profileAvatarUrl}
+            communityColor={participant.communityColor}
+            size="lg"
+          />
         </div>
       )}
 
-      {/* Subtle edge scrim + speaker name & position chip (top edge on top tile so it never collides with the center play button) */}
+      {showImage && (
+        <img
+          src={participant.avatarUrl}
+          alt={participant.name}
+          decoding="async"
+          onLoad={() => setImgLoaded(true)}
+          onError={() => setImgFailed(true)}
+          className={cx(
+            'relative z-[1] h-full w-full object-cover transition-opacity duration-200',
+            imgLoaded ? 'opacity-100' : 'opacity-0'
+          )}
+          draggable={false}
+        />
+      )}
+
+      {/* Subtle edge scrim + speaker avatar, name & stance chip */}
       <div
         aria-hidden
         className={cx(
-          'pointer-events-none absolute inset-x-0 h-12',
+          'pointer-events-none absolute inset-x-0 z-[2] h-12',
           tone === 'top'
             ? 'top-0 bg-gradient-to-b from-black/60 to-transparent'
             : 'bottom-0 bg-gradient-to-t from-black/65 to-transparent'
@@ -438,18 +501,19 @@ function SpeakerVideoStill({
       />
       <div
         className={cx(
-          'pointer-events-none absolute right-2.5 left-2.5 flex max-w-[calc(100%-20px)] items-center gap-1.5 self-start',
+          'pointer-events-none absolute right-2.5 left-2.5 z-[3] flex max-w-[calc(100%-20px)] items-center gap-1.5 self-start',
           tone === 'top' ? 'top-2' : 'bottom-2'
         )}
       >
-        <span className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-black/55 px-2 py-0.5 text-[12px] leading-[16px] text-white backdrop-blur-xs">
-          <span
-            aria-hidden
-            className="inline-block size-2 shrink-0 rounded-full"
-            style={{ backgroundColor: participant.communityColor }}
+        <span className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-black/60 py-0.5 pr-2.5 pl-1 text-[12px] leading-[16px] text-white backdrop-blur-xs">
+          <SpeakerProfileAvatar
+            name={participant.name}
+            avatarUrl={participant.profileAvatarUrl}
+            communityColor={participant.communityColor}
+            size="sm"
           />
           <span className="truncate font-medium">{participant.name}</span>
-          <span className="shrink-0 text-white/65">· {participant.position}</span>
+          <span className="shrink-0 text-white/70">· {participant.position}</span>
         </span>
       </div>
     </div>

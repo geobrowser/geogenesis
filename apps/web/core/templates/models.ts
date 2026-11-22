@@ -482,7 +482,10 @@ export interface TopicRecentDebateParticipantModel {
   name: string;
   position: 'Agree' | 'Disagree';
   communityColor: string;
+  /** Video still frame (`speaker_still_slot_1|2`) rendered across the 480:289 speaker tile. */
   avatarUrl?: string;
+  /** Circular profile avatar photo rendered inside the speaker badge and as still-unavailable fallback. */
+  profileAvatarUrl?: string | null;
 }
 
 export interface TopicRecentDebateModel {
