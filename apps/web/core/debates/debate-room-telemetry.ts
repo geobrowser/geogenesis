@@ -2,8 +2,11 @@ import type { Room } from 'livekit-client';
 
 import { resolveWithin } from '~/core/utils/resolve-within';
 
+import type { VoiceCallEndReason } from './use-voice-call-telemetry';
+
 export type DebateRoomTelemetry = {
-  stop: () => void;
+  /** `reason` defaults to `left`; pass `handover` when voice moves to another tab, not a leave. */
+  stop: (reason?: VoiceCallEndReason) => void;
   /** A speaker the person chose could not be applied to the live room. */
   audioOutputFailed: (error: unknown) => void;
 };
@@ -41,9 +44,9 @@ export async function loadDebateRoomTelemetry(): Promise<StartTelemetry> {
           { probe: report => (probe = startProbe(report)) }
         );
         return {
-          stop: () => {
+          stop: reason => {
             try {
-              stop();
+              stop(reason);
             } catch {
               // Room teardown must still run if diagnostics cleanup fails.
             }

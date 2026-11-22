@@ -262,6 +262,7 @@ describe('DebateGatewayClient', () => {
         ['debates', 'account', 'user-a', 'rematch', 'rematch-1'],
         ['debates', 'account', 'user-a', 'activity'],
         ['debates', 'account', 'user-a', 'profile'],
+        ['debates', 'account', 'user-a', 'lobby-claims'],
       ],
     ],
     [

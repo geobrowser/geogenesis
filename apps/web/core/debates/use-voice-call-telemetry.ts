@@ -36,6 +36,8 @@ import {
 
 export type VoiceCallSurface = 'picker' | 'lobby' | 'debate';
 
+export type VoiceCallEndReason = 'left' | 'disconnected' | 'page_closed' | 'handover';
+
 export type ReportCallChange = (change: Record<string, unknown>) => void;
 
 /** Surface-specific measurements added to each sample; changes go through the call's own reporter. */
@@ -238,7 +240,7 @@ export function startVoiceCallTelemetry(
     }
   };
 
-  const finish = (endReason: 'left' | 'disconnected' | 'page_closed') => {
+  const finish = (endReason: VoiceCallEndReason) => {
     if (ended) return;
     ended = true;
     cleanup();
@@ -388,7 +390,7 @@ export function startVoiceCallTelemetry(
     window.removeEventListener('pagehide', onPageHide);
     probe?.stop();
   }
-  return () => finish('left');
+  return (reason: VoiceCallEndReason = 'left') => finish(reason);
 }
 
 /**
