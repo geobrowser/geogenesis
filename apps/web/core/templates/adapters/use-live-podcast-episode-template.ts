@@ -21,6 +21,7 @@ import type {
   PodcastTopicChipModel,
   SourceQuoteModel,
   TemplateDataSource,
+  VoteChoice,
 } from '../models';
 import {
   TEMPLATE_ONTOLOGY,
@@ -28,6 +29,7 @@ import {
   extractEntityFlags,
   extractGraphConnections,
   formatOntologyDate,
+  readClaimKind,
   readEntityRelations,
   readEntityTextValue,
   resolveTemplateImageUrl,
@@ -77,6 +79,7 @@ export function useLivePodcastEpisodeTemplate({
 }): TemplateDataSource<PodcastEpisodeTemplateModel> {
   const { entity, isLoading } = useQueryEntity({ id: entityId, spaceId });
   const { space } = useSpace(spaceId);
+  const [localVotes, setLocalVotes] = React.useState<Record<string, VoteChoice>>({});
 
   const podcastRelations = React.useMemo(
     () => readEntityRelations(entity, TEMPLATE_ONTOLOGY.PODCAST_PROPERTY_ID),
@@ -133,8 +136,19 @@ export function useLivePodcastEpisodeTemplate({
       push(rel.entityId);
       push(rel.toEntity.id);
     }
+    for (const rel of claimRelations.slice(0, 40)) {
+      push(rel.toEntity.id);
+    }
     return ids;
-  }, [avatarRelations, contributorRelations, guestRelations, hostRelations, listenOnRelations, podcastRelations]);
+  }, [
+    avatarRelations,
+    claimRelations,
+    contributorRelations,
+    guestRelations,
+    hostRelations,
+    listenOnRelations,
+    podcastRelations,
+  ]);
 
   const firstHopWhere = React.useMemo(() => ({ id: { in: firstHopIds } }), [firstHopIds]);
   const { entities: firstHopEntities } = useQueryEntities({
@@ -255,36 +269,60 @@ export function useLivePodcastEpisodeTemplate({
     }
     topics.sort((a, b) => a.label.localeCompare(b.label));
 
-    // Notable claims with live vote summaries
+    // Notable claims with live vote summaries, real Factual/Judgment kinds, and inline Agree/Disagree voting
     const claims: ClaimSummaryModel[] = claimRelations
       .map(rel => {
         const claimTitle = rel.toEntity.name?.trim();
         if (!claimTitle) return null;
+        const claimHex = ID.uuidToHex(rel.toEntity.id);
+        const claimEntity = hydratedById.get(claimHex);
         const summary = responseBatch.data?.get(
           claimResponseTargetKey({ entityId: rel.toEntity.id, responseKind: 'stance' })
         );
-        const pos = summary?.counts.positive ?? 0;
-        const neg = summary?.counts.negative ?? 0;
+        const localChoice = localVotes[claimHex] ?? null;
+        const basePos = summary?.counts.positive ?? 0;
+        const baseNeg = summary?.counts.negative ?? 0;
+        const pos = basePos + (localChoice === 'agree' ? 1 : 0);
+        const neg = baseNeg + (localChoice === 'disagree' ? 1 : 0);
         const total = pos + neg;
         const pct = total > 0 ? Math.round((pos / total) * 100) : 0;
+        const isAccepted = total >= 2 && (pct >= 75 || pct <= 25);
 
         return {
           id: rel.toEntity.id,
           title: claimTitle,
-          kind: 'judgment' as const,
+          kind: readClaimKind(claimEntity?.values),
           overallPercent: total > 0 ? pct : undefined,
           agreeCount: pos,
           disagreeCount: neg,
+          userVote: localChoice,
+          onVote: (choice: Exclude<VoteChoice, null>) => setLocalVotes(prev => ({ ...prev, [claimHex]: choice })),
+          onClearVote: () => setLocalVotes(prev => ({ ...prev, [claimHex]: null })),
           split: {
             rows:
-              total > 0 ? [{ id: spaceId, label: spaceLabel, color: '#202020', percent: pct, isEveryone: true }] : [],
-            isSplit: total > 0 && pct > 25 && pct < 75,
+              total > 0
+                ? [
+                    {
+                      id: spaceId,
+                      label: spaceLabel,
+                      color: '#202020',
+                      percent: pct,
+                      voterCount: total,
+                      isEveryone: true,
+                    },
+                  ]
+                : [],
+            isSplit: !isAccepted,
             totalVotes: total > 0 ? total : undefined,
           },
-          href: NavUtils.toEntity(rel.toSpaceId ?? spaceId, rel.toEntity.id),
+          href: NavUtils.toEntity(
+            claimEntity ? resolveEntitySpaceId(claimEntity, spaceId) : (rel.toSpaceId ?? spaceId),
+            rel.toEntity.id
+          ),
         };
       })
-      .filter((item): item is NonNullable<typeof item> => item !== null);
+      .filter((item): item is NonNullable<typeof item> => item !== null)
+      .sort((a, b) => (b.split.totalVotes ?? 0) - (a.split.totalVotes ?? 0));
 
     // Notable quotes
     const quotes: SourceQuoteModel[] = quoteRelations
@@ -385,6 +423,7 @@ export function useLivePodcastEpisodeTemplate({
     hostRelations,
     hydratedById,
     listenOnRelations,
+    localVotes,
     podcastRelations,
     quoteRelations,
     responseBatch.data,

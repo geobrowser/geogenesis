@@ -10,11 +10,11 @@ import {
   type EntityActionCallbacks,
   type PodcastEpisodeTemplateModel,
   type SourceQuoteModel,
-  formatPercentInt,
 } from '../models';
 import {
   AddClaimPopover,
   AddEntityItemPopover,
+  ClaimExplorer,
   EntityContextTogglePill,
   EntityFlagsSection,
   EntityInlineContext,
@@ -42,7 +42,6 @@ export interface PodcastEpisodeTemplateProps {
   className?: string;
 }
 
-const INITIAL_VISIBLE_CLAIMS = 6;
 const INITIAL_VISIBLE_QUOTES = 4;
 
 /**
@@ -51,8 +50,8 @@ const INITIAL_VISIBLE_QUOTES = 4;
  * Combines Geo Podcasts (`../apps/pod`) episode detail structure (artwork, show link, air date &
  * duration, topic chips, expandable description, Notable Claims, Notable Quotes, Hosts, Guests,
  * Apple/Spotify listen buttons + optional inline audio playback) with Geo Genesis's crisp graph
- * styling (clickable Claim entities with live vote badges, Context relation pills, Flags, and `+`
- * popovers).
+ * styling (Topic-style ClaimExplorer with inline voting & split bars, Context relation pills,
+ * Flags, and `+` popovers).
  */
 export function PodcastEpisodeTemplate({
   model,
@@ -62,15 +61,14 @@ export function PodcastEpisodeTemplate({
   compact = false,
   className,
 }: PodcastEpisodeTemplateProps) {
-  const [showAllClaims, setShowAllClaims] = React.useState(false);
   const [showAllQuotes, setShowAllQuotes] = React.useState(false);
   const [addedClaims, setAddedClaims] = React.useState<ClaimSummaryModel[]>([]);
   const [addedQuotes, setAddedQuotes] = React.useState<SourceQuoteModel[]>([]);
   const [playerOpen, setPlayerOpen] = React.useState(false);
 
   const allClaims = [...addedClaims, ...model.claims];
-  const visibleClaims = showAllClaims ? allClaims : allClaims.slice(0, INITIAL_VISIBLE_CLAIMS);
-  const hiddenClaimCount = Math.max(0, allClaims.length - INITIAL_VISIBLE_CLAIMS);
+  const agreedClaims = allClaims.filter(claim => (claim.split.totalVotes ?? 0) >= 2 && !claim.split.isSplit);
+  const contestedClaims = allClaims.filter(claim => !((claim.split.totalVotes ?? 0) >= 2 && !claim.split.isSplit));
 
   const allQuotes = [...addedQuotes, ...model.quotes];
   const visibleQuotes = showAllQuotes ? allQuotes : allQuotes.slice(0, INITIAL_VISIBLE_QUOTES);
@@ -85,7 +83,7 @@ export function PodcastEpisodeTemplate({
 
   return (
     <TemplateShell
-      maxWidth={880}
+      maxWidth={980}
       breadcrumbs={model.breadcrumbs}
       compact={compact}
       contextByEntityId={model.contextByEntityId}
@@ -191,47 +189,32 @@ export function PodcastEpisodeTemplate({
       {/* Expandable episode description */}
       <PodcastExpandableDescription description={model.description} />
 
-      {/* Notable claims — scannable clickable claims with live vote agreement pills */}
-      <section aria-label="Notable claims" className="flex flex-col gap-3">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="m-0 text-mediumTitle font-semibold text-text">Notable claims</h2>
-          <AddClaimPopover
-            label="Add notable claim"
-            onSubmit={draft => {
-              actionCallbacks?.onAddClaim?.(draft);
-              setAddedClaims(prev => [
-                {
-                  id: `ep-claim-${Date.now()}`,
-                  title: draft.title,
-                  kind: draft.kind,
-                  split: { rows: [], isSplit: false },
-                },
-                ...prev,
-              ]);
-            }}
-          />
-        </div>
-
-        {visibleClaims.length === 0 ? (
+      {/* Notable claims — rendered identically to Topic pages via ClaimExplorer */}
+      {allClaims.length > 0 ? (
+        <ClaimExplorer contestedClaims={contestedClaims} agreedClaims={agreedClaims} title="Notable claims" />
+      ) : (
+        <section aria-label="Notable claims" className="flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="m-0 text-mediumTitle font-semibold text-text">Notable claims</h2>
+            <AddClaimPopover
+              label="Add notable claim"
+              onSubmit={draft => {
+                actionCallbacks?.onAddClaim?.(draft);
+                setAddedClaims(prev => [
+                  {
+                    id: `ep-claim-${Date.now()}`,
+                    title: draft.title,
+                    kind: draft.kind,
+                    split: { rows: [], isSplit: false },
+                  },
+                  ...prev,
+                ]);
+              }}
+            />
+          </div>
           <p className="m-0 text-[14.5px] text-grey-04">No notable claims extracted yet.</p>
-        ) : (
-          <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
-            {visibleClaims.map(claim => (
-              <EpisodeClaimItem key={claim.id} claim={claim} />
-            ))}
-          </ul>
-        )}
-
-        {hiddenClaimCount > 0 && (
-          <button
-            type="button"
-            onClick={() => setShowAllClaims(prev => !prev)}
-            className="cursor-pointer self-start border-0 bg-transparent p-0 text-[13.5px] font-medium text-grey-04 transition-colors hover:text-text"
-          >
-            {showAllClaims ? 'Show less' : `Show ${hiddenClaimCount} more claims`}
-          </button>
-        )}
-      </section>
+        </section>
+      )}
 
       {/* Notable quotes */}
       {(allQuotes.length > 0 || actionCallbacks?.onAddQuote) && (
@@ -313,63 +296,5 @@ export function PodcastEpisodeTemplate({
 
       {footer}
     </TemplateShell>
-  );
-}
-
-function EpisodeClaimItem({ claim }: { claim: ClaimSummaryModel }) {
-  const headlineRow = claim.split.rows.find(row => row.isEveryone) ?? claim.split.rows[0];
-  const percent = claim.overallPercent ?? headlineRow?.percent;
-  const totalVotes = claim.split.totalVotes;
-
-  const titleNode = (
-    <span className="text-[15.5px] leading-[23px] font-normal text-text transition-colors group-hover/claim:text-[#4c1fd4]">
-      {claim.title}
-    </span>
-  );
-
-  return (
-    <li className="group/claim flex flex-col gap-1">
-      <div className="flex items-start gap-2.5">
-        <span aria-hidden className="mt-[9px] inline-block size-1.5 shrink-0 rounded-[1px] bg-grey-03" />
-
-        <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2 gap-y-1">
-          {claim.href ? (
-            <Link href={claim.href} className="text-text no-underline">
-              {titleNode}
-            </Link>
-          ) : claim.onSelect ? (
-            <button
-              type="button"
-              onClick={claim.onSelect}
-              className="cursor-pointer border-0 bg-transparent p-0 text-left text-text"
-            >
-              {titleNode}
-            </button>
-          ) : (
-            titleNode
-          )}
-
-          {totalVotes !== undefined && totalVotes > 0 && percent !== undefined && (
-            <span
-              className={cx(
-                'inline-flex h-5 shrink-0 items-center rounded-full border px-2 text-[11.5px] font-medium tabular-nums',
-                claim.split.isSplit
-                  ? 'border-purple/20 bg-purple-tint/60 text-purple'
-                  : 'border-divider bg-grey-01 text-grey-04'
-              )}
-            >
-              {formatPercentInt(percent)} agree · {totalVotes} {totalVotes === 1 ? 'vote' : 'votes'}
-            </span>
-          )}
-        </div>
-
-        <EntityOverflowMenu
-          target={{ id: claim.id, kind: 'Claim', title: claim.title }}
-          className="mt-0.5 shrink-0 opacity-70 transition-opacity group-hover/claim:opacity-100"
-        />
-      </div>
-
-      <EntityInlineContext targetId={claim.id} targetTitle={claim.title} targetKind="Claim" className="pl-4" />
-    </li>
   );
 }

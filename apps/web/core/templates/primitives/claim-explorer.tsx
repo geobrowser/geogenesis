@@ -62,7 +62,7 @@ export function ClaimExplorer({ contestedClaims, agreedClaims, title = 'Claims',
   const visible = activeList.slice(startIndex, startIndex + PAGE_SIZE);
 
   return (
-    <section id="claims" aria-label="Claims" className={cx('flex flex-col gap-4', className)}>
+    <section id="claims" aria-label={title} className={cx('flex flex-col gap-4', className)}>
       <div className="flex items-center justify-between gap-3">
         <h2 className="m-0 text-mediumTitle font-semibold text-text">{title}</h2>
         <AddClaimPopover

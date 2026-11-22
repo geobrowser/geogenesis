@@ -490,7 +490,8 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     expect(screen.getByRole('heading', { name: 'Pilots Killed in LaGuardia Crash' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'WSJ What’s News' })).toHaveAttribute('href', '/space/s/show-wsj');
     expect(screen.getByText('Helium is a critical component in semiconductor manufacturing.')).toBeInTheDocument();
-    expect(screen.getByText(/92% agree · 12 votes/)).toBeInTheDocument();
+    expect(screen.getByText('92%')).toBeInTheDocument();
+    expect(screen.getByText('12 votes')).toBeInTheDocument();
     expect(screen.getByText(/Helium bottlenecks ripple immediately across wafer fabs/i)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Luke Vargas/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Shelby Holliday/i })).toBeInTheDocument();
