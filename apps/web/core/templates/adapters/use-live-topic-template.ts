@@ -109,21 +109,33 @@ async function fetchTopicFeedSlice({
   spaceId,
   typeId,
   sort = 'best',
+  endpoint = 'topic',
   signal,
 }: {
   topicId: string;
   spaceId: string;
   typeId: string;
   sort?: 'best' | 'top';
+  endpoint?: 'topic' | 'space';
   signal?: AbortSignal;
 }): Promise<ExploreFeedItem[]> {
-  const params = new URLSearchParams({
-    topicId,
-    spaceId,
-    sort,
-    typeIds: typeId,
-  });
-  const response = await fetch(`/api/topics/feed?${params.toString()}`, {
+  const params = new URLSearchParams(
+    endpoint === 'space'
+      ? {
+          spaceId,
+          spaceTopicId: topicId,
+          sort,
+          typeIds: typeId,
+        }
+      : {
+          topicId,
+          spaceId,
+          sort,
+          typeIds: typeId,
+        }
+  );
+  const path = endpoint === 'space' ? '/api/topics/space/feed' : '/api/topics/feed';
+  const response = await fetch(`${path}?${params.toString()}`, {
     credentials: 'include',
     signal,
   });
@@ -213,10 +225,13 @@ export function useLiveTopicTemplate({
   entityId,
   spaceId,
   serverCoverUrl,
+  isSpaceHome = false,
 }: {
   entityId: string;
   spaceId: string;
   serverCoverUrl?: string | null;
+  /** True when rendered on a Topic Space's own homepage (`/space/[id]`), so debates & news read from `/api/topics/space/feed`. */
+  isSpaceHome?: boolean;
 }): TemplateDataSource<TopicTemplateModel> {
   const { entity, isLoading: isEntityLoading } = useQueryEntity({ id: entityId, spaceId });
   const { personalSpaceId } = usePersonalSpaceId();
@@ -227,7 +242,7 @@ export function useLiveTopicTemplate({
   // Optimistic inline vote state per claim so Agree/Disagree on Topic rows responds immediately.
   const [localVotes, setLocalVotes] = React.useState<Record<string, VoteChoice>>({});
 
-  // 1. Top-voted AND Best-ranked Claims, Debates, and News stories from Geo's topic ranking feed
+  // 1. Top-voted AND Best-ranked Claims, Debates, and News stories from Geo's topic/space ranking feed
   const topClaimsQuery = useQuery({
     queryKey: ['live-topic-template', 'top-claims', ID.uuidToHex(entityId), ID.uuidToHex(spaceId)],
     queryFn: ({ signal }) =>
@@ -243,14 +258,38 @@ export function useLiveTopicTemplate({
   });
 
   const bestDebatesQuery = useQuery({
-    queryKey: ['live-topic-template', 'best-debates', ID.uuidToHex(entityId), ID.uuidToHex(spaceId)],
-    queryFn: ({ signal }) => fetchTopicFeedSlice({ topicId: entityId, spaceId, typeId: DEBATE_TYPE_ID, signal }),
+    queryKey: ['live-topic-template', 'best-debates', ID.uuidToHex(entityId), ID.uuidToHex(spaceId), isSpaceHome],
+    queryFn: async ({ signal }) => {
+      if (isSpaceHome) {
+        const spaceDebates = await fetchTopicFeedSlice({
+          topicId: entityId,
+          spaceId,
+          typeId: DEBATE_TYPE_ID,
+          endpoint: 'space',
+          signal,
+        });
+        if (spaceDebates.length > 0) return spaceDebates;
+      }
+      return fetchTopicFeedSlice({ topicId: entityId, spaceId, typeId: DEBATE_TYPE_ID, signal });
+    },
     staleTime: 60_000,
   });
 
   const bestNewsQuery = useQuery({
-    queryKey: ['live-topic-template', 'best-news', ID.uuidToHex(entityId), ID.uuidToHex(spaceId)],
-    queryFn: ({ signal }) => fetchTopicFeedSlice({ topicId: entityId, spaceId, typeId: NEWS_STORY_TYPE_ID, signal }),
+    queryKey: ['live-topic-template', 'best-news', ID.uuidToHex(entityId), ID.uuidToHex(spaceId), isSpaceHome],
+    queryFn: async ({ signal }) => {
+      if (isSpaceHome) {
+        const spaceNews = await fetchTopicFeedSlice({
+          topicId: entityId,
+          spaceId,
+          typeId: NEWS_STORY_TYPE_ID,
+          endpoint: 'space',
+          signal,
+        });
+        if (spaceNews.length > 0) return spaceNews;
+      }
+      return fetchTopicFeedSlice({ topicId: entityId, spaceId, typeId: NEWS_STORY_TYPE_ID, signal });
+    },
     staleTime: 60_000,
   });
 

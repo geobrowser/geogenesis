@@ -36,6 +36,7 @@ export function LiveTopicTemplateView({
     entityId,
     spaceId,
     serverCoverUrl,
+    isSpaceHome: embedded,
   });
 
   if (isLoading) {
