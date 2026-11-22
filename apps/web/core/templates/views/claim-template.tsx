@@ -2,16 +2,20 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
 import Link from 'next/link';
 
 import {
   type ClaimKind,
   type ClaimTemplateModel,
+  type ClaimTopicPillModel,
   type EntityActionCallbacks,
   type StrongestCaseModel,
   type SubClaimModel,
   formatClaimKindLabel,
+  formatCompactCount,
 } from '../models';
+import { resolveTemplateImageUrl } from '../ontology';
 import {
   AddClaimPopover,
   CheckCircleIcon,
@@ -21,6 +25,7 @@ import {
   EntityOverflowMenu,
   GraphConnectionsStrip,
   InlinePagination,
+  RecentDebatesGallery,
   RelatedListSection,
   SourceChipList,
   SplitBars,
@@ -28,6 +33,8 @@ import {
   TemplateBadge,
   type TemplateBadgeTone,
   TemplateShell,
+  ThumbDownIcon,
+  ThumbUpIcon,
   VoteBox,
 } from '../primitives';
 
@@ -67,7 +74,7 @@ export function ClaimTemplate({
 }: ClaimTemplateProps) {
   return (
     <TemplateShell
-      maxWidth={860}
+      maxWidth={980}
       breadcrumbs={model.breadcrumbs}
       coverUrl={model.coverUrl}
       coverAlt={model.title}
@@ -102,14 +109,6 @@ export function ClaimTemplate({
       {/* Vote box + community split bars */}
       <VoteBox split={model.split} control={model.voteBox} />
 
-      {/* Context relations & Flags (always rendered even when empty) */}
-      <GraphConnectionsStrip
-        groups={model.graphConnections ?? []}
-        target={{ id: model.id, kind: 'Claim', title: model.title }}
-      />
-
-      <EntityFlagsSection target={{ id: model.id, kind: 'Claim', title: model.title }} />
-
       {/* Accepted basis (clean soft-shadow editorial panel) */}
       {model.agreedBasis && (
         <section aria-label="Accepted" className={`flex flex-col gap-4 p-5 @[560px]:p-6 ${TEMPLATE_CARD_SURFACE}`}>
@@ -135,7 +134,7 @@ export function ClaimTemplate({
         </section>
       )}
 
-      {/* Supporting, Opposing, and Related claims */}
+      {/* Supporting, Opposing, and Related claims (prominent, with Topic-style vote actions & bars) */}
       {model.subClaims && model.subClaims.length > 0 && (
         <GroupedSubClaimSections subClaims={model.subClaims} onAddClaim={actionCallbacks?.onAddClaim} />
       )}
@@ -152,7 +151,20 @@ export function ClaimTemplate({
         </section>
       )}
 
-      {/* Related entity lists (Parent claim, Events, In the news, Sources, Debates, Topics) */}
+      {/* Debates gallery row with debate cards */}
+      {model.debates && model.debates.length > 0 && (
+        <RecentDebatesGallery
+          debates={model.debates}
+          title="Debates"
+          seeAllHref={model.debatesHref}
+          onSeeAll={model.onOpenDebates}
+        />
+      )}
+
+      {/* Topics pills with circular thumbnail images */}
+      {model.topics && model.topics.length > 0 && <ClaimTopicsSection topics={model.topics} />}
+
+      {/* Related entity lists (Parent claim, Supporting quotes, Sources, More claims in this topic) */}
       {model.sections.length > 0 && (
         <div className="flex flex-col gap-8">
           {model.sections.map(section => (
@@ -160,6 +172,14 @@ export function ClaimTemplate({
           ))}
         </div>
       )}
+
+      {/* Context relations & Disputes (always rendered at the bottom of the page) */}
+      <GraphConnectionsStrip
+        groups={model.graphConnections ?? []}
+        target={{ id: model.id, kind: 'Claim', title: model.title }}
+      />
+
+      <EntityFlagsSection target={{ id: model.id, kind: 'Claim', title: model.title }} />
 
       {footer}
     </TemplateShell>
@@ -188,6 +208,80 @@ function DebateCountLink({ count, href, onSelect }: { count: number; href?: stri
   }
 
   return <span className="ml-1 text-[14px] text-grey-04">{text}</span>;
+}
+
+const INITIAL_VISIBLE_TOPICS = 9;
+
+function TopicPillThumbnail({ label, imageUrl }: { label: string; imageUrl?: string | null }) {
+  const resolved = resolveTemplateImageUrl(imageUrl);
+  const [failed, setFailed] = React.useState(false);
+
+  React.useEffect(() => {
+    setFailed(false);
+  }, [resolved]);
+
+  const initial = label.trim()[0]?.toUpperCase() ?? '';
+
+  return (
+    <span className="relative inline-grid size-5 shrink-0 place-items-center overflow-hidden rounded-full bg-grey-01 text-[10px] font-semibold text-grey-04">
+      {resolved && !failed ? (
+        <img
+          src={resolved}
+          alt=""
+          loading="lazy"
+          onError={() => setFailed(true)}
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <span>{initial}</span>
+      )}
+    </span>
+  );
+}
+
+function ClaimTopicsSection({ topics }: { topics: readonly ClaimTopicPillModel[] }) {
+  const [showAll, setShowAll] = React.useState(false);
+  const visible = showAll ? topics : topics.slice(0, INITIAL_VISIBLE_TOPICS);
+  const hidden = Math.max(0, topics.length - INITIAL_VISIBLE_TOPICS);
+
+  const pillClasses =
+    'inline-flex max-w-full items-center gap-2 rounded-full border border-grey-02 bg-white py-1.5 pr-3 pl-2 text-[14.5px] leading-[18px] font-medium text-text no-underline transition-colors hover:border-text';
+
+  return (
+    <section aria-label="Topics" className="flex flex-col gap-3.5">
+      <h2 className="m-0 text-mediumTitle font-semibold text-text">Topics</h2>
+      <div className="flex flex-wrap items-center gap-2">
+        {visible.map(topic =>
+          topic.href ? (
+            <Link key={topic.id} href={topic.href} className={pillClasses}>
+              <TopicPillThumbnail label={topic.label} imageUrl={topic.imageUrl} />
+              <span className="min-w-0 truncate">{topic.label}</span>
+            </Link>
+          ) : topic.onSelect ? (
+            <button key={topic.id} type="button" onClick={topic.onSelect} className={cx(pillClasses, 'cursor-pointer')}>
+              <TopicPillThumbnail label={topic.label} imageUrl={topic.imageUrl} />
+              <span className="min-w-0 truncate">{topic.label}</span>
+            </button>
+          ) : (
+            <span key={topic.id} className={pillClasses}>
+              <TopicPillThumbnail label={topic.label} imageUrl={topic.imageUrl} />
+              <span className="min-w-0 truncate">{topic.label}</span>
+            </span>
+          )
+        )}
+        {hidden > 0 && (
+          <button
+            type="button"
+            aria-expanded={showAll}
+            onClick={() => setShowAll(prev => !prev)}
+            className="inline-flex cursor-pointer items-center rounded-full border border-grey-02 bg-white px-3 py-1.5 text-[14px] leading-[18px] font-medium text-grey-04 transition-colors hover:border-text hover:text-text"
+          >
+            {showAll ? 'Show less' : `Show ${hidden} more`}
+          </button>
+        )}
+      </div>
+    </section>
+  );
 }
 
 const SUBCLAIMS_PER_PAGE = 6;
@@ -232,7 +326,8 @@ function GroupedSubClaimSections({
       {sections.map(section => {
         const totalPages = Math.max(1, Math.ceil(section.items.length / SUBCLAIMS_PER_PAGE));
         const safePage = Math.min(pagesBySection[section.id] ?? 1, totalPages);
-        const visibleItems = section.items.slice((safePage - 1) * SUBCLAIMS_PER_PAGE, safePage * SUBCLAIMS_PER_PAGE);
+        const startIndex = (safePage - 1) * SUBCLAIMS_PER_PAGE;
+        const visibleItems = section.items.slice(startIndex, startIndex + SUBCLAIMS_PER_PAGE);
 
         return (
           <section key={section.id} aria-label={section.title} className="flex flex-col gap-4">
@@ -259,8 +354,8 @@ function GroupedSubClaimSections({
               />
             </div>
             <div className={`divide-y divide-divider overflow-hidden ${TEMPLATE_CARD_SURFACE}`}>
-              {visibleItems.map(subClaim => (
-                <SubClaimRow key={subClaim.id} subClaim={subClaim} />
+              {visibleItems.map((subClaim, idx) => (
+                <SubClaimRow key={subClaim.id} rank={startIndex + idx + 1} subClaim={subClaim} />
               ))}
               {totalPages > 1 && (
                 <div className="px-5 py-3">
@@ -281,60 +376,139 @@ function GroupedSubClaimSections({
   );
 }
 
-function SubClaimRow({ subClaim }: { subClaim: SubClaimModel }) {
-  const hasBars = subClaim.split.rows.length > 0;
+function SubClaimRow({ rank, subClaim }: { rank: number; subClaim: SubClaimModel }) {
+  const totalVotes = subClaim.split.totalVotes;
+  const voteCountLabel =
+    totalVotes !== undefined && totalVotes > 0
+      ? `${formatCompactCount(totalVotes)} ${totalVotes === 1 ? 'vote' : 'votes'}`
+      : '0 votes';
+
+  const handleVoteClick = (choice: 'agree' | 'disagree') => {
+    if (!subClaim.onVote) return;
+    if (subClaim.userVote === choice && subClaim.onClearVote) {
+      subClaim.onClearVote();
+      return;
+    }
+    subClaim.onVote(choice);
+  };
 
   return (
-    <article
-      className={
-        hasBars
-          ? 'grid grid-cols-1 items-start gap-4 p-5 @[680px]:grid-cols-[minmax(0,1fr)_304px] @[680px]:gap-6 @[680px]:p-6'
-          : 'flex items-start justify-between gap-4 p-5 @[680px]:p-6'
-      }
-    >
-      <div className="flex min-w-0 flex-1 flex-col gap-2">
-        {subClaim.href ? (
-          <Link
-            href={subClaim.href}
-            className="text-[17px] leading-[23px] font-semibold text-text no-underline hover:text-[#4c1fd4]"
-          >
-            {subClaim.title}
-          </Link>
-        ) : subClaim.onSelect ? (
-          <button
-            type="button"
-            onClick={subClaim.onSelect}
-            className="cursor-pointer border-0 bg-transparent p-0 text-left text-[17px] leading-[23px] font-semibold text-text hover:text-[#4c1fd4]"
-          >
-            {subClaim.title}
-          </button>
-        ) : (
-          <h3 className="m-0 text-[17px] leading-[23px] font-semibold text-text">{subClaim.title}</h3>
-        )}
+    <article className="flex flex-col gap-3 px-5 py-4 transition-colors hover:bg-grey-01/40 @[760px]:flex-row @[760px]:items-center @[760px]:justify-between @[760px]:gap-6">
+      <div className="flex min-w-0 flex-1 items-start gap-4">
+        <span className="w-6 shrink-0 pt-0.5 text-center text-[15px] font-medium text-grey-04 tabular-nums">
+          {rank}
+        </span>
 
-        {subClaim.kind && (
-          <div>
-            <TemplateBadge tone={CLAIM_KIND_TONE[subClaim.kind]} className="!h-6 !px-2 !text-[12.5px]">
-              {formatClaimKindLabel(subClaim.kind)}
-            </TemplateBadge>
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
+          {subClaim.href ? (
+            <Link
+              href={subClaim.href}
+              className="text-[16px] leading-[22px] font-semibold text-pretty text-text no-underline transition-colors hover:text-[#4c1fd4]"
+            >
+              {subClaim.title}
+            </Link>
+          ) : subClaim.onSelect ? (
+            <button
+              type="button"
+              onClick={subClaim.onSelect}
+              className="cursor-pointer border-0 bg-transparent p-0 text-left text-[16px] leading-[22px] font-semibold text-pretty text-text transition-colors hover:text-[#4c1fd4]"
+            >
+              {subClaim.title}
+            </button>
+          ) : (
+            <h3 className="m-0 text-[16px] leading-[22px] font-semibold text-pretty text-text">{subClaim.title}</h3>
+          )}
+
+          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2">
+            {subClaim.kind && (
+              <TemplateBadge tone={CLAIM_KIND_TONE[subClaim.kind]} className="!h-6 !px-2 !text-[12.5px]">
+                {formatClaimKindLabel(subClaim.kind)}
+              </TemplateBadge>
+            )}
+
+            {subClaim.onVote && (
+              <div className="inline-flex items-center gap-1.5" role="group" aria-label={`Vote on ${subClaim.title}`}>
+                <button
+                  type="button"
+                  aria-pressed={subClaim.userVote === 'agree'}
+                  onClick={() => handleVoteClick('agree')}
+                  className={cx(
+                    'inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full border px-2.5 text-[13px] font-medium whitespace-nowrap transition-colors',
+                    subClaim.userVote === 'agree'
+                      ? 'border-text bg-text text-white'
+                      : 'border-grey-02 bg-white text-text hover:border-text'
+                  )}
+                >
+                  <ThumbUpIcon className="size-3.5 shrink-0" />
+                  <span>Agree</span>
+                  {subClaim.agreeCount !== undefined && subClaim.agreeCount > 0 && (
+                    <span
+                      className={cx(
+                        'text-[12px] tabular-nums',
+                        subClaim.userVote === 'agree' ? 'text-white/80' : 'text-grey-04'
+                      )}
+                    >
+                      {formatCompactCount(subClaim.agreeCount)}
+                    </span>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  aria-pressed={subClaim.userVote === 'disagree'}
+                  onClick={() => handleVoteClick('disagree')}
+                  className={cx(
+                    'inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full border px-2.5 text-[13px] font-medium whitespace-nowrap transition-colors',
+                    subClaim.userVote === 'disagree'
+                      ? 'border-text bg-text text-white'
+                      : 'border-grey-02 bg-white text-text hover:border-text'
+                  )}
+                >
+                  <ThumbDownIcon className="size-3.5 shrink-0" />
+                  <span>Disagree</span>
+                  {subClaim.disagreeCount !== undefined && subClaim.disagreeCount > 0 && (
+                    <span
+                      className={cx(
+                        'text-[12px] tabular-nums',
+                        subClaim.userVote === 'disagree' ? 'text-white/80' : 'text-grey-04'
+                      )}
+                    >
+                      {formatCompactCount(subClaim.disagreeCount)}
+                    </span>
+                  )}
+                </button>
+              </div>
+            )}
+
+            {subClaim.debateCount !== undefined && subClaim.debateCount > 0 && (
+              <DebateCountLink count={subClaim.debateCount} href={subClaim.debatesHref} />
+            )}
+          </div>
+
+          {subClaim.stat && <p className="m-0 text-[14.5px] leading-[21px] text-grey-04">{subClaim.stat}</p>}
+
+          {subClaim.sources.length > 0 && <SourceChipList sources={subClaim.sources} className="pt-0.5" />}
+
+          <EntityInlineContext targetId={subClaim.id} targetTitle={subClaim.title} targetKind="Claim" />
+        </div>
+      </div>
+
+      <div className="flex shrink-0 items-center gap-3 pl-10 @[760px]:pl-0">
+        {subClaim.split.rows.length > 0 ? (
+          <SplitBars rows={subClaim.split.rows} density="compact" className="w-[240px] shrink-0" />
+        ) : (
+          <div className="hidden w-[240px] shrink-0 items-center gap-2 @[760px]:flex">
+            <div className="h-[5px] flex-1 overflow-hidden rounded-full bg-grey-01" />
+            <span className="w-[38px] text-right text-[12.5px] text-grey-03 tabular-nums">—</span>
           </div>
         )}
 
-        {subClaim.stat && <p className="m-0 text-[15px] leading-[22px] text-grey-04">{subClaim.stat}</p>}
+        <span className="w-[68px] shrink-0 text-right text-[13px] whitespace-nowrap text-grey-04 tabular-nums">
+          {voteCountLabel}
+        </span>
 
-        {subClaim.sources.length > 0 && <SourceChipList sources={subClaim.sources} className="pt-0.5" />}
-
-        <EntityInlineContext targetId={subClaim.id} targetTitle={subClaim.title} targetKind="Claim" />
+        <EntityOverflowMenu target={{ id: subClaim.id, kind: 'Claim', title: subClaim.title }} />
       </div>
-
-      {hasBars ? (
-        <div className="flex items-start justify-between gap-2 @[680px]:pt-1">
-          <SplitBars rows={subClaim.split.rows} density="compact" className="min-w-0 flex-1" />
-          <EntityOverflowMenu target={{ id: subClaim.id, kind: 'Claim', title: subClaim.title }} />
-        </div>
-      ) : (
-        <EntityOverflowMenu target={{ id: subClaim.id, kind: 'Claim', title: subClaim.title }} className="shrink-0" />
-      )}
     </article>
   );
 }

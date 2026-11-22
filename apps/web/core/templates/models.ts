@@ -241,6 +241,13 @@ export interface SubClaimModel {
   stance?: ClaimStance;
   stat?: string;
   split: SplitBreakdown;
+  agreeCount?: number;
+  disagreeCount?: number;
+  debateCount?: number;
+  debatesHref?: string;
+  userVote?: VoteChoice;
+  onVote?: (choice: Exclude<VoteChoice, null>) => void;
+  onClearVote?: () => void;
   sources: readonly SourceChipModel[];
   href?: string;
   onSelect?: () => void;
@@ -302,6 +309,14 @@ export interface ContextPeekItemModel {
   onOpenFull?: () => void;
 }
 
+export interface ClaimTopicPillModel {
+  id: string;
+  label: string;
+  imageUrl?: string | null;
+  href?: string;
+  onSelect?: () => void;
+}
+
 export interface ClaimTemplateModel {
   id: string;
   title: string;
@@ -313,6 +328,10 @@ export interface ClaimTemplateModel {
   debateCount?: number;
   debatesHref?: string;
   onOpenDebates?: () => void;
+  /** Horizontal gallery row of debate cards on this claim. */
+  debates?: readonly TopicRecentDebateModel[];
+  /** Topics rendered as rounded pills with circular thumbnail images. */
+  topics?: readonly ClaimTopicPillModel[];
   graphConnections?: readonly GraphConnectionGroupModel[];
   keyStat?: {
     text: string;

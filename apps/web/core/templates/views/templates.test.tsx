@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 
 import * as React from 'react';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { type GazaFixtureRoute, useGazaFixtureTemplates } from '../adapters/gaza-fixture';
 import type { TopicTemplateModel } from '../models';
@@ -274,9 +274,9 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
       name: /Context for Israel’s oral arguments at the ICJ/i,
     });
     expect(within(viewerDrawer).getByRole('region', { name: 'Context' })).toBeInTheDocument();
-    expect(within(viewerDrawer).getByRole('region', { name: 'Flags' })).toBeInTheDocument();
+    expect(within(viewerDrawer).getByRole('region', { name: 'Disputes' })).toBeInTheDocument();
     expect(within(viewerDrawer).queryByText(/Context \(\d+\)/)).toBeNull();
-    expect(within(viewerDrawer).queryByText(/Flags \(\d+\)/)).toBeNull();
+    expect(within(viewerDrawer).queryByText(/Disputes \(\d+\)/)).toBeNull();
     expect(within(viewerDrawer).getByText('Outcome')).toBeInTheDocument();
     expect(within(viewerDrawer).getByText('Court declined dismissal')).toBeInTheDocument();
 
@@ -316,14 +316,14 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     expect(within(refreshedDrawer).queryByText('Court declined dismissal')).toBeNull();
     fireEvent.click(within(refreshedDrawer).getByRole('button', { name: 'Close' }));
 
-    // Verify Agree / Disagree buttons on a Flag inside the Context drawer
+    // Verify Agree / Disagree buttons on a Dispute inside the Context drawer
     fireEvent.click(
-      within(claims).getByRole('button', { name: /Show 1 flag for Israel is committing genocide in Gaza/i })
+      within(claims).getByRole('button', { name: /Show 1 dispute for Israel is committing genocide in Gaza/i })
     );
     const claimContextDrawer = screen.getByRole('dialog', {
       name: /Context for Israel is committing genocide in Gaza/i,
     });
-    const flagVoteGroup = within(claimContextDrawer).getByRole('group', { name: 'Vote on flag' });
+    const flagVoteGroup = within(claimContextDrawer).getByRole('group', { name: 'Vote on dispute' });
     const flagAgree = within(flagVoteGroup).getByRole('button', { name: 'Agree' });
     fireEvent.click(flagAgree);
     expect(flagAgree).toHaveAttribute('aria-pressed', 'true');
@@ -335,7 +335,7 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     });
     fireEvent.click(sourceMenuTrigger);
     expect(screen.getByRole('menuitem', { name: /Show context/i })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: 'Flag' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Dispute' })).toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: 'Challenge' })).toBeNull();
     fireEvent.click(screen.getByRole('menuitem', { name: 'Add context' }));
 
@@ -442,7 +442,7 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     expect(screen.getByRole('link', { name: /Spotify/i })).toHaveAttribute('href', 'https://open.spotify.com/show/1');
     expect(screen.getByText('Michael Barbaro')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Context' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Flags' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Disputes' })).toBeInTheDocument();
 
     const filter = screen.getByRole('searchbox', { name: 'Filter episodes' });
     fireEvent.change(filter, { target: { value: 'Semiconductor' } });
@@ -496,7 +496,7 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     expect(screen.getByRole('link', { name: /Luke Vargas/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Shelby Holliday/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Context' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Flags' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Disputes' })).toBeInTheDocument();
 
     // Toggle inline audio player
     fireEvent.click(screen.getByRole('button', { name: /Play episode/i }));
@@ -531,5 +531,117 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     expect(screen.queryByText('Artificial intelligence space description')).toBeNull();
     expect(screen.getByRole('link', { name: 'AI Regulation' })).toBeInTheDocument();
     expect(screen.getByText('We should slow down AI development')).toBeInTheDocument();
+  });
+
+  it('orders ClaimTemplate with Supporting/Opposing vote rows high up, Debates gallery, Topic image pills, and Context/Disputes at the bottom', () => {
+    const onSubClaimVote = vi.fn();
+    render(
+      <ClaimTemplate
+        model={{
+          id: 'claim-ai-slowdown',
+          title: 'We should slow down AI development',
+          kind: 'judgment',
+          split: {
+            rows: [{ id: 'all', label: 'All spaces', color: '#202020', percent: 57, isEveryone: true }],
+            isSplit: true,
+            totalVotes: 28,
+          },
+          voteBox: {
+            userVote: null,
+            countSummary: '28 votes',
+            onVote: vi.fn(),
+          },
+          subClaims: [
+            {
+              id: 'sub-support-1',
+              title: 'Safety evaluations lag behind frontier model capabilities.',
+              kind: 'fact',
+              stance: 'supports',
+              agreeCount: 14,
+              disagreeCount: 3,
+              split: {
+                rows: [{ id: 'all', label: 'All spaces', color: '#202020', percent: 82, isEveryone: true }],
+                isSplit: false,
+                totalVotes: 17,
+              },
+              sources: [],
+              onVote: onSubClaimVote,
+            },
+            {
+              id: 'sub-oppose-1',
+              title: 'A slowdown would delay medical and scientific breakthroughs.',
+              kind: 'judgment',
+              stance: 'opposes',
+              agreeCount: 9,
+              disagreeCount: 6,
+              split: {
+                rows: [{ id: 'all', label: 'All spaces', color: '#202020', percent: 60, isEveryone: true }],
+                isSplit: true,
+                totalVotes: 15,
+              },
+              sources: [],
+            },
+          ],
+          debates: [
+            {
+              id: 'deb-1',
+              claimId: 'claim-ai-slowdown',
+              claimTitle: 'We should slow down AI development',
+              date: 'Sep 12, 2025',
+              duration: '24 min',
+              votesLabel: '28 votes',
+              participants: [
+                { name: 'Max Tegmark', position: 'Agree', communityColor: '#3963fe', avatarUrl: '/still-1.jpg' },
+                { name: 'Yann LeCun', position: 'Disagree', communityColor: '#6833ff', avatarUrl: '/still-2.jpg' },
+              ],
+              href: '/space/s/deb-1',
+            },
+          ],
+          topics: [
+            {
+              id: 'top-1',
+              label: 'AI Safety',
+              imageUrl: '/topic-ai-safety.png',
+              href: '/space/s/top-1',
+            },
+          ],
+          graphConnections: [
+            {
+              predicate: 'Space',
+              items: [{ id: 'v1', label: 'AI', kind: 'topic' }],
+            },
+          ],
+          sections: [],
+        }}
+      />
+    );
+
+    const supporting = screen.getByRole('region', { name: 'Supporting claims' });
+    const opposing = screen.getByRole('region', { name: 'Opposing claims' });
+    const debates = screen.getByRole('region', { name: 'Debates' });
+    const topics = screen.getByRole('region', { name: 'Topics' });
+    const context = screen.getByRole('region', { name: 'Context' });
+    const disputes = screen.getByRole('region', { name: 'Disputes' });
+
+    expect(supporting.compareDocumentPosition(opposing) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(opposing.compareDocumentPosition(debates) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(debates.compareDocumentPosition(topics) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(topics.compareDocumentPosition(context) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(context.compareDocumentPosition(disputes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    // Sub-claims render inline Agree/Disagree vote actions
+    const subVoteGroup = within(supporting).getByRole('group', {
+      name: /Vote on Safety evaluations lag behind frontier model capabilities\./i,
+    });
+    fireEvent.click(within(subVoteGroup).getByRole('button', { name: /^Agree/i }));
+    expect(onSubClaimVote).toHaveBeenCalledWith('agree');
+
+    // Topics render pills with circular images
+    const topicLink = within(topics).getByRole('link', { name: 'AI Safety' });
+    expect(topicLink).toHaveAttribute('href', '/space/s/top-1');
+    expect(topicLink.querySelector('img')).toHaveAttribute('src', '/topic-ai-safety.png');
+
+    // Disputes empty state copy
+    expect(within(disputes).getByText('No disputes')).toBeInTheDocument();
   });
 });

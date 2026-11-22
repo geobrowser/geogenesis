@@ -247,8 +247,8 @@ describe('TemplateBreadcrumb', () => {
   });
 });
 
-describe('Context & Flags empty states, inline pill +, and pagination', () => {
-  it('renders empty Context and Flags sections cleanly and paginates when rows exceed page size', () => {
+describe('Context & Disputes empty states, inline pill +, and pagination', () => {
+  it('renders empty Context and Disputes sections cleanly and paginates when rows exceed page size', () => {
     const target = { id: 'e-pag', kind: 'Claim', title: 'Paginated claim' };
     const manyGroups = Array.from({ length: 7 }, (_, i) => ({
       predicate: `Relation ${i + 1}`,
@@ -263,7 +263,7 @@ describe('Context & Flags empty states, inline pill +, and pagination', () => {
     );
 
     expect(screen.getByText('No context added yet.')).toBeInTheDocument();
-    expect(screen.getByText('No flags yet.')).toBeInTheDocument();
+    expect(screen.getByText('No disputes')).toBeInTheDocument();
 
     // Clicking `+` on Context opens an anchored popover (no full-screen modal) and adds triples
     fireEvent.click(screen.getByRole('button', { name: 'Add context' }));
@@ -274,12 +274,12 @@ describe('Context & Flags empty states, inline pill +, and pagination', () => {
     expect(screen.getByText('Jurisdiction')).toBeInTheDocument();
     expect(screen.getByText('ICJ')).toBeInTheDocument();
 
-    // Clicking `+` on Flags opens an anchored popover and submits a flag
-    fireEvent.click(screen.getByRole('button', { name: 'Flag' }));
-    fireEvent.change(screen.getByLabelText(/Why are you flagging this/i), {
+    // Clicking `+` on Disputes opens an anchored popover and submits a dispute
+    fireEvent.click(screen.getByRole('button', { name: 'Add dispute' }));
+    fireEvent.change(screen.getByLabelText(/Why are you disputing this/i), {
       target: { value: 'Needs primary source citation for this timeline.' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Submit flag' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Submit dispute' }));
     expect(screen.getByText(/Needs primary source citation for this timeline/i)).toBeInTheDocument();
 
     rerender(

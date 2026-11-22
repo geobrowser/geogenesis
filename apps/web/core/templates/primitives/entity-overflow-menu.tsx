@@ -514,8 +514,8 @@ export function AddFlagPopover({
       <Popover.Trigger asChild>
         <button
           type="button"
-          aria-label="Flag"
-          title="Add flag"
+          aria-label="Add dispute"
+          title="Add dispute"
           onClick={event => event.stopPropagation()}
           className={cx(
             'inline-grid size-7 cursor-pointer place-items-center border-0 bg-transparent text-grey-04 transition-colors hover:text-text',
@@ -538,12 +538,12 @@ export function AddFlagPopover({
           <div className="flex items-center justify-between gap-2">
             <span className="inline-flex items-center gap-1.5 text-[13.5px] font-semibold text-text">
               <FlagIcon className="size-3.5 text-grey-04" />
-              <span>Add flag</span>
+              <span>Add dispute</span>
             </span>
             <button
               type="button"
               onClick={() => setOpen(false)}
-              aria-label="Close add flag"
+              aria-label="Close add dispute"
               className="inline-grid size-6 cursor-pointer place-items-center border-0 bg-transparent text-grey-04 hover:text-text"
             >
               <CloseIcon className="size-3.5" />
@@ -571,7 +571,7 @@ export function AddFlagPopover({
             </div>
 
             <label className="flex flex-col gap-1">
-              <span className="text-[12.5px] font-medium text-grey-04">Why are you flagging this?</span>
+              <span className="text-[12.5px] font-medium text-grey-04">Why are you disputing this?</span>
               <textarea
                 rows={3}
                 autoFocus
@@ -606,7 +606,7 @@ export function AddFlagPopover({
                 disabled={body.trim().length < 5}
                 className="inline-flex h-8 cursor-pointer items-center rounded-full border border-text bg-text px-3.5 text-[13px] font-medium text-white disabled:opacity-40"
               >
-                Submit flag
+                Submit dispute
               </button>
             </div>
           </form>
@@ -1740,12 +1740,12 @@ export function EntityActionProvider({
               )}
             </section>
 
-            {/* Flags section with real section header & right-aligned borderless + anchored popover */}
-            <section aria-label="Flags" className="flex flex-col gap-3">
+            {/* Disputes section with real section header & right-aligned borderless + anchored popover */}
+            <section aria-label="Disputes" className="flex flex-col gap-3">
               <div className="flex items-center justify-between gap-2">
                 <h4 className="m-0 inline-flex items-center gap-2 text-[17px] leading-[22px] font-semibold text-text">
                   <FlagIcon className="size-4 text-grey-04" />
-                  <span>Flags</span>
+                  <span>Disputes</span>
                 </h4>
                 <AddFlagPopover onSubmit={draft => addFlag(activePaneTarget.id, draft)} />
               </div>
@@ -1762,7 +1762,7 @@ export function EntityActionProvider({
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-text">
                             <FlagIcon className="size-3.5 text-grey-04" />
-                            <span>{flag.reason ?? 'Flagged'}</span>
+                            <span>{flag.reason ?? 'Disputed'}</span>
                           </span>
 
                           {flag.helpfulPercent !== undefined && (
@@ -1786,7 +1786,7 @@ export function EntityActionProvider({
                           </a>
                         )}
 
-                        <div className="flex items-center gap-1.5 pt-1" role="group" aria-label="Vote on flag">
+                        <div className="flex items-center gap-1.5 pt-1" role="group" aria-label="Vote on dispute">
                           <button
                             type="button"
                             aria-pressed={vote === 'agree'}
@@ -1823,11 +1823,11 @@ export function EntityActionProvider({
                     page={safeFlagPage}
                     totalPages={flagTotalPages}
                     onPageChange={setFlagPage}
-                    label="Flags pages"
+                    label="Disputes pages"
                   />
                 </div>
               ) : (
-                <p className="m-0 text-[14px] text-grey-04">No flags yet.</p>
+                <p className="m-0 text-[14px] text-grey-04">No disputes</p>
               )}
             </section>
           </div>
@@ -1843,7 +1843,9 @@ export function EntityActionProvider({
             role="dialog"
             aria-modal="true"
             aria-label={
-              composer.action === 'flag' ? `Flag ${composer.target.title}` : `Add context to ${composer.target.title}`
+              composer.action === 'flag'
+                ? `Dispute ${composer.target.title}`
+                : `Add context to ${composer.target.title}`
             }
             className="rounded-2xl relative z-10 flex w-full max-w-[480px] flex-col gap-4 border border-black/[0.06] bg-white p-6 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.18)]"
           >
@@ -1853,7 +1855,7 @@ export function EntityActionProvider({
                   {composer.action === 'flag' ? (
                     <>
                       <FlagIcon className="size-3.5 text-grey-04" />
-                      <span>Flag · {composer.target.kind}</span>
+                      <span>Dispute · {composer.target.kind}</span>
                     </>
                   ) : (
                     <>
@@ -1942,7 +1944,7 @@ export function EntityActionProvider({
                   </div>
 
                   <label className="flex flex-col gap-1.5">
-                    <span className="text-[13.5px] font-medium text-text">Why are you flagging this?</span>
+                    <span className="text-[13.5px] font-medium text-text">Why are you disputing this?</span>
                     <textarea
                       rows={3}
                       value={flagBody}
@@ -1982,7 +1984,7 @@ export function EntityActionProvider({
                   }
                   className="inline-flex h-9 cursor-pointer items-center rounded-full border border-text bg-text px-4 text-[14px] font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  {composer.action === 'flag' ? 'Submit flag' : 'Add context'}
+                  {composer.action === 'flag' ? 'Submit dispute' : 'Add context'}
                 </button>
               </div>
             </form>
@@ -2042,14 +2044,14 @@ export function EntityInlineContext({
             <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-text">
                 <FlagIcon className="size-3 text-grey-04" />
-                <span>{flag.reason ?? 'Flagged'}</span>
+                <span>{flag.reason ?? 'Disputed'}</span>
               </span>
               {flag.helpfulPercent !== undefined && (
                 <span className="text-[12px] text-grey-04 tabular-nums">{flag.helpfulPercent}% agree</span>
               )}
             </div>
             <p className="m-0 text-text/85">{flag.body}</p>
-            <div className="flex items-center gap-1.5 pt-0.5" role="group" aria-label="Vote on flag">
+            <div className="flex items-center gap-1.5 pt-0.5" role="group" aria-label="Vote on dispute">
               <button
                 type="button"
                 aria-pressed={vote === 'agree'}
@@ -2101,9 +2103,9 @@ export function EntityFlagsSection({ target, className }: { target: EntityAction
   const visibleFlags = flags.slice((safePage - 1) * FLAGS_PER_PAGE, safePage * FLAGS_PER_PAGE);
 
   return (
-    <section aria-label="Flags" className={cx('flex flex-col gap-4', className)}>
+    <section aria-label="Disputes" className={cx('flex flex-col gap-4', className)}>
       <div className="flex items-center justify-between gap-3">
-        <h2 className="m-0 text-mediumTitle font-semibold text-text">Flags</h2>
+        <h2 className="m-0 text-mediumTitle font-semibold text-text">Disputes</h2>
         {ctx && <AddFlagPopover onSubmit={draft => ctx.addFlag(target.id, draft)} />}
       </div>
 
@@ -2120,7 +2122,7 @@ export function EntityFlagsSection({ target, className }: { target: EntityAction
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-text">
                       <FlagIcon className="size-3.5 text-grey-04" />
-                      <span>{flag.reason ?? 'Flagged'}</span>
+                      <span>{flag.reason ?? 'Disputed'}</span>
                     </span>
                     {flag.helpfulPercent !== undefined && (
                       <span className="text-[12.5px] text-grey-04 tabular-nums">{flag.helpfulPercent}% agree</span>
@@ -2142,7 +2144,7 @@ export function EntityFlagsSection({ target, className }: { target: EntityAction
                   )}
 
                   {ctx && (
-                    <div className="flex items-center gap-1.5 pt-0.5" role="group" aria-label="Vote on flag">
+                    <div className="flex items-center gap-1.5 pt-0.5" role="group" aria-label="Vote on dispute">
                       <button
                         type="button"
                         aria-pressed={vote === 'agree'}
@@ -2176,10 +2178,10 @@ export function EntityFlagsSection({ target, className }: { target: EntityAction
                 </article>
               );
             })}
-            <InlinePagination page={safePage} totalPages={totalPages} onPageChange={setPage} label="Flags pages" />
+            <InlinePagination page={safePage} totalPages={totalPages} onPageChange={setPage} label="Disputes pages" />
           </div>
         ) : (
-          <p className="m-0 text-[14px] text-grey-04">No flags yet.</p>
+          <p className="m-0 text-[14px] text-grey-04">No disputes</p>
         )}
       </div>
     </section>
@@ -2305,8 +2307,8 @@ export function EntityOverflowMenu({
             event.stopPropagation();
             ctx?.openViewer(target);
           }}
-          aria-label={`Show ${flagCount} ${flagCount === 1 ? 'flag' : 'flags'} for ${target.title}`}
-          title={`${flagCount} ${flagCount === 1 ? 'flag' : 'flags'}`}
+          aria-label={`Show ${flagCount} ${flagCount === 1 ? 'dispute' : 'disputes'} for ${target.title}`}
+          title={`${flagCount} ${flagCount === 1 ? 'dispute' : 'disputes'}`}
           className="inline-flex h-6 cursor-pointer items-center gap-1 rounded-full border-0 bg-grey-01 px-2 text-[12px] font-medium whitespace-nowrap text-grey-05 tabular-nums transition-colors hover:bg-grey-02/70 hover:text-text"
         >
           <FlagIcon className="size-3 text-grey-04" />
@@ -2408,7 +2410,7 @@ export function EntityOverflowMenu({
             className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg border-0 bg-transparent px-2.5 py-2 text-left text-[14px] font-medium text-text transition-colors hover:bg-grey-01"
           >
             <FlagIcon className="size-4 text-grey-04" />
-            <span>Flag</span>
+            <span>Dispute</span>
           </button>
         </div>
       )}

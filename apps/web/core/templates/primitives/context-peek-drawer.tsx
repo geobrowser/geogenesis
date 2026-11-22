@@ -681,11 +681,11 @@ function PeekFlagsSection({ initialFlags }: { initialFlags: readonly EntityFlagM
   const visibleFlags = allFlags.slice((safePage - 1) * PEEK_FLAGS_PER_PAGE, safePage * PEEK_FLAGS_PER_PAGE);
 
   return (
-    <section aria-label="Flags" className="flex flex-col gap-3">
+    <section aria-label="Disputes" className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-2">
         <h4 className="m-0 inline-flex items-center gap-2 text-[17px] leading-[22px] font-semibold text-text">
           <FlagIcon className="size-4 text-grey-04" />
-          <span>Flags</span>
+          <span>Disputes</span>
         </h4>
         <AddFlagPopover
           onSubmit={draft => {
@@ -707,14 +707,14 @@ function PeekFlagsSection({ initialFlags }: { initialFlags: readonly EntityFlagM
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-text">
                     <FlagIcon className="size-3.5 text-grey-04" />
-                    <span>{flag.reason ?? 'Flagged'}</span>
+                    <span>{flag.reason ?? 'Disputed'}</span>
                   </span>
                   {flag.helpfulPercent !== undefined && (
                     <span className="text-[12px] text-grey-04 tabular-nums">{flag.helpfulPercent}% agree</span>
                   )}
                 </div>
                 <p className="m-0 text-[14px] leading-[20px] text-text/90">{flag.body}</p>
-                <div className="flex items-center gap-1.5 pt-0.5" role="group" aria-label="Vote on flag">
+                <div className="flex items-center gap-1.5 pt-0.5" role="group" aria-label="Vote on dispute">
                   <button
                     type="button"
                     aria-pressed={vote === 'agree'}
@@ -751,10 +751,10 @@ function PeekFlagsSection({ initialFlags }: { initialFlags: readonly EntityFlagM
               </article>
             );
           })}
-          <InlinePagination page={safePage} totalPages={totalPages} onPageChange={setPage} label="Flags pages" />
+          <InlinePagination page={safePage} totalPages={totalPages} onPageChange={setPage} label="Disputes pages" />
         </div>
       ) : (
-        <p className="m-0 text-[14px] text-grey-04">No flags yet.</p>
+        <p className="m-0 text-[14px] text-grey-04">No disputes</p>
       )}
     </section>
   );
