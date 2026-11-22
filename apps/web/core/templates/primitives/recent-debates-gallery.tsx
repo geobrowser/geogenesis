@@ -175,9 +175,11 @@ function RecentDebateGalleryCard({ debate }: { debate: TopicRecentDebateModel })
         <PlayIcon className="ml-0.5 size-4" />
       </span>
 
-      <span className="pointer-events-none absolute right-2.5 bottom-2.5 rounded-md bg-black/70 px-1.5 py-0.5 text-[12px] leading-[15px] font-medium text-white tabular-nums backdrop-blur-xs">
-        {debate.duration}
-      </span>
+      {debate.duration && (
+        <span className="pointer-events-none absolute right-2.5 bottom-2.5 rounded-md bg-black/70 px-1.5 py-0.5 text-[12px] leading-[15px] font-medium text-white tabular-nums backdrop-blur-xs">
+          {debate.duration}
+        </span>
+      )}
     </div>
   );
 
@@ -356,14 +358,16 @@ function SpeakerVideoStill({
         aria-hidden
         className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-black/65 to-transparent"
       />
-      <div className="pointer-events-none absolute bottom-2 left-2.5 flex items-center gap-1.5 rounded-full bg-black/55 px-2 py-0.5 text-[12px] leading-[16px] text-white backdrop-blur-xs">
-        <span
-          aria-hidden
-          className="inline-block size-2 shrink-0 rounded-full"
-          style={{ backgroundColor: participant.communityColor }}
-        />
-        <span className="font-medium">{participant.name}</span>
-        <span className="text-white/65">· {participant.position}</span>
+      <div className="pointer-events-none absolute right-2.5 bottom-2 left-2.5 flex max-w-[calc(100%-20px)] items-center gap-1.5 self-start">
+        <span className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-black/55 px-2 py-0.5 text-[12px] leading-[16px] text-white backdrop-blur-xs">
+          <span
+            aria-hidden
+            className="inline-block size-2 shrink-0 rounded-full"
+            style={{ backgroundColor: participant.communityColor }}
+          />
+          <span className="truncate font-medium">{participant.name}</span>
+          <span className="shrink-0 text-white/65">· {participant.position}</span>
+        </span>
       </div>
     </div>
   );

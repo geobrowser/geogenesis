@@ -51,7 +51,11 @@ export function TopicTemplate({
   const contested = model.contestedClaims ?? [];
   const agreed = model.agreedClaims ?? [];
   const [addedTimelineTurns, setAddedTimelineTurns] = React.useState<TopicTimelineHighlightModel[]>([]);
+  const [subtopicsExpanded, setSubtopicsExpanded] = React.useState(false);
   const timelineHighlights = [...addedTimelineTurns, ...(model.timelineHighlights ?? [])];
+  const subtopics = model.subtopics ?? [];
+  const visibleSubtopics = subtopicsExpanded ? subtopics : subtopics.slice(0, 10);
+  const hiddenSubtopicsCount = Math.max(0, subtopics.length - 10);
   const hasContextOrLive = (model.graphConnections && model.graphConnections.length > 0) || Boolean(actionCallbacks);
   const hasFlagsOrLive = Boolean(model.contextByEntityId?.[model.id]?.flags?.length) || Boolean(actionCallbacks);
 
@@ -88,6 +92,44 @@ export function TopicTemplate({
         </div>
 
         {model.lede && <p className="m-0 mt-1 max-w-[780px] text-[16.5px] leading-[25px] text-text/85">{model.lede}</p>}
+
+        {subtopics.length > 0 && (
+          <nav aria-label="Subtopics" className="mt-1 flex flex-wrap items-center gap-1.5">
+            {visibleSubtopics.map(sub =>
+              sub.href ? (
+                <Link
+                  key={sub.id}
+                  href={sub.href}
+                  className="inline-flex h-7 items-center rounded-md border border-divider bg-white px-2.5 text-[13.5px] font-medium text-text no-underline transition-colors hover:border-text hover:text-[#4c1fd4]"
+                >
+                  {sub.label}
+                </Link>
+              ) : sub.onSelect ? (
+                <button
+                  key={sub.id}
+                  type="button"
+                  onClick={sub.onSelect}
+                  className="inline-flex h-7 cursor-pointer items-center rounded-md border border-divider bg-white px-2.5 text-[13.5px] font-medium text-text transition-colors hover:border-text hover:text-[#4c1fd4]"
+                >
+                  {sub.label}
+                </button>
+              ) : (
+                <TemplateBadge key={sub.id} tone="neutral">
+                  {sub.label}
+                </TemplateBadge>
+              )
+            )}
+            {hiddenSubtopicsCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setSubtopicsExpanded(prev => !prev)}
+                className="inline-flex h-7 cursor-pointer items-center rounded-md border border-divider bg-grey-01 px-2.5 text-[13px] font-medium text-grey-04 transition-colors hover:border-text hover:text-text"
+              >
+                {subtopicsExpanded ? 'Show less' : `+${hiddenSubtopicsCount} more`}
+              </button>
+            )}
+          </nav>
+        )}
       </header>
 
       {/* Calm single-column Claims list with 2-tab switch (Disputed | Accepted) */}
@@ -209,7 +251,7 @@ function TimelineHighlightRow({
         >
           {turn.title}
         </span>
-        {turn.summary && <span className="text-[15px] leading-[22px] text-grey-04">{turn.summary}</span>}
+        {turn.summary && <span className="line-clamp-2 text-[15px] leading-[22px] text-grey-04">{turn.summary}</span>}
       </span>
 
       {isInteractive && (

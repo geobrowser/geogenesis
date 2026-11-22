@@ -5,7 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 import Link from 'next/link';
 
-import { type ClaimSummaryModel, formatCompactCount } from '../models';
+import { type ClaimKind, type ClaimSummaryModel, formatClaimKindLabel, formatCompactCount } from '../models';
 import {
   AddClaimPopover,
   EntityInlineContext,
@@ -15,7 +15,13 @@ import {
 } from './entity-overflow-menu';
 import { CheckCircleIcon, ThumbDownIcon, ThumbUpIcon } from './icons';
 import { SplitBars } from './split-bars';
-import { TEMPLATE_CARD_SURFACE } from './template-shell';
+import { TEMPLATE_CARD_SURFACE, TemplateBadge, type TemplateBadgeTone } from './template-shell';
+
+const CLAIM_KIND_TONE: Record<ClaimKind, TemplateBadgeTone> = {
+  fact: 'fact',
+  judgment: 'judgment',
+  'value-judgment': 'value',
+};
 
 export interface ClaimExplorerProps {
   contestedClaims: readonly ClaimSummaryModel[];
@@ -210,8 +216,14 @@ function RankedClaimRow({ rank, claim, isAgreed }: { rank: number; claim: ClaimS
             titleNode
           )}
 
-          {(claim.onVote || debateLabel || metaParts.length > 0 || (claim.userVote && !claim.onVote)) && (
+          {(claim.kind || claim.onVote || debateLabel || metaParts.length > 0 || (claim.userVote && !claim.onVote)) && (
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+              {claim.kind && (
+                <TemplateBadge tone={CLAIM_KIND_TONE[claim.kind]} className="!h-6 !px-2 !text-[12px]">
+                  {formatClaimKindLabel(claim.kind)}
+                </TemplateBadge>
+              )}
+
               {claim.onVote && (
                 <div className="flex shrink-0 items-center gap-1.5" role="group" aria-label={`Vote on ${claim.title}`}>
                   <button

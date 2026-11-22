@@ -12,6 +12,7 @@ import type {
   SourceMediaKind,
   SourceQuoteModel,
 } from '../models';
+import { resolveTemplateImageUrl } from '../ontology';
 import {
   AddEntityItemPopover,
   EntityInlineContext,
@@ -82,6 +83,7 @@ export interface RelatedListSectionProps {
  * - `layout: 'list'` renders a calm, scannable hairline list (showing type badges only when kinds are mixed).
  */
 const LIST_PAGE_SIZE = 8;
+const CARDS_PAGE_SIZE = 6;
 
 export function RelatedListSection({ section, className }: RelatedListSectionProps) {
   const { title, subtitle, items, emptyText = 'Nothing linked yet.', action, layout } = section;
@@ -93,9 +95,10 @@ export function RelatedListSection({ section, className }: RelatedListSectionPro
     layout === 'cards' ||
     (layout !== 'list' &&
       allItems.some(item => Boolean(item.mediaType || item.excerpt || item.duration || item.authorHandle)));
-  const totalPages = useCards ? 1 : Math.max(1, Math.ceil(allItems.length / LIST_PAGE_SIZE));
+  const pageSize = useCards ? CARDS_PAGE_SIZE : LIST_PAGE_SIZE;
+  const totalPages = Math.max(1, Math.ceil(allItems.length / pageSize));
   const safePage = Math.min(page, totalPages);
-  const visibleItems = useCards ? allItems : allItems.slice((safePage - 1) * LIST_PAGE_SIZE, safePage * LIST_PAGE_SIZE);
+  const visibleItems = allItems.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   const isSourceSection = /source/i.test(title);
   const addLabel = isSourceSection ? 'Add source' : `Add to ${title.toLowerCase()}`;
@@ -156,10 +159,15 @@ export function RelatedListSection({ section, className }: RelatedListSectionPro
           {emptyText}
         </p>
       ) : useCards ? (
-        <div className="grid grid-cols-1 items-start gap-4 @[640px]:grid-cols-2">
-          {allItems.map(item => (
-            <RichMediaCard key={item.id} item={item} />
-          ))}
+        <div className="flex flex-col gap-3">
+          <div className="grid grid-cols-1 items-start gap-4 @[640px]:grid-cols-2">
+            {visibleItems.map(item => (
+              <RichMediaCard key={item.id} item={item} />
+            ))}
+          </div>
+          {totalPages > 1 && (
+            <InlinePagination page={safePage} totalPages={totalPages} onPageChange={setPage} label={`${title} pages`} />
+          )}
         </div>
       ) : (
         <div className={cx('divide-y divide-divider overflow-hidden', TEMPLATE_CARD_SURFACE)}>
@@ -241,6 +249,7 @@ function CardClickable({
 function RichMediaCard({ item }: { item: EntityLinkRowModel }) {
   const mediaType = inferMediaType(item);
   const leadQuote = item.quotes?.[0];
+  const resolvedThumb = resolveTemplateImageUrl(item.thumbnailUrl);
   const cardClasses = cx(
     'flex w-full flex-col justify-between gap-3.5 p-5 text-left text-text',
     TEMPLATE_INTERACTIVE_CARD_SURFACE
@@ -256,8 +265,8 @@ function RichMediaCard({ item }: { item: EntityLinkRowModel }) {
         <div className="flex flex-col gap-3">
           <CardClickable item={item}>
             <div className="relative flex aspect-[16/9] w-full items-center justify-center overflow-hidden rounded-lg bg-grey-01">
-              {item.thumbnailUrl ? (
-                <img src={item.thumbnailUrl} alt={item.title} className="h-full w-full object-cover" />
+              {resolvedThumb ? (
+                <img src={resolvedThumb} alt={item.title} className="h-full w-full object-cover" />
               ) : (
                 <div className="flex flex-col items-center gap-1.5 text-grey-04">
                   <span className="inline-grid size-11 place-items-center rounded-full bg-text text-white transition-transform group-hover/link:scale-105">
@@ -265,7 +274,7 @@ function RichMediaCard({ item }: { item: EntityLinkRowModel }) {
                   </span>
                 </div>
               )}
-              {item.thumbnailUrl && (
+              {resolvedThumb && (
                 <span className="absolute inline-grid size-11 place-items-center rounded-full bg-text/90 text-white shadow-card transition-transform group-hover/link:scale-105">
                   <PlayIcon className="ml-0.5 size-5" />
                 </span>
@@ -356,6 +365,13 @@ function RichMediaCard({ item }: { item: EntityLinkRowModel }) {
   return (
     <article className={cardClasses}>
       <div className="flex flex-col gap-2.5">
+        {resolvedThumb && (
+          <CardClickable item={item}>
+            <div className="aspect-[16/9] w-full overflow-hidden rounded-lg bg-grey-01">
+              <img src={resolvedThumb} alt={item.title} className="h-full w-full object-cover" />
+            </div>
+          </CardClickable>
+        )}
         <div className="flex items-center justify-between gap-2">
           <span className="inline-flex min-w-0 items-center gap-2 text-[14px] text-grey-04">
             <MediaIcon type={mediaType} />

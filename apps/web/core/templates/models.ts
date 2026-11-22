@@ -487,6 +487,8 @@ export interface TopicTemplateModel {
   breadcrumbs?: readonly BreadcrumbItem[];
   tags?: readonly string[];
   stats?: readonly TopicStatModel[];
+  /** Compact subtopic navigation chips rendered cleanly beneath the Topic header/lede. */
+  subtopics?: readonly { id: string; label: string; href?: string; onSelect?: () => void }[];
   communities?: readonly CommunityDefinition[];
   activeCommunityId?: string | 'all';
   onSelectCommunity?: (communityId: string | 'all') => void;
