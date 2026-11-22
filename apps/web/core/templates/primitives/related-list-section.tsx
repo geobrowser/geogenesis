@@ -28,6 +28,7 @@ import {
   PlayIcon,
   TweetIcon,
 } from './icons';
+import { ListRankingHeaderControl, ListRankingWorkspace, type RankableListItem, useListRanking } from './list-ranking';
 import {
   TEMPLATE_CARD_SURFACE,
   TEMPLATE_INTERACTIVE_CARD_SURFACE,
@@ -91,16 +92,41 @@ export function RelatedListSection({ section, className }: RelatedListSectionPro
   const { title, subtitle, items, emptyText = 'Nothing linked yet.', action, layout } = section;
   const [addedItems, setAddedItems] = React.useState<EntityLinkRowModel[]>([]);
   const [page, setPage] = React.useState(1);
-  const allItems = [...addedItems, ...items];
-  const isMixedList = allItems.length > 1 && allItems.some(item => item.kind !== allItems[0]?.kind);
+  const allItems = React.useMemo(() => [...addedItems, ...items], [addedItems, items]);
+  const rankingKey = React.useMemo(() => {
+    const sig = allItems
+      .slice(0, 3)
+      .map(item => item.id)
+      .join(',');
+    return `section:${section.id}:${title}:${sig}`;
+  }, [allItems, section.id, title]);
+
+  const ranking = useListRanking({ listKey: rankingKey, items: allItems });
+
+  const rankableItems = React.useMemo<RankableListItem[]>(
+    () =>
+      allItems.map(item => ({
+        id: item.id,
+        title: item.title,
+        subtitle: item.publisher ?? item.excerpt,
+        badge: item.kindLabel && item.kindLabel !== 'Item' ? item.kindLabel : undefined,
+        badgeTone: LINK_KIND_TONE[item.kind],
+        meta: item.meta ?? item.duration,
+        imageUrl: resolveTemplateImageUrl(item.thumbnailUrl ?? item.authorAvatarUrl),
+      })),
+    [allItems]
+  );
+
+  const orderedItems = ranking.orderedItems;
+  const isMixedList = orderedItems.length > 1 && orderedItems.some(item => item.kind !== orderedItems[0]?.kind);
   const useCards =
     layout === 'cards' ||
     (layout !== 'list' &&
-      allItems.some(item => Boolean(item.mediaType || item.excerpt || item.duration || item.authorHandle)));
+      orderedItems.some(item => Boolean(item.mediaType || item.excerpt || item.duration || item.authorHandle)));
   const pageSize = useCards ? CARDS_PAGE_SIZE : LIST_PAGE_SIZE;
-  const totalPages = Math.max(1, Math.ceil(allItems.length / pageSize));
+  const totalPages = Math.max(1, Math.ceil(orderedItems.length / pageSize));
   const safePage = Math.min(page, totalPages);
-  const visibleItems = allItems.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const visibleItems = orderedItems.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   const isSourceSection = /source/i.test(title);
   const addLabel = isSourceSection ? 'Add source' : `Add to ${title.toLowerCase()}`;
@@ -112,12 +138,12 @@ export function RelatedListSection({ section, className }: RelatedListSectionPro
           <h2 className="m-0 text-mediumTitle font-semibold text-text">{title}</h2>
           {subtitle && <p className="m-0 text-[15px] leading-[21px] text-grey-04">{subtitle}</p>}
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1.5">
           {action &&
             (action.href ? (
               <Link
                 href={action.href}
-                className="inline-flex items-center gap-1 text-[15px] font-medium whitespace-nowrap text-ctaPrimary no-underline hover:text-ctaHover"
+                className="mr-1.5 inline-flex items-center gap-1 text-[15px] font-medium whitespace-nowrap text-ctaPrimary no-underline hover:text-ctaHover"
               >
                 <span>{action.label}</span>
               </Link>
@@ -125,11 +151,23 @@ export function RelatedListSection({ section, className }: RelatedListSectionPro
               <button
                 type="button"
                 onClick={action.onClick}
-                className="inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent p-0 text-[15px] font-medium whitespace-nowrap text-ctaPrimary hover:text-ctaHover"
+                className="mr-1.5 inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent p-0 text-[15px] font-medium whitespace-nowrap text-ctaPrimary hover:text-ctaHover"
               >
                 <span>{action.label}</span>
               </button>
             ))}
+
+          <ListRankingHeaderControl
+            title={title}
+            hasMyRanking={ranking.hasMyRanking}
+            viewMode={ranking.viewMode}
+            onViewModeChange={mode => {
+              ranking.setViewMode(mode);
+              setPage(1);
+            }}
+            onOpen={ranking.open}
+            disabled={allItems.length < 2}
+          />
 
           <AddEntityItemPopover
             label={addLabel}
@@ -155,6 +193,19 @@ export function RelatedListSection({ section, className }: RelatedListSectionPro
           />
         </div>
       </div>
+
+      <ListRankingWorkspace
+        open={ranking.isOpen}
+        title={title}
+        subtitle={subtitle}
+        items={rankableItems}
+        initialOrder={ranking.myOrder}
+        onClose={ranking.close}
+        onPublish={nextOrder => {
+          ranking.publish(nextOrder);
+          setPage(1);
+        }}
+      />
 
       {allItems.length === 0 ? (
         <p className="m-0 rounded-xl border border-dashed border-grey-02 px-5 py-4 text-[15px] text-grey-04">

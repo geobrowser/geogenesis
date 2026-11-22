@@ -9,6 +9,7 @@ import type { TopicRecentDebateModel, TopicRecentDebateParticipantModel } from '
 import { formatCompactCount, formatPercentInt } from '../models';
 import { EntityInlineContext, EntityOverflowMenu } from './entity-overflow-menu';
 import { ArrowLeftIcon, ArrowRightIcon, ArrowUpRightIcon, PlayIcon, ThumbDownIcon, ThumbUpIcon } from './icons';
+import { ListRankingHeaderControl, ListRankingWorkspace, type RankableListItem, useListRanking } from './list-ranking';
 import { TEMPLATE_CARD_SURFACE } from './template-shell';
 
 export interface RecentDebatesGalleryProps {
@@ -87,14 +88,47 @@ export function RecentDebatesGallery({
     scroller.scrollBy({ left: direction * (cardWidth + 16), behavior: 'smooth' });
   }, []);
 
+  const rankingKey = React.useMemo(() => {
+    const sig = debates
+      .slice(0, 3)
+      .map(d => d.id)
+      .join(',');
+    return `debates:${title}:${sig}`;
+  }, [debates, title]);
+
+  const ranking = useListRanking({ listKey: rankingKey, items: debates });
+
+  const rankableItems = React.useMemo<RankableListItem[]>(
+    () =>
+      debates.map(debate => ({
+        id: debate.id,
+        title: debate.claimTitle,
+        subtitle: `${debate.participants[0].name} vs. ${debate.participants[1].name}`,
+        meta: [debate.date, debate.votesLabel].filter(Boolean).join(' · '),
+        imageUrl: debate.participants[0].avatarUrl,
+      })),
+    [debates]
+  );
+
   if (debates.length === 0) return null;
+
+  const displayDebates = ranking.orderedItems;
 
   return (
     <section id="recent-debates" aria-label={title} className={cx('flex flex-col gap-3', className)}>
       <header className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="m-0 text-mediumTitle font-semibold text-text">{title}</h2>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2">
+          <ListRankingHeaderControl
+            title={title}
+            hasMyRanking={ranking.hasMyRanking}
+            viewMode={ranking.viewMode}
+            onViewModeChange={ranking.setViewMode}
+            onOpen={ranking.open}
+            disabled={debates.length < 2}
+          />
+
           <div className="flex items-center gap-1.5">
             <button
               type="button"
@@ -135,12 +169,21 @@ export function RecentDebatesGallery({
         </div>
       </header>
 
+      <ListRankingWorkspace
+        open={ranking.isOpen}
+        title={title}
+        items={rankableItems}
+        initialOrder={ranking.myOrder}
+        onClose={ranking.close}
+        onPublish={ranking.publish}
+      />
+
       <div className="@container relative">
         <div
           ref={scrollerRef}
           className="-mx-2 flex snap-x snap-mandatory [scrollbar-width:none] items-stretch gap-4 overflow-x-auto px-2 py-2 [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
         >
-          {debates.map(debate => (
+          {displayDebates.map(debate => (
             <RecentDebateGalleryCard key={debate.id} debate={debate} />
           ))}
         </div>

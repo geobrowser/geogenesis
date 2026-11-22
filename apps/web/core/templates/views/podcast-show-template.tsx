@@ -13,10 +13,14 @@ import {
   EntityOverflowMenu,
   GraphConnectionsStrip,
   InlinePagination,
+  ListRankingHeaderControl,
+  ListRankingWorkspace,
+  type RankableListItem,
   SearchIcon,
   TEMPLATE_INTERACTIVE_CARD_SURFACE,
   TemplateBadge,
   TemplateShell,
+  useListRanking,
 } from '../primitives';
 import {
   PodcastArtwork,
@@ -55,14 +59,31 @@ export function PodcastShowTemplate({
   const [episodeFilter, setEpisodeFilter] = React.useState('');
   const [page, setPage] = React.useState(1);
 
+  const ranking = useListRanking({
+    listKey: `podcast-episodes:${model.id}`,
+    items: model.episodes,
+  });
+
+  const rankableEpisodes = React.useMemo<RankableListItem[]>(
+    () =>
+      model.episodes.map(ep => ({
+        id: ep.id,
+        title: ep.title,
+        meta: [ep.airDate, ep.durationLabel].filter(Boolean).join(' · ') || undefined,
+        imageUrl: ep.artworkUrl ?? model.artworkUrl,
+      })),
+    [model.artworkUrl, model.episodes]
+  );
+
   const normalizedQuery = episodeFilter.trim().toLowerCase();
   const filteredEpisodes = React.useMemo(() => {
-    if (!normalizedQuery) return model.episodes;
-    return model.episodes.filter(ep => {
+    const source = ranking.orderedItems;
+    if (!normalizedQuery) return source;
+    return source.filter(ep => {
       const hay = `${ep.title} ${ep.description ?? ''}`.toLowerCase();
       return hay.includes(normalizedQuery);
     });
-  }, [model.episodes, normalizedQuery]);
+  }, [normalizedQuery, ranking.orderedItems]);
 
   React.useEffect(() => {
     setPage(1);
@@ -141,20 +162,45 @@ export function PodcastShowTemplate({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="m-0 text-mediumTitle font-semibold text-text">Episodes</h2>
 
-          {model.episodes.length > 6 && (
-            <label className="relative flex w-full max-w-[260px] items-center">
-              <SearchIcon className="pointer-events-none absolute left-3 size-3.5 text-grey-04" />
-              <input
-                type="search"
-                value={episodeFilter}
-                onChange={event => setEpisodeFilter(event.target.value)}
-                placeholder="Filter episodes…"
-                aria-label="Filter episodes"
-                className="h-8 w-full rounded-full border border-grey-02 bg-white pr-3 pl-8 text-[13.5px] text-text placeholder:text-grey-04 focus:border-text focus:outline-none"
-              />
-            </label>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            {model.episodes.length > 6 && (
+              <label className="relative flex w-full max-w-[240px] items-center">
+                <SearchIcon className="pointer-events-none absolute left-3 size-3.5 text-grey-04" />
+                <input
+                  type="search"
+                  value={episodeFilter}
+                  onChange={event => setEpisodeFilter(event.target.value)}
+                  placeholder="Filter episodes…"
+                  aria-label="Filter episodes"
+                  className="h-8 w-full rounded-full border border-grey-02 bg-white pr-3 pl-8 text-[13.5px] text-text placeholder:text-grey-04 focus:border-text focus:outline-none"
+                />
+              </label>
+            )}
+            <ListRankingHeaderControl
+              title="Episodes"
+              hasMyRanking={ranking.hasMyRanking}
+              viewMode={ranking.viewMode}
+              onViewModeChange={mode => {
+                ranking.setViewMode(mode);
+                setPage(1);
+              }}
+              onOpen={ranking.open}
+              disabled={model.episodes.length < 2}
+            />
+          </div>
         </div>
+
+        <ListRankingWorkspace
+          open={ranking.isOpen}
+          title={`${model.title} · Episodes`}
+          items={rankableEpisodes}
+          initialOrder={ranking.myOrder}
+          onClose={ranking.close}
+          onPublish={nextOrder => {
+            ranking.publish(nextOrder);
+            setPage(1);
+          }}
+        />
 
         {visibleEpisodes.length === 0 ? (
           <p className="m-0 text-[14.5px] text-grey-04">

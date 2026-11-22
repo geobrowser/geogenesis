@@ -44,6 +44,13 @@ export {
   ThumbUpIcon,
   TweetIcon,
 } from './icons';
+export {
+  ListRankingHeaderControl,
+  ListRankingWorkspace,
+  useListRanking,
+  type ListRankingViewMode,
+  type RankableListItem,
+} from './list-ranking';
 export { RecentDebatesGallery, type RecentDebatesGalleryProps } from './recent-debates-gallery';
 export { RelatedListSection, type RelatedListSectionProps } from './related-list-section';
 export { SourceChipList, type SourceChipListProps } from './source-chip-list';

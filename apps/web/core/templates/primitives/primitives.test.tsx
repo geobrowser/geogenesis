@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -13,6 +13,7 @@ import {
   isClaimSplit,
 } from '../models';
 import {
+  ClaimExplorer,
   ClaimSummaryCard,
   EntityActionProvider,
   EntityFlagsSection,
@@ -295,5 +296,73 @@ describe('Context & Disputes empty states, inline pill +, and pagination', () =>
     fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
     expect(screen.getByText('Relation 6')).toBeInTheDocument();
     expect(screen.getByText('2 / 2')).toBeInTheDocument();
+  });
+});
+
+describe('ListRanking header control & workspace', () => {
+  it('opens the 2-column ranking workspace from the list header icon, builds a personal ranking, and reorders the list live', () => {
+    window.localStorage.clear();
+    const claims: ClaimSummaryModel[] = [
+      {
+        id: 'rank-c1',
+        title: 'First global claim',
+        kind: 'fact',
+        split: { rows: [], isSplit: true, totalVotes: 20 },
+      },
+      {
+        id: 'rank-c2',
+        title: 'Second global claim',
+        kind: 'judgment',
+        split: { rows: [], isSplit: true, totalVotes: 12 },
+      },
+      {
+        id: 'rank-c3',
+        title: 'Third global claim',
+        kind: 'fact',
+        split: { rows: [], isSplit: true, totalVotes: 4 },
+      },
+    ];
+
+    render(
+      <EntityActionProvider>
+        <ClaimExplorer contestedClaims={claims} agreedClaims={[]} />
+      </EntityActionProvider>
+    );
+
+    // Ranking icon sits beside `+` (Add claim)
+    const rankBtn = screen.getByRole('button', { name: 'Rank Claims' });
+    expect(rankBtn).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add claim' })).toBeInTheDocument();
+
+    fireEvent.click(rankBtn);
+
+    const dialog = screen.getByRole('dialog', { name: 'Rank Claims' });
+    expect(dialog).toBeInTheDocument();
+
+    // Add Third global claim first, then First global claim
+    const globalSection = within(dialog).getByRole('region', { name: 'Global ranking' });
+    fireEvent.click(within(globalSection).getByRole('button', { name: 'Add Third global claim to my ranking' }));
+    fireEvent.click(within(globalSection).getByRole('button', { name: 'Add First global claim to my ranking' }));
+
+    expect(within(globalSection).getByText('You: #1')).toBeInTheDocument();
+    expect(within(globalSection).getByText('You: #2')).toBeInTheDocument();
+
+    // Publish ranking closes the overlay and activates the Global / My ranking switcher
+    const mySection = within(dialog).getByRole('region', { name: 'My ranking' });
+    fireEvent.click(within(mySection).getByRole('button', { name: 'Publish ranking' }));
+
+    expect(screen.queryByRole('dialog', { name: 'Rank Claims' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'My ranking' })).toHaveAttribute('aria-pressed', 'true');
+
+    // In My ranking view, Third global claim is now ranked #1 above First global claim
+    const thirdEl = screen.getByText('Third global claim');
+    const firstEl = screen.getByText('First global claim');
+    expect(thirdEl.compareDocumentPosition(firstEl) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    // Switching back to Global restores the original order
+    fireEvent.click(screen.getByRole('button', { name: 'Global' }));
+    const firstRestored = screen.getByText('First global claim');
+    const thirdRestored = screen.getByText('Third global claim');
+    expect(firstRestored.compareDocumentPosition(thirdRestored) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });

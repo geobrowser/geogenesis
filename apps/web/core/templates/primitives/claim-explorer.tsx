@@ -14,6 +14,7 @@ import {
   useEntityActionContext,
 } from './entity-overflow-menu';
 import { CheckCircleIcon, ThumbDownIcon, ThumbUpIcon } from './icons';
+import { ListRankingHeaderControl, ListRankingWorkspace, type RankableListItem, useListRanking } from './list-ranking';
 import { SplitBars } from './split-bars';
 import { TEMPLATE_CARD_SURFACE, TemplateBadge, type TemplateBadgeTone } from './template-shell';
 
@@ -46,44 +47,98 @@ export function ClaimExplorer({ contestedClaims, agreedClaims, title = 'Claims',
   const [tab, setTab] = React.useState<'split' | 'agreed'>(contestedClaims.length > 0 ? 'split' : 'agreed');
   const [page, setPage] = React.useState(1);
 
-  const allContested = [...addedByTab.split, ...contestedClaims];
-  const allAgreed = [...addedByTab.agreed, ...agreedClaims];
+  const allContested = React.useMemo(
+    () => [...addedByTab.split, ...contestedClaims],
+    [addedByTab.split, contestedClaims]
+  );
+  const allAgreed = React.useMemo(() => [...addedByTab.agreed, ...agreedClaims], [addedByTab.agreed, agreedClaims]);
   const hasContested = allContested.length > 0;
   const hasAgreed = allAgreed.length > 0;
   const showTabs = hasContested && hasAgreed;
 
-  if (!hasContested && !hasAgreed) return null;
-
   const activeTab = showTabs ? tab : hasContested ? 'split' : 'agreed';
   const activeList = activeTab === 'split' ? allContested : allAgreed;
-  const totalPages = Math.max(1, Math.ceil(activeList.length / PAGE_SIZE));
+  const rankingKey = React.useMemo(() => {
+    const sig = activeList
+      .slice(0, 3)
+      .map(c => c.id)
+      .join(',');
+    return `claims:${title}:${activeTab}:${sig}`;
+  }, [activeList, activeTab, title]);
+
+  const ranking = useListRanking({ listKey: rankingKey, items: activeList });
+
+  const rankableItems = React.useMemo<RankableListItem[]>(
+    () =>
+      activeList.map(claim => ({
+        id: claim.id,
+        title: claim.title,
+        badge: claim.kind ? formatClaimKindLabel(claim.kind) : undefined,
+        badgeTone: claim.kind ? CLAIM_KIND_TONE[claim.kind] : 'neutral',
+        meta:
+          claim.split.totalVotes && claim.split.totalVotes > 0
+            ? `${formatCompactCount(claim.split.totalVotes)} ${claim.split.totalVotes === 1 ? 'vote' : 'votes'}`
+            : undefined,
+      })),
+    [activeList]
+  );
+
+  if (!hasContested && !hasAgreed) return null;
+
+  const displayList = ranking.orderedItems;
+  const totalPages = Math.max(1, Math.ceil(displayList.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const startIndex = (safePage - 1) * PAGE_SIZE;
-  const visible = activeList.slice(startIndex, startIndex + PAGE_SIZE);
+  const visible = displayList.slice(startIndex, startIndex + PAGE_SIZE);
 
   return (
     <section id="claims" aria-label={title} className={cx('flex flex-col gap-4', className)}>
       <div className="flex items-center justify-between gap-3">
         <h2 className="m-0 text-mediumTitle font-semibold text-text">{title}</h2>
-        <AddClaimPopover
-          label="Add claim"
-          onSubmit={draft => {
-            ctx?.callbacks?.onAddClaim?.(draft);
-            const newClaim: ClaimSummaryModel = {
-              id: `user-claim-${Date.now()}`,
-              title: draft.title,
-              kind: draft.kind,
-              meta: draft.note ? [draft.note] : undefined,
-              split: { rows: [], isSplit: activeTab === 'split', totalVotes: 0 },
-            };
-            setAddedByTab(prev => ({
-              ...prev,
-              [activeTab]: [newClaim, ...prev[activeTab]],
-            }));
-            setPage(1);
-          }}
-        />
+        <div className="flex items-center gap-1">
+          <ListRankingHeaderControl
+            title={title}
+            hasMyRanking={ranking.hasMyRanking}
+            viewMode={ranking.viewMode}
+            onViewModeChange={mode => {
+              ranking.setViewMode(mode);
+              setPage(1);
+            }}
+            onOpen={ranking.open}
+            disabled={activeList.length < 2}
+          />
+          <AddClaimPopover
+            label="Add claim"
+            onSubmit={draft => {
+              ctx?.callbacks?.onAddClaim?.(draft);
+              const newClaim: ClaimSummaryModel = {
+                id: `user-claim-${Date.now()}`,
+                title: draft.title,
+                kind: draft.kind,
+                meta: draft.note ? [draft.note] : undefined,
+                split: { rows: [], isSplit: activeTab === 'split', totalVotes: 0 },
+              };
+              setAddedByTab(prev => ({
+                ...prev,
+                [activeTab]: [newClaim, ...prev[activeTab]],
+              }));
+              setPage(1);
+            }}
+          />
+        </div>
       </div>
+
+      <ListRankingWorkspace
+        open={ranking.isOpen}
+        title={showTabs ? `${title} · ${activeTab === 'split' ? 'Disputed' : 'Accepted'}` : title}
+        items={rankableItems}
+        initialOrder={ranking.myOrder}
+        onClose={ranking.close}
+        onPublish={nextOrder => {
+          ranking.publish(nextOrder);
+          setPage(1);
+        }}
+      />
 
       <div className={cx('flex flex-col overflow-hidden', TEMPLATE_CARD_SURFACE)}>
         {showTabs && (

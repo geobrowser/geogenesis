@@ -25,6 +25,9 @@ import {
   EntityOverflowMenu,
   GraphConnectionsStrip,
   InlinePagination,
+  ListRankingHeaderControl,
+  ListRankingWorkspace,
+  type RankableListItem,
   RecentDebatesGallery,
   RelatedListSection,
   SourceChipList,
@@ -36,6 +39,7 @@ import {
   ThumbDownIcon,
   ThumbUpIcon,
   VoteBox,
+  useListRanking,
 } from '../primitives';
 
 const CLAIM_KIND_TONE: Record<ClaimKind, TemplateBadgeTone> = {
@@ -323,56 +327,131 @@ function GroupedSubClaimSections({
 
   return (
     <>
-      {sections.map(section => {
-        const totalPages = Math.max(1, Math.ceil(section.items.length / SUBCLAIMS_PER_PAGE));
-        const safePage = Math.min(pagesBySection[section.id] ?? 1, totalPages);
-        const startIndex = (safePage - 1) * SUBCLAIMS_PER_PAGE;
-        const visibleItems = section.items.slice(startIndex, startIndex + SUBCLAIMS_PER_PAGE);
-
-        return (
-          <section key={section.id} aria-label={section.title} className="flex flex-col gap-4">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="m-0 text-mediumTitle font-semibold text-text">{section.title}</h2>
-              <AddClaimPopover
-                label={section.addLabel}
-                onSubmit={draft => {
-                  onAddClaim?.({ ...draft, stance: section.stance });
-                  setAdded(prev => [
-                    {
-                      id: `claim-sub-${Date.now()}`,
-                      title: draft.title,
-                      kind: draft.kind,
-                      stance: section.stance,
-                      stat: draft.note,
-                      split: { rows: [], isSplit: false },
-                      sources: [],
-                    },
-                    ...prev,
-                  ]);
-                  setPagesBySection(prev => ({ ...prev, [section.id]: 1 }));
-                }}
-              />
-            </div>
-            <div className={`divide-y divide-divider overflow-hidden ${TEMPLATE_CARD_SURFACE}`}>
-              {visibleItems.map((subClaim, idx) => (
-                <SubClaimRow key={subClaim.id} rank={startIndex + idx + 1} subClaim={subClaim} />
-              ))}
-              {totalPages > 1 && (
-                <div className="px-5 py-3">
-                  <InlinePagination
-                    page={safePage}
-                    totalPages={totalPages}
-                    onPageChange={next => setPagesBySection(prev => ({ ...prev, [section.id]: next }))}
-                    label={`${section.title} pages`}
-                    className="pt-0"
-                  />
-                </div>
-              )}
-            </div>
-          </section>
-        );
-      })}
+      {sections.map(section => (
+        <SubClaimGroupSection
+          key={section.id}
+          section={section}
+          page={pagesBySection[section.id] ?? 1}
+          onPageChange={next => setPagesBySection(prev => ({ ...prev, [section.id]: next }))}
+          onAddClaim={draft => {
+            onAddClaim?.({ ...draft, stance: section.stance });
+            setAdded(prev => [
+              {
+                id: `claim-sub-${Date.now()}`,
+                title: draft.title,
+                kind: draft.kind,
+                stance: section.stance,
+                stat: draft.note,
+                split: { rows: [], isSplit: false },
+                sources: [],
+              },
+              ...prev,
+            ]);
+            setPagesBySection(prev => ({ ...prev, [section.id]: 1 }));
+          }}
+        />
+      ))}
     </>
+  );
+}
+
+function SubClaimGroupSection({
+  section,
+  page,
+  onPageChange,
+  onAddClaim,
+}: {
+  section: {
+    id: string;
+    title: string;
+    addLabel: string;
+    stance: 'supports' | 'opposes' | 'addresses';
+    items: readonly SubClaimModel[];
+  };
+  page: number;
+  onPageChange: (next: number) => void;
+  onAddClaim: (draft: { title: string; kind: ClaimKind; note?: string }) => void;
+}) {
+  const rankingKey = React.useMemo(() => {
+    const sig = section.items
+      .slice(0, 3)
+      .map(c => c.id)
+      .join(',');
+    return `subclaims:${section.id}:${sig}`;
+  }, [section.id, section.items]);
+
+  const ranking = useListRanking({ listKey: rankingKey, items: section.items });
+
+  const rankableItems = React.useMemo<RankableListItem[]>(
+    () =>
+      section.items.map(subClaim => ({
+        id: subClaim.id,
+        title: subClaim.title,
+        badge: subClaim.kind ? formatClaimKindLabel(subClaim.kind) : undefined,
+        badgeTone: subClaim.kind ? CLAIM_KIND_TONE[subClaim.kind] : 'neutral',
+        meta:
+          subClaim.split.totalVotes && subClaim.split.totalVotes > 0
+            ? `${formatCompactCount(subClaim.split.totalVotes)} ${subClaim.split.totalVotes === 1 ? 'vote' : 'votes'}`
+            : undefined,
+      })),
+    [section.items]
+  );
+
+  const orderedItems = ranking.orderedItems;
+  const totalPages = Math.max(1, Math.ceil(orderedItems.length / SUBCLAIMS_PER_PAGE));
+  const safePage = Math.min(page, totalPages);
+  const startIndex = (safePage - 1) * SUBCLAIMS_PER_PAGE;
+  const visibleItems = orderedItems.slice(startIndex, startIndex + SUBCLAIMS_PER_PAGE);
+
+  return (
+    <section aria-label={section.title} className="flex flex-col gap-4">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="m-0 text-mediumTitle font-semibold text-text">{section.title}</h2>
+        <div className="flex items-center gap-1">
+          <ListRankingHeaderControl
+            title={section.title}
+            hasMyRanking={ranking.hasMyRanking}
+            viewMode={ranking.viewMode}
+            onViewModeChange={mode => {
+              ranking.setViewMode(mode);
+              onPageChange(1);
+            }}
+            onOpen={ranking.open}
+            disabled={section.items.length < 2}
+          />
+          <AddClaimPopover label={section.addLabel} onSubmit={onAddClaim} />
+        </div>
+      </div>
+
+      <ListRankingWorkspace
+        open={ranking.isOpen}
+        title={section.title}
+        items={rankableItems}
+        initialOrder={ranking.myOrder}
+        onClose={ranking.close}
+        onPublish={nextOrder => {
+          ranking.publish(nextOrder);
+          onPageChange(1);
+        }}
+      />
+
+      <div className={`divide-y divide-divider overflow-hidden ${TEMPLATE_CARD_SURFACE}`}>
+        {visibleItems.map((subClaim, idx) => (
+          <SubClaimRow key={subClaim.id} rank={startIndex + idx + 1} subClaim={subClaim} />
+        ))}
+        {totalPages > 1 && (
+          <div className="px-5 py-3">
+            <InlinePagination
+              page={safePage}
+              totalPages={totalPages}
+              onPageChange={onPageChange}
+              label={`${section.title} pages`}
+              className="pt-0"
+            />
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 
