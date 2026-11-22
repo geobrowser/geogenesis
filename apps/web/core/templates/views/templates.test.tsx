@@ -611,7 +611,14 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
               items: [{ id: 'v1', label: 'AI', kind: 'topic' }],
             },
           ],
-          sections: [],
+          sections: [
+            {
+              id: 'sources',
+              title: 'Sources & evidence',
+              items: [],
+              emptyText: 'No sources',
+            },
+          ],
         }}
       />
     );
@@ -640,6 +647,10 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     const topicLink = within(topics).getByRole('link', { name: 'AI Safety' });
     expect(topicLink).toHaveAttribute('href', '/space/s/top-1');
     expect(topicLink.querySelector('img')).toHaveAttribute('src', '/topic-ai-safety.png');
+
+    // Sources & evidence empty state copy
+    const sourcesSection = screen.getByRole('region', { name: 'Sources & evidence' });
+    expect(within(sourcesSection).getByText('No sources')).toBeInTheDocument();
 
     // Disputes empty state copy
     expect(within(disputes).getByText('No disputes')).toBeInTheDocument();

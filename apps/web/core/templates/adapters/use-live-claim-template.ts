@@ -603,19 +603,18 @@ export function useLiveClaimTemplate({
       });
     }
 
-    if (sources.length > 0) {
-      sections.push({
-        id: 'sources',
-        title: 'Sources',
-        items: sources.map(source => ({
-          id: source.id,
-          kind: 'source',
-          kindLabel: 'Source',
-          title: source.name ?? source.id,
-          href: NavUtils.toEntity(spaceId, source.id),
-        })),
-      });
-    }
+    sections.push({
+      id: 'sources',
+      title: 'Sources & evidence',
+      items: sources.map(source => ({
+        id: source.id,
+        kind: 'source',
+        kindLabel: 'Source',
+        title: source.name ?? source.id,
+        href: NavUtils.toEntity(spaceId, source.id),
+      })),
+      emptyText: 'No sources',
+    });
 
     // Filter out claims already displayed in Supporting / Opposing / Related subclaims.
     const shownSubClaimHexIds = new Set(subClaimSeedList.map(c => ID.uuidToHex(c.id)));

@@ -967,15 +967,15 @@ export function useLiveTopicTemplate({
       });
     }
 
-    const sections: EntityListSectionModel[] = [];
-    if (coverageItems.length > 0) {
-      sections.push({
+    const sections: EntityListSectionModel[] = [
+      {
         id: 'coverage',
         title: 'Sources & evidence',
         layout: 'cards',
         items: coverageItems,
-      });
-    }
+        emptyText: 'No sources',
+      },
+    ];
 
     // 5. Compact Subtopics chips in header (deduplicated by ID & normalized name)
     const subtopicRels = readEntityRelations(entity, [

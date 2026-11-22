@@ -208,9 +208,9 @@ export function RelatedListSection({ section, className }: RelatedListSectionPro
       />
 
       {allItems.length === 0 ? (
-        <p className="m-0 rounded-xl border border-dashed border-grey-02 px-5 py-4 text-[15px] text-grey-04">
-          {emptyText}
-        </p>
+        <div className={cx('px-5 py-4', TEMPLATE_CARD_SURFACE)}>
+          <p className="m-0 text-[14px] text-grey-04">{emptyText}</p>
+        </div>
       ) : useCards ? (
         <div className="flex flex-col gap-3">
           <BalancedTwoColumnMasonry items={visibleItems} />
