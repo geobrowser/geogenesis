@@ -34,6 +34,7 @@ import {
   TEMPLATE_INTERACTIVE_CARD_SURFACE,
   TemplateBadge,
   type TemplateBadgeTone,
+  TemplateEmptyState,
 } from './template-shell';
 
 const LINK_KIND_TONE: Record<EntityLinkKind, TemplateBadgeTone> = {
@@ -208,9 +209,7 @@ export function RelatedListSection({ section, className }: RelatedListSectionPro
       />
 
       {allItems.length === 0 ? (
-        <div className={cx('px-5 py-4', TEMPLATE_CARD_SURFACE)}>
-          <p className="m-0 text-[14px] text-grey-04">{emptyText}</p>
-        </div>
+        <TemplateEmptyState icon={<DocumentIcon className="size-3.5" />}>{emptyText}</TemplateEmptyState>
       ) : useCards ? (
         <div className="flex flex-col gap-3">
           <BalancedTwoColumnMasonry items={visibleItems} />

@@ -8,11 +8,10 @@ import Link from 'next/link';
 import type { DebateTemplateModel } from '../models';
 import {
   ArrowRightIcon,
+  EntityContextAndDisputes,
   EntityContextTogglePill,
-  EntityFlagsSection,
   EntityInlineContext,
   EntityOverflowMenu,
-  GraphConnectionsStrip,
   PlayIcon,
   RelatedListSection,
   TEMPLATE_CARD_SURFACE,
@@ -243,11 +242,6 @@ export function DebateTemplate({ model, headerActions, footer, className }: Deba
         </section>
       )}
 
-      {/* Context & Flags */}
-      <GraphConnectionsStrip groups={[]} target={{ id: model.id, kind: 'Debate', title: model.claimTitle }} />
-
-      <EntityFlagsSection target={{ id: model.id, kind: 'Debate', title: model.claimTitle }} />
-
       {/* Related debates & sections */}
       {model.sections.length > 0 && (
         <div className="flex flex-col gap-8">
@@ -256,6 +250,9 @@ export function DebateTemplate({ model, headerActions, footer, className }: Deba
           ))}
         </div>
       )}
+
+      {/* Context & Disputes side-by-side */}
+      <EntityContextAndDisputes groups={[]} target={{ id: model.id, kind: 'Debate', title: model.claimTitle }} />
 
       {footer}
     </TemplateShell>

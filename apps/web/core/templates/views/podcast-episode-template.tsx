@@ -15,11 +15,10 @@ import {
   AddClaimPopover,
   AddEntityItemPopover,
   ClaimExplorer,
+  EntityContextAndDisputes,
   EntityContextTogglePill,
-  EntityFlagsSection,
   EntityInlineContext,
   EntityOverflowMenu,
-  GraphConnectionsStrip,
   PlayIcon,
   TEMPLATE_CARD_SURFACE,
   TemplateBadge,
@@ -287,12 +286,11 @@ export function PodcastEpisodeTemplate({
         <PodcastPeopleSection title="Contributors" people={model.contributors} />
       )}
 
-      {/* Context & Flags — always present on entity templates */}
-      <GraphConnectionsStrip
-        groups={model.graphConnections ?? []}
+      {/* Context & Disputes side-by-side */}
+      <EntityContextAndDisputes
+        groups={model.graphConnections}
         target={{ id: model.id, kind: 'Episode', title: model.title }}
       />
-      <EntityFlagsSection target={{ id: model.id, kind: 'Episode', title: model.title }} />
 
       {footer}
     </TemplateShell>

@@ -645,6 +645,8 @@ export interface NewsStorySourceModel {
   publication?: string;
   date?: string;
   url?: string;
+  excerpt?: string;
+  thumbnailUrl?: string | null;
   href?: string;
   onSelect?: () => void;
 }
@@ -664,9 +666,11 @@ export interface NewsStoryTemplateModel {
   archiveUrl?: string;
   breadcrumbs?: readonly BreadcrumbItem[];
   associatedTimelines?: readonly { id: string; title: string; href?: string }[];
+  /** Linked Topics rendered as rounded pills with circular thumbnail images. */
+  topics?: readonly ClaimTopicPillModel[];
   /** Ordered narrative claim sections (`Blocks` / `Perspectives`) rendered in Geo News bulleted reading style. */
   claimGroups?: readonly NewsStoryClaimGroupModel[];
-  /** Rich aggregated source articles (`Sources` with publication, date, and external link). */
+  /** Rich aggregated source articles (`Sources` with publication, date, cover, excerpt, and external link). */
   sources?: readonly NewsStorySourceModel[];
   graphConnections?: readonly GraphConnectionGroupModel[];
   accuracyRating?: {

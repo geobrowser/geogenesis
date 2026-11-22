@@ -9,14 +9,15 @@ import {
   AddEntityItemPopover,
   ArrowUpRightIcon,
   ClaimSummaryCard,
+  DocumentIcon,
+  EntityContextAndDisputes,
   EntityContextTogglePill,
-  EntityFlagsSection,
   EntityInlineContext,
   EntityOverflowMenu,
-  GraphConnectionsStrip,
   RelatedListSection,
   TEMPLATE_CARD_SURFACE,
   TemplateBadge,
+  TemplateEmptyState,
   TemplateShell,
 } from '../primitives';
 
@@ -163,18 +164,9 @@ export function SourceTemplate({
             })}
           </div>
         ) : (
-          <div className={cx('px-5 py-4', TEMPLATE_CARD_SURFACE)}>
-            <p className="m-0 text-[14px] text-grey-04">No quotes extracted yet.</p>
-          </div>
+          <TemplateEmptyState icon={<DocumentIcon className="size-3.5" />}>No quotes extracted yet.</TemplateEmptyState>
         )}
       </section>
-
-      <GraphConnectionsStrip
-        groups={model.graphConnections ?? []}
-        target={{ id: model.id, kind: model.sourceType ?? 'Source', title: model.title }}
-      />
-
-      <EntityFlagsSection target={{ id: model.id, kind: model.sourceType ?? 'Source', title: model.title }} />
 
       {model.supportedClaims.length > 0 && (
         <section aria-label="Claims it’s evidence for" className="flex flex-col gap-4">
@@ -194,6 +186,11 @@ export function SourceTemplate({
           ))}
         </div>
       )}
+
+      <EntityContextAndDisputes
+        groups={model.graphConnections}
+        target={{ id: model.id, kind: model.sourceType ?? 'Source', title: model.title }}
+      />
 
       {footer}
     </TemplateShell>

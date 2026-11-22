@@ -9,11 +9,10 @@ import {
   ArrowLeftIcon,
   ArrowRightIcon,
   ClaimSummaryCard,
+  EntityContextAndDisputes,
   EntityContextTogglePill,
-  EntityFlagsSection,
   EntityInlineContext,
   EntityOverflowMenu,
-  GraphConnectionsStrip,
   RelatedListSection,
   TEMPLATE_INTERACTIVE_CARD_SURFACE,
   TemplateBadge,
@@ -72,13 +71,6 @@ export function EventTemplate({
         <EntityInlineContext targetId={model.id} targetTitle={model.title} targetKind="Event" />
       </header>
 
-      <GraphConnectionsStrip
-        groups={model.graphConnections ?? []}
-        target={{ id: model.id, kind: 'Event', title: model.title }}
-      />
-
-      <EntityFlagsSection target={{ id: model.id, kind: 'Event', title: model.title }} />
-
       {model.claims.length > 0 && (
         <section aria-label="Agreed and split claims" className="flex flex-col gap-4">
           <h2 className="m-0 text-mediumTitle font-semibold text-text">Agreed and split claims</h2>
@@ -97,6 +89,11 @@ export function EventTemplate({
           ))}
         </div>
       )}
+
+      <EntityContextAndDisputes
+        groups={model.graphConnections}
+        target={{ id: model.id, kind: 'Event', title: model.title }}
+      />
 
       {(model.previousEvent || model.nextEvent) && (
         <nav

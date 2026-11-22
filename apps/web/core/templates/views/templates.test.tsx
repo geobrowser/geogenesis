@@ -655,4 +655,62 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     // Disputes empty state copy
     expect(within(disputes).getByText('No disputes')).toBeInTheDocument();
   });
+
+  it('renders NewsStoryTemplate with masonry Sources, Topic image pills, and Context/Disputes at the bottom', () => {
+    render(
+      <NewsStoryTemplate
+        model={{
+          id: 'story-1',
+          headline: 'Anthropic IPO fails to revive AI trade',
+          date: 'Nov 20, 2026',
+          summary: 'US tech stocks slid despite Anthropic debut.',
+          topics: [
+            { id: 't-ai', label: 'AI', imageUrl: '/topic-ai.png', href: '/space/s/t-ai' },
+            { id: 't-mkt', label: 'Markets', href: '/space/s/t-mkt' },
+          ],
+          sources: [
+            {
+              id: 'src-1',
+              title: 'Tech Stocks Tumble Despite Landmark AI IPO',
+              publication: 'Reuters',
+              date: 'Nov 20, 2026',
+              url: 'https://reuters.com/example',
+              href: '/space/s/src-1',
+            },
+            {
+              id: 'src-2',
+              title: 'Semiconductor Shares Pull Back in Late Trading',
+              publication: 'Financial Times',
+              date: 'Nov 20, 2026',
+              url: 'https://ft.com/example',
+              href: '/space/s/src-2',
+            },
+          ],
+          reportedClaims: [],
+          sections: [],
+        }}
+      />
+    );
+
+    const sources = screen.getByRole('region', { name: 'Sources' });
+    const topics = screen.getByRole('region', { name: 'Topics' });
+    const context = screen.getByRole('region', { name: 'Context' });
+    const disputes = screen.getByRole('region', { name: 'Disputes' });
+
+    expect(sources.compareDocumentPosition(topics) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(topics.compareDocumentPosition(context) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(context.compareDocumentPosition(disputes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    // Masonry source cards render publisher & headline
+    expect(within(sources).getByText('Tech Stocks Tumble Despite Landmark AI IPO')).toBeInTheDocument();
+    expect(within(sources).getByText('Semiconductor Shares Pull Back in Late Trading')).toBeInTheDocument();
+
+    // Topic image pills render thumbnail images
+    const aiPill = within(topics).getByRole('link', { name: 'AI' });
+    expect(aiPill.querySelector('img')).toHaveAttribute('src', '/topic-ai.png');
+
+    // Quiet empty states rendered cleanly
+    expect(within(context).getByText('No context added yet.')).toBeInTheDocument();
+    expect(within(disputes).getByText('No disputes')).toBeInTheDocument();
+  });
 });

@@ -1,13 +1,6 @@
 'use client';
 
-import { SystemIds } from '@geoprotocol/geo-sdk/lite';
-import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
-import { useQuery } from '@tanstack/react-query';
-
 import * as React from 'react';
-
-import { Effect } from 'effect';
-import { parse } from 'graphql';
 
 import { getClaimSources } from '~/core/claims/browse/claim-sources';
 import { useClaimRecord } from '~/core/claims/browse/use-claim-record';
@@ -18,7 +11,6 @@ import { useDebateClaims } from '~/core/debates/hooks';
 import { useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { useSpace } from '~/core/hooks/use-space';
 import { ID } from '~/core/id';
-import { graphql } from '~/core/io/graphql-client';
 import { claimResponseTargetKey } from '~/core/responses/claim-response-summaries';
 import { useClaimResponseSummaryBatch } from '~/core/responses/use-claim-response-summaries';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
@@ -47,42 +39,10 @@ import {
   extractGraphConnections,
   readClaimKind,
   readEntityRelations,
-  resolveTemplateImageUrl,
 } from '../ontology';
 import { resolveDebateStillSrc, useDebateParticipantsBatch } from './use-debate-participants-batch';
 import { useLiveEntityActions } from './use-live-entity-actions';
-
-const CLAIM_TOPIC_MEDIA_QUERY = parse(/* GraphQL */ `
-  query ClaimTopicMedia($ids: [UUID!]!, $mediaTypeIds: [UUID!]!, $imageUrlPropertyId: UUID!) {
-    entities(first: 24, filter: { id: { in: $ids } }) {
-      id
-      relationsList(first: 4, filter: { typeId: { in: $mediaTypeIds } }) {
-        typeId
-        toEntity {
-          valuesList(first: 4, filter: { propertyId: { is: $imageUrlPropertyId } }) {
-            propertyId
-            text
-          }
-        }
-      }
-    }
-  }
-`) as TypedDocumentNode<
-  {
-    entities?: {
-      id: string;
-      relationsList?:
-        | {
-            typeId: string;
-            toEntity?: {
-              valuesList?: { propertyId: string; text?: string | null }[] | null;
-            } | null;
-          }[]
-        | null;
-    }[];
-  },
-  { ids: string[]; mediaTypeIds: string[]; imageUrlPropertyId: string }
->;
+import { useTopicMediaBatch } from './use-topic-media-batch';
 
 function parseDebateTitle(rawTitle: string, fallbackClaim: string): { claimTitle: string; speakers: [string, string] } {
   const clean = rawTitle.trim();
@@ -234,41 +194,9 @@ export function useLiveClaimTemplate({
   }, [entity?.relations]);
 
   const topicIds = React.useMemo(() => topicRelations.map(relation => relation.toEntity.id), [topicRelations]);
-  const topicHexIds = React.useMemo(() => topicIds.map(id => ID.uuidToHex(id)), [topicIds]);
 
   // Batch-hydrate topic thumbnail images (Avatar preferred, then Cover) for Topic pills
-  const topicMediaQuery = useQuery({
-    queryKey: ['live-claim-template', 'topic-media', topicHexIds.join(',')],
-    enabled: topicHexIds.length > 0,
-    staleTime: 120_000,
-    queryFn: async () => {
-      const entities = await Effect.runPromise(
-        graphql({
-          query: CLAIM_TOPIC_MEDIA_QUERY,
-          variables: {
-            ids: topicHexIds.slice(0, 24),
-            mediaTypeIds: [TEMPLATE_ONTOLOGY.AVATAR_PROPERTY_ID, SystemIds.COVER_PROPERTY],
-            imageUrlPropertyId: TEMPLATE_ONTOLOGY.IMAGE_URL_PROPERTY_ID,
-          },
-          decoder: data => data.entities ?? [],
-        })
-      );
-
-      const map = new Map<string, string>();
-      for (const item of entities) {
-        const rels = item.relationsList ?? [];
-        const avatarRel = rels.find(r => ID.equals(r.typeId, TEMPLATE_ONTOLOGY.AVATAR_PROPERTY_ID));
-        const coverRel = rels.find(r => ID.equals(r.typeId, SystemIds.COVER_PROPERTY));
-        const chosen = avatarRel ?? coverRel;
-        const rawUrl = chosen?.toEntity?.valuesList?.find(v =>
-          ID.equals(v.propertyId, TEMPLATE_ONTOLOGY.IMAGE_URL_PROPERTY_ID)
-        )?.text;
-        const resolved = resolveTemplateImageUrl(rawUrl);
-        if (resolved) map.set(ID.uuidToHex(item.id), resolved);
-      }
-      return map;
-    },
-  });
+  const topicMediaQuery = useTopicMediaBatch(topicIds);
 
   const sources = React.useMemo(() => getClaimSources(entity?.relations ?? []), [entity?.relations]);
   const record = useClaimRecord({ claimId: entityId, spaceId, topicIds });

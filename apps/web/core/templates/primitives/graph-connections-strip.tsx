@@ -8,12 +8,14 @@ import type { GraphConnectionGroupModel } from '../models';
 import {
   AddContextPopover,
   type EntityActionTarget,
+  EntityFlagsSection,
   InlinePagination,
   TemplateAddRelationPillPopover,
   TemplateRelationPill,
   useEntityActionContext,
 } from './entity-overflow-menu';
-import { TEMPLATE_CARD_SURFACE } from './template-shell';
+import { NetworkIcon } from './icons';
+import { TEMPLATE_CARD_SURFACE, TemplateEmptyState } from './template-shell';
 
 const GROUPS_PER_PAGE = 5;
 const PILLS_COLLAPSE_CAP = 6;
@@ -73,104 +75,121 @@ export function GraphConnectionsStrip({ groups = [], target, className }: GraphC
   const pagedGroups = visibleGroups.slice((safePage - 1) * GROUPS_PER_PAGE, safePage * GROUPS_PER_PAGE);
 
   return (
-    <section aria-label="Context" className={cx('flex flex-col gap-4', className)}>
+    <section aria-label="Context" className={cx('flex flex-col gap-3', className)}>
       <div className="flex items-center justify-between gap-3">
         <h2 className="m-0 text-mediumTitle font-semibold text-text">Context</h2>
 
         {target && ctx && <AddContextPopover onSubmit={(pred, vals) => ctx.addTriple(target.id, pred, vals)} />}
       </div>
 
-      <div className={cx('flex flex-col gap-3 px-5 py-4', TEMPLATE_CARD_SURFACE)}>
-        {pagedGroups.length > 0 ? (
-          <>
-            <dl className="m-0 flex flex-col divide-y divide-divider/80">
-              {pagedGroups.map(group => {
-                const isExpanded = expandedPredicates.has(group.predicate);
-                const hasOverflow = group.items.length > PILLS_COLLAPSE_CAP;
-                const visibleItems =
-                  isExpanded || !hasOverflow ? group.items : group.items.slice(0, PILLS_COLLAPSE_CAP);
-                const hiddenCount = group.items.length - visibleItems.length;
+      {pagedGroups.length > 0 ? (
+        <div className={cx('@container flex flex-col gap-3 px-5 py-4', TEMPLATE_CARD_SURFACE)}>
+          <dl className="m-0 flex flex-col divide-y divide-divider/80">
+            {pagedGroups.map(group => {
+              const isExpanded = expandedPredicates.has(group.predicate);
+              const hasOverflow = group.items.length > PILLS_COLLAPSE_CAP;
+              const visibleItems = isExpanded || !hasOverflow ? group.items : group.items.slice(0, PILLS_COLLAPSE_CAP);
+              const hiddenCount = group.items.length - visibleItems.length;
 
-                return (
-                  <div
-                    key={group.predicate}
-                    className="group/rel-row grid grid-cols-1 items-baseline gap-x-3 gap-y-1.5 py-2.5 first:pt-0.5 last:pb-0 @[520px]:grid-cols-[120px_minmax(0,1fr)]"
-                  >
-                    <dt className="text-[13.5px] font-medium text-grey-04">{group.predicate}</dt>
-                    <dd className="m-0 flex min-w-0 flex-wrap items-center gap-1.5">
-                      {visibleItems.map(item => {
-                        const pillValue = {
-                          id: item.id,
-                          label: item.label,
-                          kind: item.kind,
-                          href: item.href,
-                          onSelect: item.onSelect,
-                          relationHref: item.relationHref,
-                        };
-                        return (
-                          <TemplateRelationPill
-                            key={item.id}
-                            predicate={group.predicate}
-                            value={pillValue}
-                            onOpenRelation={
-                              target && ctx
-                                ? () =>
-                                    ctx.inspectRelation(target, group.predicate, pillValue, { returnToViewer: false })
-                                : undefined
-                            }
-                            onDelete={() => {
-                              if (target && ctx) {
-                                ctx.deleteTripleValue(target.id, item.id);
-                              }
-                              setDeletedIds(prev => {
-                                const next = new Set(prev);
-                                next.add(item.id);
-                                return next;
-                              });
-                            }}
-                          />
-                        );
-                      })}
-
-                      {hasOverflow && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setExpandedPredicates(prev => {
-                              const next = new Set(prev);
-                              if (next.has(group.predicate)) {
-                                next.delete(group.predicate);
-                              } else {
-                                next.add(group.predicate);
-                              }
-                              return next;
-                            })
-                          }
-                          className="inline-flex h-6 cursor-pointer items-center rounded border border-grey-02 bg-white px-1.5 text-[12px] font-medium text-grey-04 tabular-nums transition-colors hover:border-text hover:text-text"
-                        >
-                          {isExpanded ? 'Show less' : `+${hiddenCount}`}
-                        </button>
-                      )}
-
-                      {target && ctx && (
-                        <TemplateAddRelationPillPopover
+              return (
+                <div
+                  key={group.predicate}
+                  className="group/rel-row grid grid-cols-1 items-baseline gap-x-3 gap-y-1.5 py-2.5 first:pt-0.5 last:pb-0 @[360px]:grid-cols-[110px_minmax(0,1fr)]"
+                >
+                  <dt className="text-[13.5px] font-medium text-grey-04">{group.predicate}</dt>
+                  <dd className="m-0 flex min-w-0 flex-wrap items-center gap-1.5">
+                    {visibleItems.map(item => {
+                      const pillValue = {
+                        id: item.id,
+                        label: item.label,
+                        kind: item.kind,
+                        href: item.href,
+                        onSelect: item.onSelect,
+                        relationHref: item.relationHref,
+                      };
+                      return (
+                        <TemplateRelationPill
+                          key={item.id}
                           predicate={group.predicate}
-                          existingLabels={group.items.map(i => i.label)}
-                          onAdd={label => ctx.addTripleValue(target.id, group.predicate, label)}
+                          value={pillValue}
+                          onOpenRelation={
+                            target && ctx
+                              ? () => ctx.inspectRelation(target, group.predicate, pillValue, { returnToViewer: false })
+                              : undefined
+                          }
+                          onDelete={() => {
+                            if (target && ctx) {
+                              ctx.deleteTripleValue(target.id, item.id);
+                            }
+                            setDeletedIds(prev => {
+                              const next = new Set(prev);
+                              next.add(item.id);
+                              return next;
+                            });
+                          }}
                         />
-                      )}
-                    </dd>
-                  </div>
-                );
-              })}
-            </dl>
+                      );
+                    })}
 
-            <InlinePagination page={safePage} totalPages={totalPages} onPageChange={setPage} label="Context pages" />
-          </>
-        ) : (
-          <p className="m-0 text-[14px] text-grey-04">No context added yet.</p>
-        )}
-      </div>
+                    {hasOverflow && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExpandedPredicates(prev => {
+                            const next = new Set(prev);
+                            if (next.has(group.predicate)) {
+                              next.delete(group.predicate);
+                            } else {
+                              next.add(group.predicate);
+                            }
+                            return next;
+                          })
+                        }
+                        className="inline-flex h-6 cursor-pointer items-center rounded border border-grey-02 bg-white px-1.5 text-[12px] font-medium text-grey-04 tabular-nums transition-colors hover:border-text hover:text-text"
+                      >
+                        {isExpanded ? 'Show less' : `+${hiddenCount}`}
+                      </button>
+                    )}
+
+                    {target && ctx && (
+                      <TemplateAddRelationPillPopover
+                        predicate={group.predicate}
+                        existingLabels={group.items.map(i => i.label)}
+                        onAdd={label => ctx.addTripleValue(target.id, group.predicate, label)}
+                      />
+                    )}
+                  </dd>
+                </div>
+              );
+            })}
+          </dl>
+
+          <InlinePagination page={safePage} totalPages={totalPages} onPageChange={setPage} label="Context pages" />
+        </div>
+      ) : (
+        <TemplateEmptyState icon={<NetworkIcon className="size-3.5" />}>No context added yet.</TemplateEmptyState>
+      )}
     </section>
+  );
+}
+
+/**
+ * Shared 2-column footer row placing `Context` and `Disputes` side-by-side on desktop
+ * (stacking cleanly on narrow viewports or compact side panels).
+ */
+export function EntityContextAndDisputes({
+  groups,
+  target,
+  className,
+}: {
+  groups?: readonly GraphConnectionGroupModel[];
+  target: EntityActionTarget;
+  className?: string;
+}) {
+  return (
+    <div className={cx('grid grid-cols-1 items-start gap-8 @[720px]:grid-cols-2', className)}>
+      <GraphConnectionsStrip groups={groups ?? []} target={target} />
+      <EntityFlagsSection target={target} />
+    </div>
   );
 }

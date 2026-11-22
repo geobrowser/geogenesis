@@ -2103,14 +2103,14 @@ export function EntityFlagsSection({ target, className }: { target: EntityAction
   const visibleFlags = flags.slice((safePage - 1) * FLAGS_PER_PAGE, safePage * FLAGS_PER_PAGE);
 
   return (
-    <section aria-label="Disputes" className={cx('flex flex-col gap-4', className)}>
+    <section aria-label="Disputes" className={cx('flex flex-col gap-3', className)}>
       <div className="flex items-center justify-between gap-3">
         <h2 className="m-0 text-mediumTitle font-semibold text-text">Disputes</h2>
         {ctx && <AddFlagPopover onSubmit={draft => ctx.addFlag(target.id, draft)} />}
       </div>
 
-      <div className="flex flex-col gap-3 rounded-xl border border-black/[0.025] bg-white px-5 py-4 shadow-[0_10px_36px_-6px_rgba(0,0,0,0.065),0_2px_10px_-2px_rgba(0,0,0,0.03)]">
-        {visibleFlags.length > 0 ? (
+      {visibleFlags.length > 0 ? (
+        <div className="flex flex-col gap-3 rounded-xl border border-black/[0.025] bg-white px-5 py-4 shadow-[0_10px_36px_-6px_rgba(0,0,0,0.065),0_2px_10px_-2px_rgba(0,0,0,0.03)]">
           <div className="flex flex-col gap-3">
             {visibleFlags.map(flag => {
               const vote = ctx?.flagVotes[flag.id] ?? null;
@@ -2180,10 +2180,13 @@ export function EntityFlagsSection({ target, className }: { target: EntityAction
             })}
             <InlinePagination page={safePage} totalPages={totalPages} onPageChange={setPage} label="Disputes pages" />
           </div>
-        ) : (
-          <p className="m-0 text-[14px] text-grey-04">No disputes</p>
-        )}
-      </div>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2 border-t border-divider/80 pt-3 text-[14px] text-grey-04">
+          <FlagIcon className="size-3.5 shrink-0 text-grey-03" />
+          <p className="m-0">No disputes</p>
+        </div>
+      )}
     </section>
   );
 }

@@ -21,7 +21,11 @@ export {
   type EntityActionTarget,
   type EntityOverflowMenuProps,
 } from './entity-overflow-menu';
-export { GraphConnectionsStrip, type GraphConnectionsStripProps } from './graph-connections-strip';
+export {
+  EntityContextAndDisputes,
+  GraphConnectionsStrip,
+  type GraphConnectionsStripProps,
+} from './graph-connections-strip';
 export {
   ArrowLeftIcon,
   ArrowRightIcon,
@@ -60,8 +64,10 @@ export {
   TEMPLATE_INTERACTIVE_CARD_SURFACE,
   TemplateBadge,
   TemplateBreadcrumb,
+  TemplateEmptyState,
   TemplateShell,
   type TemplateBadgeTone,
 } from './template-shell';
+export { TopicImagePills } from './topic-image-pills';
 export { TopicTrendsChart, type TopicTrendsChartProps } from './topic-trends-chart';
 export { VoteBox, type VoteBoxProps } from './vote-box';

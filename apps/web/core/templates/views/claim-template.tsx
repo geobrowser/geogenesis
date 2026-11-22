@@ -8,22 +8,19 @@ import Link from 'next/link';
 import {
   type ClaimKind,
   type ClaimTemplateModel,
-  type ClaimTopicPillModel,
   type EntityActionCallbacks,
   type StrongestCaseModel,
   type SubClaimModel,
   formatClaimKindLabel,
   formatCompactCount,
 } from '../models';
-import { resolveTemplateImageUrl } from '../ontology';
 import {
   AddClaimPopover,
   CheckCircleIcon,
+  EntityContextAndDisputes,
   EntityContextTogglePill,
-  EntityFlagsSection,
   EntityInlineContext,
   EntityOverflowMenu,
-  GraphConnectionsStrip,
   InlinePagination,
   ListRankingHeaderControl,
   ListRankingWorkspace,
@@ -38,6 +35,7 @@ import {
   TemplateShell,
   ThumbDownIcon,
   ThumbUpIcon,
+  TopicImagePills,
   VoteBox,
   useListRanking,
 } from '../primitives';
@@ -166,7 +164,7 @@ export function ClaimTemplate({
       )}
 
       {/* Topics pills with circular thumbnail images */}
-      {model.topics && model.topics.length > 0 && <ClaimTopicsSection topics={model.topics} />}
+      {model.topics && model.topics.length > 0 && <TopicImagePills topics={model.topics} />}
 
       {/* Related entity lists (Parent claim, Supporting quotes, Sources, More claims in this topic) */}
       {model.sections.length > 0 && (
@@ -177,13 +175,11 @@ export function ClaimTemplate({
         </div>
       )}
 
-      {/* Context relations & Disputes (always rendered at the bottom of the page) */}
-      <GraphConnectionsStrip
-        groups={model.graphConnections ?? []}
+      {/* Context relations & Disputes side-by-side at the bottom of the page */}
+      <EntityContextAndDisputes
+        groups={model.graphConnections}
         target={{ id: model.id, kind: 'Claim', title: model.title }}
       />
-
-      <EntityFlagsSection target={{ id: model.id, kind: 'Claim', title: model.title }} />
 
       {footer}
     </TemplateShell>
@@ -212,80 +208,6 @@ function DebateCountLink({ count, href, onSelect }: { count: number; href?: stri
   }
 
   return <span className="ml-1 text-[14px] text-grey-04">{text}</span>;
-}
-
-const INITIAL_VISIBLE_TOPICS = 9;
-
-function TopicPillThumbnail({ label, imageUrl }: { label: string; imageUrl?: string | null }) {
-  const resolved = resolveTemplateImageUrl(imageUrl);
-  const [failed, setFailed] = React.useState(false);
-
-  React.useEffect(() => {
-    setFailed(false);
-  }, [resolved]);
-
-  const initial = label.trim()[0]?.toUpperCase() ?? '';
-
-  return (
-    <span className="relative inline-grid size-5 shrink-0 place-items-center overflow-hidden rounded-full bg-grey-01 text-[10px] font-semibold text-grey-04">
-      {resolved && !failed ? (
-        <img
-          src={resolved}
-          alt=""
-          loading="lazy"
-          onError={() => setFailed(true)}
-          className="h-full w-full object-cover"
-        />
-      ) : (
-        <span>{initial}</span>
-      )}
-    </span>
-  );
-}
-
-function ClaimTopicsSection({ topics }: { topics: readonly ClaimTopicPillModel[] }) {
-  const [showAll, setShowAll] = React.useState(false);
-  const visible = showAll ? topics : topics.slice(0, INITIAL_VISIBLE_TOPICS);
-  const hidden = Math.max(0, topics.length - INITIAL_VISIBLE_TOPICS);
-
-  const pillClasses =
-    'inline-flex max-w-full items-center gap-2 rounded-full border border-grey-02 bg-white py-1.5 pr-3 pl-2 text-[14.5px] leading-[18px] font-medium text-text no-underline transition-colors hover:border-text';
-
-  return (
-    <section aria-label="Topics" className="flex flex-col gap-3.5">
-      <h2 className="m-0 text-mediumTitle font-semibold text-text">Topics</h2>
-      <div className="flex flex-wrap items-center gap-2">
-        {visible.map(topic =>
-          topic.href ? (
-            <Link key={topic.id} href={topic.href} className={pillClasses}>
-              <TopicPillThumbnail label={topic.label} imageUrl={topic.imageUrl} />
-              <span className="min-w-0 truncate">{topic.label}</span>
-            </Link>
-          ) : topic.onSelect ? (
-            <button key={topic.id} type="button" onClick={topic.onSelect} className={cx(pillClasses, 'cursor-pointer')}>
-              <TopicPillThumbnail label={topic.label} imageUrl={topic.imageUrl} />
-              <span className="min-w-0 truncate">{topic.label}</span>
-            </button>
-          ) : (
-            <span key={topic.id} className={pillClasses}>
-              <TopicPillThumbnail label={topic.label} imageUrl={topic.imageUrl} />
-              <span className="min-w-0 truncate">{topic.label}</span>
-            </span>
-          )
-        )}
-        {hidden > 0 && (
-          <button
-            type="button"
-            aria-expanded={showAll}
-            onClick={() => setShowAll(prev => !prev)}
-            className="inline-flex cursor-pointer items-center rounded-full border border-grey-02 bg-white px-3 py-1.5 text-[14px] leading-[18px] font-medium text-grey-04 transition-colors hover:border-text hover:text-text"
-          >
-            {showAll ? 'Show less' : `Show ${hidden} more`}
-          </button>
-        )}
-      </div>
-    </section>
-  );
 }
 
 const SUBCLAIMS_PER_PAGE = 6;

@@ -10,10 +10,9 @@ import { resolveTemplateImageUrl } from '../ontology';
 import {
   ArrowUpRightIcon,
   CheckIcon,
+  EntityContextAndDisputes,
   EntityContextTogglePill,
-  EntityFlagsSection,
   EntityOverflowMenu,
-  GraphConnectionsStrip,
   PlusIcon,
   RelatedListSection,
   SourceChipList,
@@ -374,13 +373,6 @@ export function PostTemplate({
         </div>
       </div>
 
-      <GraphConnectionsStrip
-        groups={model.graphConnections ?? []}
-        target={{ id: model.id, kind: 'Post', title: postTitle }}
-      />
-
-      <EntityFlagsSection target={{ id: model.id, kind: 'Post', title: postTitle }} />
-
       {model.sections.length > 0 && (
         <div className="flex flex-col gap-8">
           {model.sections.map(section => (
@@ -388,6 +380,11 @@ export function PostTemplate({
           ))}
         </div>
       )}
+
+      <EntityContextAndDisputes
+        groups={model.graphConnections}
+        target={{ id: model.id, kind: 'Post', title: postTitle }}
+      />
 
       {footer}
     </TemplateShell>

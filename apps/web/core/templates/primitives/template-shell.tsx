@@ -20,6 +20,32 @@ export const TEMPLATE_CARD_SURFACE =
 export const TEMPLATE_INTERACTIVE_CARD_SURFACE =
   'rounded-xl border border-black/[0.025] bg-white shadow-[0_10px_36px_-6px_rgba(0,0,0,0.065),0_2px_10px_-2px_rgba(0,0,0,0.03)] transition-all duration-200 hover:-translate-y-[1.5px] hover:border-black/[0.05] hover:shadow-[0_18px_44px_-8px_rgba(0,0,0,0.095),0_4px_14px_-2px_rgba(0,0,0,0.04)]';
 
+/**
+ * Quiet, card-less empty state for optional entity sections (`Disputes`, `Sources`, `Context`).
+ * Uses a whisper-thin top hairline rule + muted outline icon + calm copy so empty sections stay
+ * clear and anchored to their heading without adding floating empty card boxes.
+ */
+export function TemplateEmptyState({
+  children,
+  icon,
+  className,
+}: {
+  children: React.ReactNode;
+  icon?: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cx('flex items-center gap-2 border-t border-divider/80 pt-3 text-[14px] text-grey-04', className)}>
+      {icon && (
+        <span aria-hidden className="inline-flex shrink-0 items-center text-grey-03">
+          {icon}
+        </span>
+      )}
+      <p className="m-0">{children}</p>
+    </div>
+  );
+}
+
 export type TemplateBadgeTone =
   | 'neutral'
   | 'split'

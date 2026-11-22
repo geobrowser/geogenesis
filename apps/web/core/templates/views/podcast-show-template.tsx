@@ -7,11 +7,10 @@ import Link from 'next/link';
 
 import type { EntityActionCallbacks, PodcastEpisodeSummaryModel, PodcastShowTemplateModel } from '../models';
 import {
+  EntityContextAndDisputes,
   EntityContextTogglePill,
-  EntityFlagsSection,
   EntityInlineContext,
   EntityOverflowMenu,
-  GraphConnectionsStrip,
   InlinePagination,
   ListRankingHeaderControl,
   ListRankingWorkspace,
@@ -243,12 +242,11 @@ export function PodcastShowTemplate({
       {/* Hosts */}
       <PodcastPeopleSection title="Hosts" people={model.hosts} />
 
-      {/* Context & Flags — always present on entity templates */}
-      <GraphConnectionsStrip
-        groups={model.graphConnections ?? []}
+      {/* Context & Disputes side-by-side */}
+      <EntityContextAndDisputes
+        groups={model.graphConnections}
         target={{ id: model.id, kind: 'Podcast', title: model.title }}
       />
-      <EntityFlagsSection target={{ id: model.id, kind: 'Podcast', title: model.title }} />
 
       {footer}
     </TemplateShell>

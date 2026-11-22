@@ -2,29 +2,26 @@
 
 import * as React from 'react';
 
-import cx from 'classnames';
 import Link from 'next/link';
 
 import {
   type ClaimSummaryModel,
   type EntityActionCallbacks,
-  type NewsStorySourceModel,
+  type EntityListSectionModel,
   type NewsStoryTemplateModel,
   formatPercentInt,
 } from '../models';
 import {
   AddClaimPopover,
-  AddEntityItemPopover,
   ArrowUpRightIcon,
+  EntityContextAndDisputes,
   EntityContextTogglePill,
-  EntityFlagsSection,
   EntityInlineContext,
   EntityOverflowMenu,
-  GraphConnectionsStrip,
   RelatedListSection,
-  TEMPLATE_CARD_SURFACE,
   TemplateBadge,
   TemplateShell,
+  TopicImagePills,
   VoteBox,
 } from '../primitives';
 
@@ -37,15 +34,13 @@ export interface NewsStoryTemplateProps {
   className?: string;
 }
 
-const INITIAL_VISIBLE_SOURCES = 5;
-
 /**
  * Pure, data-driven News Story page template.
  *
  * Hybrid of Geo News's scannable news-aggregator layout (cover, summary, ordered narrative
- * claim sections / bulleted claims, expandable source articles) and Geo Genesis's crisp graph
- * styling (clickable Claim entities, subtle inline agreement pills, Context relation pills,
- * Flags, and inline `+` popovers).
+ * claim sections / bulleted claims, masonry source cards, topic pills with images) and Geo
+ * Genesis's crisp graph styling (clickable Claim entities, subtle inline agreement pills,
+ * side-by-side Context & Disputes at the bottom, and inline `+` popovers).
  */
 export function NewsStoryTemplate({
   model,
@@ -56,24 +51,49 @@ export function NewsStoryTemplate({
   className,
 }: NewsStoryTemplateProps) {
   const [addedClaimsByGroup, setAddedClaimsByGroup] = React.useState<Record<string, ClaimSummaryModel[]>>({});
-  const [addedSources, setAddedSources] = React.useState<NewsStorySourceModel[]>([]);
-  const [sourcesExpanded, setSourcesExpanded] = React.useState(false);
 
   const hasClaimGroups = Boolean(model.claimGroups && model.claimGroups.length > 0);
   const flatClaims = [...(addedClaimsByGroup['flat'] ?? []), ...model.reportedClaims];
-  const allSources = [...addedSources, ...(model.sources ?? [])];
-  const visibleSources = sourcesExpanded ? allSources : allSources.slice(0, INITIAL_VISIBLE_SOURCES);
-  const hiddenSourceCount = Math.max(0, allSources.length - INITIAL_VISIBLE_SOURCES);
+
+  // Check if `model.sections` already includes a Sources section (e.g. Gaza fixture's Primary sources);
+  // otherwise build a rich 2-column masonry Sources section from `model.sources` (always shown, with `No sources` empty state).
+  const hasSourcesInSections = model.sections.some(sec => /source/i.test(sec.title) || sec.id === 'sources');
+  const sourcesSection = React.useMemo<EntityListSectionModel | null>(() => {
+    if (hasSourcesInSections) return null;
+    const rawSources = model.sources ?? [];
+    return {
+      id: 'sources',
+      title: 'Sources',
+      layout: 'cards',
+      emptyText: 'No sources',
+      items: rawSources.map(source => ({
+        id: source.id,
+        kind: 'source',
+        kindLabel: 'Source',
+        mediaType: 'article',
+        title: source.title,
+        publisher: source.publication,
+        meta: source.date,
+        excerpt: source.excerpt,
+        thumbnailUrl: source.thumbnailUrl ?? undefined,
+        externalUrl: source.url,
+        href: source.href,
+        onSelect: source.onSelect,
+      })),
+    };
+  }, [hasSourcesInSections, model.sources]);
+
+  const sourceCount = model.sources?.length ?? 0;
 
   const metaParts = [
     model.date,
-    allSources.length > 0 ? `${allSources.length} ${allSources.length === 1 ? 'source' : 'sources'}` : undefined,
+    sourceCount > 0 ? `${sourceCount} ${sourceCount === 1 ? 'source' : 'sources'}` : undefined,
     model.authors && model.authors.length > 0 ? model.authors.join(', ') : undefined,
   ].filter(Boolean);
 
   return (
     <TemplateShell
-      maxWidth={860}
+      maxWidth={960}
       breadcrumbs={model.breadcrumbs}
       coverUrl={model.coverUrl}
       coverAlt={model.headline}
@@ -238,53 +258,8 @@ export function NewsStoryTemplate({
         </section>
       ) : null}
 
-      {/* Aggregated Sources (Geo News expandable source cards in Geo Genesis surface style) */}
-      {allSources.length > 0 && (
-        <section aria-label="Sources" className="flex flex-col gap-4">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="m-0 text-mediumTitle font-semibold text-text">Sources</h2>
-            <AddEntityItemPopover
-              label="Add source"
-              primaryLabel="Source title"
-              primaryPlaceholder="e.g. Reuters report or official statement"
-              secondaryLabel="Publication (optional)"
-              secondaryPlaceholder="e.g. Reuters"
-              tertiaryLabel="Source URL (optional)"
-              tertiaryPlaceholder="https://..."
-              onSubmit={draft => {
-                actionCallbacks?.onAddTriple?.(model.id, 'Sources', [draft.primary]);
-                setAddedSources(prev => [
-                  {
-                    id: `story-src-${Date.now()}`,
-                    title: draft.primary,
-                    publication: draft.secondary,
-                    url: draft.tertiary,
-                  },
-                  ...prev,
-                ]);
-              }}
-            />
-          </div>
-
-          <div className="flex flex-col gap-3">
-            {visibleSources.map(source => (
-              <NewsSourceCard key={source.id} source={source} />
-            ))}
-          </div>
-
-          {hiddenSourceCount > 0 && (
-            <button
-              type="button"
-              onClick={() => setSourcesExpanded(prev => !prev)}
-              className="cursor-pointer self-start border-0 bg-transparent p-0 text-[14.5px] font-medium text-grey-04 transition-colors hover:text-text"
-            >
-              {sourcesExpanded
-                ? `Hide ${hiddenSourceCount} ${hiddenSourceCount === 1 ? 'source' : 'sources'}`
-                : `Show ${hiddenSourceCount} more ${hiddenSourceCount === 1 ? 'source' : 'sources'}`}
-            </button>
-          )}
-        </section>
-      )}
+      {/* Aggregated Sources in 2-column balanced masonry layout */}
+      {sourcesSection && <RelatedListSection section={sourcesSection} />}
 
       {model.accuracyRating && (
         <VoteBox
@@ -294,12 +269,8 @@ export function NewsStoryTemplate({
         />
       )}
 
-      <GraphConnectionsStrip
-        groups={model.graphConnections ?? []}
-        target={{ id: model.id, kind: 'News story', title: model.headline }}
-      />
-
-      <EntityFlagsSection target={{ id: model.id, kind: 'News story', title: model.headline }} />
+      {/* Topics as rounded pills with circular thumbnail images */}
+      {model.topics && model.topics.length > 0 && <TopicImagePills topics={model.topics} />}
 
       {model.sections.length > 0 && (
         <div className="flex flex-col gap-8">
@@ -308,6 +279,12 @@ export function NewsStoryTemplate({
           ))}
         </div>
       )}
+
+      {/* Context & Disputes side-by-side at the bottom of the page */}
+      <EntityContextAndDisputes
+        groups={model.graphConnections}
+        target={{ id: model.id, kind: 'News story', title: model.headline }}
+      />
 
       {footer}
     </TemplateShell>
@@ -366,56 +343,5 @@ function NewsClaimBulletList({ claims }: { claims: readonly ClaimSummaryModel[] 
         );
       })}
     </ul>
-  );
-}
-
-function NewsSourceCard({ source }: { source: NewsStorySourceModel }) {
-  const byline = [source.publication, source.date].filter(Boolean).join(' · ');
-
-  return (
-    <article className={cx('flex flex-col gap-2 px-5 py-4', TEMPLATE_CARD_SURFACE)}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
-          {byline && <span className="text-[13px] font-medium text-grey-04">{byline}</span>}
-
-          {source.href ? (
-            <Link
-              href={source.href}
-              className="text-[16.5px] leading-[23px] font-semibold text-text no-underline transition-colors hover:text-[#4c1fd4]"
-            >
-              {source.title}
-            </Link>
-          ) : source.onSelect ? (
-            <button
-              type="button"
-              onClick={source.onSelect}
-              className="cursor-pointer border-0 bg-transparent p-0 text-left text-[16.5px] leading-[23px] font-semibold text-text transition-colors hover:text-[#4c1fd4]"
-            >
-              {source.title}
-            </button>
-          ) : (
-            <h3 className="m-0 text-[16.5px] leading-[23px] font-semibold text-text">{source.title}</h3>
-          )}
-        </div>
-
-        <EntityOverflowMenu target={{ id: source.id, kind: 'Source', title: source.title }} className="shrink-0" />
-      </div>
-
-      {source.url && (
-        <div className="flex justify-end pt-0.5">
-          <a
-            href={source.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-[13.5px] font-medium text-grey-04 no-underline transition-colors hover:text-text"
-          >
-            <span>View source article</span>
-            <ArrowUpRightIcon className="size-3.5" />
-          </a>
-        </div>
-      )}
-
-      <EntityInlineContext targetId={source.id} targetTitle={source.title} targetKind="Source" />
-    </article>
   );
 }

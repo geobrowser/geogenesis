@@ -227,15 +227,22 @@ export function TopicTemplate({
         </div>
       )}
 
-      {/* Context relations & Flags on live Topic pages */}
-      {hasContextOrLive && (
-        <GraphConnectionsStrip
-          groups={model.graphConnections ?? []}
-          target={{ id: model.id, kind: 'Topic', title: model.title }}
-        />
+      {/* Context relations & Disputes side-by-side on live Topic pages */}
+      {(hasContextOrLive || hasFlagsOrLive) && (
+        <div
+          className={
+            hasContextOrLive && hasFlagsOrLive ? 'grid grid-cols-1 items-start gap-8 @[720px]:grid-cols-2' : undefined
+          }
+        >
+          {hasContextOrLive && (
+            <GraphConnectionsStrip
+              groups={model.graphConnections ?? []}
+              target={{ id: model.id, kind: 'Topic', title: model.title }}
+            />
+          )}
+          {hasFlagsOrLive && <EntityFlagsSection target={{ id: model.id, kind: 'Topic', title: model.title }} />}
+        </div>
       )}
-
-      {hasFlagsOrLive && <EntityFlagsSection target={{ id: model.id, kind: 'Topic', title: model.title }} />}
 
       {footer}
     </TemplateShell>
