@@ -18,6 +18,7 @@ import {
   TemplateBadge,
   TemplateEmptyState,
   TemplateShell,
+  TopicImagePills,
 } from '../primitives';
 
 export interface SourceTemplateProps {
@@ -26,6 +27,8 @@ export interface SourceTemplateProps {
   footer?: React.ReactNode;
   actionCallbacks?: EntityActionCallbacks;
   compact?: boolean;
+  /** True briefly during initial client hydration so sections reveal calmly instead of popping in one by one. */
+  isLoadingSections?: boolean;
   className?: string;
 }
 
@@ -38,6 +41,7 @@ export function SourceTemplate({
   footer,
   actionCallbacks,
   compact = false,
+  isLoadingSections = false,
   className,
 }: SourceTemplateProps) {
   const ctaLabel = (model.externalLabel ?? 'Open source').replace(/\s*↗\s*$/, '');
@@ -108,88 +112,114 @@ export function SourceTemplate({
         </dl>
       )}
 
-      <section aria-label="Quotes" className="flex flex-col gap-3.5">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="m-0 text-mediumTitle font-semibold text-text">Quotes</h2>
-          <AddEntityItemPopover
-            label="Add quote"
-            primaryLabel="Quote text"
-            primaryPlaceholder="Paste the exact excerpt from this source..."
-            secondaryLabel="Speaker or author (optional)"
-            secondaryPlaceholder="e.g. International Court of Justice"
-            tertiaryLabel="Page or section (optional)"
-            tertiaryPlaceholder="e.g. §86(1) or 07:12"
-            multilinePrimary
-            onSubmit={draft => {
-              actionCallbacks?.onAddQuote?.({
-                text: draft.primary,
-                speaker: draft.secondary,
-                location: draft.tertiary,
-              });
-              setAddedQuotes(prev => [
-                {
-                  id: `user-q-${Date.now()}`,
-                  text: draft.primary,
-                  speaker: draft.secondary,
-                  location: draft.tertiary,
-                },
-                ...prev,
-              ]);
-            }}
+      {isLoadingSections ? (
+        <div aria-busy="true" aria-label="Loading article sections" className="flex flex-col gap-7">
+          <div className="flex flex-col gap-3">
+            <div className="h-5 w-36 animate-pulse rounded bg-grey-01" />
+            <div className="grid grid-cols-1 gap-4 @[620px]:grid-cols-2">
+              <div className={`h-[108px] animate-pulse ${TEMPLATE_CARD_SURFACE}`} />
+              <div className={`h-[108px] animate-pulse ${TEMPLATE_CARD_SURFACE}`} />
+            </div>
+          </div>
+          <div className="flex flex-col gap-2.5">
+            <div className="h-5 w-24 animate-pulse rounded bg-grey-01" />
+            <div className="flex flex-wrap gap-2">
+              <div className="h-9 w-28 animate-pulse rounded-full bg-grey-01" />
+              <div className="h-9 w-36 animate-pulse rounded-full bg-grey-01" />
+              <div className="h-9 w-32 animate-pulse rounded-full bg-grey-01" />
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="flex animate-fade-in flex-col gap-8">
+          <section aria-label="Claims" className="flex flex-col gap-4">
+            <h2 className="m-0 text-mediumTitle font-semibold text-text">Claims</h2>
+            {model.supportedClaims.length > 0 ? (
+              <div className="grid grid-cols-1 gap-4 @[620px]:grid-cols-2">
+                {model.supportedClaims.map(claim => (
+                  <ClaimSummaryCard key={claim.id} claim={claim} variant={claim.split.isSplit ? 'default' : 'agreed'} />
+                ))}
+              </div>
+            ) : (
+              <TemplateEmptyState>No claims linked yet.</TemplateEmptyState>
+            )}
+          </section>
+
+          <section aria-label="Quotes" className="flex flex-col gap-3.5">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="m-0 text-mediumTitle font-semibold text-text">Quotes</h2>
+              <AddEntityItemPopover
+                label="Add quote"
+                primaryLabel="Quote text"
+                primaryPlaceholder="Paste the exact excerpt from this source..."
+                secondaryLabel="Speaker or author (optional)"
+                secondaryPlaceholder="e.g. International Court of Justice"
+                tertiaryLabel="Page or section (optional)"
+                tertiaryPlaceholder="e.g. §86(1) or 07:12"
+                multilinePrimary
+                onSubmit={draft => {
+                  actionCallbacks?.onAddQuote?.({
+                    text: draft.primary,
+                    speaker: draft.secondary,
+                    location: draft.tertiary,
+                  });
+                  setAddedQuotes(prev => [
+                    {
+                      id: `user-q-${Date.now()}`,
+                      text: draft.primary,
+                      speaker: draft.secondary,
+                      location: draft.tertiary,
+                    },
+                    ...prev,
+                  ]);
+                }}
+              />
+            </div>
+            {allQuotes.length > 0 ? (
+              <div className="flex flex-col gap-3">
+                {allQuotes.map(quote => {
+                  const attribution = [quote.speaker, quote.location].filter(Boolean).join(', ');
+                  return (
+                    <blockquote
+                      key={quote.id}
+                      className={cx('m-0 flex items-start justify-between gap-4 p-5', TEMPLATE_CARD_SURFACE)}
+                    >
+                      <div className="flex min-w-0 flex-1 flex-col gap-2">
+                        <p className="m-0 text-[16px] leading-[24px] text-text">“{quote.text}”</p>
+                        {attribution && <footer className="text-[14px] text-grey-04">— {attribution}</footer>}
+                        <EntityInlineContext
+                          targetId={quote.id}
+                          targetTitle={quote.text.slice(0, 80)}
+                          targetKind="Quote"
+                          className="mt-1"
+                        />
+                      </div>
+                      <EntityOverflowMenu target={{ id: quote.id, kind: 'Quote', title: quote.text.slice(0, 80) }} />
+                    </blockquote>
+                  );
+                })}
+              </div>
+            ) : (
+              <TemplateEmptyState>No quotes extracted yet.</TemplateEmptyState>
+            )}
+          </section>
+
+          {model.topics && model.topics.length > 0 && <TopicImagePills topics={model.topics} />}
+
+          {model.sections.length > 0 && (
+            <div className="flex flex-col gap-8">
+              {model.sections.map(section => (
+                <RelatedListSection key={section.id} section={section} />
+              ))}
+            </div>
+          )}
+
+          <EntityContextAndDisputes
+            groups={model.graphConnections}
+            target={{ id: model.id, kind: model.sourceType ?? 'Source', title: model.title }}
           />
         </div>
-        {allQuotes.length > 0 ? (
-          <div className="flex flex-col gap-3">
-            {allQuotes.map(quote => {
-              const attribution = [quote.speaker, quote.location].filter(Boolean).join(', ');
-              return (
-                <blockquote
-                  key={quote.id}
-                  className={cx('m-0 flex items-start justify-between gap-4 p-5', TEMPLATE_CARD_SURFACE)}
-                >
-                  <div className="flex min-w-0 flex-1 flex-col gap-2">
-                    <p className="m-0 text-[16px] leading-[24px] text-text">“{quote.text}”</p>
-                    {attribution && <footer className="text-[14px] text-grey-04">— {attribution}</footer>}
-                    <EntityInlineContext
-                      targetId={quote.id}
-                      targetTitle={quote.text.slice(0, 80)}
-                      targetKind="Quote"
-                      className="mt-1"
-                    />
-                  </div>
-                  <EntityOverflowMenu target={{ id: quote.id, kind: 'Quote', title: quote.text.slice(0, 80) }} />
-                </blockquote>
-              );
-            })}
-          </div>
-        ) : (
-          <TemplateEmptyState>No quotes extracted yet.</TemplateEmptyState>
-        )}
-      </section>
-
-      {model.supportedClaims.length > 0 && (
-        <section aria-label="Claims it’s evidence for" className="flex flex-col gap-4">
-          <h2 className="m-0 text-mediumTitle font-semibold text-text">Claims it’s evidence for</h2>
-          <div className="grid grid-cols-1 gap-4 @[620px]:grid-cols-2">
-            {model.supportedClaims.map(claim => (
-              <ClaimSummaryCard key={claim.id} claim={claim} variant={claim.split.isSplit ? 'default' : 'agreed'} />
-            ))}
-          </div>
-        </section>
       )}
-
-      {model.sections.length > 0 && (
-        <div className="flex flex-col gap-8">
-          {model.sections.map(section => (
-            <RelatedListSection key={section.id} section={section} />
-          ))}
-        </div>
-      )}
-
-      <EntityContextAndDisputes
-        groups={model.graphConnections}
-        target={{ id: model.id, kind: model.sourceType ?? 'Source', title: model.title }}
-      />
 
       {footer}
     </TemplateShell>

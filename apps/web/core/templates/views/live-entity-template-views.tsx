@@ -96,7 +96,7 @@ export function LiveSourceTemplateView({
   compact = false,
   footer,
 }: LiveEntityTemplateViewProps) {
-  const { data, isLoading, actionCallbacks } = useLiveSourceTemplate({
+  const { data, isLoading, isSectionsLoading, actionCallbacks } = useLiveSourceTemplate({
     entityId,
     spaceId,
     serverCoverUrl,
@@ -109,6 +109,7 @@ export function LiveSourceTemplateView({
       model={data}
       actionCallbacks={actionCallbacks}
       compact={compact}
+      isLoadingSections={isSectionsLoading}
       headerActions={<EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable compact={compact} />}
       footer={footer}
     />

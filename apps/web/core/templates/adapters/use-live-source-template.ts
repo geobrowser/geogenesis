@@ -7,13 +7,16 @@ import { ID } from '~/core/id';
 import { claimResponseTargetKey } from '~/core/responses/claim-response-summaries';
 import { useClaimResponseSummaryBatch } from '~/core/responses/use-claim-response-summaries';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
+import type { Entity, Relation } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
 import { NavUtils } from '~/core/utils/utils';
 
 import type {
   BreadcrumbItem,
+  ClaimKind,
   ClaimSummaryModel,
+  ClaimTopicPillModel,
   EntityListSectionModel,
   SourceQuoteModel,
   SourceTemplateModel,
@@ -29,15 +32,19 @@ import {
   readEntityRelations,
   readEntityTextValue,
 } from '../ontology';
+import { useInitialHydrationGate } from './use-initial-hydration-gate';
 import { useLiveEntityActions } from './use-live-entity-actions';
+import { useTopicMediaBatch } from './use-topic-media-batch';
 
 /**
  * Live Geo adapter for `SourceTemplate` (Articles, Official documents, Datasets, Papers).
  *
  * Hydrates outgoing metadata (publisher, authors, publish date, summary, URL, DOI, archive URL),
- * incoming Claims citing this source (`Sources`), incoming verbatim Quotes extracted from this
- * source (`Quote --[Sources]--> Source`), incoming News stories citing it, live claim vote splits,
- * Context graph relations, Flags, and live `useMutate` actions.
+ * BOTH incoming Claims citing this source (`Claim --[Sources]--> Source`) AND outgoing linked
+ * claims (`Source --[Related claims / Notable claims / Claims]--> Claim`), incoming verbatim Quotes
+ * extracted from this source (`Quote --[Sources]--> Source`), incoming News stories citing it,
+ * Topic pills with circular avatars, live claim vote splits, Context graph relations, Disputes,
+ * and live `useMutate` actions.
  */
 export function useLiveSourceTemplate({
   entityId,
@@ -50,6 +57,11 @@ export function useLiveSourceTemplate({
 }): TemplateDataSource<SourceTemplateModel> {
   const { entity, isLoading } = useQueryEntity({ id: entityId, spaceId });
   const { space } = useSpace(spaceId);
+  const [isMounted, setIsMounted] = React.useState(false);
+
+  React.useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   const citingClaimsWhere = React.useMemo(
     () => ({
@@ -81,13 +93,112 @@ export function useLiveSourceTemplate({
     [entityId]
   );
 
-  const { entities: citingClaims } = useQueryEntities({ where: citingClaimsWhere, first: 16 });
-  const { entities: sourceQuotes } = useQueryEntities({ where: quotesWhere, first: 12 });
-  const { entities: citingStories } = useQueryEntities({ where: citingStoriesWhere, first: 8 });
+  const { entities: citingClaims, isLoading: isCitingClaimsLoading } = useQueryEntities({
+    where: citingClaimsWhere,
+    first: 24,
+    enabled: isMounted,
+  });
+  const { entities: sourceQuotes, isLoading: isQuotesLoading } = useQueryEntities({
+    where: quotesWhere,
+    first: 12,
+    enabled: isMounted,
+  });
+  const { entities: citingStories, isLoading: isStoriesLoading } = useQueryEntities({
+    where: citingStoriesWhere,
+    first: 8,
+    enabled: isMounted,
+  });
+
+  // Outgoing claims directly linked from the article/source (e.g. `Related claims`, `Notable claims`, `Claims`)
+  const outgoingClaimRelations = React.useMemo(
+    () =>
+      readEntityRelations(entity, [
+        TEMPLATE_ONTOLOGY.RELATED_CLAIMS_PROPERTY_ID,
+        TEMPLATE_ONTOLOGY.NOTABLE_CLAIMS_PROPERTY_ID,
+        TEMPLATE_ONTOLOGY.TOPIC_CLAIMS_PROPERTY_ID,
+      ]),
+    [entity]
+  );
+
+  const outgoingClaimIds = React.useMemo(() => {
+    const seen = new Set<string>();
+    const ids: string[] = [];
+    for (const rel of outgoingClaimRelations) {
+      const hex = ID.uuidToHex(rel.toEntity.id);
+      if (seen.has(hex)) continue;
+      seen.add(hex);
+      ids.push(rel.toEntity.id);
+    }
+    return ids;
+  }, [outgoingClaimRelations]);
+
+  const outgoingClaimsWhere = React.useMemo(() => ({ id: { in: outgoingClaimIds } }), [outgoingClaimIds]);
+  const { entities: hydratedOutgoingClaims, isLoading: isOutgoingClaimsLoading } = useQueryEntities({
+    where: outgoingClaimsWhere,
+    first: Math.max(outgoingClaimIds.length, 1),
+    enabled: isMounted && outgoingClaimIds.length > 0,
+  });
+
+  // Deduplicated topic relations + batch-hydrated Avatar/Cover thumbnails for Topic pills
+  const topicRelations = React.useMemo(() => {
+    const raw = readEntityRelations(entity, TEMPLATE_ONTOLOGY.TOPICS_PROPERTY_ID);
+    const seen = new Set<string>();
+    const out: Relation[] = [];
+    for (const rel of raw) {
+      const hex = ID.uuidToHex(rel.toEntity.id);
+      if (seen.has(hex)) continue;
+      seen.add(hex);
+      out.push(rel);
+    }
+    return out;
+  }, [entity]);
+
+  const topicIds = React.useMemo(() => topicRelations.map(rel => rel.toEntity.id), [topicRelations]);
+  const topicMediaQuery = useTopicMediaBatch(topicIds);
+
+  // Merge incoming citing claims + outgoing related/notable claims (deduplicated by hex ID)
+  const combinedClaimSeeds = React.useMemo(() => {
+    const hydratedByHex = new Map<string, Entity>();
+    for (const item of hydratedOutgoingClaims) {
+      hydratedByHex.set(ID.uuidToHex(item.id), item);
+    }
+
+    const byHex = new Map<string, { id: string; title: string; kind?: ClaimKind; href: string }>();
+
+    for (const claim of citingClaims) {
+      if (!claim.name) continue;
+      const hex = ID.uuidToHex(claim.id);
+      byHex.set(hex, {
+        id: claim.id,
+        title: claim.name,
+        kind: readClaimKind(claim.values),
+        href: NavUtils.toEntity(resolveEntitySpaceId(claim, spaceId), claim.id),
+      });
+    }
+
+    for (const rel of outgoingClaimRelations) {
+      const hex = ID.uuidToHex(rel.toEntity.id);
+      if (byHex.has(hex)) continue;
+      const hydrated = hydratedByHex.get(hex);
+      const claimTitle = hydrated?.name?.trim() || rel.toEntity.name?.trim();
+      if (!claimTitle) continue;
+      const targetSpace = hydrated
+        ? resolveEntitySpaceId(hydrated, rel.toSpaceId ?? spaceId)
+        : (rel.toSpaceId ?? spaceId);
+      byHex.set(hex, {
+        id: rel.toEntity.id,
+        title: claimTitle,
+        kind: hydrated ? readClaimKind(hydrated.values) : undefined,
+        href: NavUtils.toEntity(targetSpace, rel.toEntity.id),
+      });
+    }
+
+    return Array.from(byHex.values());
+  }, [citingClaims, hydratedOutgoingClaims, outgoingClaimRelations, spaceId]);
 
   const claimBatchTargets = React.useMemo(
-    () => citingClaims.map(claim => ({ entityId: claim.id, responseKind: 'stance' as const })),
-    [citingClaims]
+    () => combinedClaimSeeds.map(claim => ({ entityId: claim.id, responseKind: 'stance' as const })),
+    [combinedClaimSeeds]
   );
   const responseBatch = useClaimResponseSummaryBatch({
     spaceId,
@@ -123,8 +234,7 @@ export function useLiveSourceTemplate({
     const summary =
       readEntityTextValue(entity, TEMPLATE_ONTOLOGY.SUMMARY_PROPERTY_ID) ?? entity.description ?? undefined;
 
-    const topics = readEntityRelations(entity, TEMPLATE_ONTOLOGY.TOPICS_PROPERTY_ID);
-    const firstTopic = topics[0];
+    const firstTopic = topicRelations[0];
     const breadcrumbs: BreadcrumbItem[] | undefined = firstTopic
       ? [
           {
@@ -157,8 +267,7 @@ export function useLiveSourceTemplate({
         };
       });
 
-    const supportedClaims: ClaimSummaryModel[] = citingClaims
-      .filter(claim => Boolean(claim.name))
+    const supportedClaims: ClaimSummaryModel[] = combinedClaimSeeds
       .map(claim => {
         const batch = responseBatch.data?.get(claimResponseTargetKey({ entityId: claim.id, responseKind: 'stance' }));
         const pos = batch?.counts.positive ?? 0;
@@ -168,8 +277,8 @@ export function useLiveSourceTemplate({
         const isAccepted = total >= 2 && pct !== undefined && (pct >= 75 || pct <= 25);
         return {
           id: claim.id,
-          title: claim.name ?? claim.id,
-          kind: readClaimKind(claim.values),
+          title: claim.title,
+          kind: claim.kind,
           overallPercent: pct,
           meta: total > 0 ? [`${total.toLocaleString('en-US')} ${total === 1 ? 'vote' : 'votes'}`] : undefined,
           split: {
@@ -189,9 +298,22 @@ export function useLiveSourceTemplate({
             isSplit: !isAccepted,
             totalVotes: total > 0 ? total : undefined,
           },
-          href: NavUtils.toEntity(resolveEntitySpaceId(claim, spaceId), claim.id),
+          href: claim.href,
         };
-      });
+      })
+      .sort((a, b) => (b.split.totalVotes ?? 0) - (a.split.totalVotes ?? 0));
+
+    // Topic pills with circular images
+    const topicMediaByHex = topicMediaQuery.data;
+    const topics: ClaimTopicPillModel[] = topicRelations.map(rel => {
+      const hex = ID.uuidToHex(rel.toEntity.id);
+      return {
+        id: rel.toEntity.id,
+        label: rel.toEntity.name ?? rel.toEntity.id,
+        imageUrl: topicMediaByHex?.get(hex) ?? null,
+        href: NavUtils.toEntity(rel.toSpaceId ?? spaceId, rel.toEntity.id),
+      };
+    });
 
     const sections: EntityListSectionModel[] = [];
 
@@ -212,24 +334,13 @@ export function useLiveSourceTemplate({
       });
     }
 
-    if (topics.length > 0) {
-      sections.push({
-        id: 'topics',
-        title: 'Topics',
-        items: topics.map(rel => ({
-          id: rel.toEntity.id,
-          kind: 'topic',
-          kindLabel: 'Topic',
-          title: rel.toEntity.name ?? rel.toEntity.id,
-          href: NavUtils.toEntity(rel.toSpaceId ?? spaceId, rel.toEntity.id),
-        })),
-      });
-    }
-
     const graphConnections = extractGraphConnections(entity, spaceId, [
       TEMPLATE_ONTOLOGY.TOPICS_PROPERTY_ID,
       TEMPLATE_ONTOLOGY.PUBLISHER_PROPERTY_ID,
       TEMPLATE_ONTOLOGY.AUTHORS_PROPERTY_ID,
+      TEMPLATE_ONTOLOGY.RELATED_CLAIMS_PROPERTY_ID,
+      TEMPLATE_ONTOLOGY.NOTABLE_CLAIMS_PROPERTY_ID,
+      TEMPLATE_ONTOLOGY.TOPIC_CLAIMS_PROPERTY_ID,
     ]);
     const flags = extractEntityFlags(entity, spaceId);
 
@@ -249,6 +360,7 @@ export function useLiveSourceTemplate({
       externalUrl,
       breadcrumbs,
       tags: extraTags.length > 0 ? extraTags : undefined,
+      topics: topics.length > 0 ? topics : undefined,
       metadata,
       graphConnections: graphConnections.length > 0 ? graphConnections : undefined,
       contextByEntityId: buildEntityContextMap(entity.id, flags),
@@ -256,19 +368,31 @@ export function useLiveSourceTemplate({
       sections,
     };
   }, [
-    citingClaims,
     citingStories,
+    combinedClaimSeeds,
     entity,
     responseBatch.data,
     serverCoverUrl,
     sourceQuotes,
     space?.entity?.name,
     spaceId,
+    topicMediaQuery.data,
+    topicRelations,
   ]);
+
+  const isSectionsLoading = useInitialHydrationGate(
+    !isMounted ||
+      isCitingClaimsLoading ||
+      isQuotesLoading ||
+      isStoriesLoading ||
+      (outgoingClaimIds.length > 0 && isOutgoingClaimsLoading),
+    `${ID.uuidToHex(entityId)}:${ID.uuidToHex(spaceId)}`
+  );
 
   return {
     data: model,
     isLoading: isLoading && !entity,
+    isSectionsLoading,
     source: 'live',
     actionCallbacks,
   };

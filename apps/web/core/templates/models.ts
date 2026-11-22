@@ -696,6 +696,8 @@ export interface SourceTemplateModel {
   externalLabel?: string;
   breadcrumbs?: readonly BreadcrumbItem[];
   tags?: readonly string[];
+  /** Linked Topics rendered as rounded pills with circular thumbnail images. */
+  topics?: readonly ClaimTopicPillModel[];
   graphConnections?: readonly GraphConnectionGroupModel[];
   metadata: readonly { label: string; value: string }[];
   supportedClaims: readonly ClaimSummaryModel[];
