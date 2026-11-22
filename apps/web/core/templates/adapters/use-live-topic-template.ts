@@ -56,7 +56,7 @@ import {
 } from '../ontology';
 import { useLiveEntityActions } from './use-live-entity-actions';
 
-const LIVE_CLAIMS_LIMIT = 24;
+const LIVE_CLAIMS_LIMIT = 40;
 const LIVE_COVERAGE_LIMIT = 12;
 
 const MULTI_SPACE_CLAIM_VOTES_QUERY = parse(/* GraphQL */ `
@@ -108,17 +108,19 @@ async function fetchTopicFeedSlice({
   topicId,
   spaceId,
   typeId,
+  sort = 'best',
   signal,
 }: {
   topicId: string;
   spaceId: string;
   typeId: string;
+  sort?: 'best' | 'top';
   signal?: AbortSignal;
 }): Promise<ExploreFeedItem[]> {
   const params = new URLSearchParams({
     topicId,
     spaceId,
-    sort: 'best',
+    sort,
     typeIds: typeId,
   });
   const response = await fetch(`/api/topics/feed?${params.toString()}`, {
@@ -225,10 +227,18 @@ export function useLiveTopicTemplate({
   // Optimistic inline vote state per claim so Agree/Disagree on Topic rows responds immediately.
   const [localVotes, setLocalVotes] = React.useState<Record<string, VoteChoice>>({});
 
-  // 1. Best-ranked Claims, Debates, and News stories from Geo's topic ranking feed
+  // 1. Top-voted AND Best-ranked Claims, Debates, and News stories from Geo's topic ranking feed
+  const topClaimsQuery = useQuery({
+    queryKey: ['live-topic-template', 'top-claims', ID.uuidToHex(entityId), ID.uuidToHex(spaceId)],
+    queryFn: ({ signal }) =>
+      fetchTopicFeedSlice({ topicId: entityId, spaceId, typeId: CLAIM_TYPE_ID, sort: 'top', signal }),
+    staleTime: 60_000,
+  });
+
   const bestClaimsQuery = useQuery({
     queryKey: ['live-topic-template', 'best-claims', ID.uuidToHex(entityId), ID.uuidToHex(spaceId)],
-    queryFn: ({ signal }) => fetchTopicFeedSlice({ topicId: entityId, spaceId, typeId: CLAIM_TYPE_ID, signal }),
+    queryFn: ({ signal }) =>
+      fetchTopicFeedSlice({ topicId: entityId, spaceId, typeId: CLAIM_TYPE_ID, sort: 'best', signal }),
     staleTime: 60_000,
   });
 
@@ -290,6 +300,23 @@ export function useLiveTopicTemplate({
       seeds.push(item);
     };
 
+    for (const item of topClaimsQuery.data ?? []) {
+      add({
+        id: item.entityId,
+        title: item.title,
+        spaceId: item.spaceId || spaceId,
+        spaceName: item.spaceName,
+      });
+    }
+    for (const debateItem of bestDebatesQuery.data ?? []) {
+      if (!debateItem.debateClaim?.entityId || !debateItem.debateClaim?.name) continue;
+      add({
+        id: debateItem.debateClaim.entityId,
+        title: debateItem.debateClaim.name,
+        spaceId: debateItem.spaceId || spaceId,
+        spaceName: debateItem.spaceName,
+      });
+    }
     for (const item of bestClaimsQuery.data ?? []) {
       add({
         id: item.entityId,
@@ -316,7 +343,7 @@ export function useLiveTopicTemplate({
       });
     }
     return seeds.slice(0, LIVE_CLAIMS_LIMIT);
-  }, [bestClaimsQuery.data, directClaimRels, linkedClaims, spaceId]);
+  }, [bestClaimsQuery.data, bestDebatesQuery.data, directClaimRels, linkedClaims, spaceId, topClaimsQuery.data]);
 
   // Batch-hydrate claim entities that came from `/api/topics/feed` so we read their real `Is factual` value
   const claimIdsToHydrate = React.useMemo(
@@ -488,6 +515,8 @@ export function useLiveTopicTemplate({
     ): {
       rows: SplitRow[];
       total: number;
+      agreeCount: number;
+      disagreeCount: number;
       percent: number | undefined;
       userVote: VoteChoice;
       isAccepted: boolean;
@@ -556,7 +585,7 @@ export function useLiveTopicTemplate({
         }
       }
 
-      return { rows, total, percent, userVote, isAccepted };
+      return { rows, total, agreeCount: pos, disagreeCount: neg, percent, userVote, isAccepted };
     };
 
     // Count debates per claim ID from the topic's debates so Claim rows show debate counts
@@ -574,7 +603,10 @@ export function useLiveTopicTemplate({
     for (const seed of orderedClaimSeeds) {
       const hex = ID.uuidToHex(seed.id);
       const kind = seed.kind ?? hydratedClaimKindByHex.get(hex);
-      const { rows, total, percent, userVote, isAccepted } = buildSplitForClaim(seed.id, seed.spaceName);
+      const { rows, total, agreeCount, disagreeCount, percent, userVote, isAccepted } = buildSplitForClaim(
+        seed.id,
+        seed.spaceName
+      );
       const debateCount = debateCountByClaimHex.get(hex);
       const claimHref = NavUtils.toEntity(seed.spaceId, seed.id);
 
@@ -583,6 +615,8 @@ export function useLiveTopicTemplate({
         title: seed.title,
         kind,
         overallPercent: percent,
+        agreeCount,
+        disagreeCount,
         userVote,
         debateCount: debateCount && debateCount > 0 ? debateCount : undefined,
         debatesHref: debateCount && debateCount > 0 ? `${claimHref}/debates` : undefined,
@@ -621,9 +655,9 @@ export function useLiveTopicTemplate({
       const { claimTitle, speakers } = parseDebateTitle(item.title, item.debateClaim?.name);
       const claimId = item.debateClaim?.entityId ?? item.entityId;
       const claimSplit = buildSplitForClaim(claimId, item.spaceName);
-      const fallbackStill = resolveTemplateImageUrl(item.imageUrl) ?? undefined;
-      const slot1Avatar = resolveTemplateImageUrl(item.debatePosters?.slot1) ?? fallbackStill;
-      const slot2Avatar = resolveTemplateImageUrl(item.debatePosters?.slot2) ?? undefined;
+      const normDebateId = ID.uuidToHex(item.entityId).toLowerCase();
+      const slot1Avatar = resolveTemplateImageUrl(item.debatePosters?.slot1) ?? `/api/debates/still/${normDebateId}/1`;
+      const slot2Avatar = resolveTemplateImageUrl(item.debatePosters?.slot2) ?? `/api/debates/still/${normDebateId}/2`;
       const dateStr = formatUnixSecDate(item.createdAtSec) ?? 'Debate';
       const votesLabel =
         claimSplit.total > 0

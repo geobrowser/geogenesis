@@ -325,6 +325,14 @@ function SpeakerVideoStill({
   participant: TopicRecentDebateParticipantModel;
   tone: 'top' | 'bottom';
 }) {
+  const [imgFailed, setImgFailed] = React.useState(false);
+
+  React.useEffect(() => {
+    setImgFailed(false);
+  }, [participant.avatarUrl]);
+
+  const showImage = Boolean(participant.avatarUrl) && !imgFailed;
+
   return (
     <div
       className="relative aspect-[480/289] w-full overflow-hidden"
@@ -335,10 +343,12 @@ function SpeakerVideoStill({
             : `radial-gradient(circle at 50% 42%, ${participant.communityColor}2e 0%, #1f2228 56%, #131417 100%)`,
       }}
     >
-      {participant.avatarUrl ? (
+      {showImage ? (
         <img
           src={participant.avatarUrl}
           alt={participant.name}
+          loading="lazy"
+          onError={() => setImgFailed(true)}
           className="h-full w-full object-cover"
           draggable={false}
         />
@@ -353,12 +363,22 @@ function SpeakerVideoStill({
         </div>
       )}
 
-      {/* Subtle bottom scrim + speaker name & position chip */}
+      {/* Subtle edge scrim + speaker name & position chip (top edge on top tile so it never collides with the center play button) */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-black/65 to-transparent"
+        className={cx(
+          'pointer-events-none absolute inset-x-0 h-12',
+          tone === 'top'
+            ? 'top-0 bg-gradient-to-b from-black/60 to-transparent'
+            : 'bottom-0 bg-gradient-to-t from-black/65 to-transparent'
+        )}
       />
-      <div className="pointer-events-none absolute right-2.5 bottom-2 left-2.5 flex max-w-[calc(100%-20px)] items-center gap-1.5 self-start">
+      <div
+        className={cx(
+          'pointer-events-none absolute right-2.5 left-2.5 flex max-w-[calc(100%-20px)] items-center gap-1.5 self-start',
+          tone === 'top' ? 'top-2' : 'bottom-2'
+        )}
+      >
         <span className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-black/55 px-2 py-0.5 text-[12px] leading-[16px] text-white backdrop-blur-xs">
           <span
             aria-hidden

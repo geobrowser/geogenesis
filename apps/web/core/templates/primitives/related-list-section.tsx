@@ -160,11 +160,7 @@ export function RelatedListSection({ section, className }: RelatedListSectionPro
         </p>
       ) : useCards ? (
         <div className="flex flex-col gap-3">
-          <div className="grid grid-cols-1 items-start gap-4 @[640px]:grid-cols-2">
-            {visibleItems.map(item => (
-              <RichMediaCard key={item.id} item={item} />
-            ))}
-          </div>
+          <BalancedTwoColumnMasonry items={visibleItems} />
           {totalPages > 1 && (
             <InlinePagination page={safePage} totalPages={totalPages} onPageChange={setPage} label={`${title} pages`} />
           )}
@@ -188,6 +184,53 @@ export function RelatedListSection({ section, className }: RelatedListSectionPro
         </div>
       )}
     </section>
+  );
+}
+
+function estimateCardWeight(item: EntityLinkRowModel): number {
+  const mediaType = inferMediaType(item);
+  let weight = 1;
+  if (mediaType === 'video' || Boolean(item.thumbnailUrl)) weight += 1.4;
+  if (item.quotes && item.quotes.length > 0) weight += 0.7;
+  if ((item.excerpt?.length ?? 0) > 140) weight += 0.3;
+  return weight;
+}
+
+/**
+ * Balanced 2-column masonry using two independent flex stacks so tall media/video cards
+ * never leave awkward vertical gaps in the opposite column, while keeping `overflow-visible`
+ * for anchored popovers.
+ */
+function BalancedTwoColumnMasonry({ items }: { items: readonly EntityLinkRowModel[] }) {
+  const left: EntityLinkRowModel[] = [];
+  const right: EntityLinkRowModel[] = [];
+  let leftWeight = 0;
+  let rightWeight = 0;
+
+  for (const item of items) {
+    const w = estimateCardWeight(item);
+    if (leftWeight <= rightWeight) {
+      left.push(item);
+      leftWeight += w;
+    } else {
+      right.push(item);
+      rightWeight += w;
+    }
+  }
+
+  return (
+    <div className="grid grid-cols-1 items-start gap-4 @[640px]:grid-cols-2">
+      <div className="flex min-w-0 flex-col gap-4">
+        {left.map(item => (
+          <RichMediaCard key={item.id} item={item} />
+        ))}
+      </div>
+      <div className="flex min-w-0 flex-col gap-4">
+        {right.map(item => (
+          <RichMediaCard key={item.id} item={item} />
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -250,10 +293,7 @@ function RichMediaCard({ item }: { item: EntityLinkRowModel }) {
   const mediaType = inferMediaType(item);
   const leadQuote = item.quotes?.[0];
   const resolvedThumb = resolveTemplateImageUrl(item.thumbnailUrl);
-  const cardClasses = cx(
-    'flex w-full flex-col justify-between gap-3.5 p-5 text-left text-text',
-    TEMPLATE_INTERACTIVE_CARD_SURFACE
-  );
+  const cardClasses = cx('flex w-full flex-col gap-3 p-5 text-left text-text', TEMPLATE_INTERACTIVE_CARD_SURFACE);
 
   const overflow = !item.plain ? (
     <EntityOverflowMenu target={{ id: item.id, kind: item.kindLabel || 'Source', title: item.title }} />
@@ -343,7 +383,7 @@ function RichMediaCard({ item }: { item: EntityLinkRowModel }) {
           </div>
 
           <CardClickable item={item}>
-            <p className="m-0 text-[15px] leading-[23px] text-text">{item.excerpt ?? item.title}</p>
+            <p className="m-0 line-clamp-4 text-[15px] leading-[23px] text-text">{item.excerpt ?? item.title}</p>
           </CardClickable>
 
           {leadQuote && <SourceQuoteBlock quote={leadQuote} />}

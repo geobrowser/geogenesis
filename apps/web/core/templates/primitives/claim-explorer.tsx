@@ -239,6 +239,16 @@ function RankedClaimRow({ rank, claim, isAgreed }: { rank: number; claim: ClaimS
                   >
                     <ThumbUpIcon className="size-3.5 shrink-0" />
                     <span>Agree</span>
+                    {claim.agreeCount !== undefined && claim.agreeCount > 0 && (
+                      <span
+                        className={cx(
+                          'text-[12px] tabular-nums',
+                          claim.userVote === 'agree' ? 'text-white/80' : 'text-grey-04'
+                        )}
+                      >
+                        {formatCompactCount(claim.agreeCount)}
+                      </span>
+                    )}
                   </button>
 
                   <button
@@ -254,6 +264,16 @@ function RankedClaimRow({ rank, claim, isAgreed }: { rank: number; claim: ClaimS
                   >
                     <ThumbDownIcon className="size-3.5 shrink-0" />
                     <span>Disagree</span>
+                    {claim.disagreeCount !== undefined && claim.disagreeCount > 0 && (
+                      <span
+                        className={cx(
+                          'text-[12px] tabular-nums',
+                          claim.userVote === 'disagree' ? 'text-white/80' : 'text-grey-04'
+                        )}
+                      >
+                        {formatCompactCount(claim.disagreeCount)}
+                      </span>
+                    )}
                   </button>
                 </div>
               )}
@@ -303,15 +323,18 @@ function RankedClaimRow({ rank, claim, isAgreed }: { rank: number; claim: ClaimS
       </div>
 
       <div className="flex shrink-0 items-center gap-3 pl-10 @[760px]:pl-0">
-        {claim.split.rows.length > 0 && (
+        {claim.split.rows.length > 0 ? (
           <SplitBars rows={claim.split.rows} density="compact" className="w-[264px] shrink-0" />
+        ) : (
+          <div className="hidden w-[264px] shrink-0 items-center gap-2 @[760px]:flex">
+            <div className="h-[5px] flex-1 overflow-hidden rounded-full bg-grey-01" />
+            <span className="w-[38px] text-right text-[12.5px] text-grey-03 tabular-nums">—</span>
+          </div>
         )}
 
-        {voteCountLabel && (
-          <span className="w-[76px] shrink-0 text-right text-[13px] whitespace-nowrap text-grey-04 tabular-nums">
-            {voteCountLabel}
-          </span>
-        )}
+        <span className="w-[76px] shrink-0 text-right text-[13px] whitespace-nowrap text-grey-04 tabular-nums">
+          {voteCountLabel ?? '0 votes'}
+        </span>
 
         <EntityOverflowMenu
           target={{ id: claim.id, kind: 'Claim', title: claim.title }}

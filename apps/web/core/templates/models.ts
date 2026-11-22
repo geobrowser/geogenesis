@@ -104,6 +104,9 @@ export interface ClaimSummaryModel {
   split: SplitBreakdown;
   /** Optional headline percentage (e.g. overall % agree) shown on lead contested cards. */
   overallPercent?: number;
+  /** Optional explicit Agree / Disagree vote totals for inline vote button counters. */
+  agreeCount?: number;
+  disagreeCount?: number;
   /** Short source/basis attribution shown on agreed claim cards. */
   basisSummary?: string;
   /** Optional metadata items (e.g. "2,418 votes", "7 debates"). */
