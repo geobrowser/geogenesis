@@ -28,7 +28,7 @@ export function LiveClaimTemplateView({
   compact = false,
   footer,
 }: LiveClaimTemplateViewProps) {
-  const { data, isLoading, actionCallbacks } = useLiveClaimTemplate({
+  const { data, isLoading, isSectionsLoading, actionCallbacks } = useLiveClaimTemplate({
     entityId,
     spaceId,
     serverCoverUrl,
@@ -36,7 +36,7 @@ export function LiveClaimTemplateView({
 
   if (isLoading) {
     return (
-      <div className="mx-auto flex w-full max-w-[840px] flex-col gap-4 px-4 py-6">
+      <div className="mx-auto flex w-full max-w-[980px] flex-col gap-4 px-4 py-6">
         <Skeleton className="h-9 w-3/4 rounded" />
         <Skeleton className="h-[140px] w-full rounded-xl" />
       </div>
@@ -50,6 +50,7 @@ export function LiveClaimTemplateView({
       model={data}
       actionCallbacks={actionCallbacks}
       compact={compact}
+      isLoadingSections={isSectionsLoading}
       headerActions={<EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable={false} compact={compact} />}
       footer={footer}
     />

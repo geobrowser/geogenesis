@@ -227,6 +227,7 @@ describe('RelatedListSection', () => {
     expect(screen.getByText('18:40')).toBeInTheDocument();
     expect(screen.getByText('@official')).toBeInTheDocument();
     expect(screen.getByText('Key quote from the post.')).toBeInTheDocument();
+    expect(document.querySelectorAll('[data-masonry-col]').length).toBeGreaterThan(0);
   });
 });
 
@@ -264,7 +265,9 @@ describe('Context & Disputes empty states, inline pill +, and pagination', () =>
     );
 
     expect(screen.getByText('No context added yet.')).toBeInTheDocument();
-    expect(screen.getByText('No disputes')).toBeInTheDocument();
+    const noDisputes = screen.getByText('No disputes');
+    expect(noDisputes).toBeInTheDocument();
+    expect(noDisputes.closest('section')?.querySelectorAll('svg')).toHaveLength(1); // only the '+' icon button
 
     // Clicking `+` on Context opens an anchored popover (no full-screen modal) and adds triples
     fireEvent.click(screen.getByRole('button', { name: 'Add context' }));

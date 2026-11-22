@@ -18,6 +18,7 @@ import {
   GraphConnectionsStrip,
   RecentDebatesGallery,
   RelatedListSection,
+  TEMPLATE_CARD_SURFACE,
   TemplateBadge,
   TemplateShell,
 } from '../primitives';
@@ -34,6 +35,8 @@ export interface TopicTemplateProps {
   compact?: boolean;
   /** Embedded inside a Topic Space shell: omits duplicate cover, breadcrumbs, H1, and lede. */
   embedded?: boolean;
+  /** True briefly during initial client hydration so sections reveal calmly instead of popping in one by one. */
+  isLoadingSections?: boolean;
   className?: string;
 }
 
@@ -49,6 +52,7 @@ export function TopicTemplate({
   actionCallbacks,
   compact = false,
   embedded = false,
+  isLoadingSections = false,
   className,
 }: TopicTemplateProps) {
   const contested = model.contestedClaims ?? [];
@@ -145,102 +149,135 @@ export function TopicTemplate({
         </header>
       )}
 
-      {/* Calm single-column Claims list with 2-tab switch (Disputed | Accepted) */}
-      {(contested.length > 0 || agreed.length > 0) && (
-        <ClaimExplorer contestedClaims={contested} agreedClaims={agreed} title="Claims" />
-      )}
-
-      {/* Recent debates gallery (horizontal snap-scroll cards matching Genesis's debate gallery) */}
-      {model.recentDebates && model.recentDebates.length > 0 && <RecentDebatesGallery debates={model.recentDebates} />}
-
-      {/* Timeline (rendered open directly on the page) */}
-      {timelineHighlights.length > 0 && (
-        <section id="timeline" aria-label="Timeline" className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="m-0 text-mediumTitle font-semibold text-text">Timeline</h2>
-            <div className="flex items-center gap-3">
-              {model.timelineHref ? (
-                <Link
-                  href={model.timelineHref}
-                  className="inline-flex items-center gap-1.5 text-[15px] font-medium text-ctaPrimary no-underline hover:text-ctaHover"
-                >
-                  <span>Full timeline</span>
-                  <ArrowRightIcon className="size-4" />
-                </Link>
-              ) : model.onOpenTimeline ? (
-                <button
-                  type="button"
-                  onClick={model.onOpenTimeline}
-                  className="inline-flex cursor-pointer items-center gap-1.5 border-0 bg-transparent p-0 text-[15px] font-medium text-ctaPrimary hover:text-ctaHover"
-                >
-                  <span>Full timeline</span>
-                  <ArrowRightIcon className="size-4" />
-                </button>
-              ) : null}
-
-              <AddEntityItemPopover
-                label="Add event"
-                primaryLabel="Event"
-                primaryPlaceholder="e.g. UN Security Council adopts resolution"
-                secondaryLabel="Date"
-                secondaryPlaceholder="e.g. 18 Nov 2026"
-                tertiaryLabel="Summary (optional)"
-                tertiaryPlaceholder="Brief neutral summary of what happened..."
-                onSubmit={draft => {
-                  actionCallbacks?.onAddEvent?.({
-                    title: draft.primary,
-                    when: draft.secondary,
-                    summary: draft.tertiary,
-                  });
-                  setAddedTimelineTurns(prev => [
-                    {
-                      id: `user-ev-${Date.now()}`,
-                      when: draft.secondary ?? 'Recent',
-                      title: draft.primary,
-                      summary: draft.tertiary,
-                    },
-                    ...prev,
-                  ]);
-                }}
-              />
+      {isLoadingSections ? (
+        <div aria-busy="true" aria-label="Loading topic sections" className="flex flex-col gap-10">
+          <div className="flex flex-col gap-3">
+            <div className="h-6 w-28 animate-pulse rounded-md bg-grey-01" />
+            <div className={`flex flex-col divide-y divide-divider overflow-hidden ${TEMPLATE_CARD_SURFACE}`}>
+              {Array.from({ length: 5 }, (_, idx) => (
+                <div key={idx} className="flex items-center justify-between gap-4 px-5 py-4">
+                  <div className="flex min-w-0 flex-1 flex-col gap-2">
+                    <div className="h-4 w-3/4 animate-pulse rounded bg-grey-01" />
+                    <div className="h-6 w-48 animate-pulse rounded-full bg-grey-01" />
+                  </div>
+                  <div className="hidden h-3 w-44 animate-pulse rounded-full bg-grey-01 @[760px]:block" />
+                </div>
+              ))}
             </div>
           </div>
-          <ol className="m-0 flex list-none flex-col p-0">
-            {timelineHighlights.map((turn, idx) => (
-              <TimelineHighlightRow
-                key={turn.id}
-                turn={turn}
-                isFirst={idx === 0}
-                isLast={idx === timelineHighlights.length - 1}
-              />
-            ))}
-          </ol>
-        </section>
-      )}
-
-      {/* Sources & evidence (and additional structured sections) */}
-      {model.sections && model.sections.length > 0 && (
-        <div id="sources-section" className="flex flex-col gap-8">
-          {model.sections.map(section => (
-            <RelatedListSection key={section.id} section={section} />
-          ))}
+          <div className="flex flex-col gap-3">
+            <div className="h-6 w-40 animate-pulse rounded-md bg-grey-01" />
+            <div className="grid grid-cols-1 gap-4 @[640px]:grid-cols-3">
+              {Array.from({ length: 3 }, (_, idx) => (
+                <div key={idx} className={`h-[320px] animate-pulse ${TEMPLATE_CARD_SURFACE} bg-grey-01/60`} />
+              ))}
+            </div>
+          </div>
         </div>
-      )}
-
-      {/* Context relations & Disputes side-by-side on live Topic pages */}
-      {(hasContextOrLive || hasFlagsOrLive) && (
-        <div
-          className={
-            hasContextOrLive && hasFlagsOrLive ? 'grid grid-cols-1 items-start gap-8 @[720px]:grid-cols-2' : undefined
-          }
-        >
-          {hasContextOrLive && (
-            <GraphConnectionsStrip
-              groups={model.graphConnections ?? []}
-              target={{ id: model.id, kind: 'Topic', title: model.title }}
-            />
+      ) : (
+        <div className="flex animate-fade-in flex-col gap-10">
+          {/* Calm single-column Claims list with 2-tab switch (Disputed | Accepted) */}
+          {(contested.length > 0 || agreed.length > 0) && (
+            <ClaimExplorer contestedClaims={contested} agreedClaims={agreed} title="Claims" />
           )}
-          {hasFlagsOrLive && <EntityFlagsSection target={{ id: model.id, kind: 'Topic', title: model.title }} />}
+
+          {/* Recent debates gallery (horizontal snap-scroll cards matching Genesis's debate gallery) */}
+          {model.recentDebates && model.recentDebates.length > 0 && (
+            <RecentDebatesGallery debates={model.recentDebates} />
+          )}
+
+          {/* Timeline (rendered open directly on the page) */}
+          {timelineHighlights.length > 0 && (
+            <section id="timeline" aria-label="Timeline" className="flex flex-col gap-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 className="m-0 text-mediumTitle font-semibold text-text">Timeline</h2>
+                <div className="flex items-center gap-3">
+                  {model.timelineHref ? (
+                    <Link
+                      href={model.timelineHref}
+                      className="inline-flex items-center gap-1.5 text-[15px] font-medium text-ctaPrimary no-underline hover:text-ctaHover"
+                    >
+                      <span>Full timeline</span>
+                      <ArrowRightIcon className="size-4" />
+                    </Link>
+                  ) : model.onOpenTimeline ? (
+                    <button
+                      type="button"
+                      onClick={model.onOpenTimeline}
+                      className="inline-flex cursor-pointer items-center gap-1.5 border-0 bg-transparent p-0 text-[15px] font-medium text-ctaPrimary hover:text-ctaHover"
+                    >
+                      <span>Full timeline</span>
+                      <ArrowRightIcon className="size-4" />
+                    </button>
+                  ) : null}
+
+                  <AddEntityItemPopover
+                    label="Add event"
+                    primaryLabel="Event"
+                    primaryPlaceholder="e.g. UN Security Council adopts resolution"
+                    secondaryLabel="Date"
+                    secondaryPlaceholder="e.g. 18 Nov 2026"
+                    tertiaryLabel="Summary (optional)"
+                    tertiaryPlaceholder="Brief neutral summary of what happened..."
+                    onSubmit={draft => {
+                      actionCallbacks?.onAddEvent?.({
+                        title: draft.primary,
+                        when: draft.secondary,
+                        summary: draft.tertiary,
+                      });
+                      setAddedTimelineTurns(prev => [
+                        {
+                          id: `user-ev-${Date.now()}`,
+                          when: draft.secondary ?? 'Recent',
+                          title: draft.primary,
+                          summary: draft.tertiary,
+                        },
+                        ...prev,
+                      ]);
+                    }}
+                  />
+                </div>
+              </div>
+              <ol className="m-0 flex list-none flex-col p-0">
+                {timelineHighlights.map((turn, idx) => (
+                  <TimelineHighlightRow
+                    key={turn.id}
+                    turn={turn}
+                    isFirst={idx === 0}
+                    isLast={idx === timelineHighlights.length - 1}
+                  />
+                ))}
+              </ol>
+            </section>
+          )}
+
+          {/* Sources & evidence (and additional structured sections) */}
+          {model.sections && model.sections.length > 0 && (
+            <div id="sources-section" className="flex flex-col gap-8">
+              {model.sections.map(section => (
+                <RelatedListSection key={section.id} section={section} />
+              ))}
+            </div>
+          )}
+
+          {/* Context relations & Disputes side-by-side on live Topic pages */}
+          {(hasContextOrLive || hasFlagsOrLive) && (
+            <div
+              className={
+                hasContextOrLive && hasFlagsOrLive
+                  ? 'grid grid-cols-1 items-start gap-8 @[720px]:grid-cols-2'
+                  : undefined
+              }
+            >
+              {hasContextOrLive && (
+                <GraphConnectionsStrip
+                  groups={model.graphConnections ?? []}
+                  target={{ id: model.id, kind: 'Topic', title: model.title }}
+                />
+              )}
+              {hasFlagsOrLive && <EntityFlagsSection target={{ id: model.id, kind: 'Topic', title: model.title }} />}
+            </div>
+          )}
         </div>
       )}
 

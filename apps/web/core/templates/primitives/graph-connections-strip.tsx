@@ -14,7 +14,6 @@ import {
   TemplateRelationPill,
   useEntityActionContext,
 } from './entity-overflow-menu';
-import { NetworkIcon } from './icons';
 import { TEMPLATE_CARD_SURFACE, TemplateEmptyState } from './template-shell';
 
 const GROUPS_PER_PAGE = 5;
@@ -167,7 +166,7 @@ export function GraphConnectionsStrip({ groups = [], target, className }: GraphC
           <InlinePagination page={safePage} totalPages={totalPages} onPageChange={setPage} label="Context pages" />
         </div>
       ) : (
-        <TemplateEmptyState icon={<NetworkIcon className="size-3.5" />}>No context added yet.</TemplateEmptyState>
+        <TemplateEmptyState>No context added yet.</TemplateEmptyState>
       )}
     </section>
   );

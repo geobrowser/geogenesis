@@ -32,7 +32,7 @@ export function LiveTopicTemplateView({
   embedded = false,
   footer,
 }: LiveTopicTemplateViewProps) {
-  const { data, isLoading, actionCallbacks } = useLiveTopicTemplate({
+  const { data, isLoading, isSectionsLoading, actionCallbacks } = useLiveTopicTemplate({
     entityId,
     spaceId,
     serverCoverUrl,
@@ -62,6 +62,7 @@ export function LiveTopicTemplateView({
       actionCallbacks={actionCallbacks}
       compact={compact}
       embedded={embedded}
+      isLoadingSections={isSectionsLoading}
       headerActions={
         embedded ? undefined : (
           <EntityPageActions

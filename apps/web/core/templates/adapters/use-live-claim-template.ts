@@ -41,6 +41,7 @@ import {
   readEntityRelations,
 } from '../ontology';
 import { resolveDebateStillSrc, useDebateParticipantsBatch } from './use-debate-participants-batch';
+import { useInitialHydrationGate } from './use-initial-hydration-gate';
 import { useLiveEntityActions } from './use-live-entity-actions';
 import { useTopicMediaBatch } from './use-topic-media-batch';
 
@@ -163,12 +164,12 @@ export function useLiveClaimTemplate({
     setIsMounted(true);
   }, []);
 
-  const { entities: incomingSupportingClaims } = useQueryEntities({
+  const { entities: incomingSupportingClaims, isLoading: isSupportingLoading } = useQueryEntities({
     where: incomingSupportsWhere,
     first: 12,
     enabled: isMounted,
   });
-  const { entities: incomingOpposingClaims } = useQueryEntities({
+  const { entities: incomingOpposingClaims, isLoading: isOpposingLoading } = useQueryEntities({
     where: incomingOpposesWhere,
     first: 12,
     enabled: isMounted,
@@ -661,9 +662,15 @@ export function useLiveClaimTemplate({
     topicRelations,
   ]);
 
+  const isSectionsLoading = useInitialHydrationGate(
+    !isMounted || isSupportingLoading || isOpposingLoading || record.debatesLoading || record.claimsLoading,
+    `${ID.uuidToHex(entityId)}:${ID.uuidToHex(spaceId)}`
+  );
+
   return {
     data: model,
     isLoading: isEntityLoading && !entity,
+    isSectionsLoading,
     source: 'live',
     actionCallbacks,
   };

@@ -56,6 +56,8 @@ export interface ClaimTemplateProps {
   actionCallbacks?: EntityActionCallbacks;
   /** Compact density when rendered inside the narrow entity side panel. */
   compact?: boolean;
+  /** Shows a calm skeleton below the VoteBox while async live sections coalesce in one smooth reveal. */
+  isLoadingSections?: boolean;
   className?: string;
 }
 
@@ -72,6 +74,7 @@ export function ClaimTemplate({
   footer,
   actionCallbacks,
   compact = false,
+  isLoadingSections = false,
   className,
 }: ClaimTemplateProps) {
   return (
@@ -100,9 +103,6 @@ export function ClaimTemplate({
         <div className="flex flex-wrap items-center gap-2">
           <TemplateBadge tone="neutral">Claim</TemplateBadge>
           <TemplateBadge tone={CLAIM_KIND_TONE[model.kind]}>{formatClaimKindLabel(model.kind)}</TemplateBadge>
-          {model.debateCount !== undefined && model.debateCount > 0 && (
-            <DebateCountLink count={model.debateCount} href={model.debatesHref} onSelect={model.onOpenDebates} />
-          )}
         </div>
 
         <EntityInlineContext targetId={model.id} targetTitle={model.title} targetKind="Claim" />
@@ -111,75 +111,104 @@ export function ClaimTemplate({
       {/* Vote box + community split bars */}
       <VoteBox split={model.split} control={model.voteBox} />
 
-      {/* Accepted basis (clean soft-shadow editorial panel) */}
-      {model.agreedBasis && (
-        <section aria-label="Accepted" className={`flex flex-col gap-4 p-5 @[560px]:p-6 ${TEMPLATE_CARD_SURFACE}`}>
-          <div className="flex items-center gap-2 text-ctaPrimary">
-            <CheckCircleIcon className="size-5" />
-            <h2 className="m-0 text-smallTitle text-text">Accepted</h2>
+      {isLoadingSections ? (
+        <div aria-busy="true" aria-label="Loading claim sections" className="flex flex-col gap-8">
+          <div className="flex flex-col gap-3">
+            <div className="h-6 w-44 animate-pulse rounded-md bg-grey-01" />
+            <div className={`flex flex-col divide-y divide-divider overflow-hidden ${TEMPLATE_CARD_SURFACE}`}>
+              {Array.from({ length: 4 }, (_, idx) => (
+                <div key={idx} className="flex items-center justify-between gap-4 px-5 py-4">
+                  <div className="flex min-w-0 flex-1 flex-col gap-2">
+                    <div className="h-4 w-3/4 animate-pulse rounded bg-grey-01" />
+                    <div className="h-6 w-48 animate-pulse rounded-full bg-grey-01" />
+                  </div>
+                  <div className="hidden h-3 w-44 animate-pulse rounded-full bg-grey-01 @[760px]:block" />
+                </div>
+              ))}
+            </div>
           </div>
-          <p className="m-0 text-[15.5px] leading-[24px] text-text/85">{model.agreedBasis.summary}</p>
-          {model.agreedBasis.settlingSources.length > 0 && (
-            <div className="flex flex-col gap-2.5 border-t border-divider pt-4">
-              <span className="text-[14px] font-medium text-grey-04">Primary sources</span>
-              <SourceChipList sources={model.agreedBasis.settlingSources} />
+          <div className="flex flex-col gap-3">
+            <div className="h-6 w-28 animate-pulse rounded-md bg-grey-01" />
+            <div className="grid grid-cols-1 gap-4 @[640px]:grid-cols-3">
+              {Array.from({ length: 3 }, (_, idx) => (
+                <div key={idx} className={`h-[320px] animate-pulse ${TEMPLATE_CARD_SURFACE} bg-grey-01/60`} />
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="flex animate-fade-in flex-col gap-10">
+          {/* Accepted basis (clean soft-shadow editorial panel) */}
+          {model.agreedBasis && (
+            <section aria-label="Accepted" className={`flex flex-col gap-4 p-5 @[560px]:p-6 ${TEMPLATE_CARD_SURFACE}`}>
+              <div className="flex items-center gap-2 text-ctaPrimary">
+                <CheckCircleIcon className="size-5" />
+                <h2 className="m-0 text-smallTitle text-text">Accepted</h2>
+              </div>
+              <p className="m-0 text-[15.5px] leading-[24px] text-text/85">{model.agreedBasis.summary}</p>
+              {model.agreedBasis.settlingSources.length > 0 && (
+                <div className="flex flex-col gap-2.5 border-t border-divider pt-4">
+                  <span className="text-[14px] font-medium text-grey-04">Primary sources</span>
+                  <SourceChipList sources={model.agreedBasis.settlingSources} />
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* Key stat callout */}
+          {model.keyStat && (
+            <section aria-label="Key evidence" className={`flex flex-col gap-3 p-5 ${TEMPLATE_CARD_SURFACE}`}>
+              <p className="m-0 text-[15.5px] leading-[24px] text-text">{model.keyStat.text}</p>
+              <SourceChipList sources={model.keyStat.sources} />
+            </section>
+          )}
+
+          {/* Supporting, Opposing, and Related claims (prominent, with Topic-style vote actions & bars) */}
+          {model.subClaims && model.subClaims.length > 0 && (
+            <GroupedSubClaimSections subClaims={model.subClaims} onAddClaim={actionCallbacks?.onAddClaim} />
+          )}
+
+          {/* Strongest cases */}
+          {model.strongestCases && model.strongestCases.length > 0 && (
+            <section aria-label="Strongest cases" className="flex flex-col gap-4">
+              <h2 className="m-0 text-mediumTitle font-semibold text-text">Strongest cases</h2>
+              <div className="grid grid-cols-1 gap-4 @[640px]:grid-cols-2">
+                {model.strongestCases.map(item => (
+                  <StrongestCaseCard key={item.id} item={item} />
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Debates gallery row with debate cards */}
+          {model.debates && model.debates.length > 0 && (
+            <RecentDebatesGallery
+              debates={model.debates}
+              title="Debates"
+              seeAllHref={model.debatesHref}
+              onSeeAll={model.onOpenDebates}
+            />
+          )}
+
+          {/* Topics pills with circular thumbnail images */}
+          {model.topics && model.topics.length > 0 && <TopicImagePills topics={model.topics} />}
+
+          {/* Related entity lists (Parent claim, Supporting quotes, Sources, More claims in this topic) */}
+          {model.sections.length > 0 && (
+            <div className="flex flex-col gap-8">
+              {model.sections.map(section => (
+                <RelatedListSection key={section.id} section={section} />
+              ))}
             </div>
           )}
-        </section>
-      )}
 
-      {/* Key stat callout */}
-      {model.keyStat && (
-        <section aria-label="Key evidence" className={`flex flex-col gap-3 p-5 ${TEMPLATE_CARD_SURFACE}`}>
-          <p className="m-0 text-[15.5px] leading-[24px] text-text">{model.keyStat.text}</p>
-          <SourceChipList sources={model.keyStat.sources} />
-        </section>
-      )}
-
-      {/* Supporting, Opposing, and Related claims (prominent, with Topic-style vote actions & bars) */}
-      {model.subClaims && model.subClaims.length > 0 && (
-        <GroupedSubClaimSections subClaims={model.subClaims} onAddClaim={actionCallbacks?.onAddClaim} />
-      )}
-
-      {/* Strongest cases */}
-      {model.strongestCases && model.strongestCases.length > 0 && (
-        <section aria-label="Strongest cases" className="flex flex-col gap-4">
-          <h2 className="m-0 text-mediumTitle font-semibold text-text">Strongest cases</h2>
-          <div className="grid grid-cols-1 gap-4 @[640px]:grid-cols-2">
-            {model.strongestCases.map(item => (
-              <StrongestCaseCard key={item.id} item={item} />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* Debates gallery row with debate cards */}
-      {model.debates && model.debates.length > 0 && (
-        <RecentDebatesGallery
-          debates={model.debates}
-          title="Debates"
-          seeAllHref={model.debatesHref}
-          onSeeAll={model.onOpenDebates}
-        />
-      )}
-
-      {/* Topics pills with circular thumbnail images */}
-      {model.topics && model.topics.length > 0 && <TopicImagePills topics={model.topics} />}
-
-      {/* Related entity lists (Parent claim, Supporting quotes, Sources, More claims in this topic) */}
-      {model.sections.length > 0 && (
-        <div className="flex flex-col gap-8">
-          {model.sections.map(section => (
-            <RelatedListSection key={section.id} section={section} />
-          ))}
+          {/* Context relations & Disputes side-by-side at the bottom of the page */}
+          <EntityContextAndDisputes
+            groups={model.graphConnections}
+            target={{ id: model.id, kind: 'Claim', title: model.title }}
+          />
         </div>
       )}
-
-      {/* Context relations & Disputes side-by-side at the bottom of the page */}
-      <EntityContextAndDisputes
-        groups={model.graphConnections}
-        target={{ id: model.id, kind: 'Claim', title: model.title }}
-      />
 
       {footer}
     </TemplateShell>

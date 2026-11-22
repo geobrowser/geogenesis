@@ -31,6 +31,8 @@ export interface NewsStoryTemplateProps {
   footer?: React.ReactNode;
   actionCallbacks?: EntityActionCallbacks;
   compact?: boolean;
+  /** Shows a calm skeleton below the Summary while claim groups and sources hydrate in one smooth reveal. */
+  isLoadingSections?: boolean;
   className?: string;
 }
 
@@ -48,6 +50,7 @@ export function NewsStoryTemplate({
   footer,
   actionCallbacks,
   compact = false,
+  isLoadingSections = false,
   className,
 }: NewsStoryTemplateProps) {
   const [addedClaimsByGroup, setAddedClaimsByGroup] = React.useState<Record<string, ClaimSummaryModel[]>>({});
@@ -193,98 +196,118 @@ export function NewsStoryTemplate({
         </section>
       )}
 
-      {/* Grouped narrative claims (Blocks / Perspectives) — scannable Geo News bulleted reading flow */}
-      {hasClaimGroups ? (
-        <div className="flex flex-col gap-8">
-          {model.claimGroups!.map(group => {
-            const claims = [...(addedClaimsByGroup[group.id] ?? []), ...group.claims];
-            return (
-              <section key={group.id} aria-label={group.title} className="flex flex-col gap-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex flex-col gap-1">
-                    <h2 className="m-0 text-mediumTitle font-semibold text-text">{group.title}</h2>
-                    {group.description && (
-                      <p className="m-0 text-[15px] leading-[22px] text-grey-04">{group.description}</p>
-                    )}
-                  </div>
-                  <AddClaimPopover
-                    label={`Add claim to ${group.title}`}
-                    onSubmit={draft => {
-                      actionCallbacks?.onAddClaim?.(draft);
-                      setAddedClaimsByGroup(prev => ({
-                        ...prev,
-                        [group.id]: [
-                          {
-                            id: `story-claim-${Date.now()}`,
-                            title: draft.title,
-                            kind: draft.kind,
-                            split: { rows: [], isSplit: false },
-                          },
-                          ...(prev[group.id] ?? []),
-                        ],
-                      }));
-                    }}
-                  />
-                </div>
-                <NewsClaimBulletList claims={claims} />
-              </section>
-            );
-          })}
-        </div>
-      ) : flatClaims.length > 0 ? (
-        <section aria-label="Claims" className="flex flex-col gap-3">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="m-0 text-mediumTitle font-semibold text-text">Claims</h2>
-            <AddClaimPopover
-              label="Add claim"
-              onSubmit={draft => {
-                actionCallbacks?.onAddClaim?.(draft);
-                setAddedClaimsByGroup(prev => ({
-                  ...prev,
-                  flat: [
-                    {
-                      id: `story-claim-${Date.now()}`,
-                      title: draft.title,
-                      kind: draft.kind,
-                      split: { rows: [], isSplit: false },
-                    },
-                    ...(prev.flat ?? []),
-                  ],
-                }));
-              }}
-            />
+      {isLoadingSections ? (
+        <div aria-busy="true" aria-label="Loading story sections" className="flex flex-col gap-8">
+          <div className="flex flex-col gap-3">
+            <div className="h-6 w-48 animate-pulse rounded-md bg-grey-01" />
+            <div className="h-4 w-full animate-pulse rounded bg-grey-01" />
+            <div className="h-4 w-5/6 animate-pulse rounded bg-grey-01" />
+            <div className="h-4 w-4/5 animate-pulse rounded bg-grey-01" />
           </div>
-          <NewsClaimBulletList claims={flatClaims} />
-        </section>
-      ) : null}
+          <div className="flex flex-col gap-3">
+            <div className="h-6 w-28 animate-pulse rounded-md bg-grey-01" />
+            <div className="grid grid-cols-1 gap-4 @[640px]:grid-cols-2">
+              <div className="h-32 animate-pulse rounded-xl bg-grey-01/80" />
+              <div className="h-32 animate-pulse rounded-xl bg-grey-01/80" />
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="flex animate-fade-in flex-col gap-10">
+          {/* Grouped narrative claims (Blocks / Perspectives) — scannable Geo News bulleted reading flow */}
+          {hasClaimGroups ? (
+            <div className="flex flex-col gap-8">
+              {model.claimGroups!.map(group => {
+                const claims = [...(addedClaimsByGroup[group.id] ?? []), ...group.claims];
+                return (
+                  <section key={group.id} aria-label={group.title} className="flex flex-col gap-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex flex-col gap-1">
+                        <h2 className="m-0 text-mediumTitle font-semibold text-text">{group.title}</h2>
+                        {group.description && (
+                          <p className="m-0 text-[15px] leading-[22px] text-grey-04">{group.description}</p>
+                        )}
+                      </div>
+                      <AddClaimPopover
+                        label={`Add claim to ${group.title}`}
+                        onSubmit={draft => {
+                          actionCallbacks?.onAddClaim?.(draft);
+                          setAddedClaimsByGroup(prev => ({
+                            ...prev,
+                            [group.id]: [
+                              {
+                                id: `story-claim-${Date.now()}`,
+                                title: draft.title,
+                                kind: draft.kind,
+                                split: { rows: [], isSplit: false },
+                              },
+                              ...(prev[group.id] ?? []),
+                            ],
+                          }));
+                        }}
+                      />
+                    </div>
+                    <NewsClaimBulletList claims={claims} />
+                  </section>
+                );
+              })}
+            </div>
+          ) : flatClaims.length > 0 ? (
+            <section aria-label="Claims" className="flex flex-col gap-3">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="m-0 text-mediumTitle font-semibold text-text">Claims</h2>
+                <AddClaimPopover
+                  label="Add claim"
+                  onSubmit={draft => {
+                    actionCallbacks?.onAddClaim?.(draft);
+                    setAddedClaimsByGroup(prev => ({
+                      ...prev,
+                      flat: [
+                        {
+                          id: `story-claim-${Date.now()}`,
+                          title: draft.title,
+                          kind: draft.kind,
+                          split: { rows: [], isSplit: false },
+                        },
+                        ...(prev.flat ?? []),
+                      ],
+                    }));
+                  }}
+                />
+              </div>
+              <NewsClaimBulletList claims={flatClaims} />
+            </section>
+          ) : null}
 
-      {/* Aggregated Sources in 2-column balanced masonry layout */}
-      {sourcesSection && <RelatedListSection section={sourcesSection} />}
+          {/* Aggregated Sources in horizontally scrollable masonry layout */}
+          {sourcesSection && <RelatedListSection section={sourcesSection} />}
 
-      {model.accuracyRating && (
-        <VoteBox
-          prompt={model.accuracyRating.prompt}
-          split={model.accuracyRating.split}
-          control={model.accuracyRating.voteBox}
-        />
-      )}
+          {model.accuracyRating && (
+            <VoteBox
+              prompt={model.accuracyRating.prompt}
+              split={model.accuracyRating.split}
+              control={model.accuracyRating.voteBox}
+            />
+          )}
 
-      {/* Topics as rounded pills with circular thumbnail images */}
-      {model.topics && model.topics.length > 0 && <TopicImagePills topics={model.topics} />}
+          {/* Topics as rounded pills with circular thumbnail images */}
+          {model.topics && model.topics.length > 0 && <TopicImagePills topics={model.topics} />}
 
-      {model.sections.length > 0 && (
-        <div className="flex flex-col gap-8">
-          {model.sections.map(section => (
-            <RelatedListSection key={section.id} section={section} />
-          ))}
+          {model.sections.length > 0 && (
+            <div className="flex flex-col gap-8">
+              {model.sections.map(section => (
+                <RelatedListSection key={section.id} section={section} />
+              ))}
+            </div>
+          )}
+
+          {/* Context & Disputes side-by-side at the bottom of the page */}
+          <EntityContextAndDisputes
+            groups={model.graphConnections}
+            target={{ id: model.id, kind: 'News story', title: model.headline }}
+          />
         </div>
       )}
-
-      {/* Context & Disputes side-by-side at the bottom of the page */}
-      <EntityContextAndDisputes
-        groups={model.graphConnections}
-        target={{ id: model.id, kind: 'News story', title: model.headline }}
-      />
 
       {footer}
     </TemplateShell>

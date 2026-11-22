@@ -34,6 +34,7 @@ import {
   readEntityRelations,
   readEntityTextValue,
 } from '../ontology';
+import { useInitialHydrationGate } from './use-initial-hydration-gate';
 import { useLiveEntityActions } from './use-live-entity-actions';
 import { useTopicMediaBatch } from './use-topic-media-batch';
 
@@ -143,7 +144,7 @@ export function useLiveNewsStoryTemplate({
   }, [sectionRelations, sourceRelations]);
 
   const hydrationWhere = React.useMemo(() => ({ id: { in: hydrationIds } }), [hydrationIds]);
-  const { entities: hydratedEntities } = useQueryEntities({
+  const { entities: hydratedEntities, isLoading: isHydratingEntities } = useQueryEntities({
     where: hydrationWhere,
     first: Math.max(hydrationIds.length, 1),
     enabled: hydrationIds.length > 0,
@@ -448,9 +449,15 @@ export function useLiveNewsStoryTemplate({
     topicRelations,
   ]);
 
+  const isSectionsLoading = useInitialHydrationGate(
+    hydrationIds.length > 0 && isHydratingEntities,
+    `${ID.uuidToHex(entityId)}:${ID.uuidToHex(spaceId)}`
+  );
+
   return {
     data: model,
     isLoading: isLoading && !entity,
+    isSectionsLoading,
     source: 'live',
     actionCallbacks,
   };

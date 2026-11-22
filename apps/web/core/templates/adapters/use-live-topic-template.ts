@@ -55,6 +55,7 @@ import {
   resolveTemplateImageUrl,
 } from '../ontology';
 import { resolveDebateStillSrc, useDebateParticipantsBatch } from './use-debate-participants-batch';
+import { useInitialHydrationGate } from './use-initial-hydration-gate';
 import { useLiveEntityActions } from './use-live-entity-actions';
 
 const LIVE_CLAIMS_LIMIT = 40;
@@ -1058,9 +1059,20 @@ export function useLiveTopicTemplate({
     votesQuery.data,
   ]);
 
+  const isSectionsLoading = useInitialHydrationGate(
+    topClaimsQuery.isLoading ||
+      bestClaimsQuery.isLoading ||
+      bestDebatesQuery.isLoading ||
+      coverage.isLoading ||
+      (orderedClaimSeeds.length > 0 && votesQuery.isLoading),
+    `${ID.uuidToHex(entityId)}:${ID.uuidToHex(spaceId)}:${isSpaceHome ? 'home' : 'entity'}`,
+    1100
+  );
+
   return {
     data: model,
     isLoading: isEntityLoading && !entity,
+    isSectionsLoading,
     source: 'live',
     actionCallbacks,
   };

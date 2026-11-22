@@ -20,6 +20,8 @@ import {
   InlinePagination,
 } from './entity-overflow-menu';
 import {
+  ArrowLeftIcon,
+  ArrowRightIcon,
   ArrowUpRightIcon,
   ArticleIcon,
   ChevronRightIcon,
@@ -87,7 +89,6 @@ export interface RelatedListSectionProps {
  * - `layout: 'list'` renders a calm, scannable hairline list (showing type badges only when kinds are mixed).
  */
 const LIST_PAGE_SIZE = 8;
-const CARDS_PAGE_SIZE = 6;
 
 export function RelatedListSection({ section, className }: RelatedListSectionProps) {
   const { title, subtitle, items, emptyText = 'Nothing linked yet.', action, layout } = section;
@@ -124,16 +125,65 @@ export function RelatedListSection({ section, className }: RelatedListSectionPro
     layout === 'cards' ||
     (layout !== 'list' &&
       orderedItems.some(item => Boolean(item.mediaType || item.excerpt || item.duration || item.authorHandle)));
-  const pageSize = useCards ? CARDS_PAGE_SIZE : LIST_PAGE_SIZE;
-  const totalPages = Math.max(1, Math.ceil(orderedItems.length / pageSize));
+  const totalPages = useCards ? 1 : Math.max(1, Math.ceil(orderedItems.length / LIST_PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
-  const visibleItems = orderedItems.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const visibleItems = useCards
+    ? orderedItems
+    : orderedItems.slice((safePage - 1) * LIST_PAGE_SIZE, safePage * LIST_PAGE_SIZE);
+
+  const railRef = React.useRef<HTMLDivElement | null>(null);
+  const [railNav, setRailNav] = React.useState({ left: false, right: false });
+
+  React.useEffect(() => {
+    if (!useCards) return;
+    const scroller = railRef.current;
+    if (!scroller) return;
+
+    let frame = 0;
+    const measure = () => {
+      frame = 0;
+      const box = scroller.getBoundingClientRect();
+      const cols = Array.from(scroller.querySelectorAll<HTMLElement>('[data-masonry-col]'));
+      const firstBox = cols.at(0)?.getBoundingClientRect();
+      const lastBox = cols.at(-1)?.getBoundingClientRect();
+      const next = {
+        left: Boolean(firstBox && firstBox.left < box.left - 1),
+        right: Boolean(lastBox && lastBox.right > box.right + 1),
+      };
+      setRailNav(current => (current.left === next.left && current.right === next.right ? current : next));
+    };
+
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(measure);
+    };
+
+    measure();
+    scroller.addEventListener('scroll', schedule, { passive: true });
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(schedule);
+    observer?.observe(scroller);
+    window.addEventListener('resize', schedule);
+
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      scroller.removeEventListener('scroll', schedule);
+      observer?.disconnect();
+      window.removeEventListener('resize', schedule);
+    };
+  }, [orderedItems.length, useCards]);
+
+  const scrollRailByColumn = React.useCallback((direction: -1 | 1) => {
+    const scroller = railRef.current;
+    if (!scroller) return;
+    const firstCol = scroller.querySelector<HTMLElement>('[data-masonry-col]');
+    const colWidth = firstCol?.getBoundingClientRect().width || 360;
+    scroller.scrollBy({ left: direction * (colWidth + 16), behavior: 'smooth' });
+  }, []);
 
   const isSourceSection = /source/i.test(title);
   const addLabel = isSourceSection ? 'Add source' : `Add to ${title.toLowerCase()}`;
 
   return (
-    <section aria-label={title} className={cx('flex flex-col gap-4', className)}>
+    <section aria-label={title} className={cx('flex flex-col gap-3', className)}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-col gap-1">
           <h2 className="m-0 text-mediumTitle font-semibold text-text">{title}</h2>
@@ -157,6 +207,29 @@ export function RelatedListSection({ section, className }: RelatedListSectionPro
                 <span>{action.label}</span>
               </button>
             ))}
+
+          {useCards && allItems.length > 2 && (railNav.left || railNav.right) && (
+            <div className="mr-1 flex items-center gap-1.5">
+              <button
+                type="button"
+                aria-label={`Scroll ${title.toLowerCase()} left`}
+                disabled={!railNav.left}
+                onClick={() => scrollRailByColumn(-1)}
+                className="inline-grid size-7 cursor-pointer place-items-center rounded-full border border-grey-02 bg-white text-text transition-colors hover:border-text disabled:cursor-default disabled:border-divider disabled:text-grey-03"
+              >
+                <ArrowLeftIcon className="size-3.5" />
+              </button>
+              <button
+                type="button"
+                aria-label={`Scroll ${title.toLowerCase()} right`}
+                disabled={!railNav.right}
+                onClick={() => scrollRailByColumn(1)}
+                className="inline-grid size-7 cursor-pointer place-items-center rounded-full border border-grey-02 bg-white text-text transition-colors hover:border-text disabled:cursor-default disabled:border-divider disabled:text-grey-03"
+              >
+                <ArrowRightIcon className="size-3.5" />
+              </button>
+            </div>
+          )}
 
           <ListRankingHeaderControl
             title={title}
@@ -209,14 +282,9 @@ export function RelatedListSection({ section, className }: RelatedListSectionPro
       />
 
       {allItems.length === 0 ? (
-        <TemplateEmptyState icon={<DocumentIcon className="size-3.5" />}>{emptyText}</TemplateEmptyState>
+        <TemplateEmptyState>{emptyText}</TemplateEmptyState>
       ) : useCards ? (
-        <div className="flex flex-col gap-3">
-          <BalancedTwoColumnMasonry items={visibleItems} />
-          {totalPages > 1 && (
-            <InlinePagination page={safePage} totalPages={totalPages} onPageChange={setPage} label={`${title} pages`} />
-          )}
-        </div>
+        <HorizontalMasonryRail items={visibleItems} scrollerRef={railRef} />
       ) : (
         <div className={cx('divide-y divide-divider overflow-hidden', TEMPLATE_CARD_SURFACE)}>
           {visibleItems.map(item => (
@@ -249,37 +317,67 @@ function estimateCardWeight(item: EntityLinkRowModel): number {
 }
 
 /**
- * Balanced 2-column masonry using two independent flex stacks so tall media/video cards
- * never leave awkward vertical gaps in the opposite column, while keeping `overflow-visible`
- * for anchored popovers.
+ * Horizontally scrollable masonry rail:
+ * - For 1–3 cards (e.g. News story Sources), renders a single horizontal snap-scroll row of
+ *   crisp fixed-width cards.
+ * - For 4+ cards (e.g. Topic `Sources & evidence`), packs cards into balanced 2-card vertical
+ *   masonry columns inside a horizontal snap-scroll strip so tall media cards never leave awkward
+ *   vertical whitespace AND users can smoothly swipe or click `←` `→` horizontally through all cards.
  */
-function BalancedTwoColumnMasonry({ items }: { items: readonly EntityLinkRowModel[] }) {
-  const left: EntityLinkRowModel[] = [];
-  const right: EntityLinkRowModel[] = [];
-  let leftWeight = 0;
-  let rightWeight = 0;
-
-  for (const item of items) {
-    const w = estimateCardWeight(item);
-    if (leftWeight <= rightWeight) {
-      left.push(item);
-      leftWeight += w;
-    } else {
-      right.push(item);
-      rightWeight += w;
+function HorizontalMasonryRail({
+  items,
+  scrollerRef,
+}: {
+  items: readonly EntityLinkRowModel[];
+  scrollerRef: React.RefObject<HTMLDivElement | null>;
+}) {
+  const columns = React.useMemo<EntityLinkRowModel[][]>(() => {
+    if (items.length <= 3) {
+      return items.map(item => [item]);
     }
-  }
+    const colCount = Math.ceil(items.length / 2);
+    const cols: EntityLinkRowModel[][] = Array.from({ length: colCount }, () => []);
+    const weights = new Array<number>(colCount).fill(0);
+
+    // Pack greedily into the lightest column that still has < 2 cards so every column stays balanced
+    for (const item of items) {
+      let bestIdx = 0;
+      let bestWeight = Infinity;
+      for (let i = 0; i < colCount; i++) {
+        if (cols[i]!.length >= 2) continue;
+        if (weights[i]! < bestWeight) {
+          bestWeight = weights[i]!;
+          bestIdx = i;
+        }
+      }
+      cols[bestIdx]!.push(item);
+      weights[bestIdx]! += estimateCardWeight(item);
+    }
+
+    return cols.filter(col => col.length > 0);
+  }, [items]);
+
+  const singleRow = items.length <= 3;
 
   return (
-    <div className="grid grid-cols-1 items-start gap-4 @[640px]:grid-cols-2">
-      <div className="flex min-w-0 flex-col gap-4">
-        {left.map(item => (
-          <RichMediaCard key={item.id} item={item} />
-        ))}
-      </div>
-      <div className="flex min-w-0 flex-col gap-4">
-        {right.map(item => (
-          <RichMediaCard key={item.id} item={item} />
+    <div className="@container relative">
+      <div
+        ref={scrollerRef}
+        className="-mx-2 flex snap-x snap-mandatory [scrollbar-width:none] items-start gap-4 overflow-x-auto px-2 py-2 [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {columns.map((colItems, colIdx) => (
+          <div
+            key={colItems[0]?.id ?? colIdx}
+            data-masonry-col
+            className={cx(
+              'flex shrink-0 snap-start flex-col gap-4',
+              singleRow ? 'w-[min(360px,84cqw)]' : 'w-[min(390px,84cqw)]'
+            )}
+          >
+            {colItems.map(item => (
+              <RichMediaCard key={item.id} item={item} />
+            ))}
+          </div>
         ))}
       </div>
     </div>

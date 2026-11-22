@@ -9,7 +9,6 @@ import {
   AddEntityItemPopover,
   ArrowUpRightIcon,
   ClaimSummaryCard,
-  DocumentIcon,
   EntityContextAndDisputes,
   EntityContextTogglePill,
   EntityInlineContext,
@@ -164,7 +163,7 @@ export function SourceTemplate({
             })}
           </div>
         ) : (
-          <TemplateEmptyState icon={<DocumentIcon className="size-3.5" />}>No quotes extracted yet.</TemplateEmptyState>
+          <TemplateEmptyState>No quotes extracted yet.</TemplateEmptyState>
         )}
       </section>
 

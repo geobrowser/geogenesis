@@ -2182,8 +2182,7 @@ export function EntityFlagsSection({ target, className }: { target: EntityAction
           </div>
         </div>
       ) : (
-        <div className="flex items-center gap-2 border-t border-divider/80 pt-3 text-[14px] text-grey-04">
-          <FlagIcon className="size-3.5 shrink-0 text-grey-03" />
+        <div className="border-t border-divider/80 pt-3 text-[14px] text-grey-04">
           <p className="m-0">No disputes</p>
         </div>
       )}

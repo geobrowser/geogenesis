@@ -881,6 +881,8 @@ export interface PodcastEpisodeTemplateModel {
 export interface TemplateDataSource<TModel> {
   data: TModel | null;
   isLoading: boolean;
+  /** True during the brief initial window while async body sections coalesce to avoid progressive layout jumps. */
+  isSectionsLoading?: boolean;
   error?: Error | null;
   source: 'live' | 'fixture';
   actionCallbacks?: EntityActionCallbacks;

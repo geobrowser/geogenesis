@@ -69,12 +69,12 @@ export function LiveNewsStoryTemplateView({
   compact = false,
   footer,
 }: LiveEntityTemplateViewProps) {
-  const { data, isLoading, actionCallbacks } = useLiveNewsStoryTemplate({
+  const { data, isLoading, isSectionsLoading, actionCallbacks } = useLiveNewsStoryTemplate({
     entityId,
     spaceId,
     serverCoverUrl,
   });
-  if (isLoading) return <TemplateLoadingSkeleton />;
+  if (isLoading) return <TemplateLoadingSkeleton maxWidth={960} />;
   if (!data) return null;
 
   return (
@@ -82,6 +82,7 @@ export function LiveNewsStoryTemplateView({
       model={data}
       actionCallbacks={actionCallbacks}
       compact={compact}
+      isLoadingSections={isSectionsLoading}
       headerActions={<EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable compact={compact} />}
       footer={footer}
     />

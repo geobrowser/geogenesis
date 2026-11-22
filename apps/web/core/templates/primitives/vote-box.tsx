@@ -29,7 +29,11 @@ export function VoteBox({ prompt, split, control, className }: VoteBoxProps) {
   return (
     <section
       aria-label={prompt ?? 'Vote on this claim'}
-      className={cx('flex flex-col gap-5 p-5 @[560px]:p-6', TEMPLATE_CARD_SURFACE, className)}
+      className={cx(
+        'flex min-h-[104px] flex-col justify-center gap-5 p-5 @[560px]:p-6',
+        TEMPLATE_CARD_SURFACE,
+        className
+      )}
     >
       {prompt && <p className="m-0 text-smallTitle text-text">{prompt}</p>}
 
