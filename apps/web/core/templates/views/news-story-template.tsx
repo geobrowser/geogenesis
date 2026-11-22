@@ -6,6 +6,7 @@ import Link from 'next/link';
 
 import {
   type ClaimSummaryModel,
+  type ClaimTopicPillModel,
   type EntityActionCallbacks,
   type EntityListSectionModel,
   type NewsStoryTemplateModel,
@@ -20,6 +21,7 @@ import {
   EntityInlineContext,
   EntityOverflowMenu,
   RelatedListSection,
+  TEMPLATE_INTERACTIVE_CARD_SURFACE,
   TemplateBadge,
   TemplateShell,
   TopicImagePills,
@@ -339,7 +341,7 @@ export function NewsStoryTemplate({
         {hasSideRail && (
           <aside
             aria-label="Story connections"
-            className="w-full border-t border-divider pt-8 @[920px]:sticky @[920px]:top-20 @[920px]:w-[272px] @[920px]:shrink-0 @[920px]:border-t-0 @[920px]:border-l @[920px]:pt-0 @[920px]:pl-8"
+            className="w-full border-t border-divider pt-8 @[920px]:sticky @[920px]:top-20 @[920px]:w-[288px] @[920px]:shrink-0 @[920px]:border-t-0 @[920px]:border-l @[920px]:pt-0 @[920px]:pl-7"
           >
             <div className="flex flex-col divide-y divide-divider">
               {hasTimelines && (
@@ -357,19 +359,19 @@ export function NewsStoryTemplate({
 
               {hasPeople && (
                 <div className="py-6 first:pt-0 last:pb-0">
-                  <TopicImagePills topics={model.relatedPeople!} title="People involved" density="rail" />
+                  <RailEntityCardList items={model.relatedPeople!} title="People involved" avatarShape="circle" />
                 </div>
               )}
 
               {hasProjects && (
                 <div className="py-6 first:pt-0 last:pb-0">
-                  <TopicImagePills topics={model.relatedProjects!} title="Related projects" density="rail" />
+                  <RailEntityCardList items={model.relatedProjects!} title="Related projects" avatarShape="rounded" />
                 </div>
               )}
 
               {hasEntities && (
                 <div className="py-6 first:pt-0 last:pb-0">
-                  <TopicImagePills topics={model.relatedEntities!} title="Related entities" density="rail" />
+                  <RailEntityCardList items={model.relatedEntities!} title="Related entities" avatarShape="rounded" />
                 </div>
               )}
 
@@ -385,6 +387,136 @@ export function NewsStoryTemplate({
 
       {footer}
     </TemplateShell>
+  );
+}
+
+const INITIAL_RAIL_CARDS = 6;
+
+function RailEntityAvatar({
+  label,
+  imageUrl,
+  shape,
+}: {
+  label: string;
+  imageUrl?: string | null;
+  shape: 'circle' | 'rounded';
+}) {
+  const resolved = resolveTemplateImageUrl(imageUrl);
+  const [failed, setFailed] = React.useState(false);
+  const [loaded, setLoaded] = React.useState(false);
+
+  React.useEffect(() => {
+    setFailed(false);
+    setLoaded(false);
+  }, [resolved]);
+
+  const initial = label.trim()[0]?.toUpperCase() ?? '';
+  const showImage = Boolean(resolved) && !failed;
+  const radius = shape === 'circle' ? 'rounded-full' : 'rounded-xl';
+
+  return (
+    <span
+      aria-hidden
+      className={`relative inline-grid size-12 shrink-0 place-items-center overflow-hidden border border-black/[0.06] bg-grey-01 text-[16px] font-semibold text-grey-04 ${radius}`}
+    >
+      {(!showImage || !loaded) && <span>{initial}</span>}
+      {showImage && (
+        <img
+          src={resolved ?? undefined}
+          alt=""
+          decoding="async"
+          onLoad={() => setLoaded(true)}
+          onError={() => setFailed(true)}
+          className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-150 ${loaded ? 'opacity-100' : 'opacity-0'}`}
+        />
+      )}
+    </span>
+  );
+}
+
+/**
+ * Renders a 2-column grid of visual entity cards with larger avatars when at least half
+ * the items have images; otherwise falls back cleanly to compact circular-avatar pills.
+ */
+function RailEntityCardList({
+  items,
+  title,
+  avatarShape,
+}: {
+  items: readonly ClaimTopicPillModel[];
+  title: string;
+  avatarShape: 'circle' | 'rounded';
+}) {
+  const [showAll, setShowAll] = React.useState(false);
+
+  if (items.length === 0) return null;
+
+  const imageCount = items.filter(item => Boolean(resolveTemplateImageUrl(item.imageUrl))).length;
+  const useVisualCards = imageCount > 0 && imageCount >= Math.ceil(items.length / 2);
+
+  if (!useVisualCards) {
+    return <TopicImagePills topics={items} title={title} density="rail" />;
+  }
+
+  const visible = showAll ? items : items.slice(0, INITIAL_RAIL_CARDS);
+  const hidden = Math.max(0, items.length - INITIAL_RAIL_CARDS);
+
+  return (
+    <section aria-label={title} className="flex flex-col gap-3">
+      <h2 className="m-0 text-[16px] leading-[22px] font-semibold tracking-[-0.01em] text-text">{title}</h2>
+      <div className="grid grid-cols-2 gap-2.5">
+        {visible.map(item => {
+          const cardContent = (
+            <>
+              <RailEntityAvatar label={item.label} imageUrl={item.imageUrl} shape={avatarShape} />
+              <span className="line-clamp-2 text-[13.5px] leading-[17px] font-semibold text-text transition-colors group-hover:text-[#4c1fd4]">
+                {item.label}
+              </span>
+            </>
+          );
+
+          const cardClasses = `group flex flex-col items-center justify-center gap-2.5 px-2.5 py-3.5 text-center no-underline ${TEMPLATE_INTERACTIVE_CARD_SURFACE}`;
+
+          if (item.href) {
+            return (
+              <Link key={item.id} href={item.href} className={cardClasses}>
+                {cardContent}
+              </Link>
+            );
+          }
+
+          if (item.onSelect) {
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={item.onSelect}
+                className={`cursor-pointer border-0 ${cardClasses}`}
+              >
+                {cardContent}
+              </button>
+            );
+          }
+
+          return (
+            <div key={item.id} className={cardClasses}>
+              {cardContent}
+            </div>
+          );
+        })}
+      </div>
+
+      {hidden > 0 && (
+        <button
+          type="button"
+          aria-expanded={showAll}
+          onClick={() => setShowAll(prev => !prev)}
+          className="cursor-pointer self-start border-0 bg-transparent p-0 text-[13px] font-medium text-grey-04 transition-colors hover:text-text"
+        >
+          {showAll ? 'Show less' : `Show ${hidden} more`}
+        </button>
+      )}
+    </section>
   );
 }
 

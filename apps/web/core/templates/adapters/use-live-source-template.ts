@@ -21,6 +21,7 @@ import type {
   SourceQuoteModel,
   SourceTemplateModel,
   TemplateDataSource,
+  VoteChoice,
 } from '../models';
 import {
   TEMPLATE_ONTOLOGY,
@@ -58,6 +59,7 @@ export function useLiveSourceTemplate({
   const { entity, isLoading } = useQueryEntity({ id: entityId, spaceId });
   const { space } = useSpace(spaceId);
   const [isMounted, setIsMounted] = React.useState(false);
+  const [localClaimVotes, setLocalClaimVotes] = React.useState<Record<string, VoteChoice>>({});
 
   React.useEffect(() => {
     setIsMounted(true);
@@ -270,8 +272,11 @@ export function useLiveSourceTemplate({
     const supportedClaims: ClaimSummaryModel[] = combinedClaimSeeds
       .map(claim => {
         const batch = responseBatch.data?.get(claimResponseTargetKey({ entityId: claim.id, responseKind: 'stance' }));
-        const pos = batch?.counts.positive ?? 0;
-        const neg = batch?.counts.negative ?? 0;
+        const basePos = batch?.counts.positive ?? 0;
+        const baseNeg = batch?.counts.negative ?? 0;
+        const localVote = localClaimVotes[claim.id] ?? null;
+        const pos = basePos + (localVote === 'agree' ? 1 : 0);
+        const neg = baseNeg + (localVote === 'disagree' ? 1 : 0);
         const total = pos + neg;
         const pct = total > 0 ? Math.round((pos / total) * 100) : undefined;
         const isAccepted = total >= 2 && pct !== undefined && (pct >= 75 || pct <= 25);
@@ -280,6 +285,11 @@ export function useLiveSourceTemplate({
           title: claim.title,
           kind: claim.kind,
           overallPercent: pct,
+          agreeCount: pos,
+          disagreeCount: neg,
+          userVote: localVote,
+          onVote: (choice: Exclude<VoteChoice, null>) => setLocalClaimVotes(prev => ({ ...prev, [claim.id]: choice })),
+          onClearVote: () => setLocalClaimVotes(prev => ({ ...prev, [claim.id]: null })),
           meta: total > 0 ? [`${total.toLocaleString('en-US')} ${total === 1 ? 'vote' : 'votes'}`] : undefined,
           split: {
             rows:
@@ -371,6 +381,7 @@ export function useLiveSourceTemplate({
     citingStories,
     combinedClaimSeeds,
     entity,
+    localClaimVotes,
     responseBatch.data,
     serverCoverUrl,
     sourceQuotes,

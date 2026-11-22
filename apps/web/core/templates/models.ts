@@ -312,6 +312,8 @@ export interface ContextPeekItemModel {
 export interface ClaimTopicPillModel {
   id: string;
   label: string;
+  /** Optional concise description or type label (shown on entity cards in side rails). */
+  subtitle?: string;
   imageUrl?: string | null;
   href?: string;
   onSelect?: () => void;

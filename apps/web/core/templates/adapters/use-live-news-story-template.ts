@@ -36,7 +36,7 @@ import {
 } from '../ontology';
 import { useInitialHydrationGate } from './use-initial-hydration-gate';
 import { useLiveEntityActions } from './use-live-entity-actions';
-import { useTopicMediaBatch } from './use-topic-media-batch';
+import { useEntitySummaryBatch } from './use-topic-media-batch';
 
 /**
  * Deduplicate ordered story section relations (`Blocks` / `Perspectives`) by `toEntity.id`,
@@ -150,7 +150,7 @@ export function useLiveNewsStoryTemplate({
     ],
     [peopleRelations, projectRelations, relatedEntityRelations, timelineRelations, topicRelations]
   );
-  const topicMediaQuery = useTopicMediaBatch(railMediaIds);
+  const entitySummaryQuery = useEntitySummaryBatch(railMediaIds);
 
   // Collect all sub-entity IDs we need to hydrate in ONE batched query:
   // - Block toEntity IDs (for Collection items)
@@ -397,32 +397,34 @@ export function useLiveNewsStoryTemplate({
       };
     });
 
-    // Side-rail avatar pills (Topics, People involved, Related projects, Related entities)
-    const mediaByHex = topicMediaQuery.data;
-    const toAvatarPills = (rels: readonly Relation[]): ClaimTopicPillModel[] =>
+    // Side-rail entity cards (People involved, Related projects, Related entities) + Topic avatar pills
+    const summaryByHex = entitySummaryQuery.data;
+    const toRailItems = (rels: readonly Relation[]): ClaimTopicPillModel[] =>
       rels
         .filter(rel => Boolean(rel.toEntity.name?.trim()))
         .map(rel => {
           const hex = ID.uuidToHex(rel.toEntity.id);
+          const preview = summaryByHex?.get(hex);
           return {
             id: rel.toEntity.id,
             label: rel.toEntity.name!.trim(),
-            imageUrl: mediaByHex?.get(hex) ?? null,
+            subtitle: preview?.description ?? preview?.typeName,
+            imageUrl: preview?.imageUrl ?? null,
             href: NavUtils.toEntity(rel.toSpaceId ?? spaceId, rel.toEntity.id),
           };
         });
 
-    const topics = toAvatarPills(topicRelations);
-    const relatedPeople = toAvatarPills(peopleRelations);
-    const relatedProjects = toAvatarPills(projectRelations);
-    const relatedEntities = toAvatarPills(relatedEntityRelations);
+    const topics = toRailItems(topicRelations);
+    const relatedPeople = toRailItems(peopleRelations);
+    const relatedProjects = toRailItems(projectRelations);
+    const relatedEntities = toRailItems(relatedEntityRelations);
 
     const associatedTimelines = timelineRelations
       .filter(rel => Boolean(rel.toEntity.name?.trim()))
       .map(rel => ({
         id: rel.toEntity.id,
         title: rel.toEntity.name!.trim(),
-        coverUrl: mediaByHex?.get(ID.uuidToHex(rel.toEntity.id)) ?? null,
+        coverUrl: summaryByHex?.get(ID.uuidToHex(rel.toEntity.id))?.imageUrl ?? null,
         href: NavUtils.toEntity(rel.toSpaceId ?? spaceId, rel.toEntity.id),
       }));
 
@@ -500,7 +502,7 @@ export function useLiveNewsStoryTemplate({
     space?.entity?.name,
     spaceId,
     timelineRelations,
-    topicMediaQuery.data,
+    entitySummaryQuery.data,
     topicRelations,
   ]);
 

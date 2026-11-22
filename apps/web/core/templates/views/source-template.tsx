@@ -4,11 +4,12 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import type { EntityActionCallbacks, SourceQuoteModel, SourceTemplateModel } from '../models';
+import type { ClaimSummaryModel, EntityActionCallbacks, SourceQuoteModel, SourceTemplateModel } from '../models';
 import {
+  AddClaimPopover,
   AddEntityItemPopover,
   ArrowUpRightIcon,
-  ClaimSummaryCard,
+  ClaimExplorer,
   EntityContextAndDisputes,
   EntityContextTogglePill,
   EntityInlineContext,
@@ -46,11 +47,18 @@ export function SourceTemplate({
 }: SourceTemplateProps) {
   const ctaLabel = (model.externalLabel ?? 'Open source').replace(/\s*↗\s*$/, '');
   const [addedQuotes, setAddedQuotes] = React.useState<SourceQuoteModel[]>([]);
+  const [addedClaims, setAddedClaims] = React.useState<ClaimSummaryModel[]>([]);
   const allQuotes = [...addedQuotes, ...(model.quotes ?? [])];
+  const allClaims = React.useMemo(
+    () => [...addedClaims, ...model.supportedClaims],
+    [addedClaims, model.supportedClaims]
+  );
+  const contestedClaims = React.useMemo(() => allClaims.filter(c => c.split.isSplit), [allClaims]);
+  const agreedClaims = React.useMemo(() => allClaims.filter(c => !c.split.isSplit), [allClaims]);
 
   return (
     <TemplateShell
-      maxWidth={860}
+      maxWidth={920}
       breadcrumbs={model.breadcrumbs}
       coverUrl={model.coverUrl}
       coverAlt={model.title}
@@ -115,10 +123,11 @@ export function SourceTemplate({
       {isLoadingSections ? (
         <div aria-busy="true" aria-label="Loading article sections" className="flex flex-col gap-7">
           <div className="flex flex-col gap-3">
-            <div className="h-5 w-36 animate-pulse rounded bg-grey-01" />
-            <div className="grid grid-cols-1 gap-4 @[620px]:grid-cols-2">
-              <div className={`h-[108px] animate-pulse ${TEMPLATE_CARD_SURFACE}`} />
-              <div className={`h-[108px] animate-pulse ${TEMPLATE_CARD_SURFACE}`} />
+            <div className="h-5 w-28 animate-pulse rounded bg-grey-01" />
+            <div className={`flex flex-col divide-y divide-divider overflow-hidden ${TEMPLATE_CARD_SURFACE}`}>
+              <div className="h-[76px] animate-pulse bg-white" />
+              <div className="h-[76px] animate-pulse bg-white" />
+              <div className="h-[76px] animate-pulse bg-white" />
             </div>
           </div>
           <div className="flex flex-col gap-2.5">
@@ -132,18 +141,32 @@ export function SourceTemplate({
         </div>
       ) : (
         <div className="flex animate-fade-in flex-col gap-8">
-          <section aria-label="Claims" className="flex flex-col gap-4">
-            <h2 className="m-0 text-mediumTitle font-semibold text-text">Claims</h2>
-            {model.supportedClaims.length > 0 ? (
-              <div className="grid grid-cols-1 gap-4 @[620px]:grid-cols-2">
-                {model.supportedClaims.map(claim => (
-                  <ClaimSummaryCard key={claim.id} claim={claim} variant={claim.split.isSplit ? 'default' : 'agreed'} />
-                ))}
+          {allClaims.length > 0 ? (
+            <ClaimExplorer contestedClaims={contestedClaims} agreedClaims={agreedClaims} title="Claims" />
+          ) : (
+            <section aria-label="Claims" className="flex flex-col gap-3.5">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="m-0 text-mediumTitle font-semibold text-text">Claims</h2>
+                <AddClaimPopover
+                  label="Add claim"
+                  onSubmit={draft => {
+                    actionCallbacks?.onAddClaim?.(draft);
+                    setAddedClaims(prev => [
+                      {
+                        id: `source-claim-${Date.now()}`,
+                        title: draft.title,
+                        kind: draft.kind,
+                        meta: draft.note ? [draft.note] : undefined,
+                        split: { rows: [], isSplit: true, totalVotes: 0 },
+                      },
+                      ...prev,
+                    ]);
+                  }}
+                />
               </div>
-            ) : (
               <TemplateEmptyState>No claims linked yet.</TemplateEmptyState>
-            )}
-          </section>
+            </section>
+          )}
 
           <section aria-label="Quotes" className="flex flex-col gap-3.5">
             <div className="flex items-center justify-between gap-3">

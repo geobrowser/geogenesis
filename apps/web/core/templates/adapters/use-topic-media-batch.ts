@@ -14,10 +14,20 @@ import { graphql } from '~/core/io/graphql-client';
 
 import { TEMPLATE_ONTOLOGY, resolveTemplateImageUrl } from '../ontology';
 
-const TOPIC_MEDIA_BATCH_QUERY = parse(/* GraphQL */ `
-  query TemplateTopicMediaBatch($ids: [UUID!]!, $mediaTypeIds: [UUID!]!, $imageUrlPropertyId: UUID!) {
+export interface EntityPreviewSummary {
+  imageUrl?: string;
+  description?: string;
+  typeName?: string;
+}
+
+const ENTITY_SUMMARY_BATCH_QUERY = parse(/* GraphQL */ `
+  query TemplateEntitySummaryBatch($ids: [UUID!]!, $mediaTypeIds: [UUID!]!, $imageUrlPropertyId: UUID!) {
     entities(first: 48, filter: { id: { in: $ids } }) {
       id
+      description
+      types {
+        name
+      }
       relationsList(first: 4, filter: { typeId: { in: $mediaTypeIds } }) {
         typeId
         toEntity {
@@ -33,6 +43,8 @@ const TOPIC_MEDIA_BATCH_QUERY = parse(/* GraphQL */ `
   {
     entities?: {
       id: string;
+      description?: string | null;
+      types?: { name?: string | null }[] | null;
       relationsList?:
         | {
             typeId: string;
@@ -46,34 +58,37 @@ const TOPIC_MEDIA_BATCH_QUERY = parse(/* GraphQL */ `
   { ids: string[]; mediaTypeIds: string[]; imageUrlPropertyId: string }
 >;
 
+function normalizeBatchIds(entityIds: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const id of entityIds) {
+    if (!id) continue;
+    const hex = ID.uuidToHex(id);
+    if (seen.has(hex)) continue;
+    seen.add(hex);
+    out.push(hex);
+  }
+  return out.slice(0, 48);
+}
+
 /**
- * Batch-hydrates Topic `Avatar` (preferred) or `Cover` image URLs keyed by normalized hex ID,
- * used by Claim and News story templates to render circular thumbnails inside Topic pills.
+ * Batch-hydrates `Avatar` (preferred) / `Cover` image URL, short description, and primary type name
+ * keyed by normalized hex ID. Used for News story side-rail entity cards (People, Projects, Entities)
+ * as well as Topic pills and Timeline cards in one combined query.
  */
-export function useTopicMediaBatch(topicIds: readonly string[]) {
-  const topicHexIds = React.useMemo(() => {
-    const seen = new Set<string>();
-    const out: string[] = [];
-    for (const id of topicIds) {
-      if (!id) continue;
-      const hex = ID.uuidToHex(id);
-      if (seen.has(hex)) continue;
-      seen.add(hex);
-      out.push(hex);
-    }
-    return out.slice(0, 48);
-  }, [topicIds]);
+export function useEntitySummaryBatch(entityIds: readonly string[]) {
+  const hexIds = React.useMemo(() => normalizeBatchIds(entityIds), [entityIds]);
 
   return useQuery({
-    queryKey: ['template-topic-media-batch', topicHexIds.join(',')],
-    enabled: topicHexIds.length > 0,
+    queryKey: ['template-entity-summary-batch', hexIds.join(',')],
+    enabled: hexIds.length > 0,
     staleTime: 120_000,
     queryFn: async () => {
       const entities = await Effect.runPromise(
         graphql({
-          query: TOPIC_MEDIA_BATCH_QUERY,
+          query: ENTITY_SUMMARY_BATCH_QUERY,
           variables: {
-            ids: topicHexIds,
+            ids: hexIds,
             mediaTypeIds: [TEMPLATE_ONTOLOGY.AVATAR_PROPERTY_ID, SystemIds.COVER_PROPERTY],
             imageUrlPropertyId: TEMPLATE_ONTOLOGY.IMAGE_URL_PROPERTY_ID,
           },
@@ -81,7 +96,7 @@ export function useTopicMediaBatch(topicIds: readonly string[]) {
         })
       );
 
-      const map = new Map<string, string>();
+      const map = new Map<string, EntityPreviewSummary>();
       for (const item of entities) {
         const rels = item.relationsList ?? [];
         const avatarRel = rels.find(r => ID.equals(r.typeId, TEMPLATE_ONTOLOGY.AVATAR_PROPERTY_ID));
@@ -90,10 +105,31 @@ export function useTopicMediaBatch(topicIds: readonly string[]) {
         const rawUrl = chosen?.toEntity?.valuesList?.find(v =>
           ID.equals(v.propertyId, TEMPLATE_ONTOLOGY.IMAGE_URL_PROPERTY_ID)
         )?.text;
-        const resolved = resolveTemplateImageUrl(rawUrl);
-        if (resolved) map.set(ID.uuidToHex(item.id), resolved);
+        const imageUrl = resolveTemplateImageUrl(rawUrl) ?? undefined;
+        const description = item.description?.trim() || undefined;
+        const typeName = item.types?.find(t => Boolean(t.name?.trim()))?.name?.trim() || undefined;
+        map.set(ID.uuidToHex(item.id), { imageUrl, description, typeName });
       }
       return map;
     },
   });
+}
+
+/**
+ * Batch-hydrates Topic `Avatar` (preferred) or `Cover` image URLs keyed by normalized hex ID,
+ * used by Claim and Source templates to render circular thumbnails inside Topic pills.
+ */
+export function useTopicMediaBatch(topicIds: readonly string[]) {
+  const query = useEntitySummaryBatch(topicIds);
+
+  const data = React.useMemo(() => {
+    if (!query.data) return undefined;
+    const map = new Map<string, string>();
+    for (const [hex, summary] of query.data.entries()) {
+      if (summary.imageUrl) map.set(hex, summary.imageUrl);
+    }
+    return map;
+  }, [query.data]);
+
+  return { ...query, data };
 }
