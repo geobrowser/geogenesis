@@ -41,6 +41,7 @@ import {
   readEntityRelations,
 } from '../ontology';
 import { resolveDebateStillSrc, useDebateParticipantsBatch } from './use-debate-participants-batch';
+import { useHydratedSourceCards } from './use-hydrated-source-cards';
 import { useInitialHydrationGate } from './use-initial-hydration-gate';
 import { useLiveEntityActions } from './use-live-entity-actions';
 import { useTopicMediaBatch } from './use-topic-media-batch';
@@ -200,6 +201,11 @@ export function useLiveClaimTemplate({
   const topicMediaQuery = useTopicMediaBatch(topicIds);
 
   const sources = React.useMemo(() => getClaimSources(entity?.relations ?? []), [entity?.relations]);
+  const { items: hydratedSourceCards, isLoading: isSourcesLoading } = useHydratedSourceCards({
+    sources,
+    spaceId,
+    enabled: isMounted,
+  });
   const record = useClaimRecord({ claimId: entityId, spaceId, topicIds });
 
   const debateIdsForParticipants = React.useMemo(
@@ -546,13 +552,8 @@ export function useLiveClaimTemplate({
     sections.push({
       id: 'sources',
       title: 'Sources & evidence',
-      items: sources.map(source => ({
-        id: source.id,
-        kind: 'source',
-        kindLabel: 'Source',
-        title: source.name ?? source.id,
-        href: NavUtils.toEntity(spaceId, source.id),
-      })),
+      layout: 'cards',
+      items: hydratedSourceCards,
       emptyText: 'No sources',
     });
 
@@ -652,7 +653,7 @@ export function useLiveClaimTemplate({
     record.debatesTotal,
     row,
     serverCoverUrl,
-    sources,
+    hydratedSourceCards,
     space?.entity?.name,
     spaceId,
     state,
@@ -663,7 +664,12 @@ export function useLiveClaimTemplate({
   ]);
 
   const isSectionsLoading = useInitialHydrationGate(
-    !isMounted || isSupportingLoading || isOpposingLoading || record.debatesLoading || record.claimsLoading,
+    !isMounted ||
+      isSupportingLoading ||
+      isOpposingLoading ||
+      isSourcesLoading ||
+      record.debatesLoading ||
+      record.claimsLoading,
     `${ID.uuidToHex(entityId)}:${ID.uuidToHex(spaceId)}`
   );
 

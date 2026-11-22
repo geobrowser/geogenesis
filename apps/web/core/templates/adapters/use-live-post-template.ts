@@ -26,6 +26,7 @@ import {
   readEntityRelations,
   readEntityTextValue,
 } from '../ontology';
+import { useHydratedSourceCards } from './use-hydrated-source-cards';
 import { useLiveEntityActions } from './use-live-entity-actions';
 
 /**
@@ -72,6 +73,20 @@ export function useLivePostTemplate({
     ownerKind: 'post',
   });
 
+  const sourceSeeds = React.useMemo(
+    () =>
+      readEntityRelations(entity, TEMPLATE_ONTOLOGY.SOURCES_PROPERTY_ID).map(rel => ({
+        id: rel.toEntity.id,
+        name: rel.toEntity.name,
+        spaceId: rel.toSpaceId,
+      })),
+    [entity]
+  );
+  const { items: hydratedSourceCards } = useHydratedSourceCards({
+    sources: sourceSeeds,
+    spaceId,
+  });
+
   const model = React.useMemo<PostTemplateModel | null>(() => {
     if (!entity) return null;
 
@@ -84,7 +99,6 @@ export function useLivePostTemplate({
     const when = formatOntologyDate(readEntityTextValue(entity, TEMPLATE_ONTOLOGY.PUBLISH_DATE_PROPERTY_ID));
     const externalUrl = readEntityTextValue(entity, TEMPLATE_ONTOLOGY.WEB_URL_PROPERTY_ID) ?? undefined;
     const topics = readEntityRelations(entity, TEMPLATE_ONTOLOGY.TOPICS_PROPERTY_ID);
-    const sources = readEntityRelations(entity, TEMPLATE_ONTOLOGY.SOURCES_PROPERTY_ID);
     const communityNotes = readEntityRelations(entity, TEMPLATE_ONTOLOGY.COMMUNITY_NOTES_PROPERTY_ID);
     const quotedPosts = readEntityRelations(entity, TEMPLATE_ONTOLOGY.QUOTED_POSTS_PROPERTY_ID);
 
@@ -175,17 +189,12 @@ export function useLivePostTemplate({
       });
     }
 
-    if (sources.length > 0) {
+    if (hydratedSourceCards.length > 0) {
       sections.push({
         id: 'sources',
         title: 'Sources',
-        items: sources.map(rel => ({
-          id: rel.toEntity.id,
-          kind: 'source',
-          kindLabel: 'Source',
-          title: rel.toEntity.name ?? rel.toEntity.id,
-          href: NavUtils.toEntity(rel.toSpaceId ?? spaceId, rel.toEntity.id),
-        })),
+        layout: 'cards',
+        items: hydratedSourceCards,
       });
     }
 
@@ -261,6 +270,7 @@ export function useLivePostTemplate({
     actionCallbacks,
     claimRelations,
     entity,
+    hydratedSourceCards,
     localNotes,
     responseBatch.data,
     serverCoverUrl,

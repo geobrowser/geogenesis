@@ -28,6 +28,7 @@ import {
   readEntityRelations,
   readEntityTextValue,
 } from '../ontology';
+import { useHydratedSourceCards } from './use-hydrated-source-cards';
 import { useLiveEntityActions } from './use-live-entity-actions';
 
 /**
@@ -81,6 +82,20 @@ export function useLiveEventTemplate({
     ownerKind: 'event',
   });
 
+  const sourceSeeds = React.useMemo(
+    () =>
+      readEntityRelations(entity, TEMPLATE_ONTOLOGY.SOURCES_PROPERTY_ID).map(rel => ({
+        id: rel.toEntity.id,
+        name: rel.toEntity.name,
+        spaceId: rel.toSpaceId,
+      })),
+    [entity]
+  );
+  const { items: hydratedSourceCards } = useHydratedSourceCards({
+    sources: sourceSeeds,
+    spaceId,
+  });
+
   const model = React.useMemo<EventTemplateModel | null>(() => {
     if (!entity) return null;
 
@@ -88,7 +103,6 @@ export function useLiveEventTemplate({
     const spaceLabel = space?.entity?.name?.trim() || 'Everyone';
     const when = formatOntologyDate(readEntityTextValue(entity, TEMPLATE_ONTOLOGY.EVENT_DATE_PROPERTY_ID)) ?? '';
     const topics = readEntityRelations(entity, TEMPLATE_ONTOLOGY.TOPICS_PROPERTY_ID);
-    const sources = readEntityRelations(entity, TEMPLATE_ONTOLOGY.SOURCES_PROPERTY_ID);
     const relatedClaimsRels = readEntityRelations(entity, TEMPLATE_ONTOLOGY.RELATED_CLAIMS_PROPERTY_ID);
 
     const firstTopic = topics[0];
@@ -152,17 +166,12 @@ export function useLiveEventTemplate({
 
     const sections: EntityListSectionModel[] = [];
 
-    if (sources.length > 0) {
+    if (hydratedSourceCards.length > 0) {
       sections.push({
         id: 'sources',
         title: 'Sources',
-        items: sources.map(rel => ({
-          id: rel.toEntity.id,
-          kind: 'source',
-          kindLabel: 'Source',
-          title: rel.toEntity.name ?? rel.toEntity.id,
-          href: NavUtils.toEntity(rel.toSpaceId ?? spaceId, rel.toEntity.id),
-        })),
+        layout: 'cards',
+        items: hydratedSourceCards,
       });
     }
 
@@ -199,7 +208,7 @@ export function useLiveEventTemplate({
       claims: Array.from(claimsById.values()),
       sections,
     };
-  }, [entity, linkedClaims, responseBatch.data, serverCoverUrl, space?.entity?.name, spaceId]);
+  }, [entity, hydratedSourceCards, linkedClaims, responseBatch.data, serverCoverUrl, space?.entity?.name, spaceId]);
 
   return {
     data: model,
