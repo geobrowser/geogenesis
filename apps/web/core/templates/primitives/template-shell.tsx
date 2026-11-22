@@ -5,7 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 import Link from 'next/link';
 
-import type { BreadcrumbItem, EntityContextDataModel } from '../models';
+import type { BreadcrumbItem, EntityActionCallbacks, EntityContextDataModel } from '../models';
 import { EntityActionProvider } from './entity-overflow-menu';
 import { ChevronRightIcon } from './icons';
 
@@ -121,21 +121,35 @@ export function TemplateShell({
   children,
   maxWidth = 860,
   breadcrumbs,
+  coverUrl,
+  coverAlt = '',
   contextByEntityId,
+  actionCallbacks,
   className,
 }: {
   children: React.ReactNode;
   maxWidth?: number;
   breadcrumbs?: readonly BreadcrumbItem[];
+  coverUrl?: string | null;
+  coverAlt?: string;
   contextByEntityId?: Readonly<Record<string, EntityContextDataModel>>;
+  actionCallbacks?: EntityActionCallbacks;
   className?: string;
 }) {
   return (
-    <EntityActionProvider initialContextByTarget={contextByEntityId}>
+    <EntityActionProvider initialContextByTarget={contextByEntityId} callbacks={actionCallbacks}>
       <div className="@container">
+        {coverUrl && (
+          <div className="mx-auto w-full max-w-[1192px] px-5 pt-6 @[600px]:px-6">
+            <div className="h-[180px] w-full overflow-hidden rounded-xl border border-black/[0.04] bg-grey-01 @[640px]:h-[260px]">
+              <img src={coverUrl} alt={coverAlt} className="h-full w-full object-cover" />
+            </div>
+          </div>
+        )}
         <div
           className={cx(
-            'mx-auto flex w-full flex-col gap-8 px-5 py-8 @[600px]:gap-11 @[600px]:px-6 @[600px]:py-10',
+            'mx-auto flex w-full flex-col gap-8 px-5 py-8 @[600px]:gap-11 @[600px]:px-6',
+            coverUrl ? '@[600px]:pt-7 @[600px]:pb-10' : '@[600px]:py-10',
             className
           )}
           style={{ maxWidth }}

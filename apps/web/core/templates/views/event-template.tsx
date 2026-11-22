@@ -9,6 +9,10 @@ import {
   ArrowLeftIcon,
   ArrowRightIcon,
   ClaimSummaryCard,
+  EntityContextTogglePill,
+  EntityFlagsSection,
+  EntityInlineContext,
+  EntityOverflowMenu,
   GraphConnectionsStrip,
   RelatedListSection,
   TEMPLATE_INTERACTIVE_CARD_SURFACE,
@@ -28,31 +32,40 @@ export interface EventTemplateProps {
  */
 export function EventTemplate({ model, headerActions, footer, className }: EventTemplateProps) {
   return (
-    <TemplateShell maxWidth={860} breadcrumbs={model.breadcrumbs} className={className}>
-      <header className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <TemplateBadge tone="event">Event</TemplateBadge>
-            {model.when && <TemplateBadge tone="neutral">{model.when}</TemplateBadge>}
-            {model.storyCountLabel && <TemplateBadge tone="neutral">{model.storyCountLabel}</TemplateBadge>}
+    <TemplateShell
+      maxWidth={860}
+      breadcrumbs={model.breadcrumbs}
+      coverUrl={model.coverUrl}
+      coverAlt={model.title}
+      contextByEntityId={model.contextByEntityId}
+      className={className}
+    >
+      <header className="flex flex-col gap-3.5">
+        <div className="flex items-start justify-between gap-4">
+          <h1 className="m-0 text-entityTitle text-pretty text-text">{model.title}</h1>
+          <div className="flex shrink-0 items-center gap-2 pt-1.5">
+            <EntityContextTogglePill />
+            {headerActions}
+            <EntityOverflowMenu target={{ id: model.id, kind: 'Event', title: model.title }} isPageRoot size="md" />
           </div>
-          {headerActions}
         </div>
 
-        <h1 className="m-0 text-entityTitle text-pretty text-text">{model.title}</h1>
+        <div className="flex flex-wrap items-center gap-2">
+          <TemplateBadge tone="event">Event</TemplateBadge>
+          {model.when && <TemplateBadge tone="neutral">{model.when}</TemplateBadge>}
+          {model.storyCountLabel && <TemplateBadge tone="neutral">{model.storyCountLabel}</TemplateBadge>}
+        </div>
 
-        {model.summary && <p className="m-0 text-[16.5px] leading-[25px] text-text/85">{model.summary}</p>}
+        {model.summary && <p className="m-0 mt-0.5 text-[16.5px] leading-[25px] text-text/85">{model.summary}</p>}
+        <EntityInlineContext targetId={model.id} targetTitle={model.title} targetKind="Event" />
       </header>
 
-      {model.coverUrl && (
-        <div className="overflow-hidden rounded-xl border border-divider bg-grey-01">
-          <img src={model.coverUrl} alt={model.title} className="max-h-[340px] w-full object-cover" />
-        </div>
-      )}
+      <GraphConnectionsStrip
+        groups={model.graphConnections ?? []}
+        target={{ id: model.id, kind: 'Event', title: model.title }}
+      />
 
-      {model.graphConnections && model.graphConnections.length > 0 && (
-        <GraphConnectionsStrip groups={model.graphConnections} />
-      )}
+      <EntityFlagsSection target={{ id: model.id, kind: 'Event', title: model.title }} />
 
       {model.claims.length > 0 && (
         <section aria-label="Agreed and split claims" className="flex flex-col gap-4">

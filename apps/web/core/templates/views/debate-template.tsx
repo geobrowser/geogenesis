@@ -8,6 +8,11 @@ import Link from 'next/link';
 import type { DebateTemplateModel } from '../models';
 import {
   ArrowRightIcon,
+  EntityContextTogglePill,
+  EntityFlagsSection,
+  EntityInlineContext,
+  EntityOverflowMenu,
+  GraphConnectionsStrip,
   PlayIcon,
   RelatedListSection,
   TEMPLATE_CARD_SURFACE,
@@ -46,22 +51,36 @@ export function DebateTemplate({ model, headerActions, footer, className }: Deba
   const [isPlaying, setIsPlaying] = React.useState(false);
 
   return (
-    <TemplateShell maxWidth={860} breadcrumbs={model.breadcrumbs} className={className}>
-      {/* Header */}
-      <header className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <TemplateBadge tone="debate">Debate</TemplateBadge>
-            {model.date && <TemplateBadge tone="neutral">{model.date}</TemplateBadge>}
-            {model.duration && <TemplateBadge tone="neutral">{model.duration}</TemplateBadge>}
-            {model.voteCountLabel && <TemplateBadge tone="neutral">{model.voteCountLabel}</TemplateBadge>}
+    <TemplateShell
+      maxWidth={860}
+      breadcrumbs={model.breadcrumbs}
+      contextByEntityId={model.contextByEntityId}
+      className={className}
+    >
+      {/* Header (name first, type labels below) */}
+      <header className="flex flex-col gap-3.5">
+        <div className="flex items-start justify-between gap-4">
+          <h1 className="m-0 text-largeTitle text-pretty text-text">{model.claimTitle}</h1>
+          <div className="flex shrink-0 items-center gap-2 pt-1">
+            <EntityContextTogglePill />
+            {headerActions}
+            <EntityOverflowMenu
+              target={{ id: model.id, kind: 'Debate', title: model.claimTitle }}
+              isPageRoot
+              size="md"
+            />
           </div>
-          {headerActions}
         </div>
 
-        <h1 className="m-0 text-largeTitle text-pretty text-text">{model.claimTitle}</h1>
+        <div className="flex flex-wrap items-center gap-2">
+          <TemplateBadge tone="debate">Debate</TemplateBadge>
+          {model.date && <TemplateBadge tone="neutral">{model.date}</TemplateBadge>}
+          {model.duration && <TemplateBadge tone="neutral">{model.duration}</TemplateBadge>}
+          {model.voteCountLabel && <TemplateBadge tone="neutral">{model.voteCountLabel}</TemplateBadge>}
+        </div>
 
-        {model.summary && <p className="m-0 text-[16.5px] leading-[25px] text-text/85">{model.summary}</p>}
+        {model.summary && <p className="m-0 mt-0.5 text-[16.5px] leading-[25px] text-text/85">{model.summary}</p>}
+        <EntityInlineContext targetId={model.id} targetTitle={model.claimTitle} targetKind="Debate" />
 
         {(model.claimHref || model.onOpenClaim) && (
           <div>
@@ -223,6 +242,11 @@ export function DebateTemplate({ model, headerActions, footer, className }: Deba
           </div>
         </section>
       )}
+
+      {/* Context & Flags */}
+      <GraphConnectionsStrip groups={[]} target={{ id: model.id, kind: 'Debate', title: model.claimTitle }} />
+
+      <EntityFlagsSection target={{ id: model.id, kind: 'Debate', title: model.claimTitle }} />
 
       {/* Related debates & sections */}
       {model.sections.length > 0 && (

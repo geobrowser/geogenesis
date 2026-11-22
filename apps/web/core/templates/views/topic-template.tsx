@@ -7,6 +7,7 @@ import Link from 'next/link';
 
 import type { TopicTemplateModel, TopicTimelineHighlightModel } from '../models';
 import {
+  AddEntityItemPopover,
   ArrowRightIcon,
   ChevronRightIcon,
   ClaimExplorer,
@@ -15,7 +16,6 @@ import {
   EntityOverflowMenu,
   RecentDebatesGallery,
   RelatedListSection,
-  TEMPLATE_CARD_SURFACE,
   TemplateBadge,
   TemplateShell,
 } from '../primitives';
@@ -37,44 +37,42 @@ export interface TopicTemplateProps {
 export function TopicTemplate({ model, headerActions, footer, className }: TopicTemplateProps) {
   const contested = model.contestedClaims ?? [];
   const agreed = model.agreedClaims ?? [];
+  const [addedTimelineTurns, setAddedTimelineTurns] = React.useState<TopicTimelineHighlightModel[]>([]);
+  const timelineHighlights = [...addedTimelineTurns, ...(model.timelineHighlights ?? [])];
 
   return (
     <TemplateShell
       maxWidth={1120}
       breadcrumbs={model.breadcrumbs}
+      coverUrl={model.coverUrl}
+      coverAlt={model.title}
       contextByEntityId={model.contextByEntityId}
       className={className}
     >
-      {/* Hero header */}
-      <header className="flex flex-col gap-5">
-        {model.coverUrl && (
-          <div className={cx('overflow-hidden', TEMPLATE_CARD_SURFACE)}>
-            <img src={model.coverUrl} alt={model.title} className="max-h-[280px] w-full object-cover" />
-          </div>
-        )}
-
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
-            <TemplateBadge tone="neutral">Topic</TemplateBadge>
-            {model.tags?.map(tag => (
-              <TemplateBadge key={tag} tone="neutral">
-                {tag}
-              </TemplateBadge>
-            ))}
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
+      {/* Hero header (normal Geo entity page order: cover -> name -> type labels -> description) */}
+      <header className="flex flex-col gap-3.5">
+        <div className="flex items-start justify-between gap-4">
+          <h1 className="m-0 text-entityTitle text-pretty text-text">{model.title}</h1>
+          <div className="flex shrink-0 items-center gap-2 pt-1.5">
             <EntityContextTogglePill />
             {headerActions}
             <EntityOverflowMenu target={{ id: model.id, kind: 'Topic', title: model.title }} isPageRoot size="md" />
           </div>
         </div>
 
-        <h1 className="m-0 text-entityTitle text-pretty text-text">{model.title}</h1>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+          <TemplateBadge tone="neutral">Topic</TemplateBadge>
+          {model.tags?.map(tag => (
+            <TemplateBadge key={tag} tone="neutral">
+              {tag}
+            </TemplateBadge>
+          ))}
+        </div>
 
-        {model.lede && <p className="m-0 max-w-[780px] text-[16.5px] leading-[25px] text-text/85">{model.lede}</p>}
+        {model.lede && <p className="m-0 mt-1 max-w-[780px] text-[16.5px] leading-[25px] text-text/85">{model.lede}</p>}
       </header>
 
-      {/* Calm single-column Claims list with 2-tab switch (Where they split | Common ground) */}
+      {/* Calm single-column Claims list with 2-tab switch (Disputed | Accepted) */}
       {(contested.length > 0 || agreed.length > 0) && (
         <ClaimExplorer contestedClaims={contested} agreedClaims={agreed} title="Claims" />
       )}
@@ -83,36 +81,59 @@ export function TopicTemplate({ model, headerActions, footer, className }: Topic
       {model.recentDebates && model.recentDebates.length > 0 && <RecentDebatesGallery debates={model.recentDebates} />}
 
       {/* Timeline (rendered open directly on the page) */}
-      {model.timelineHighlights && model.timelineHighlights.length > 0 && (
+      {timelineHighlights.length > 0 && (
         <section id="timeline" aria-label="Timeline" className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-baseline justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="m-0 text-mediumTitle font-semibold text-text">Timeline</h2>
-            {model.timelineHref ? (
-              <Link
-                href={model.timelineHref}
-                className="inline-flex items-center gap-1.5 text-[15px] font-medium text-ctaPrimary no-underline hover:text-ctaHover"
-              >
-                <span>Full timeline</span>
-                <ArrowRightIcon className="size-4" />
-              </Link>
-            ) : model.onOpenTimeline ? (
-              <button
-                type="button"
-                onClick={model.onOpenTimeline}
-                className="inline-flex cursor-pointer items-center gap-1.5 border-0 bg-transparent p-0 text-[15px] font-medium text-ctaPrimary hover:text-ctaHover"
-              >
-                <span>Full timeline</span>
-                <ArrowRightIcon className="size-4" />
-              </button>
-            ) : null}
+            <div className="flex items-center gap-3">
+              {model.timelineHref ? (
+                <Link
+                  href={model.timelineHref}
+                  className="inline-flex items-center gap-1.5 text-[15px] font-medium text-ctaPrimary no-underline hover:text-ctaHover"
+                >
+                  <span>Full timeline</span>
+                  <ArrowRightIcon className="size-4" />
+                </Link>
+              ) : model.onOpenTimeline ? (
+                <button
+                  type="button"
+                  onClick={model.onOpenTimeline}
+                  className="inline-flex cursor-pointer items-center gap-1.5 border-0 bg-transparent p-0 text-[15px] font-medium text-ctaPrimary hover:text-ctaHover"
+                >
+                  <span>Full timeline</span>
+                  <ArrowRightIcon className="size-4" />
+                </button>
+              ) : null}
+
+              <AddEntityItemPopover
+                label="Add event"
+                primaryLabel="Event"
+                primaryPlaceholder="e.g. UN Security Council adopts resolution"
+                secondaryLabel="Date"
+                secondaryPlaceholder="e.g. 18 Nov 2026"
+                tertiaryLabel="Summary (optional)"
+                tertiaryPlaceholder="Brief neutral summary of what happened..."
+                onSubmit={draft =>
+                  setAddedTimelineTurns(prev => [
+                    {
+                      id: `user-ev-${Date.now()}`,
+                      when: draft.secondary ?? 'Recent',
+                      title: draft.primary,
+                      summary: draft.tertiary,
+                    },
+                    ...prev,
+                  ])
+                }
+              />
+            </div>
           </div>
           <ol className="m-0 flex list-none flex-col p-0">
-            {model.timelineHighlights.map((turn, idx) => (
+            {timelineHighlights.map((turn, idx) => (
               <TimelineHighlightRow
                 key={turn.id}
                 turn={turn}
                 isFirst={idx === 0}
-                isLast={idx === (model.timelineHighlights?.length ?? 0) - 1}
+                isLast={idx === timelineHighlights.length - 1}
               />
             ))}
           </ol>

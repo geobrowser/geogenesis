@@ -11,7 +11,19 @@
 
 export type VoteChoice = 'agree' | 'disagree' | null;
 
+/**
+ * Stored epistemic property on a Claim (`CLAIM_IS_FACTUAL_PROPERTY_ID`).
+ *
+ * Distinct from agreement state (`Contested` vs `Common ground`), which is always computed
+ * dynamically from community vote splits (`SplitBreakdown.isSplit`), never stored as a type.
+ */
 export type ClaimKind = 'fact' | 'judgment' | 'value-judgment';
+
+/**
+ * Directed stance edge connecting a subclaim to a parent claim
+ * (`CLAIM_SUPPORTS_PROPERTY_ID` | `CLAIM_OPPOSES_PROPERTY_ID` | `CLAIM_ADDRESSES_PROPERTY_ID`).
+ */
+export type ClaimStance = 'supports' | 'opposes' | 'addresses';
 
 export type EntityLinkKind = 'claim' | 'event' | 'news-story' | 'source' | 'post' | 'debate' | 'topic' | 'case';
 
@@ -35,7 +47,7 @@ export interface CommunityDefinition {
 }
 
 export interface SplitRow {
-  /** Community ID, or `'all'` for the combined Everyone bar. */
+  /** Community / space ID, or `'all'` / top-level space ID for the combined parent bar. */
   id: string;
   label: string;
   color: string;
@@ -46,7 +58,12 @@ export interface SplitRow {
   unit?: string;
   /** Set when the current user's vote belongs to this row. */
   userLabel?: string;
+  /** True for the top-level space / overall aggregate bar rendered above subspaces. */
   isEveryone?: boolean;
+  /** True for subspace bars nested visually beneath the top-level space bar. */
+  isSubspace?: boolean;
+  href?: string;
+  onSelect?: () => void;
 }
 
 export interface SplitBreakdown {
@@ -144,6 +161,13 @@ export interface EntityContextDataModel {
   flags?: readonly EntityFlagModel[];
 }
 
+/** Optional persistence callbacks for live GRC-20 adapters wired through `TemplateShell`. */
+export interface EntityActionCallbacks {
+  onAddTriple?: (targetId: string, predicate: string, values: readonly string[]) => void;
+  onDeleteTriple?: (targetId: string, valueId: string) => void;
+  onAddFlag?: (targetId: string, draft: { reason: string; body: string; sourceUrl?: string }) => void;
+}
+
 export interface EntityLinkRowModel {
   id: string;
   kind: EntityLinkKind;
@@ -195,15 +219,25 @@ export interface StrongestCaseModel {
   sources: readonly SourceChipModel[];
 }
 
-export interface SubClaimFactModel {
+/**
+ * A child Claim linked via `SUBCLAIMS_PROPERTY_ID` (and optional stance edge `Supports` / `Opposes` / `Addresses`).
+ */
+export interface SubClaimModel {
   id: string;
   title: string;
+  /** Stored epistemic property on the subclaim (`Factual` vs `Judgment`). */
+  kind?: ClaimKind;
+  /** Optional stance relation to the parent claim (`Supports`, `Opposes`, `Addresses`). */
+  stance?: ClaimStance;
   stat?: string;
   split: SplitBreakdown;
   sources: readonly SourceChipModel[];
   href?: string;
   onSelect?: () => void;
 }
+
+/** @deprecated Prefer `SubClaimModel`. Kept as an alias for backwards compatibility. */
+export type SubClaimFactModel = SubClaimModel;
 
 export interface ClaimAgreedBasisModel {
   summary: string;
@@ -241,7 +275,7 @@ export interface ContextPeekItemModel {
   split?: SplitBreakdown;
   voteBox?: VoteControlModel;
   settlingSources?: readonly SourceChipModel[];
-  subClaims?: readonly SubClaimFactModel[];
+  subClaims?: readonly SubClaimModel[];
   claims?: readonly ClaimSummaryModel[];
   relations?: readonly {
     id: string;
@@ -250,6 +284,7 @@ export interface ContextPeekItemModel {
     note?: string;
     onSelect?: () => void;
   }[];
+  flags?: readonly EntityFlagModel[];
   openFullLabel?: string;
   fullHref?: string;
   onOpenFull?: () => void;
@@ -258,6 +293,7 @@ export interface ContextPeekItemModel {
 export interface ClaimTemplateModel {
   id: string;
   title: string;
+  coverUrl?: string | null;
   breadcrumbs?: readonly BreadcrumbItem[];
   kind: ClaimKind;
   split: SplitBreakdown;
@@ -270,9 +306,11 @@ export interface ClaimTemplateModel {
     text: string;
     sources: readonly SourceChipModel[];
   };
-  subClaims?: readonly SubClaimFactModel[];
+  subClaims?: readonly SubClaimModel[];
   strongestCases?: readonly StrongestCaseModel[];
   agreedBasis?: ClaimAgreedBasisModel;
+  /** Seeded context triples and flags keyed by entity ID for inline / drawer Context menus. */
+  contextByEntityId?: Readonly<Record<string, EntityContextDataModel>>;
   sections: readonly EntityListSectionModel[];
 }
 
@@ -548,6 +586,7 @@ export interface EventTemplateModel {
   storyCountLabel?: string;
   graphConnections?: readonly GraphConnectionGroupModel[];
   claims: readonly ClaimSummaryModel[];
+  contextByEntityId?: Readonly<Record<string, EntityContextDataModel>>;
   sections: readonly EntityListSectionModel[];
   previousEvent?: { id: string; title: string; when: string; href?: string; onSelect?: () => void };
   nextEvent?: { id: string; title: string; when: string; href?: string; onSelect?: () => void };
@@ -572,6 +611,7 @@ export interface NewsStoryTemplateModel {
     voteBox: VoteControlModel;
   };
   reportedClaims: readonly ClaimSummaryModel[];
+  contextByEntityId?: Readonly<Record<string, EntityContextDataModel>>;
   sections: readonly EntityListSectionModel[];
 }
 
@@ -622,6 +662,7 @@ export interface DebateTemplateModel {
     deltaPoints: number;
   }[];
   shiftVerdict?: string;
+  contextByEntityId?: Readonly<Record<string, EntityContextDataModel>>;
   sections: readonly EntityListSectionModel[];
 }
 
@@ -722,10 +763,21 @@ export function formatCompactCount(value: number): string {
 export function formatClaimKindLabel(kind: ClaimKind): string {
   switch (kind) {
     case 'fact':
-      return 'Fact';
+      return 'Factual';
     case 'judgment':
       return 'Judgment';
     case 'value-judgment':
       return 'Value judgment';
+  }
+}
+
+export function formatClaimStanceLabel(stance: ClaimStance): string {
+  switch (stance) {
+    case 'supports':
+      return 'Supports';
+    case 'opposes':
+      return 'Opposes';
+    case 'addresses':
+      return 'Addresses';
   }
 }

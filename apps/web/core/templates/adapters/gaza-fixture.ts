@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import {
   type ClaimKind,
+  type ClaimStance,
   type ClaimSummaryModel,
   type ClaimTemplateModel,
   type CommunityDefinition,
@@ -23,8 +24,7 @@ import {
   type SourceQuoteModel,
   type SourceTemplateModel,
   type SplitBreakdown,
-  type StrongestCaseModel,
-  type SubClaimFactModel,
+  type SubClaimModel,
   type TemplateDataSource,
   type TimelineTemplateModel,
   type TopicRankingItemModel,
@@ -34,6 +34,7 @@ import {
   type TopicViralPostPreviewModel,
   type VoteChoice,
   computeSplitGap,
+  formatClaimKindLabel,
   formatCompactCount,
   isClaimSplit,
 } from '../models';
@@ -668,6 +669,8 @@ interface SeedClaim {
   subClaims?: readonly {
     id: string;
     title: string;
+    kind?: ClaimKind;
+    stance?: ClaimStance;
     pp: number;
     pi: number;
     stat: string;
@@ -702,18 +705,54 @@ const SEED_CLAIMS: readonly SeedClaim[] = [
       {
         id: 'f-coi',
         title: 'The UN Commission of Inquiry concluded Israel committed four of the five acts of genocide',
+        kind: 'fact',
+        stance: 'supports',
         pp: 96,
         pi: 58,
         stat: 'Mandated by the UN Human Rights Council; follow-up report published Oct 2026.',
         sourceIds: ['s-coi'],
       },
       {
+        id: 'f-scale',
+        title:
+          'The scale of killing, structural destruction, and spring 2025 aid halt meets the Genocide Convention threshold',
+        kind: 'judgment',
+        stance: 'supports',
+        pp: 94,
+        pi: 7,
+        stat: 'Cites 70,000+ fatalities, 82% of structures damaged or destroyed, and confirmed IPC Phase 5 famine.',
+        sourceIds: ['s-unosat', 's-ipc', 's-coi'],
+      },
+      {
         id: 'f-icj',
         title: 'No court has yet ruled on whether genocide occurred',
+        kind: 'fact',
+        stance: 'opposes',
         pp: 71,
         pi: 98,
         stat: 'The ICJ issued provisional measures in Jan 2024; a merits ruling is expected around 2029.',
         sourceIds: ['s-icj'],
+      },
+      {
+        id: 'f-embedded',
+        title:
+          'Urban warfare against fighters embedded in tunnels and civilian sites does not establish genocidal intent',
+        kind: 'judgment',
+        stance: 'opposes',
+        pp: 9,
+        pi: 94,
+        stat: 'Israel argued at the ICJ that evacuation warnings and aid corridors contradict dolus specialis.',
+        sourceIds: ['s-il-icj', 's-icj'],
+      },
+      {
+        id: 'f-intent',
+        title: 'Specific intent (dolus specialis) under the 1948 Convention can be inferred from patterns of conduct',
+        kind: 'judgment',
+        stance: 'addresses',
+        pp: 89,
+        pi: 18,
+        stat: 'International law scholars disagree on how broadly the ICJ’s “only reasonable inference” standard applies in urban warfare.',
+        sourceIds: ['s-icj', 's-coi'],
       },
     ],
     cases: [
@@ -1292,27 +1331,11 @@ function computeEffectiveSplit(
   const userLabel = userVote ? `You: ${userVote === 'agree' ? 'Agree' : 'Disagree'}` : undefined;
 
   const rows = [
-    {
-      id: 'pp',
-      label: 'Pro-Palestinian',
-      color: '#6833ff',
-      percent: ppPct,
-      voterCount: ppVotes,
-      userLabel: ppVoted ? userLabel : undefined,
-    },
-    {
-      id: 'pi',
-      label: 'Pro-Israel',
-      color: '#3963fe',
-      percent: piPct,
-      voterCount: piVotes,
-      userLabel: piVoted ? userLabel : undefined,
-    },
     ...(includeEveryone
       ? [
           {
-            id: 'all',
-            label: 'Everyone',
+            id: 'world-affairs',
+            label: 'World affairs',
             color: '#202020',
             percent: allPct,
             voterCount: totalVotes,
@@ -1321,14 +1344,32 @@ function computeEffectiveSplit(
           },
         ]
       : []),
+    {
+      id: 'pp',
+      label: 'Pro-Palestinian',
+      color: '#6833ff',
+      percent: ppPct,
+      voterCount: ppVotes,
+      isSubspace: includeEveryone,
+      userLabel: ppVoted ? userLabel : undefined,
+    },
+    {
+      id: 'pi',
+      label: 'Pro-Israel',
+      color: '#3963fe',
+      percent: piPct,
+      voterCount: piVotes,
+      isSubspace: includeEveryone,
+      userLabel: piVoted ? userLabel : undefined,
+    },
   ];
 
   const gapPoints = computeSplitGap(rows);
   const impactNote = !userVote
     ? undefined
     : joinedCommunityId
-      ? `Counted for ${joinedCommunityId === 'pp' ? 'Pro-Palestinian' : 'Pro-Israel'} and Everyone (${totalVotes.toLocaleString('en-US')} votes).`
-      : `Counted in Everyone (${totalVotes.toLocaleString('en-US')} votes). Join a community to count in its split.`;
+      ? `Counted in ${joinedCommunityId === 'pp' ? 'Pro-Palestinian' : 'Pro-Israel'} and World affairs (${formatCompactCount(totalVotes)} votes).`
+      : `Counted in World affairs (${formatCompactCount(totalVotes)} votes).`;
 
   return {
     split: { rows, gapPoints, isSplit: isClaimSplit(gapPoints), totalVotes },
@@ -1498,7 +1539,7 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
         claim.nall,
         userVote,
         joinedCommunityId,
-        false
+        true
       );
       const matchingDebate = SEED_DEBATES.find(debate => debate.claimId === claim.id);
       return {
@@ -1820,47 +1861,47 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
         true
       );
 
-      const subClaims: SubClaimFactModel[] | undefined = seed.subClaims?.map(fact => {
-        const gap = Math.abs(fact.pp - fact.pi);
+      const subClaims: SubClaimModel[] | undefined = seed.subClaims?.map(subClaim => {
+        const gap = Math.abs(subClaim.pp - subClaim.pi);
+        const worldAffairsPct = Math.round((subClaim.pp + subClaim.pi) / 2);
         return {
-          id: fact.id,
-          title: fact.title,
-          stat: fact.stat,
+          id: subClaim.id,
+          title: subClaim.title,
+          kind: subClaim.kind,
+          stance: subClaim.stance,
+          stat: subClaim.stat,
           split: {
             isSplit: isClaimSplit(gap),
             gapPoints: gap,
             rows: [
-              { id: 'pp', label: 'Pro-Palestinian', color: '#6833ff', percent: fact.pp },
-              { id: 'pi', label: 'Pro-Israel', color: '#3963fe', percent: fact.pi },
+              {
+                id: 'world-affairs',
+                label: 'World affairs',
+                color: '#202020',
+                percent: worldAffairsPct,
+                isEveryone: true,
+              },
+              { id: 'pp', label: 'Pro-Palestinian', color: '#6833ff', percent: subClaim.pp, isSubspace: true },
+              { id: 'pi', label: 'Pro-Israel', color: '#3963fe', percent: subClaim.pi, isSubspace: true },
             ],
           },
-          sources: toSourceChips(fact.sourceIds),
+          sources: toSourceChips(subClaim.sourceIds),
         };
       });
-
-      const strongestCases: StrongestCaseModel[] | undefined = seed.cases?.map(item => ({
-        id: `${seed.id}-${item.communityId}`,
-        communityId: item.communityId,
-        title: item.title,
-        accentColor: item.communityId === 'pp' ? '#6833ff' : '#3963fe',
-        points: item.points,
-        concede: item.concede,
-        sources: toSourceChips(item.sourceIds),
-      }));
 
       const sections: EntityListSectionModel[] = [];
 
       if (seed.splitNextIds && seed.splitNextIds.length > 0) {
         sections.push({
           id: 'split-next',
-          title: 'Where they split next',
+          title: 'Disputed next',
           items: seed.splitNextIds
             .map(id => CLAIM_BY_ID[id])
             .filter((item): item is SeedClaim => Boolean(item))
             .map(item => ({
               id: item.id,
               kind: 'claim',
-              kindLabel: 'Contested claim',
+              kindLabel: 'Claim',
               title: item.title,
               meta: `Pro-Palestinian ${item.pp}% · Pro-Israel ${item.pi}% agree`,
               onSelect: () => openClaim(item.id),
@@ -1920,7 +1961,7 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
       if (claimDebates.length > 0) {
         sections.push({
           id: 'debates',
-          title: claimDebates.length > 1 ? `Debates on this claim (${claimDebates.length})` : 'Debate on this claim',
+          title: claimDebates.length > 1 ? 'Debates on this claim' : 'Debate on this claim',
           items: claimDebates.map(debate => ({
             id: debate.id,
             kind: 'debate',
@@ -1933,8 +1974,25 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
       }
 
       const relatedActors = SEED_GRAPH_NODES.filter(node => node.claimIds?.includes(seed.id));
+      const seededTriples = SEED_ENTITY_CONTEXT[seed.id]?.triples ?? [];
+      const hasSeededActors = seededTriples.some(t => /actor/i.test(t.predicate));
+
+      // Keep Context focused on non-sectioned graph triples (avoid duplicating Events & Sources
+      // which already render as full structured sections below on the Claim page).
       const graphConnections: GraphConnectionGroupModel[] = [
-        ...(relatedActors.length > 0
+        ...seededTriples.map(triple => ({
+          predicate: triple.predicate,
+          items: triple.values.map(val => {
+            const matchedActor = SEED_GRAPH_NODES.find(n => n.name.toLowerCase() === val.label.toLowerCase());
+            return {
+              id: val.id,
+              label: val.label,
+              kind: 'entity' as const,
+              onSelect: matchedActor ? () => pushPeek({ kind: 'entity', id: matchedActor.id }) : undefined,
+            };
+          }),
+        })),
+        ...(!hasSeededActors && relatedActors.length > 0
           ? [
               {
                 predicate: 'Actors',
@@ -1944,38 +2002,6 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
                   kind: 'entity' as const,
                   onSelect: () => pushPeek({ kind: 'entity', id: node.id }),
                 })),
-              },
-            ]
-          : []),
-        ...(seed.eventIds.length > 0
-          ? [
-              {
-                predicate: 'Events',
-                items: seed.eventIds
-                  .map(id => EVENT_BY_ID[id])
-                  .filter((ev): ev is SeedEvent => Boolean(ev))
-                  .map(ev => ({
-                    id: `ev-${ev.id}`,
-                    label: ev.title,
-                    kind: 'event' as const,
-                    onSelect: () => pushPeek({ kind: 'event', id: ev.id }),
-                  })),
-              },
-            ]
-          : []),
-        ...(seed.sourceIds.length > 0
-          ? [
-              {
-                predicate: 'Sources',
-                items: seed.sourceIds
-                  .map(id => SOURCE_BY_ID[id])
-                  .filter((s): s is SeedSource => Boolean(s))
-                  .map(s => ({
-                    id: `src-${s.id}`,
-                    label: s.title,
-                    kind: 'source' as const,
-                    onSelect: () => pushPeek({ kind: 'source', id: s.id }),
-                  })),
               },
             ]
           : []),
@@ -1995,10 +2021,7 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
         graphConnections: graphConnections.length > 0 ? graphConnections : undefined,
         voteBox: {
           userVote,
-          countSummary: `${eff.totalVotes.toLocaleString('en-US')} votes in all · ${(seed.npp + seed.npi).toLocaleString('en-US')} from community members`,
-          hint: joinedCommunityId
-            ? `Your vote counts in Everyone and in the ${joinedCommunityId === 'pp' ? 'Pro-Palestinian' : 'Pro-Israel'} split.`
-            : 'You haven’t joined a community, so your vote counts in Everyone only.',
+          countSummary: `${formatCompactCount(eff.totalVotes)} votes`,
           impactNote: eff.impactNote,
           onVote: choice => setVotes(prev => ({ ...prev, [seed.id]: choice })),
           onClear: () => setVotes(prev => ({ ...prev, [seed.id]: null })),
@@ -2010,7 +2033,7 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
             }
           : undefined,
         subClaims,
-        strongestCases,
+        contextByEntityId: SEED_ENTITY_CONTEXT,
         sections,
       };
     },
@@ -2045,11 +2068,12 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
     return {
       id: 'israel-gaza-war',
       title: 'Israel–Gaza war',
+      coverUrl: '/images/gaza-topic-cover.svg',
       lede: TOPIC_LEDE_BY_COMMUNITY[activeCommunityId] ?? TOPIC_LEDE_BY_COMMUNITY.all,
       tags: ['Prototype sample data'],
       stats: [
-        { label: 'Contested claims', value: String(contestedClaims.length) },
-        { label: 'Common ground', value: String(agreedClaims.length) },
+        { label: 'Disputed claims', value: String(contestedClaims.length) },
+        { label: 'Accepted', value: String(agreedClaims.length) },
         { label: 'Members in communities', value: (9189 + (joinedCommunityId ? 1 : 0)).toLocaleString('en-US') },
         { label: 'Sources linked', value: String(SEED_SOURCES.length) },
       ],
@@ -2207,6 +2231,7 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
         { id: ev.id, label: ev.title },
       ],
       claims: ev.claimIds.map(cid => toSummary(CLAIM_BY_ID[cid])),
+      contextByEntityId: SEED_ENTITY_CONTEXT,
       sections,
       previousEvent: prevEv
         ? { id: prevEv.id, title: prevEv.title, when: prevEv.when, onSelect: () => openEvent(prevEv.id) }
@@ -2261,6 +2286,7 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
         },
       },
       reportedClaims: [toSummary(CLAIM_BY_ID[st.claimId])],
+      contextByEntityId: SEED_ENTITY_CONTEXT,
       sections: [
         ...(ev
           ? [
@@ -2467,6 +2493,13 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
 
     const shifts = [
       {
+        label: 'World affairs viewers',
+        color: '#202020',
+        beforePercent: debate.allBeforeAfter[0],
+        afterPercent: debate.allBeforeAfter[1],
+        deltaPoints: debate.allBeforeAfter[1] - debate.allBeforeAfter[0],
+      },
+      {
         label: 'Pro-Palestinian viewers',
         color: '#6833ff',
         beforePercent: debate.ppBeforeAfter[0],
@@ -2480,16 +2513,9 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
         afterPercent: debate.piBeforeAfter[1],
         deltaPoints: debate.piBeforeAfter[1] - debate.piBeforeAfter[0],
       },
-      {
-        label: 'Everyone who watched',
-        color: '#202020',
-        beforePercent: debate.allBeforeAfter[0],
-        afterPercent: debate.allBeforeAfter[1],
-        deltaPoints: debate.allBeforeAfter[1] - debate.allBeforeAfter[0],
-      },
     ];
 
-    const biggest = [...shifts.slice(0, 2)].sort((a, b) => Math.abs(b.deltaPoints) - Math.abs(a.deltaPoints))[0];
+    const biggest = [...shifts.slice(1)].sort((a, b) => Math.abs(b.deltaPoints) - Math.abs(a.deltaPoints))[0];
     const shiftVerdict =
       biggest && biggest.deltaPoints !== 0
         ? `Biggest shift: ${biggest.label}, ${Math.abs(biggest.deltaPoints)} pts toward ${biggest.deltaPoints > 0 ? 'Agree' : 'Disagree'}. Counts viewers who voted before and after watching.`
@@ -2527,7 +2553,7 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
       ],
       voteBox: {
         userVote,
-        countSummary: `${eff.totalVotes.toLocaleString('en-US')} votes on this claim`,
+        countSummary: `${formatCompactCount(eff.totalVotes)} votes`,
         hint: 'Vote on the claim itself. The shift table below counts viewers who voted before and after watching.',
         impactNote: eff.impactNote,
         onVote: choice => setVotes(prev => ({ ...prev, [claim.id]: choice })),
@@ -2535,6 +2561,7 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
       },
       shifts,
       shiftVerdict,
+      contextByEntityId: SEED_ENTITY_CONTEXT,
       sections:
         otherDebates.length > 0
           ? [
@@ -2702,6 +2729,7 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
           note: ev.when,
           onSelect: () => pushPeek({ kind: 'event', id: ev.id }),
         })),
+        flags: SEED_ENTITY_CONTEXT[src.id]?.flags,
         openFullLabel: 'Open full source page',
         onOpenFull: () => openSource(src.id),
       };
@@ -2797,18 +2825,16 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
     return {
       id: claim.id,
       kind: 'claim',
-      kindLabel: claimDetail.split.isSplit ? 'Contested claim' : 'Agreed claim',
+      kindLabel: 'Claim',
       title: claim.title,
-      tags:
-        claimDetail.split.isSplit && claimDetail.split.gapPoints !== undefined
-          ? [`${Math.round(claimDetail.split.gapPoints)} pts apart`]
-          : undefined,
+      tags: [formatClaimKindLabel(claimDetail.kind)],
       summary: claimDetail.agreedBasis?.summary,
       settlingSources: claimDetail.agreedBasis?.settlingSources,
       split: claimDetail.split,
       voteBox: claimDetail.voteBox,
       subClaims: claimDetail.subClaims,
       relations: relations.length > 0 ? relations : undefined,
+      flags: SEED_ENTITY_CONTEXT[claim.id]?.flags,
       openFullLabel: 'Open full claim page',
       onOpenFull: () => openClaim(claim.id),
     };

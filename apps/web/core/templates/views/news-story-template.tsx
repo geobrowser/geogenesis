@@ -6,6 +6,11 @@ import type { NewsStoryTemplateModel } from '../models';
 import {
   ArrowUpRightIcon,
   ClaimSummaryCard,
+  EntityContextTogglePill,
+  EntityFlagsSection,
+  EntityInlineContext,
+  EntityOverflowMenu,
+  GraphConnectionsStrip,
   RelatedListSection,
   TemplateBadge,
   TemplateShell,
@@ -24,35 +29,49 @@ export interface NewsStoryTemplateProps {
  */
 export function NewsStoryTemplate({ model, headerActions, footer, className }: NewsStoryTemplateProps) {
   return (
-    <TemplateShell maxWidth={860} breadcrumbs={model.breadcrumbs} className={className}>
-      <header className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3.5">
+    <TemplateShell
+      maxWidth={860}
+      breadcrumbs={model.breadcrumbs}
+      contextByEntityId={model.contextByEntityId}
+      className={className}
+    >
+      <header className="flex flex-col gap-3.5">
+        <div className="flex items-start justify-between gap-4">
+          <h1 className="m-0 text-entityTitle text-pretty text-text">{model.headline}</h1>
+          <div className="flex shrink-0 items-center gap-2 pt-1.5">
+            <EntityContextTogglePill />
+            {headerActions}
+            <EntityOverflowMenu
+              target={{ id: model.id, kind: 'News story', title: model.headline }}
+              isPageRoot
+              size="md"
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <TemplateBadge tone="story">News story</TemplateBadge>
+          <div className="flex items-center gap-2">
             <span
               aria-hidden
-              className="inline-grid size-11 shrink-0 place-items-center rounded-lg text-[14px] font-semibold tracking-tight text-white"
+              className="inline-grid size-6 shrink-0 place-items-center rounded text-[11px] font-semibold tracking-tight text-white"
               style={{ backgroundColor: model.outletColor }}
             >
               {model.outletInitials}
             </span>
-            <div className="flex flex-col gap-0.5">
-              <div className="flex flex-wrap items-center gap-2">
-                <TemplateBadge tone="story">News story</TemplateBadge>
-                <span className="text-[16px] font-semibold text-text">{model.outlet}</span>
-              </div>
-              <span className="text-[15px] text-grey-04">
-                {[model.date, model.authors && model.authors.length > 0 ? model.authors.join(', ') : undefined]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </span>
-            </div>
+            <span className="text-[15px] font-semibold text-text">{model.outlet}</span>
           </div>
-          {headerActions}
+          {(model.date || (model.authors && model.authors.length > 0)) && (
+            <span className="text-[14.5px] text-grey-04">
+              {[model.date, model.authors && model.authors.length > 0 ? model.authors.join(', ') : undefined]
+                .filter(Boolean)
+                .join(' · ')}
+            </span>
+          )}
         </div>
 
-        <h1 className="m-0 text-entityTitle text-pretty text-text">{model.headline}</h1>
-
-        {model.summary && <p className="m-0 text-[16.5px] leading-[25px] text-text/85">{model.summary}</p>}
+        {model.summary && <p className="m-0 mt-0.5 text-[16.5px] leading-[25px] text-text/85">{model.summary}</p>}
+        <EntityInlineContext targetId={model.id} targetTitle={model.headline} targetKind="News story" />
 
         {(model.externalUrl || model.archiveUrl) && (
           <div className="flex flex-wrap items-center gap-3 pt-1">
@@ -89,6 +108,10 @@ export function NewsStoryTemplate({ model, headerActions, footer, className }: N
           control={model.accuracyRating.voteBox}
         />
       )}
+
+      <GraphConnectionsStrip groups={[]} target={{ id: model.id, kind: 'News story', title: model.headline }} />
+
+      <EntityFlagsSection target={{ id: model.id, kind: 'News story', title: model.headline }} />
 
       {model.reportedClaims.length > 0 && (
         <section aria-label="The claim it reports" className="flex flex-col gap-4">

@@ -298,7 +298,7 @@ export function PostTemplate({ model, headerActions, footer, className }: PostTe
                 {draftTag && (
                   <div className="flex flex-col gap-2 rounded-lg border border-divider bg-bg p-3.5">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[13px] font-semibold text-grey-04 uppercase">Live preview</span>
+                      <span className="text-[13.5px] font-medium text-grey-04">Live preview</span>
                       <span className="text-[13px] text-grey-04">
                         {selectedEvidenceIds.length + (draftSource.trim() ? 1 : 0)}{' '}
                         {selectedEvidenceIds.length + (draftSource.trim() ? 1 : 0) === 1 ? 'source' : 'sources'}

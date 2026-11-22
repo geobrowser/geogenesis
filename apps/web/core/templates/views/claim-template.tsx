@@ -8,12 +8,16 @@ import {
   type ClaimKind,
   type ClaimTemplateModel,
   type StrongestCaseModel,
-  type SubClaimFactModel,
+  type SubClaimModel,
   formatClaimKindLabel,
 } from '../models';
 import {
+  AddClaimPopover,
   CheckCircleIcon,
-  ChevronRightIcon,
+  EntityContextTogglePill,
+  EntityFlagsSection,
+  EntityInlineContext,
+  EntityOverflowMenu,
   GraphConnectionsStrip,
   RelatedListSection,
   SourceChipList,
@@ -43,56 +47,64 @@ export interface ClaimTemplateProps {
 /**
  * Pure, data-driven Claim page template.
  *
- * Editorial white/black layout with restrained Geo blue/purple accents and Calibre-scaled typography.
+ * Mirrors Geo's GRC-20 Claim ontology: every assertion is a `Claim` with a stored epistemic
+ * property (`Factual` / `Judgment` / `Value judgment`), while agreement state (`Where they split`
+ * vs `Common ground`) is computed dynamically from community vote splits and shown in the bars.
  */
 export function ClaimTemplate({ model, headerActions, footer, className }: ClaimTemplateProps) {
-  const isSplit = model.split.isSplit;
-
   return (
-    <TemplateShell maxWidth={860} breadcrumbs={model.breadcrumbs} className={className}>
-      {/* Header */}
-      <header className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <TemplateBadge tone={isSplit ? 'split' : 'agreed'}>
-              {isSplit ? 'Contested claim' : 'Agreed claim'}
-            </TemplateBadge>
-            <TemplateBadge tone={CLAIM_KIND_TONE[model.kind]}>{formatClaimKindLabel(model.kind)}</TemplateBadge>
-            {isSplit && model.split.gapPoints !== undefined && (
-              <TemplateBadge tone="neutral">{Math.round(model.split.gapPoints)} pts apart</TemplateBadge>
-            )}
-            {model.debateCount !== undefined && model.debateCount > 0 && (
-              <DebateCountPill count={model.debateCount} href={model.debatesHref} onSelect={model.onOpenDebates} />
-            )}
+    <TemplateShell
+      maxWidth={860}
+      breadcrumbs={model.breadcrumbs}
+      coverUrl={model.coverUrl}
+      coverAlt={model.title}
+      contextByEntityId={model.contextByEntityId}
+      className={className}
+    >
+      {/* Header (name first, type labels below) */}
+      <header className="flex flex-col gap-3.5">
+        <div className="flex items-start justify-between gap-4">
+          <h1 className="m-0 text-entityTitle text-pretty text-text">{model.title}</h1>
+          <div className="flex shrink-0 items-center gap-2 pt-1.5">
+            <EntityContextTogglePill />
+            {headerActions}
+            <EntityOverflowMenu target={{ id: model.id, kind: 'Claim', title: model.title }} isPageRoot size="md" />
           </div>
-          {headerActions}
         </div>
 
-        <h1 className="m-0 text-entityTitle text-pretty text-text">{model.title}</h1>
+        <div className="flex flex-wrap items-center gap-2">
+          <TemplateBadge tone="neutral">Claim</TemplateBadge>
+          <TemplateBadge tone={CLAIM_KIND_TONE[model.kind]}>{formatClaimKindLabel(model.kind)}</TemplateBadge>
+          {model.debateCount !== undefined && model.debateCount > 0 && (
+            <DebateCountLink count={model.debateCount} href={model.debatesHref} onSelect={model.onOpenDebates} />
+          )}
+        </div>
+
+        <EntityInlineContext targetId={model.id} targetTitle={model.title} targetKind="Claim" />
       </header>
 
       {/* Vote box + community split bars */}
       <VoteBox split={model.split} control={model.voteBox} />
 
-      {/* Typed graph connections */}
-      {model.graphConnections && model.graphConnections.length > 0 && (
-        <GraphConnectionsStrip groups={model.graphConnections} />
-      )}
+      {/* Context relations & Flags (always rendered even when empty) */}
+      <GraphConnectionsStrip
+        groups={model.graphConnections ?? []}
+        target={{ id: model.id, kind: 'Claim', title: model.title }}
+      />
 
-      {/* Agreed basis (clean soft-shadow editorial panel) */}
+      <EntityFlagsSection target={{ id: model.id, kind: 'Claim', title: model.title }} />
+
+      {/* Accepted basis (clean soft-shadow editorial panel) */}
       {model.agreedBasis && (
-        <section
-          aria-label="What both communities agree on"
-          className={`flex flex-col gap-4 p-5 @[560px]:p-6 ${TEMPLATE_CARD_SURFACE}`}
-        >
+        <section aria-label="Accepted" className={`flex flex-col gap-4 p-5 @[560px]:p-6 ${TEMPLATE_CARD_SURFACE}`}>
           <div className="flex items-center gap-2 text-ctaPrimary">
             <CheckCircleIcon className="size-5" />
-            <h2 className="m-0 text-smallTitle text-text">What both communities agree on</h2>
+            <h2 className="m-0 text-smallTitle text-text">Accepted</h2>
           </div>
           <p className="m-0 text-[15.5px] leading-[24px] text-text/85">{model.agreedBasis.summary}</p>
           {model.agreedBasis.settlingSources.length > 0 && (
             <div className="flex flex-col gap-2.5 border-t border-divider pt-4">
-              <span className="text-[14px] font-medium text-grey-04">Sources that settled it</span>
+              <span className="text-[14px] font-medium text-grey-04">Primary sources</span>
               <SourceChipList sources={model.agreedBasis.settlingSources} />
             </div>
           )}
@@ -107,17 +119,8 @@ export function ClaimTemplate({ model, headerActions, footer, className }: Claim
         </section>
       )}
 
-      {/* Underlying facts / sub-claims — unified editorial container with 2-column rows */}
-      {model.subClaims && model.subClaims.length > 0 && (
-        <section aria-label="The facts it turns on" className="flex flex-col gap-4">
-          <h2 className="m-0 text-mediumTitle font-semibold text-text">The facts it turns on</h2>
-          <div className={`divide-y divide-divider overflow-hidden ${TEMPLATE_CARD_SURFACE}`}>
-            {model.subClaims.map(fact => (
-              <SubClaimFactRow key={fact.id} fact={fact} />
-            ))}
-          </div>
-        </section>
-      )}
+      {/* Supporting, Opposing, and Related claims */}
+      {model.subClaims && model.subClaims.length > 0 && <GroupedSubClaimSections subClaims={model.subClaims} />}
 
       {/* Strongest cases */}
       {model.strongestCases && model.strongestCases.length > 0 && (
@@ -145,62 +148,134 @@ export function ClaimTemplate({ model, headerActions, footer, className }: Claim
   );
 }
 
-function DebateCountPill({ count, href, onSelect }: { count: number; href?: string; onSelect?: () => void }) {
+function DebateCountLink({ count, href, onSelect }: { count: number; href?: string; onSelect?: () => void }) {
   const text = `${count} ${count === 1 ? 'debate' : 'debates'}`;
-  const classes =
-    'inline-flex h-7 items-center gap-1 rounded-md border border-ctaPrimary/15 bg-ctaTertiary px-2.5 text-[14px] leading-none font-medium text-ctaPrimary no-underline transition-colors hover:bg-ctaPrimary hover:text-white';
+  const linkClasses =
+    'ml-1 text-[14px] font-medium text-grey-04 underline decoration-grey-02 underline-offset-2 transition-colors hover:text-[#4c1fd4] hover:decoration-[#4c1fd4]';
 
   if (href) {
     return (
-      <Link href={href} className={classes}>
-        <span>{text}</span>
-        <ChevronRightIcon className="size-3.5" />
+      <Link href={href} className={linkClasses}>
+        {text}
       </Link>
     );
   }
 
   if (onSelect) {
     return (
-      <button type="button" onClick={onSelect} className={`${classes} cursor-pointer`}>
-        <span>{text}</span>
-        <ChevronRightIcon className="size-3.5" />
+      <button type="button" onClick={onSelect} className={`cursor-pointer border-0 bg-transparent p-0 ${linkClasses}`}>
+        {text}
       </button>
     );
   }
 
-  return <TemplateBadge tone="neutral">{text}</TemplateBadge>;
+  return <span className="ml-1 text-[14px] text-grey-04">{text}</span>;
 }
 
-function SubClaimFactRow({ fact }: { fact: SubClaimFactModel }) {
+function GroupedSubClaimSections({ subClaims }: { subClaims: readonly SubClaimModel[] }) {
+  const [added, setAdded] = React.useState<SubClaimModel[]>([]);
+  const combined = [...subClaims, ...added];
+
+  const sections = [
+    {
+      id: 'supporting-claims',
+      title: 'Supporting claims',
+      addLabel: 'Add supporting claim',
+      stance: 'supports' as const,
+      items: combined.filter(c => c.stance === 'supports'),
+    },
+    {
+      id: 'opposing-claims',
+      title: 'Opposing claims',
+      addLabel: 'Add opposing claim',
+      stance: 'opposes' as const,
+      items: combined.filter(c => c.stance === 'opposes'),
+    },
+    {
+      id: 'related-claims',
+      title: 'Related claims',
+      addLabel: 'Add related claim',
+      stance: 'addresses' as const,
+      items: combined.filter(c => c.stance !== 'supports' && c.stance !== 'opposes'),
+    },
+  ].filter(section => section.items.length > 0);
+
   return (
-    <article className="grid grid-cols-1 items-start gap-4 p-5 @[680px]:grid-cols-[minmax(0,1fr)_270px] @[680px]:gap-6 @[680px]:p-6">
-      <div className="flex min-w-0 flex-col gap-2.5">
-        {fact.href ? (
+    <>
+      {sections.map(section => (
+        <section key={section.id} aria-label={section.title} className="flex flex-col gap-4">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="m-0 text-mediumTitle font-semibold text-text">{section.title}</h2>
+            <AddClaimPopover
+              label={section.addLabel}
+              onSubmit={draft =>
+                setAdded(prev => [
+                  ...prev,
+                  {
+                    id: `claim-sub-${Date.now()}`,
+                    title: draft.title,
+                    kind: draft.kind,
+                    stance: section.stance,
+                    stat: draft.note,
+                    split: { rows: [], isSplit: false },
+                    sources: [],
+                  },
+                ])
+              }
+            />
+          </div>
+          <div className={`divide-y divide-divider overflow-hidden ${TEMPLATE_CARD_SURFACE}`}>
+            {section.items.map(subClaim => (
+              <SubClaimRow key={subClaim.id} subClaim={subClaim} />
+            ))}
+          </div>
+        </section>
+      ))}
+    </>
+  );
+}
+
+function SubClaimRow({ subClaim }: { subClaim: SubClaimModel }) {
+  return (
+    <article className="grid grid-cols-1 items-start gap-4 p-5 @[680px]:grid-cols-[minmax(0,1fr)_304px] @[680px]:gap-6 @[680px]:p-6">
+      <div className="flex min-w-0 flex-col gap-2">
+        {subClaim.href ? (
           <Link
-            href={fact.href}
+            href={subClaim.href}
             className="text-[17px] leading-[23px] font-semibold text-text no-underline hover:text-[#4c1fd4]"
           >
-            {fact.title}
+            {subClaim.title}
           </Link>
-        ) : fact.onSelect ? (
+        ) : subClaim.onSelect ? (
           <button
             type="button"
-            onClick={fact.onSelect}
+            onClick={subClaim.onSelect}
             className="cursor-pointer border-0 bg-transparent p-0 text-left text-[17px] leading-[23px] font-semibold text-text hover:text-[#4c1fd4]"
           >
-            {fact.title}
+            {subClaim.title}
           </button>
         ) : (
-          <h3 className="m-0 text-[17px] leading-[23px] font-semibold text-text">{fact.title}</h3>
+          <h3 className="m-0 text-[17px] leading-[23px] font-semibold text-text">{subClaim.title}</h3>
         )}
 
-        {fact.stat && <p className="m-0 text-[15px] leading-[22px] text-grey-04">{fact.stat}</p>}
+        {subClaim.kind && (
+          <div>
+            <TemplateBadge tone={CLAIM_KIND_TONE[subClaim.kind]} className="!h-6 !px-2 !text-[12.5px]">
+              {formatClaimKindLabel(subClaim.kind)}
+            </TemplateBadge>
+          </div>
+        )}
 
-        {fact.sources.length > 0 && <SourceChipList sources={fact.sources} className="pt-0.5" />}
+        {subClaim.stat && <p className="m-0 text-[15px] leading-[22px] text-grey-04">{subClaim.stat}</p>}
+
+        {subClaim.sources.length > 0 && <SourceChipList sources={subClaim.sources} className="pt-0.5" />}
+
+        <EntityInlineContext targetId={subClaim.id} targetTitle={subClaim.title} targetKind="Claim" />
       </div>
 
-      <div className="@[680px]:pt-1">
-        <SplitBars rows={fact.split.rows} density="compact" />
+      <div className="flex items-start justify-between gap-2 @[680px]:pt-1">
+        <SplitBars rows={subClaim.split.rows} density="compact" className="min-w-0 flex-1" />
+        <EntityOverflowMenu target={{ id: subClaim.id, kind: 'Claim', title: subClaim.title }} />
       </div>
     </article>
   );
@@ -234,7 +309,7 @@ function StrongestCaseCard({ item }: { item: StrongestCaseModel }) {
       <div className="flex flex-col gap-3">
         {item.concede && (
           <div className="flex flex-col gap-1 rounded-lg bg-grey-01/80 px-4 py-3 text-[15px] leading-[22px] text-text/85">
-            <span className="text-[12px] font-semibold tracking-[0.04em] text-grey-04 uppercase">Concedes</span>
+            <span className="text-[13px] font-medium text-grey-04">Concedes</span>
             <span>{item.concede}</span>
           </div>
         )}

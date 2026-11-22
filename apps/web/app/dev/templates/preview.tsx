@@ -40,8 +40,8 @@ type PreviewMode = 'prototype' | 'primitives';
 
 const QUICK_JUMPS: readonly { label: string; route: GazaFixtureRoute }[] = [
   { label: 'Topic', route: { kind: 'topic' } },
-  { label: 'Contested claim', route: { kind: 'claim', id: 'gen' } },
-  { label: 'Agreed claim', route: { kind: 'claim', id: 'build' } },
+  { label: 'Claim (disputed)', route: { kind: 'claim', id: 'gen' } },
+  { label: 'Claim (accepted)', route: { kind: 'claim', id: 'build' } },
   { label: 'Debate', route: { kind: 'debate', id: 'd-gen' } },
   { label: 'Timeline', route: { kind: 'timeline' } },
   { label: 'Sources', route: { kind: 'sources' } },

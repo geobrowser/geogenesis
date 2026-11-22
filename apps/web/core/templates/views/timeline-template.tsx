@@ -355,15 +355,15 @@ function TimelineTurnItem({
         {turn.knownDisputedUnknown && (
           <dl className={cx('m-0 grid grid-cols-1 gap-4 p-4 @[600px]:grid-cols-3', TEMPLATE_CARD_SURFACE)}>
             <div className="flex flex-col gap-1">
-              <dt className="text-[12.5px] font-semibold tracking-[0.04em] text-text uppercase">Known</dt>
+              <dt className="text-[13.5px] font-semibold text-text">Known</dt>
               <dd className="m-0 text-[14.5px] leading-[21px] text-text/85">{turn.knownDisputedUnknown.known}</dd>
             </div>
             <div className="flex flex-col gap-1">
-              <dt className="text-[12.5px] font-semibold tracking-[0.04em] text-purple uppercase">Disputed</dt>
+              <dt className="text-[13.5px] font-semibold text-purple">Disputed</dt>
               <dd className="m-0 text-[14.5px] leading-[21px] text-text/85">{turn.knownDisputedUnknown.disputed}</dd>
             </div>
             <div className="flex flex-col gap-1">
-              <dt className="text-[12.5px] font-semibold tracking-[0.04em] text-grey-04 uppercase">Unknown</dt>
+              <dt className="text-[13.5px] font-semibold text-grey-04">Unknown</dt>
               <dd className="m-0 text-[14.5px] leading-[21px] text-text/85">{turn.knownDisputedUnknown.unknown}</dd>
             </div>
           </dl>

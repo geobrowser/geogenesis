@@ -12,7 +12,7 @@ import type {
   SourceMediaKind,
   SourceQuoteModel,
 } from '../models';
-import { EntityInlineContext, EntityOverflowMenu } from './entity-overflow-menu';
+import { AddEntityItemPopover, EntityInlineContext, EntityOverflowMenu } from './entity-overflow-menu';
 import {
   ArrowUpRightIcon,
   ArticleIcon,
@@ -78,51 +78,81 @@ export interface RelatedListSectionProps {
  */
 export function RelatedListSection({ section, className }: RelatedListSectionProps) {
   const { title, subtitle, items, emptyText = 'Nothing linked yet.', action, layout } = section;
-  const isMixedList = items.length > 1 && items.some(item => item.kind !== items[0]?.kind);
+  const [addedItems, setAddedItems] = React.useState<EntityLinkRowModel[]>([]);
+  const allItems = [...addedItems, ...items];
+  const isMixedList = allItems.length > 1 && allItems.some(item => item.kind !== allItems[0]?.kind);
   const useCards =
     layout === 'cards' ||
     (layout !== 'list' &&
-      items.some(item => Boolean(item.mediaType || item.excerpt || item.duration || item.authorHandle)));
+      allItems.some(item => Boolean(item.mediaType || item.excerpt || item.duration || item.authorHandle)));
+
+  const isSourceSection = /source/i.test(title);
+  const addLabel = isSourceSection ? 'Add source' : `Add to ${title.toLowerCase()}`;
 
   return (
     <section aria-label={title} className={cx('flex flex-col gap-4', className)}>
-      <div className="flex flex-wrap items-baseline justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-col gap-1">
           <h2 className="m-0 text-mediumTitle font-semibold text-text">{title}</h2>
           {subtitle && <p className="m-0 text-[15px] leading-[21px] text-grey-04">{subtitle}</p>}
         </div>
-        {action &&
-          (action.href ? (
-            <Link
-              href={action.href}
-              className="inline-flex items-center gap-1 text-[15px] font-medium whitespace-nowrap text-ctaPrimary no-underline hover:text-ctaHover"
-            >
-              <span>{action.label}</span>
-            </Link>
-          ) : (
-            <button
-              type="button"
-              onClick={action.onClick}
-              className="inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent p-0 text-[15px] font-medium whitespace-nowrap text-ctaPrimary hover:text-ctaHover"
-            >
-              <span>{action.label}</span>
-            </button>
-          ))}
+        <div className="flex items-center gap-3">
+          {action &&
+            (action.href ? (
+              <Link
+                href={action.href}
+                className="inline-flex items-center gap-1 text-[15px] font-medium whitespace-nowrap text-ctaPrimary no-underline hover:text-ctaHover"
+              >
+                <span>{action.label}</span>
+              </Link>
+            ) : (
+              <button
+                type="button"
+                onClick={action.onClick}
+                className="inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent p-0 text-[15px] font-medium whitespace-nowrap text-ctaPrimary hover:text-ctaHover"
+              >
+                <span>{action.label}</span>
+              </button>
+            ))}
+
+          <AddEntityItemPopover
+            label={addLabel}
+            primaryLabel={isSourceSection ? 'Source title' : 'Title'}
+            primaryPlaceholder={isSourceSection ? 'e.g. UN OCHA Situation Report' : `Add ${title.toLowerCase()}...`}
+            secondaryLabel={isSourceSection ? 'Publisher (optional)' : 'Details (optional)'}
+            secondaryPlaceholder={isSourceSection ? 'e.g. UN OCHA · Nov 2026' : 'Date or short summary...'}
+            tertiaryLabel={isSourceSection ? 'URL (optional)' : undefined}
+            tertiaryPlaceholder={isSourceSection ? 'https://...' : undefined}
+            onSubmit={draft => {
+              const newItem: EntityLinkRowModel = {
+                id: `user-${section.id}-${Date.now()}`,
+                kind: isSourceSection ? 'source' : (allItems[0]?.kind ?? 'case'),
+                kindLabel: isSourceSection ? 'Source' : (allItems[0]?.kindLabel ?? 'Item'),
+                mediaType: isSourceSection ? 'article' : undefined,
+                title: draft.primary,
+                publisher: isSourceSection ? draft.secondary : undefined,
+                meta: draft.secondary,
+                externalUrl: draft.tertiary,
+              };
+              setAddedItems(prev => [newItem, ...prev]);
+            }}
+          />
+        </div>
       </div>
 
-      {items.length === 0 ? (
+      {allItems.length === 0 ? (
         <p className="m-0 rounded-xl border border-dashed border-grey-02 px-5 py-4 text-[15px] text-grey-04">
           {emptyText}
         </p>
       ) : useCards ? (
         <div className="grid grid-cols-1 items-start gap-4 @[640px]:grid-cols-2">
-          {items.map(item => (
+          {allItems.map(item => (
             <RichMediaCard key={item.id} item={item} />
           ))}
         </div>
       ) : (
         <div className={cx('divide-y divide-divider overflow-hidden', TEMPLATE_CARD_SURFACE)}>
-          {items.map(item => (
+          {allItems.map(item => (
             <RelatedListRow key={item.id} item={item} showKindBadge={isMixedList && !item.avatarPair} />
           ))}
         </div>

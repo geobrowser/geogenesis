@@ -127,19 +127,37 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
 
     fireEvent.click(within(claimsSection).getByRole('button', { name: 'Israel is committing genocide in Gaza' }));
     const claimDrawer = screen.getByRole('dialog');
-    expect(within(claimDrawer).getByText('Contested claim')).toBeInTheDocument();
+    expect(within(claimDrawer).getByText('Claim')).toBeInTheDocument();
+    expect(within(claimDrawer).getAllByText('Judgment').length).toBeGreaterThan(0);
+    expect(within(claimDrawer).getByRole('region', { name: 'Supporting claims' })).toBeInTheDocument();
+    expect(within(claimDrawer).getByRole('region', { name: 'Opposing claims' })).toBeInTheDocument();
+    expect(within(claimDrawer).getByRole('region', { name: 'Related claims' })).toBeInTheDocument();
+    expect(within(claimDrawer).queryByText('Contested claim')).toBeNull();
+    expect(within(claimDrawer).queryByText(/pts apart/i)).toBeNull();
+    expect(within(claimDrawer).queryByText('The facts it turns on')).toBeNull();
     fireEvent.click(within(claimDrawer).getByRole('button', { name: /Open full claim page/i }));
-    expect(screen.getByText('Contested claim')).toBeInTheDocument();
+    expect(screen.getByText('Claim')).toBeInTheDocument();
+    expect(screen.getAllByText('Judgment').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Factual').length).toBeGreaterThan(0);
+    expect(screen.getByRole('heading', { name: 'Supporting claims' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Opposing claims' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Related claims' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Strongest cases' })).toBeNull();
+    expect(screen.queryByText('Contested claim')).toBeNull();
+    expect(screen.queryByText(/pts apart/i)).toBeNull();
+    expect(screen.queryByText('The facts it turns on')).toBeNull();
 
-    // Verify GraphConnectionsStrip + ContextPeekDrawer on Claim page
-    const graphStrip = screen.getByRole('region', { name: 'Connected in the graph' });
-    fireEvent.click(within(graphStrip).getByRole('button', { name: /International Court of Justice/i }));
+    // Verify Context relation pills + ContextPeekDrawer on Claim page
+    const contextSection = screen.getByRole('region', { name: 'Context' });
+    fireEvent.click(within(contextSection).getByRole('button', { name: 'International Court of Justice' }));
     const drawer = screen.getByRole('dialog');
     expect(within(drawer).getByRole('heading', { name: 'International Court of Justice' })).toBeInTheDocument();
+    expect(within(drawer).getByRole('region', { name: 'Context' })).toBeInTheDocument();
     fireEvent.click(within(drawer).getByRole('button', { name: 'Close' }));
 
     // Vote Agree
-    fireEvent.click(screen.getByRole('button', { name: 'Agree' }));
+    const voteSection = screen.getByRole('region', { name: 'Vote on this claim' });
+    fireEvent.click(within(voteSection).getByRole('button', { name: 'Agree' }));
     expect(screen.getByText('You agreed.')).toBeInTheDocument();
 
     // Navigate from Claim -> Event -> News Story -> Source
@@ -180,18 +198,20 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     expect(screen.getByText(/Reverse image search confirms this footage/i)).toBeInTheDocument();
   });
 
-  it('renders agreed claim basis and peekable settling sources when inspecting a common-ground claim', () => {
+  it('renders accepted claim basis and peekable primary sources when inspecting an accepted claim', () => {
     render(<FixtureHarness />);
 
     const claimsSection = screen.getByRole('region', { name: 'Claims' });
-    fireEvent.click(within(claimsSection).getByRole('tab', { name: /Common ground/i }));
+    fireEvent.click(within(claimsSection).getByRole('tab', { name: /Accepted/i }));
     fireEvent.click(
       within(claimsSection).getByRole('button', { name: 'Most of Gaza’s buildings are damaged or destroyed' })
     );
 
-    // Clicking the claim row opens the ContextPeekDrawer with agreed basis & settling sources
+    // Clicking the claim row opens the ContextPeekDrawer with accepted basis & primary sources
     const drawer = screen.getByRole('dialog');
-    expect(within(drawer).getByText('Agreed claim')).toBeInTheDocument();
+    expect(within(drawer).getByText('Claim')).toBeInTheDocument();
+    expect(within(drawer).getByText('Factual')).toBeInTheDocument();
+    expect(within(drawer).queryByText('Agreed claim')).toBeNull();
 
     // Clicking a source chip inside the drawer drills into the source with a Back button
     fireEvent.click(within(drawer).getAllByRole('button', { name: /UNOSAT satellite damage assessment/i })[0]);
@@ -200,7 +220,8 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     // Go back to claim in drawer, then open the full Claim page
     fireEvent.click(within(drawer).getByRole('button', { name: /Back/i }));
     fireEvent.click(within(drawer).getByRole('button', { name: /Open full claim page/i }));
-    expect(screen.getByRole('heading', { name: 'Where they split next' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Accepted' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Disputed next' })).toBeInTheDocument();
   });
 
   it('renders 10 claims, Recent debates gallery, 8 timeline items, and Sources cleanly without removed sections', () => {
@@ -220,6 +241,10 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     const sources = screen.getByRole('region', { name: 'Sources & evidence' });
 
     expect(within(claims).getAllByRole('group', { name: /^Vote on /i })).toHaveLength(10);
+    expect(within(claims).getByRole('button', { name: 'Add claim' })).toBeInTheDocument();
+    expect(within(claims).getByRole('tab', { name: /Disputed/i })).toBeInTheDocument();
+    expect(within(claims).getByRole('tab', { name: /Accepted/i })).toBeInTheDocument();
+    expect(within(claims).getAllByText('World affairs').length).toBeGreaterThan(0);
     expect(within(claims).getByText('18.2k votes')).toBeInTheDocument();
     expect(within(claims).getByRole('button', { name: '11 debates' })).toBeInTheDocument();
     expect(within(recentDebates).getAllByRole('article')).toHaveLength(6);
@@ -237,7 +262,7 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     // Sources render verbatim quotes, graph/flag count chips, and `...` Flag / Add context menus
     expect(within(sources).getByText(/The key component of genocide/i)).toBeInTheDocument();
 
-    // Clicking the graph chip opens the Context drawer showing "Added context" key-value relation pills
+    // Clicking the graph chip opens the Context drawer showing Context & Flags (no parenthetical counts)
     fireEvent.click(
       within(sources).getByRole('button', {
         name: /Show 5 context relations for Israel’s oral arguments at the ICJ/i,
@@ -246,23 +271,63 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     const viewerDrawer = screen.getByRole('dialog', {
       name: /Context for Israel’s oral arguments at the ICJ/i,
     });
-    expect(within(viewerDrawer).getByText(/Added context \(5\)/i)).toBeInTheDocument();
+    expect(within(viewerDrawer).getByRole('region', { name: 'Context' })).toBeInTheDocument();
+    expect(within(viewerDrawer).getByRole('region', { name: 'Flags' })).toBeInTheDocument();
+    expect(within(viewerDrawer).queryByText(/Context \(\d+\)/)).toBeNull();
+    expect(within(viewerDrawer).queryByText(/Flags \(\d+\)/)).toBeNull();
     expect(within(viewerDrawer).getByText('Outcome')).toBeInTheDocument();
     expect(within(viewerDrawer).getByText('Court declined dismissal')).toBeInTheDocument();
+
+    // Clicking inline `+` at the end of a relation pill row pops the Geo-style relation adder
+    fireEvent.click(within(viewerDrawer).getByRole('button', { name: 'Add Outcome' }));
+    const pillInput = screen.getByLabelText('Find or add Outcome');
+    fireEvent.change(pillInput, { target: { value: 'Provisional measures ordered' } });
+    fireEvent.click(screen.getByRole('button', { name: /Add “Provisional measures ordered”/i }));
+    expect(within(viewerDrawer).getByText('Provisional measures ordered')).toBeInTheDocument();
 
     // Clicking the relation pill two-dot trigger opens the Genesis-style hover toolbar (Go to relation + Delete)
     fireEvent.click(
       within(viewerDrawer).getByRole('button', { name: 'Relation actions for Court declined dismissal' })
     );
-    expect(
-      screen.getByRole('button', { name: /Go to relation: Outcome → Court declined dismissal/i })
-    ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Delete relation: Court declined dismissal' }));
-    expect(within(viewerDrawer).queryByText('Court declined dismissal')).toBeNull();
-    expect(within(viewerDrawer).getByText(/Added context \(4\)/i)).toBeInTheDocument();
-    fireEvent.click(within(viewerDrawer).getByRole('button', { name: 'Close' }));
+    const goToRelationBtn = screen.getByRole('button', {
+      name: /Go to relation: Outcome → Court declined dismissal/i,
+    });
+    expect(goToRelationBtn).toBeInTheDocument();
 
-    // Adding a new key-value triple via `...` -> Add context increments the graph chip count (4 -> 6)
+    // Clicking Go to relation opens the Relation entity pane (From -> To + Relation & Outcome type badges)
+    fireEvent.click(goToRelationBtn);
+    const relationPane = screen.getByRole('dialog', {
+      name: /Relation: Israel’s oral arguments at the ICJ → Court declined dismissal/i,
+    });
+    expect(within(relationPane).getByText('Relation')).toBeInTheDocument();
+    expect(within(relationPane).getAllByText('Outcome').length).toBeGreaterThan(0);
+    fireEvent.click(within(relationPane).getByRole('button', { name: /Back to Israel’s oral arguments at the ICJ/i }));
+
+    // Re-open relation pill actions and delete one relation
+    const refreshedDrawer = screen.getByRole('dialog', {
+      name: /Context for Israel’s oral arguments at the ICJ/i,
+    });
+    fireEvent.click(
+      within(refreshedDrawer).getByRole('button', { name: 'Relation actions for Court declined dismissal' })
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Delete relation: Court declined dismissal' }));
+    expect(within(refreshedDrawer).queryByText('Court declined dismissal')).toBeNull();
+    fireEvent.click(within(refreshedDrawer).getByRole('button', { name: 'Close' }));
+
+    // Verify Agree / Disagree buttons on a Flag inside the Context drawer
+    fireEvent.click(
+      within(claims).getByRole('button', { name: /Show 1 flag for Israel is committing genocide in Gaza/i })
+    );
+    const claimContextDrawer = screen.getByRole('dialog', {
+      name: /Context for Israel is committing genocide in Gaza/i,
+    });
+    const flagVoteGroup = within(claimContextDrawer).getByRole('group', { name: 'Vote on flag' });
+    const flagAgree = within(flagVoteGroup).getByRole('button', { name: 'Agree' });
+    fireEvent.click(flagAgree);
+    expect(flagAgree).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(within(claimContextDrawer).getByRole('button', { name: 'Close' }));
+
+    // Adding a new key-value triple via `...` -> Add context increments the graph chip count (5 -> 7)
     const sourceMenuTrigger = within(sources).getByRole('button', {
       name: /More actions for Israel’s oral arguments at the ICJ/i,
     });
@@ -282,7 +347,7 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     fireEvent.click(within(contextDialog).getByRole('button', { name: 'Add context' }));
     expect(
       within(sources).getByRole('button', {
-        name: /Show 6 context relations for Israel’s oral arguments at the ICJ/i,
+        name: /Show 7 context relations for Israel’s oral arguments at the ICJ/i,
       })
     ).toBeInTheDocument();
 

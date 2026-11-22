@@ -13,6 +13,7 @@ import { useTopicConnectionCounts } from '~/core/topics/browse/use-topic-connect
 import { useTopicCoverage } from '~/core/topics/browse/use-topic-coverage';
 import { useTopicLinkedEntities } from '~/core/topics/browse/use-topic-linked-entities';
 import { useTopicSpaceScope } from '~/core/topics/use-topic-space-scope';
+import { Entities } from '~/core/utils/entity';
 import { resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -211,6 +212,7 @@ export function useLiveTopicTemplate({
     return {
       id: entity.id,
       title: entity.name ?? entity.id,
+      coverUrl: Entities.cover(entity.relations),
       lede: entity.description ?? undefined,
       breadcrumbs: breadcrumbs.length > 0 ? breadcrumbs : undefined,
       tags: [...extraTypeLabels, ...(isCurated ? ['Curated'] : [])],

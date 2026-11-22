@@ -11,18 +11,22 @@ import { useDebateClaims } from '~/core/debates/hooks';
 import { useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { ID } from '~/core/id';
 import { useQueryEntity } from '~/core/sync/use-store';
+import { Entities } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
-import type {
-  BreadcrumbItem,
-  ClaimKind,
-  ClaimTemplateModel,
-  EntityListSectionModel,
-  SplitRow,
-  StrongestCaseModel,
-  SubClaimFactModel,
-  TemplateDataSource,
-  VoteChoice,
+import {
+  type BreadcrumbItem,
+  type ClaimKind,
+  type ClaimStance,
+  type ClaimTemplateModel,
+  type EntityListSectionModel,
+  type GraphConnectionGroupModel,
+  type SplitRow,
+  type StrongestCaseModel,
+  type SubClaimModel,
+  type TemplateDataSource,
+  type VoteChoice,
+  formatCompactCount,
 } from '../models';
 import { TEMPLATE_ONTOLOGY, readEntityRelations } from '../ontology';
 
@@ -125,14 +129,32 @@ export function useLiveClaimTemplate({
     const opposingArgs = readEntityRelations(entity, TEMPLATE_ONTOLOGY.OPPOSING_ARGUMENTS_PROPERTY_ID);
     const supportsClaims = readEntityRelations(entity, TEMPLATE_ONTOLOGY.CLAIM_SUPPORTS_PROPERTY_ID);
     const opposesClaims = readEntityRelations(entity, TEMPLATE_ONTOLOGY.CLAIM_OPPOSES_PROPERTY_ID);
+    const addressesClaims = readEntityRelations(entity, TEMPLATE_ONTOLOGY.CLAIM_ADDRESSES_PROPERTY_ID);
 
-    const subClaims: SubClaimFactModel[] = subClaimRelations.map(rel => ({
-      id: rel.toEntity.id,
-      title: rel.toEntity.name ?? rel.toEntity.id,
-      split: { rows: [], isSplit: false },
-      sources: [],
-      href: NavUtils.toEntity(spaceId, rel.toEntity.id),
-    }));
+    const subClaimsById = new Map<string, SubClaimModel>();
+    const addSubClaim = (rel: { toEntity: { id: string; name: string | null } }, stance?: ClaimStance) => {
+      const existing = subClaimsById.get(rel.toEntity.id);
+      if (existing) {
+        if (stance && !existing.stance) {
+          subClaimsById.set(rel.toEntity.id, { ...existing, stance });
+        }
+        return;
+      }
+      subClaimsById.set(rel.toEntity.id, {
+        id: rel.toEntity.id,
+        title: rel.toEntity.name ?? rel.toEntity.id,
+        stance,
+        split: { rows: [], isSplit: false },
+        sources: [],
+        href: NavUtils.toEntity(spaceId, rel.toEntity.id),
+      });
+    };
+
+    for (const rel of supportsClaims) addSubClaim(rel, 'supports');
+    for (const rel of opposesClaims) addSubClaim(rel, 'opposes');
+    for (const rel of addressesClaims) addSubClaim(rel, 'addresses');
+    for (const rel of subClaimRelations) addSubClaim(rel, 'addresses');
+    const subClaims: SubClaimModel[] = Array.from(subClaimsById.values());
 
     const strongestCases: StrongestCaseModel[] = [];
     if (supportingArgs.length > 0) {
@@ -264,14 +286,63 @@ export function useLiveClaimTemplate({
       });
     }
 
+    const quoteRelations = readEntityRelations(entity, TEMPLATE_ONTOLOGY.QUOTES_THAT_SUPPORT_CLAIMS_PROPERTY_ID);
+    const sectionedPropertyIds = new Set<string>([
+      TOPICS_PROPERTY_ID,
+      TEMPLATE_ONTOLOGY.BROADER_CLAIMS_PROPERTY_ID,
+      TEMPLATE_ONTOLOGY.SUBCLAIMS_PROPERTY_ID,
+      TEMPLATE_ONTOLOGY.SUPPORTING_ARGUMENTS_PROPERTY_ID,
+      TEMPLATE_ONTOLOGY.OPPOSING_ARGUMENTS_PROPERTY_ID,
+      TEMPLATE_ONTOLOGY.CLAIM_SUPPORTS_PROPERTY_ID,
+      TEMPLATE_ONTOLOGY.CLAIM_OPPOSES_PROPERTY_ID,
+      TEMPLATE_ONTOLOGY.CLAIM_ADDRESSES_PROPERTY_ID,
+      TEMPLATE_ONTOLOGY.SOURCES_PROPERTY_ID,
+      TEMPLATE_ONTOLOGY.QUOTES_THAT_SUPPORT_CLAIMS_PROPERTY_ID,
+    ]);
+
+    const contextGroupsMap = new Map<string, GraphConnectionGroupModel['items'][number][]>();
+    for (const rel of entity.relations) {
+      if (rel.isDeleted) continue;
+      if (sectionedPropertyIds.has(rel.type.id)) continue;
+      const predicate = rel.type.name?.trim();
+      const label = rel.toEntity.name?.trim();
+      if (!predicate || !label || /^(Types|Cover|Avatar|Blocks|Tabs)$/i.test(predicate)) continue;
+      const list = contextGroupsMap.get(predicate) ?? [];
+      list.push({
+        id: rel.id,
+        label,
+        kind: 'entity',
+        href: NavUtils.toEntity(rel.toSpaceId ?? spaceId, rel.toEntity.id),
+      });
+      contextGroupsMap.set(predicate, list);
+    }
+    const graphConnections: GraphConnectionGroupModel[] = Array.from(contextGroupsMap.entries()).map(
+      ([predicate, items]) => ({ predicate, items })
+    );
+
+    if (quoteRelations.length > 0) {
+      sections.push({
+        id: 'quotes',
+        title: 'Supporting quotes',
+        items: quoteRelations.map(rel => ({
+          id: rel.toEntity.id,
+          kind: 'source',
+          kindLabel: 'Quote',
+          title: rel.toEntity.name ?? rel.toEntity.id,
+          href: NavUtils.toEntity(rel.toSpaceId ?? spaceId, rel.toEntity.id),
+        })),
+      });
+    }
+
     const countSummary =
       summary.total > 0
-        ? `${summary.total.toLocaleString('en-US')} ${summary.total === 1 ? 'vote' : 'votes'} (${summary.positive.toLocaleString('en-US')} agree · ${summary.negative.toLocaleString('en-US')} disagree)`
-        : 'No votes yet. Be the first to weigh in.';
+        ? `${formatCompactCount(summary.total)} ${summary.total === 1 ? 'vote' : 'votes'}`
+        : 'No votes yet';
 
     return {
       id: entity.id,
       title,
+      coverUrl: Entities.cover(entity.relations),
       breadcrumbs,
       kind: readClaimKind(entity.values),
       split: {
@@ -281,6 +352,7 @@ export function useLiveClaimTemplate({
       },
       debateCount: record.debatesTotal ?? undefined,
       debatesHref: `${overviewHref}/debates`,
+      graphConnections: graphConnections.length > 0 ? graphConnections : undefined,
       voteBox: {
         userVote,
         countSummary,

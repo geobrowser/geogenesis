@@ -6,7 +6,7 @@ import cx from 'classnames';
 import Link from 'next/link';
 
 import { type ClaimSummaryModel, formatCompactCount } from '../models';
-import { EntityInlineContext, EntityOverflowMenu } from './entity-overflow-menu';
+import { AddClaimPopover, EntityInlineContext, EntityOverflowMenu, InlinePagination } from './entity-overflow-menu';
 import { CheckCircleIcon, ThumbDownIcon, ThumbUpIcon } from './icons';
 import { SplitBars } from './split-bars';
 import { TEMPLATE_CARD_SURFACE } from './template-shell';
@@ -18,41 +18,57 @@ export interface ClaimExplorerProps {
   className?: string;
 }
 
-const DEFAULT_VISIBLE = 10;
+const PAGE_SIZE = 10;
 
 /**
  * Calm ranked Claims list styled identically to the Rankings panel: soft-shadow card container,
- * plain tabular rank numbers, clean 2-tab switch (`Where they split` | `Common ground`), and
- * right-aligned split bars. Clicking any row opens it in the Context Peek Drawer (or navigates via `href`).
+ * plain tabular rank numbers, clean 2-tab switch (`Disputed` | `Accepted`), right-aligned split bars,
+ * anchored `+` claim proposal popover, and automatic pagination when more claims exist than fit on one page.
  */
 export function ClaimExplorer({ contestedClaims, agreedClaims, title = 'Claims', className }: ClaimExplorerProps) {
-  const hasContested = contestedClaims.length > 0;
-  const hasAgreed = agreedClaims.length > 0;
-  const showTabs = hasContested && hasAgreed;
+  const [addedByTab, setAddedByTab] = React.useState<{ split: ClaimSummaryModel[]; agreed: ClaimSummaryModel[] }>({
+    split: [],
+    agreed: [],
+  });
+  const [tab, setTab] = React.useState<'split' | 'agreed'>(contestedClaims.length > 0 ? 'split' : 'agreed');
+  const [page, setPage] = React.useState(1);
 
-  const [tab, setTab] = React.useState<'split' | 'agreed'>(hasContested ? 'split' : 'agreed');
-  const [showAll, setShowAll] = React.useState(false);
+  const allContested = [...addedByTab.split, ...contestedClaims];
+  const allAgreed = [...addedByTab.agreed, ...agreedClaims];
+  const hasContested = allContested.length > 0;
+  const hasAgreed = allAgreed.length > 0;
+  const showTabs = hasContested && hasAgreed;
 
   if (!hasContested && !hasAgreed) return null;
 
   const activeTab = showTabs ? tab : hasContested ? 'split' : 'agreed';
-  const activeList = activeTab === 'split' ? contestedClaims : agreedClaims;
-  const visible = showAll ? activeList : activeList.slice(0, DEFAULT_VISIBLE);
+  const activeList = activeTab === 'split' ? allContested : allAgreed;
+  const totalPages = Math.max(1, Math.ceil(activeList.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const startIndex = (safePage - 1) * PAGE_SIZE;
+  const visible = activeList.slice(startIndex, startIndex + PAGE_SIZE);
 
   return (
     <section id="claims" aria-label="Claims" className={cx('flex flex-col gap-4', className)}>
-      <div className="flex flex-wrap items-baseline justify-between gap-3">
+      <div className="flex items-center justify-between gap-3">
         <h2 className="m-0 text-mediumTitle font-semibold text-text">{title}</h2>
-
-        {activeList.length > DEFAULT_VISIBLE && (
-          <button
-            type="button"
-            onClick={() => setShowAll(prev => !prev)}
-            className="cursor-pointer border-0 bg-transparent p-0 text-[14.5px] font-medium text-ctaPrimary hover:text-ctaHover"
-          >
-            {showAll ? 'Show fewer' : `Show all ${activeList.length}`}
-          </button>
-        )}
+        <AddClaimPopover
+          label="Add claim"
+          onSubmit={draft => {
+            const newClaim: ClaimSummaryModel = {
+              id: `user-claim-${Date.now()}`,
+              title: draft.title,
+              kind: draft.kind,
+              meta: draft.note ? [draft.note] : undefined,
+              split: { rows: [], isSplit: activeTab === 'split', totalVotes: 0 },
+            };
+            setAddedByTab(prev => ({
+              ...prev,
+              [activeTab]: [newClaim, ...prev[activeTab]],
+            }));
+            setPage(1);
+          }}
+        />
       </div>
 
       <div className={cx('flex flex-col overflow-hidden', TEMPLATE_CARD_SURFACE)}>
@@ -68,7 +84,7 @@ export function ClaimExplorer({ contestedClaims, agreedClaims, title = 'Claims',
               aria-selected={activeTab === 'split'}
               onClick={() => {
                 setTab('split');
-                setShowAll(false);
+                setPage(1);
               }}
               className={cx(
                 'inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[14px] font-medium transition-colors',
@@ -77,12 +93,7 @@ export function ClaimExplorer({ contestedClaims, agreedClaims, title = 'Claims',
                   : 'border-grey-02 bg-white text-text hover:border-text'
               )}
             >
-              <span>Where they split</span>
-              <span
-                className={cx('text-[13px] tabular-nums', activeTab === 'split' ? 'text-white/75' : 'text-grey-04')}
-              >
-                {contestedClaims.length}
-              </span>
+              <span>Disputed</span>
             </button>
 
             <button
@@ -91,7 +102,7 @@ export function ClaimExplorer({ contestedClaims, agreedClaims, title = 'Claims',
               aria-selected={activeTab === 'agreed'}
               onClick={() => {
                 setTab('agreed');
-                setShowAll(false);
+                setPage(1);
               }}
               className={cx(
                 'inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[14px] font-medium transition-colors',
@@ -100,21 +111,27 @@ export function ClaimExplorer({ contestedClaims, agreedClaims, title = 'Claims',
                   : 'border-grey-02 bg-white text-text hover:border-text'
               )}
             >
-              <span>Common ground</span>
-              <span
-                className={cx('text-[13px] tabular-nums', activeTab === 'agreed' ? 'text-white/75' : 'text-grey-04')}
-              >
-                {agreedClaims.length}
-              </span>
+              <span>Accepted</span>
             </button>
           </div>
         )}
 
         <div className="divide-y divide-divider">
           {visible.map((claim, index) => (
-            <RankedClaimRow key={claim.id} rank={index + 1} claim={claim} isAgreed={activeTab === 'agreed'} />
+            <RankedClaimRow
+              key={claim.id}
+              rank={startIndex + index + 1}
+              claim={claim}
+              isAgreed={activeTab === 'agreed'}
+            />
           ))}
         </div>
+
+        {totalPages > 1 && (
+          <div className="border-t border-divider px-5 py-2.5">
+            <InlinePagination page={safePage} totalPages={totalPages} onPageChange={setPage} label="Claims pages" />
+          </div>
+        )}
       </div>
     </section>
   );
@@ -267,7 +284,7 @@ function RankedClaimRow({ rank, claim, isAgreed }: { rank: number; claim: ClaimS
 
       <div className="flex shrink-0 items-center gap-3 pl-10 @[760px]:pl-0">
         {claim.split.rows.length > 0 && (
-          <SplitBars rows={claim.split.rows} density="compact" className="w-[244px] shrink-0" />
+          <SplitBars rows={claim.split.rows} density="compact" className="w-[264px] shrink-0" />
         )}
 
         {voteCountLabel && (

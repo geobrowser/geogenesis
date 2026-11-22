@@ -33,28 +33,28 @@ export function VoteBox({ prompt, split, control, className }: VoteBoxProps) {
     >
       {prompt && <p className="m-0 text-smallTitle text-text">{prompt}</p>}
 
-      <div className="grid grid-cols-1 items-start gap-6 @[680px]:grid-cols-[minmax(0,1fr)_280px]">
+      <div className="grid grid-cols-1 items-start gap-6 @[680px]:grid-cols-[minmax(0,1fr)_344px]">
         <div className="min-w-0">
           <SplitBars rows={split.rows} density="full" />
         </div>
 
         <div className="flex flex-col gap-3 border-t border-divider pt-4 @[680px]:border-t-0 @[680px]:border-l @[680px]:pt-0 @[680px]:pl-6">
-          <span className="text-[13px] font-semibold tracking-[0.04em] text-grey-04 uppercase">Do you agree?</span>
+          <span className="text-[13.5px] font-medium text-grey-04">Do you agree?</span>
 
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               disabled={disabled}
               aria-pressed={userVote === 'agree'}
               onClick={() => onVote('agree')}
               className={cx(
-                'inline-flex h-10 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-full border px-4 text-button transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+                'inline-flex h-9 cursor-pointer items-center justify-center gap-1.5 rounded-full border px-3.5 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50',
                 userVote === 'agree'
                   ? 'border-text bg-text text-white'
                   : 'border-grey-02 bg-white text-text hover:border-text'
               )}
             >
-              <ThumbUpIcon className="size-4" />
+              <ThumbUpIcon className="size-3.5" />
               <span>Agree</span>
             </button>
 
@@ -64,15 +64,19 @@ export function VoteBox({ prompt, split, control, className }: VoteBoxProps) {
               aria-pressed={userVote === 'disagree'}
               onClick={() => onVote('disagree')}
               className={cx(
-                'inline-flex h-10 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-full border px-4 text-button transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+                'inline-flex h-9 cursor-pointer items-center justify-center gap-1.5 rounded-full border px-3.5 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50',
                 userVote === 'disagree'
                   ? 'border-text bg-text text-white'
                   : 'border-grey-02 bg-white text-text hover:border-text'
               )}
             >
-              <ThumbDownIcon className="size-4" />
+              <ThumbDownIcon className="size-3.5" />
               <span>Disagree</span>
             </button>
+
+            {countSummary && (
+              <span className="ml-auto text-[13.5px] whitespace-nowrap text-grey-04 tabular-nums">{countSummary}</span>
+            )}
           </div>
 
           {userVote && (
@@ -90,11 +94,12 @@ export function VoteBox({ prompt, split, control, className }: VoteBoxProps) {
             </div>
           )}
 
-          <div className="flex flex-col gap-1 text-[14px] leading-[20px] text-grey-04">
-            <span>{countSummary}</span>
-            {impactNote && <span className="text-text">{impactNote}</span>}
-            {!userVote && hint && <span>{hint}</span>}
-          </div>
+          {(impactNote || (!userVote && hint)) && (
+            <div className="flex flex-col gap-1 text-[13.5px] leading-[19px] text-grey-04">
+              {impactNote && <span className="text-text">{impactNote}</span>}
+              {!userVote && hint && <span>{hint}</span>}
+            </div>
+          )}
         </div>
       </div>
     </section>

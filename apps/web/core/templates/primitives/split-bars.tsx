@@ -3,8 +3,9 @@
 import * as React from 'react';
 
 import cx from 'classnames';
+import Link from 'next/link';
 
-import { type SplitRow, formatPercentInt } from '../models';
+import { type SplitRow, formatCompactCount, formatPercentInt } from '../models';
 
 export interface SplitBarsProps {
   rows: readonly SplitRow[];
@@ -34,18 +35,44 @@ export function SplitBars({ rows, density = 'compact', className }: SplitBarsPro
             className={cx(
               'grid items-center',
               isFull
-                ? 'grid-cols-[minmax(112px,148px)_minmax(0,1fr)_auto] gap-3 text-[15px] leading-[20px]'
-                : 'grid-cols-[minmax(96px,114px)_minmax(0,1fr)_36px] gap-2.5 text-[14px] leading-[18px]',
+                ? 'grid-cols-[minmax(122px,156px)_minmax(0,1fr)_auto] gap-3 text-[15px] leading-[20px]'
+                : 'grid-cols-[minmax(108px,128px)_minmax(0,1fr)_36px] gap-2.5 text-[13.5px] leading-[18px]',
               row.isEveryone ? 'text-text' : 'text-grey-04'
             )}
           >
-            <span className="flex min-w-0 items-center gap-2 truncate">
+            <span className={cx('flex min-w-0 items-center gap-2 truncate', row.isSubspace && 'pl-3')}>
               <span
                 aria-hidden
-                className={cx('inline-block shrink-0 rounded-full', isFull ? 'size-2.5' : 'size-2')}
+                className={cx(
+                  'inline-block shrink-0 rounded-full',
+                  isFull ? (row.isSubspace ? 'size-2' : 'size-2.5') : row.isSubspace ? 'size-1.5' : 'size-2'
+                )}
                 style={{ backgroundColor: row.color }}
               />
-              <span className={cx('truncate', row.isEveryone && 'font-medium text-text')}>{row.label}</span>
+              {row.href ? (
+                <Link
+                  href={row.href}
+                  className={cx(
+                    'truncate text-inherit no-underline transition-colors hover:text-text hover:underline',
+                    row.isEveryone && 'font-medium text-text'
+                  )}
+                >
+                  {row.label}
+                </Link>
+              ) : row.onSelect ? (
+                <button
+                  type="button"
+                  onClick={row.onSelect}
+                  className={cx(
+                    'cursor-pointer truncate border-0 bg-transparent p-0 text-left text-inherit transition-colors hover:text-text hover:underline',
+                    row.isEveryone && 'font-medium text-text'
+                  )}
+                >
+                  {row.label}
+                </button>
+              ) : (
+                <span className={cx('truncate', row.isEveryone && 'font-medium text-text')}>{row.label}</span>
+              )}
             </span>
 
             <div
@@ -68,7 +95,7 @@ export function SplitBars({ rows, density = 'compact', className }: SplitBarsPro
             <span className="flex items-center justify-end gap-2 whitespace-nowrap tabular-nums">
               <strong className="font-semibold text-text">{percentText}</strong>
               {isFull && row.voterCount !== undefined && (
-                <span className="text-[14px] text-grey-04">({row.voterCount.toLocaleString('en-US')})</span>
+                <span className="text-[14px] text-grey-04">({formatCompactCount(row.voterCount)})</span>
               )}
               {row.userLabel && (
                 <span className="rounded-md bg-grey-01 px-2 py-0.5 text-[13px] font-medium text-text">

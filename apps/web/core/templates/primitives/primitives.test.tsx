@@ -12,7 +12,17 @@ import {
   computeSplitGap,
   isClaimSplit,
 } from '../models';
-import { ClaimSummaryCard, RelatedListSection, SourceChipList, SplitBars, TemplateBreadcrumb, VoteBox } from './index';
+import {
+  ClaimSummaryCard,
+  EntityActionProvider,
+  EntityFlagsSection,
+  GraphConnectionsStrip,
+  RelatedListSection,
+  SourceChipList,
+  SplitBars,
+  TemplateBreadcrumb,
+  VoteBox,
+} from './index';
 
 afterEach(cleanup);
 
@@ -107,7 +117,7 @@ describe('ClaimSummaryCard', () => {
     render(<ClaimSummaryCard claim={claim} variant="lead" />);
 
     expect(screen.getByText('Judgment')).toBeInTheDocument();
-    expect(screen.getByText('88 pts apart')).toBeInTheDocument();
+    expect(screen.queryByText(/pts apart/i)).toBeNull();
     expect(screen.getAllByText('52%')).toHaveLength(2);
 
     fireEvent.click(screen.getByRole('button'));
@@ -234,5 +244,56 @@ describe('TemplateBreadcrumb', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Topic root' }));
     expect(onRoot).toHaveBeenCalledTimes(1);
     expect(screen.getByText('Current claim')).toHaveAttribute('aria-current', 'page');
+  });
+});
+
+describe('Context & Flags empty states, inline pill +, and pagination', () => {
+  it('renders empty Context and Flags sections cleanly and paginates when rows exceed page size', () => {
+    const target = { id: 'e-pag', kind: 'Claim', title: 'Paginated claim' };
+    const manyGroups = Array.from({ length: 7 }, (_, i) => ({
+      predicate: `Relation ${i + 1}`,
+      items: [{ id: `item-${i + 1}`, label: `Target ${i + 1}`, kind: 'entity' as const }],
+    }));
+
+    const { rerender } = render(
+      <EntityActionProvider>
+        <GraphConnectionsStrip groups={[]} target={target} />
+        <EntityFlagsSection target={target} />
+      </EntityActionProvider>
+    );
+
+    expect(screen.getByText('No context added yet.')).toBeInTheDocument();
+    expect(screen.getByText('No flags yet.')).toBeInTheDocument();
+
+    // Clicking `+` on Context opens an anchored popover (no full-screen modal) and adds triples
+    fireEvent.click(screen.getByRole('button', { name: 'Add context' }));
+    const ctxPopover = screen.getByRole('dialog');
+    fireEvent.change(screen.getByLabelText(/Property \(relation key\)/i), { target: { value: 'Jurisdiction' } });
+    fireEvent.change(screen.getByLabelText(/Values \(comma-separated\)/i), { target: { value: 'ICJ' } });
+    fireEvent.click(ctxPopover.querySelector('button[type="submit"]') as HTMLButtonElement);
+    expect(screen.getByText('Jurisdiction')).toBeInTheDocument();
+    expect(screen.getByText('ICJ')).toBeInTheDocument();
+
+    // Clicking `+` on Flags opens an anchored popover and submits a flag
+    fireEvent.click(screen.getByRole('button', { name: 'Flag' }));
+    fireEvent.change(screen.getByLabelText(/Why are you flagging this/i), {
+      target: { value: 'Needs primary source citation for this timeline.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Submit flag' }));
+    expect(screen.getByText(/Needs primary source citation for this timeline/i)).toBeInTheDocument();
+
+    rerender(
+      <EntityActionProvider>
+        <GraphConnectionsStrip groups={manyGroups} target={target} />
+      </EntityActionProvider>
+    );
+
+    expect(screen.getByText('Relation 1')).toBeInTheDocument();
+    expect(screen.queryByText('Relation 6')).toBeNull();
+    expect(screen.getByText('1 / 2')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(screen.getByText('Relation 6')).toBeInTheDocument();
+    expect(screen.getByText('2 / 2')).toBeInTheDocument();
   });
 });

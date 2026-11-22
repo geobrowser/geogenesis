@@ -38,19 +38,16 @@ export function ClaimSummaryCard({ claim, variant = 'default', className }: Clai
 
   const content = (
     <>
-      {(claim.kind || claim.badgeLabel || (claim.split.isSplit && claim.split.gapPoints !== undefined) || isAgreed) && (
+      {(claim.kind || claim.badgeLabel || isAgreed) && (
         <div className="flex flex-wrap items-center gap-2">
           {isAgreed && (
             <span className="inline-flex items-center gap-1.5 text-[14px] font-medium text-ctaPrimary">
               <CheckCircleIcon className="size-4" />
-              <span>Agreed</span>
+              <span>Accepted</span>
             </span>
           )}
-          {!isAgreed && claim.kind && (
+          {claim.kind && (
             <TemplateBadge tone={CLAIM_KIND_TONE[claim.kind]}>{formatClaimKindLabel(claim.kind)}</TemplateBadge>
-          )}
-          {claim.split.isSplit && claim.split.gapPoints !== undefined && (
-            <TemplateBadge tone="neutral">{Math.round(claim.split.gapPoints)} pts apart</TemplateBadge>
           )}
           {claim.badgeLabel && <TemplateBadge tone="dark">{claim.badgeLabel}</TemplateBadge>}
         </div>

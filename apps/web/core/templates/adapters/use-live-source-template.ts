@@ -6,7 +6,13 @@ import { useQueryEntity } from '~/core/sync/use-store';
 import { Entities } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
-import type { BreadcrumbItem, EntityListSectionModel, SourceTemplateModel, TemplateDataSource } from '../models';
+import type {
+  BreadcrumbItem,
+  EntityListSectionModel,
+  GraphConnectionGroupModel,
+  SourceTemplateModel,
+  TemplateDataSource,
+} from '../models';
 import { TEMPLATE_ONTOLOGY, formatOntologyDate, readEntityRelations, readEntityTextValue } from '../ontology';
 
 /**
@@ -68,6 +74,32 @@ export function useLiveSourceTemplate({
       });
     }
 
+    const contextGroupsMap = new Map<string, GraphConnectionGroupModel['items'][number][]>();
+    for (const rel of entity.relations) {
+      if (rel.isDeleted) continue;
+      if (
+        rel.type.id === TEMPLATE_ONTOLOGY.TOPICS_PROPERTY_ID ||
+        rel.type.id === TEMPLATE_ONTOLOGY.PUBLISHER_PROPERTY_ID ||
+        rel.type.id === TEMPLATE_ONTOLOGY.AUTHORS_PROPERTY_ID
+      ) {
+        continue;
+      }
+      const predicate = rel.type.name?.trim();
+      const label = rel.toEntity.name?.trim();
+      if (!predicate || !label || /^(Types|Cover|Avatar|Blocks|Tabs)$/i.test(predicate)) continue;
+      const list = contextGroupsMap.get(predicate) ?? [];
+      list.push({
+        id: rel.id,
+        label,
+        kind: 'entity',
+        href: NavUtils.toEntity(rel.toSpaceId ?? spaceId, rel.toEntity.id),
+      });
+      contextGroupsMap.set(predicate, list);
+    }
+    const graphConnections: GraphConnectionGroupModel[] = Array.from(contextGroupsMap.entries()).map(
+      ([predicate, items]) => ({ predicate, items })
+    );
+
     return {
       id: entity.id,
       title,
@@ -79,6 +111,7 @@ export function useLiveSourceTemplate({
       externalUrl,
       breadcrumbs,
       metadata,
+      graphConnections: graphConnections.length > 0 ? graphConnections : undefined,
       supportedClaims: [],
       sections,
     };

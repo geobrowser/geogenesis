@@ -3,10 +3,20 @@ export { ClaimSummaryCard, type ClaimSummaryCardProps } from './claim-summary-ca
 export { ContextPeekDrawer, type ContextPeekDrawerProps } from './context-peek-drawer';
 export { EntityGraphExplorer, type EntityGraphExplorerProps } from './entity-graph-explorer';
 export {
+  AddClaimPopover,
+  AddContextPopover,
+  AddEntityItemPopover,
+  AddFlagPopover,
   EntityActionProvider,
   EntityContextTogglePill,
+  EntityFlagsSection,
   EntityInlineContext,
   EntityOverflowMenu,
+  InlinePagination,
+  TemplateAddRelationPillPopover,
+  TemplatePopoverPortalProvider,
+  TemplateRelationPill,
+  useEntityActionContext,
   type EntityActionKind,
   type EntityActionTarget,
   type EntityOverflowMenuProps,
