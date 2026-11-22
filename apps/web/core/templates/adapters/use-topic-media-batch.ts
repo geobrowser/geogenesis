@@ -16,7 +16,7 @@ import { TEMPLATE_ONTOLOGY, resolveTemplateImageUrl } from '../ontology';
 
 const TOPIC_MEDIA_BATCH_QUERY = parse(/* GraphQL */ `
   query TemplateTopicMediaBatch($ids: [UUID!]!, $mediaTypeIds: [UUID!]!, $imageUrlPropertyId: UUID!) {
-    entities(first: 24, filter: { id: { in: $ids } }) {
+    entities(first: 48, filter: { id: { in: $ids } }) {
       id
       relationsList(first: 4, filter: { typeId: { in: $mediaTypeIds } }) {
         typeId
@@ -61,7 +61,7 @@ export function useTopicMediaBatch(topicIds: readonly string[]) {
       seen.add(hex);
       out.push(hex);
     }
-    return out.slice(0, 24);
+    return out.slice(0, 48);
   }, [topicIds]);
 
   return useQuery({

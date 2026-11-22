@@ -668,6 +668,9 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
             { id: 't-ai', label: 'AI', imageUrl: '/topic-ai.png', href: '/space/s/t-ai' },
             { id: 't-mkt', label: 'Markets', href: '/space/s/t-mkt' },
           ],
+          relatedPeople: [{ id: 'p-1', label: 'Dario Amodei', href: '/space/s/p-1' }],
+          relatedProjects: [{ id: 'pr-1', label: 'Anthropic', href: '/space/s/pr-1' }],
+          relatedEntities: [{ id: 'e-1', label: 'Nasdaq', href: '/space/s/e-1' }],
           sources: [
             {
               id: 'src-1',
@@ -693,13 +696,18 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     );
 
     const sources = screen.getByRole('region', { name: 'Sources' });
-    const topics = screen.getByRole('region', { name: 'Topics' });
+    const rail = screen.getByRole('complementary', { name: 'Story connections' });
+    const topics = within(rail).getByRole('region', { name: 'Topics' });
     const context = screen.getByRole('region', { name: 'Context' });
     const disputes = screen.getByRole('region', { name: 'Disputes' });
 
-    expect(sources.compareDocumentPosition(topics) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(topics.compareDocumentPosition(context) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(sources.compareDocumentPosition(context) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(context.compareDocumentPosition(disputes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    // Right rail surfaces People involved, Related projects, Related entities, and Topics
+    expect(within(rail).getByRole('link', { name: 'Dario Amodei' })).toBeInTheDocument();
+    expect(within(rail).getByRole('link', { name: 'Anthropic' })).toBeInTheDocument();
+    expect(within(rail).getByRole('link', { name: 'Nasdaq' })).toBeInTheDocument();
 
     // Masonry source cards render publisher & headline
     expect(within(sources).getByText('Tech Stocks Tumble Despite Landmark AI IPO')).toBeInTheDocument();

@@ -665,9 +665,15 @@ export interface NewsStoryTemplateModel {
   externalUrl?: string;
   archiveUrl?: string;
   breadcrumbs?: readonly BreadcrumbItem[];
-  associatedTimelines?: readonly { id: string; title: string; href?: string }[];
+  associatedTimelines?: readonly { id: string; title: string; coverUrl?: string | null; href?: string }[];
   /** Linked Topics rendered as rounded pills with circular thumbnail images. */
   topics?: readonly ClaimTopicPillModel[];
+  /** People involved in the story (rendered with circular avatars in the story side rail). */
+  relatedPeople?: readonly ClaimTopicPillModel[];
+  /** Organizations & projects involved in the story (rendered with circular avatars in the story side rail). */
+  relatedProjects?: readonly ClaimTopicPillModel[];
+  /** Other notable linked entities (places, exchanges, tickers) shown in the story side rail. */
+  relatedEntities?: readonly ClaimTopicPillModel[];
   /** Ordered narrative claim sections (`Blocks` / `Perspectives`) rendered in Geo News bulleted reading style. */
   claimGroups?: readonly NewsStoryClaimGroupModel[];
   /** Rich aggregated source articles (`Sources` with publication, date, cover, excerpt, and external link). */

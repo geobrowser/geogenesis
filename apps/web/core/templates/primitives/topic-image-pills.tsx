@@ -53,26 +53,41 @@ function TopicPillThumbnail({ label, imageUrl }: { label: string; imageUrl?: str
 export function TopicImagePills({
   topics,
   title = 'Topics',
+  density = 'default',
   className,
 }: {
   topics: readonly ClaimTopicPillModel[];
   title?: string;
+  density?: 'default' | 'rail';
   className?: string;
 }) {
   const [showAll, setShowAll] = React.useState(false);
 
   if (topics.length === 0) return null;
 
-  const visible = showAll ? topics : topics.slice(0, INITIAL_VISIBLE_TOPICS);
-  const hidden = Math.max(0, topics.length - INITIAL_VISIBLE_TOPICS);
+  const isRail = density === 'rail';
+  const maxVisible = isRail ? 8 : INITIAL_VISIBLE_TOPICS;
+  const visible = showAll ? topics : topics.slice(0, maxVisible);
+  const hidden = Math.max(0, topics.length - maxVisible);
 
-  const pillClasses =
-    'inline-flex max-w-full items-center gap-2 rounded-full border border-grey-02 bg-white py-1.5 pr-3 pl-2 text-[14.5px] leading-[18px] font-medium text-text no-underline transition-colors hover:border-text';
+  const pillClasses = cx(
+    'inline-flex max-w-full items-center rounded-full border border-grey-02 bg-white font-medium text-text no-underline transition-colors hover:border-text',
+    isRail
+      ? 'gap-1.5 py-1 pr-2.5 pl-1.5 text-[13.5px] leading-[18px]'
+      : 'gap-2 py-1.5 pr-3 pl-2 text-[14.5px] leading-[18px]'
+  );
 
   return (
-    <section aria-label={title} className={cx('flex flex-col gap-3.5', className)}>
-      <h2 className="m-0 text-mediumTitle font-semibold text-text">{title}</h2>
-      <div className="flex flex-wrap items-center gap-2">
+    <section aria-label={title} className={cx('flex flex-col', isRail ? 'gap-2.5' : 'gap-3.5', className)}>
+      <h2
+        className={cx(
+          'm-0 font-semibold text-text',
+          isRail ? 'text-[16px] leading-[22px] tracking-[-0.01em]' : 'text-mediumTitle'
+        )}
+      >
+        {title}
+      </h2>
+      <div className={cx('flex flex-wrap items-center', isRail ? 'gap-1.5' : 'gap-2')}>
         {visible.map(topic =>
           topic.href ? (
             <Link key={topic.id} href={topic.href} className={pillClasses}>

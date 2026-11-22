@@ -74,7 +74,7 @@ export function LiveNewsStoryTemplateView({
     spaceId,
     serverCoverUrl,
   });
-  if (isLoading) return <TemplateLoadingSkeleton maxWidth={960} />;
+  if (isLoading) return <TemplateLoadingSkeleton maxWidth={1080} />;
   if (!data) return null;
 
   return (

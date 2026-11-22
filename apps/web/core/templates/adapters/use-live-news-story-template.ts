@@ -99,9 +99,7 @@ export function useLiveNewsStoryTemplate({
     [entity]
   );
 
-  // Deduplicated topic relations + batch-hydrated Avatar/Cover thumbnails for Topic pills
-  const topicRelations = React.useMemo(() => {
-    const raw = readEntityRelations(entity, TEMPLATE_ONTOLOGY.TOPICS_PROPERTY_ID);
+  const dedupeRelations = React.useCallback((raw: readonly Relation[]): Relation[] => {
     const seen = new Set<string>();
     const out: Relation[] = [];
     for (const rel of raw) {
@@ -111,10 +109,48 @@ export function useLiveNewsStoryTemplate({
       out.push(rel);
     }
     return out;
-  }, [entity]);
+  }, []);
 
-  const topicIds = React.useMemo(() => topicRelations.map(rel => rel.toEntity.id), [topicRelations]);
-  const topicMediaQuery = useTopicMediaBatch(topicIds);
+  // Deduplicated side-rail relations (Topics, People involved, Related projects, Related entities, Timelines)
+  const topicRelations = React.useMemo(
+    () => dedupeRelations(readEntityRelations(entity, TEMPLATE_ONTOLOGY.TOPICS_PROPERTY_ID)),
+    [dedupeRelations, entity]
+  );
+  const peopleRelations = React.useMemo(
+    () => dedupeRelations(readEntityRelations(entity, TEMPLATE_ONTOLOGY.RELATED_PEOPLE_PROPERTY_ID)),
+    [dedupeRelations, entity]
+  );
+  const projectRelations = React.useMemo(
+    () => dedupeRelations(readEntityRelations(entity, TEMPLATE_ONTOLOGY.RELATED_PROJECTS_PROPERTY_ID)),
+    [dedupeRelations, entity]
+  );
+  const relatedEntityRelations = React.useMemo(
+    () =>
+      dedupeRelations(
+        readEntityRelations(entity, [
+          TEMPLATE_ONTOLOGY.RELATED_ENTITIES_PROPERTY_ID,
+          TEMPLATE_ONTOLOGY.HIGHLIGHTED_RELATED_ENTITIES_PROPERTY_ID,
+        ])
+      ),
+    [dedupeRelations, entity]
+  );
+  const timelineRelations = React.useMemo(
+    () => dedupeRelations(readEntityRelations(entity, TEMPLATE_ONTOLOGY.ASSOCIATED_TIMELINES_PROPERTY_ID)),
+    [dedupeRelations, entity]
+  );
+
+  // Batch-hydrate circular Avatar/Cover thumbnails for ALL side-rail pills & timeline cards in one query
+  const railMediaIds = React.useMemo(
+    () => [
+      ...peopleRelations.map(rel => rel.toEntity.id),
+      ...projectRelations.map(rel => rel.toEntity.id),
+      ...relatedEntityRelations.map(rel => rel.toEntity.id),
+      ...timelineRelations.map(rel => rel.toEntity.id),
+      ...topicRelations.map(rel => rel.toEntity.id),
+    ],
+    [peopleRelations, projectRelations, relatedEntityRelations, timelineRelations, topicRelations]
+  );
+  const topicMediaQuery = useTopicMediaBatch(railMediaIds);
 
   // Collect all sub-entity IDs we need to hydrate in ONE batched query:
   // - Block toEntity IDs (for Collection items)
@@ -270,7 +306,6 @@ export function useLiveNewsStoryTemplate({
       readEntityTextValue(entity, TEMPLATE_ONTOLOGY.SUMMARY_PROPERTY_ID) ?? entity.description ?? undefined;
 
     const relatedStories = readEntityRelations(entity, TEMPLATE_ONTOLOGY.RELATED_STORIES_PROPERTY_ID);
-    const timelineRels = readEntityRelations(entity, TEMPLATE_ONTOLOGY.ASSOCIATED_TIMELINES_PROPERTY_ID);
 
     const firstTopic = topicRelations[0];
     const breadcrumbs: BreadcrumbItem[] | undefined = firstTopic
@@ -362,23 +397,32 @@ export function useLiveNewsStoryTemplate({
       };
     });
 
-    // Topic pills with circular images
-    const topicMediaByHex = topicMediaQuery.data;
-    const topics: ClaimTopicPillModel[] = topicRelations.map(rel => {
-      const hex = ID.uuidToHex(rel.toEntity.id);
-      return {
-        id: rel.toEntity.id,
-        label: rel.toEntity.name ?? rel.toEntity.id,
-        imageUrl: topicMediaByHex?.get(hex) ?? null,
-        href: NavUtils.toEntity(rel.toSpaceId ?? spaceId, rel.toEntity.id),
-      };
-    });
+    // Side-rail avatar pills (Topics, People involved, Related projects, Related entities)
+    const mediaByHex = topicMediaQuery.data;
+    const toAvatarPills = (rels: readonly Relation[]): ClaimTopicPillModel[] =>
+      rels
+        .filter(rel => Boolean(rel.toEntity.name?.trim()))
+        .map(rel => {
+          const hex = ID.uuidToHex(rel.toEntity.id);
+          return {
+            id: rel.toEntity.id,
+            label: rel.toEntity.name!.trim(),
+            imageUrl: mediaByHex?.get(hex) ?? null,
+            href: NavUtils.toEntity(rel.toSpaceId ?? spaceId, rel.toEntity.id),
+          };
+        });
 
-    const associatedTimelines = timelineRels
+    const topics = toAvatarPills(topicRelations);
+    const relatedPeople = toAvatarPills(peopleRelations);
+    const relatedProjects = toAvatarPills(projectRelations);
+    const relatedEntities = toAvatarPills(relatedEntityRelations);
+
+    const associatedTimelines = timelineRelations
       .filter(rel => Boolean(rel.toEntity.name?.trim()))
       .map(rel => ({
         id: rel.toEntity.id,
         title: rel.toEntity.name!.trim(),
+        coverUrl: mediaByHex?.get(ID.uuidToHex(rel.toEntity.id)) ?? null,
         href: NavUtils.toEntity(rel.toSpaceId ?? spaceId, rel.toEntity.id),
       }));
 
@@ -406,6 +450,10 @@ export function useLiveNewsStoryTemplate({
       TEMPLATE_ONTOLOGY.SOURCES_PROPERTY_ID,
       TEMPLATE_ONTOLOGY.RELATED_STORIES_PROPERTY_ID,
       TEMPLATE_ONTOLOGY.TOPICS_PROPERTY_ID,
+      TEMPLATE_ONTOLOGY.RELATED_PEOPLE_PROPERTY_ID,
+      TEMPLATE_ONTOLOGY.RELATED_PROJECTS_PROPERTY_ID,
+      TEMPLATE_ONTOLOGY.RELATED_ENTITIES_PROPERTY_ID,
+      TEMPLATE_ONTOLOGY.HIGHLIGHTED_RELATED_ENTITIES_PROPERTY_ID,
       TEMPLATE_ONTOLOGY.PUBLISHER_PROPERTY_ID,
       TEMPLATE_ONTOLOGY.AUTHORS_PROPERTY_ID,
       TEMPLATE_ONTOLOGY.PERSPECTIVES_PROPERTY_ID,
@@ -428,6 +476,9 @@ export function useLiveNewsStoryTemplate({
       breadcrumbs,
       associatedTimelines: associatedTimelines.length > 0 ? associatedTimelines : undefined,
       topics: topics.length > 0 ? topics : undefined,
+      relatedPeople: relatedPeople.length > 0 ? relatedPeople : undefined,
+      relatedProjects: relatedProjects.length > 0 ? relatedProjects : undefined,
+      relatedEntities: relatedEntities.length > 0 ? relatedEntities : undefined,
       claimGroups: claimGroups.length > 0 ? claimGroups : undefined,
       sources: sources.length > 0 ? sources : undefined,
       graphConnections: graphConnections.length > 0 ? graphConnections : undefined,
@@ -439,12 +490,16 @@ export function useLiveNewsStoryTemplate({
     entity,
     flatClaimRelations,
     hydratedById,
+    peopleRelations,
+    projectRelations,
     rawClaimGroups,
+    relatedEntityRelations,
     responseBatch.data,
     serverCoverUrl,
     sourceRelations,
     space?.entity?.name,
     spaceId,
+    timelineRelations,
     topicMediaQuery.data,
     topicRelations,
   ]);
