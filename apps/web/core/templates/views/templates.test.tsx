@@ -501,4 +501,34 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     fireEvent.click(screen.getByRole('button', { name: /Play episode/i }));
     expect(screen.getByRole('button', { name: /Hide audio player/i })).toBeInTheDocument();
   });
+
+  it('omits duplicate header and cover in embedded TopicTemplate mode for Topic Spaces', () => {
+    const model: TopicTemplateModel = {
+      id: 'topic-ai',
+      title: 'AI',
+      lede: 'Artificial intelligence space description',
+      coverUrl: '/cover-ai.jpg',
+      subtopics: [{ id: 'sub-1', label: 'AI Regulation', href: '/space/s/sub-1' }],
+      contestedClaims: [
+        {
+          id: 'c-1',
+          title: 'We should slow down AI development',
+          kind: 'judgment',
+          split: {
+            rows: [{ id: 'ai', label: 'AI', color: '#202020', percent: 57, isEveryone: true }],
+            isSplit: true,
+            totalVotes: 28,
+          },
+        },
+      ],
+      agreedClaims: [],
+    };
+
+    render(<TopicTemplate model={model} embedded />);
+
+    expect(screen.queryByRole('heading', { level: 1, name: 'AI' })).toBeNull();
+    expect(screen.queryByText('Artificial intelligence space description')).toBeNull();
+    expect(screen.getByRole('link', { name: 'AI Regulation' })).toBeInTheDocument();
+    expect(screen.getByText('We should slow down AI development')).toBeInTheDocument();
+  });
 });

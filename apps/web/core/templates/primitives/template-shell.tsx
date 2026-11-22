@@ -133,6 +133,7 @@ export function TemplateShell({
   coverUrl,
   coverAlt = '',
   compact = false,
+  embedded = false,
   contextByEntityId,
   actionCallbacks,
   className,
@@ -144,11 +145,13 @@ export function TemplateShell({
   coverAlt?: string;
   /** Tighten outer spacing and cover height when rendered inside the narrow entity side panel. */
   compact?: boolean;
+  /** Omit outer max-width, horizontal padding, cover, and breadcrumbs when embedded inside a Space shell. */
+  embedded?: boolean;
   contextByEntityId?: Readonly<Record<string, EntityContextDataModel>>;
   actionCallbacks?: EntityActionCallbacks;
   className?: string;
 }) {
-  const resolvedCoverUrl = resolveTemplateImageUrl(coverUrl);
+  const resolvedCoverUrl = embedded ? null : resolveTemplateImageUrl(coverUrl);
 
   return (
     <EntityActionProvider initialContextByTarget={contextByEntityId} callbacks={actionCallbacks}>
@@ -167,14 +170,19 @@ export function TemplateShell({
         )}
         <div
           className={cx(
-            'mx-auto flex w-full flex-col',
-            compact ? 'gap-7 px-4 py-5' : 'gap-8 px-5 py-8 @[600px]:gap-11 @[600px]:px-6',
-            !compact && (resolvedCoverUrl ? '@[600px]:pt-7 @[600px]:pb-10' : '@[600px]:py-10'),
+            'flex w-full flex-col',
+            embedded
+              ? 'gap-9 pt-1 pb-10'
+              : cx(
+                  'mx-auto',
+                  compact ? 'gap-7 px-4 py-5' : 'gap-8 px-5 py-8 @[600px]:gap-11 @[600px]:px-6',
+                  !compact && (resolvedCoverUrl ? '@[600px]:pt-7 @[600px]:pb-10' : '@[600px]:py-10')
+                ),
             className
           )}
-          style={compact ? undefined : { maxWidth }}
+          style={compact || embedded ? undefined : { maxWidth }}
         >
-          {breadcrumbs && breadcrumbs.length > 0 && <TemplateBreadcrumb items={breadcrumbs} />}
+          {!embedded && breadcrumbs && breadcrumbs.length > 0 && <TemplateBreadcrumb items={breadcrumbs} />}
           {children}
         </div>
       </div>

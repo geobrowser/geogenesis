@@ -32,6 +32,8 @@ export interface TopicTemplateProps {
   actionCallbacks?: EntityActionCallbacks;
   /** Compact density when rendered inside the narrow entity side panel. */
   compact?: boolean;
+  /** Embedded inside a Topic Space shell: omits duplicate cover, breadcrumbs, H1, and lede. */
+  embedded?: boolean;
   className?: string;
 }
 
@@ -46,6 +48,7 @@ export function TopicTemplate({
   footer,
   actionCallbacks,
   compact = false,
+  embedded = false,
   className,
 }: TopicTemplateProps) {
   const contested = model.contestedClaims ?? [];
@@ -59,78 +62,88 @@ export function TopicTemplate({
   const hasContextOrLive = (model.graphConnections && model.graphConnections.length > 0) || Boolean(actionCallbacks);
   const hasFlagsOrLive = Boolean(model.contextByEntityId?.[model.id]?.flags?.length) || Boolean(actionCallbacks);
 
+  const subtopicsNav =
+    subtopics.length > 0 ? (
+      <nav aria-label="Subtopics" className={cx('flex flex-wrap items-center gap-1.5', !embedded && 'mt-1')}>
+        {visibleSubtopics.map(sub =>
+          sub.href ? (
+            <Link
+              key={sub.id}
+              href={sub.href}
+              className="inline-flex h-7 items-center rounded-md border border-divider bg-white px-2.5 text-[13.5px] font-medium text-text no-underline transition-colors hover:border-text hover:text-[#4c1fd4]"
+            >
+              {sub.label}
+            </Link>
+          ) : sub.onSelect ? (
+            <button
+              key={sub.id}
+              type="button"
+              onClick={sub.onSelect}
+              className="inline-flex h-7 cursor-pointer items-center rounded-md border border-divider bg-white px-2.5 text-[13.5px] font-medium text-text transition-colors hover:border-text hover:text-[#4c1fd4]"
+            >
+              {sub.label}
+            </button>
+          ) : (
+            <TemplateBadge key={sub.id} tone="neutral">
+              {sub.label}
+            </TemplateBadge>
+          )
+        )}
+        {hiddenSubtopicsCount > 0 && (
+          <button
+            type="button"
+            onClick={() => setSubtopicsExpanded(prev => !prev)}
+            className="inline-flex h-7 cursor-pointer items-center rounded-md border border-divider bg-grey-01 px-2.5 text-[13px] font-medium text-grey-04 transition-colors hover:border-text hover:text-text"
+          >
+            {subtopicsExpanded ? 'Show less' : `+${hiddenSubtopicsCount} more`}
+          </button>
+        )}
+      </nav>
+    ) : null;
+
   return (
     <TemplateShell
       maxWidth={1120}
-      breadcrumbs={model.breadcrumbs}
-      coverUrl={model.coverUrl}
+      breadcrumbs={embedded ? undefined : model.breadcrumbs}
+      coverUrl={embedded ? null : model.coverUrl}
       coverAlt={model.title}
       compact={compact}
+      embedded={embedded}
       contextByEntityId={model.contextByEntityId}
       actionCallbacks={actionCallbacks}
       className={className}
     >
-      {/* Hero header (normal Geo entity page order: cover -> name -> type labels -> description) */}
-      <header className="flex flex-col gap-3.5">
-        <div className="flex items-start justify-between gap-4">
-          <h1 className="m-0 text-entityTitle text-pretty text-text">{model.title}</h1>
-          <div className="flex shrink-0 items-center gap-2 pt-1.5">
-            <EntityContextTogglePill />
-            {headerActions ?? (
-              <EntityOverflowMenu target={{ id: model.id, kind: 'Topic', title: model.title }} isPageRoot size="md" />
-            )}
+      {/* Hero header (omitted when embedded inside a Topic Space shell that renders the space header) */}
+      {embedded ? (
+        subtopicsNav
+      ) : (
+        <header className="flex flex-col gap-3.5">
+          <div className="flex items-start justify-between gap-4">
+            <h1 className="m-0 text-entityTitle text-pretty text-text">{model.title}</h1>
+            <div className="flex shrink-0 items-center gap-2 pt-1.5">
+              <EntityContextTogglePill />
+              {headerActions ?? (
+                <EntityOverflowMenu target={{ id: model.id, kind: 'Topic', title: model.title }} isPageRoot size="md" />
+              )}
+            </div>
           </div>
-        </div>
 
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
-          <TemplateBadge tone="neutral">Topic</TemplateBadge>
-          {model.tags?.map(tag => (
-            <TemplateBadge key={tag} tone="neutral">
-              {tag}
-            </TemplateBadge>
-          ))}
-        </div>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+            <TemplateBadge tone="neutral">Topic</TemplateBadge>
+            {model.tags?.map(tag => (
+              <TemplateBadge key={tag} tone="neutral">
+                {tag}
+              </TemplateBadge>
+            ))}
+          </div>
 
-        {model.lede && <p className="m-0 mt-1 max-w-[780px] text-[16.5px] leading-[25px] text-text/85">{model.lede}</p>}
+          {model.lede && (
+            <p className="m-0 mt-1 max-w-[780px] text-[16.5px] leading-[25px] text-text/85">{model.lede}</p>
+          )}
 
-        {subtopics.length > 0 && (
-          <nav aria-label="Subtopics" className="mt-1 flex flex-wrap items-center gap-1.5">
-            {visibleSubtopics.map(sub =>
-              sub.href ? (
-                <Link
-                  key={sub.id}
-                  href={sub.href}
-                  className="inline-flex h-7 items-center rounded-md border border-divider bg-white px-2.5 text-[13.5px] font-medium text-text no-underline transition-colors hover:border-text hover:text-[#4c1fd4]"
-                >
-                  {sub.label}
-                </Link>
-              ) : sub.onSelect ? (
-                <button
-                  key={sub.id}
-                  type="button"
-                  onClick={sub.onSelect}
-                  className="inline-flex h-7 cursor-pointer items-center rounded-md border border-divider bg-white px-2.5 text-[13.5px] font-medium text-text transition-colors hover:border-text hover:text-[#4c1fd4]"
-                >
-                  {sub.label}
-                </button>
-              ) : (
-                <TemplateBadge key={sub.id} tone="neutral">
-                  {sub.label}
-                </TemplateBadge>
-              )
-            )}
-            {hiddenSubtopicsCount > 0 && (
-              <button
-                type="button"
-                onClick={() => setSubtopicsExpanded(prev => !prev)}
-                className="inline-flex h-7 cursor-pointer items-center rounded-md border border-divider bg-grey-01 px-2.5 text-[13px] font-medium text-grey-04 transition-colors hover:border-text hover:text-text"
-              >
-                {subtopicsExpanded ? 'Show less' : `+${hiddenSubtopicsCount} more`}
-              </button>
-            )}
-          </nav>
-        )}
-      </header>
+          {subtopicsNav}
+        </header>
+      )}
 
       {/* Calm single-column Claims list with 2-tab switch (Disputed | Accepted) */}
       {(contested.length > 0 || agreed.length > 0) && (

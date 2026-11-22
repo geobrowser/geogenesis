@@ -15,18 +15,21 @@ export interface LiveTopicTemplateViewProps {
   spaceId: string;
   serverCoverUrl?: string | null;
   compact?: boolean;
+  /** Embedded inside a Topic Space shell (suppresses duplicate cover/header). */
+  embedded?: boolean;
   footer?: React.ReactNode;
 }
 
 /**
  * Live Geo container connecting `useLiveTopicTemplate` to `TopicTemplate`.
- * Rendered by `EntityPageBody` when the `entityTemplatesV2` feature flag is enabled.
+ * Rendered by `EntityPageBody` and `SpaceTopicExploreBody` when `entityTemplatesV2` is enabled.
  */
 export function LiveTopicTemplateView({
   entityId,
   spaceId,
   serverCoverUrl,
   compact = false,
+  embedded = false,
   footer,
 }: LiveTopicTemplateViewProps) {
   const { data, isLoading, actionCallbacks } = useLiveTopicTemplate({
@@ -37,8 +40,14 @@ export function LiveTopicTemplateView({
 
   if (isLoading) {
     return (
-      <div className="mx-auto flex w-full max-w-[1120px] flex-col gap-4 px-4 py-6">
-        <Skeleton className="h-9 w-2/3 rounded" />
+      <div
+        className={
+          embedded
+            ? 'flex w-full flex-col gap-4 pt-1 pb-6'
+            : 'mx-auto flex w-full max-w-[1120px] flex-col gap-4 px-4 py-6'
+        }
+      >
+        {!embedded && <Skeleton className="h-9 w-2/3 rounded" />}
         <Skeleton className="h-[120px] w-full rounded-xl" />
       </div>
     );
@@ -51,13 +60,16 @@ export function LiveTopicTemplateView({
       model={data}
       actionCallbacks={actionCallbacks}
       compact={compact}
+      embedded={embedded}
       headerActions={
-        <EntityPageActions
-          entityId={entityId}
-          spaceId={spaceId}
-          compact={compact}
-          leading={<TopicFollowControl topic={{ id: entityId, name: data.title }} />}
-        />
+        embedded ? undefined : (
+          <EntityPageActions
+            entityId={entityId}
+            spaceId={spaceId}
+            compact={compact}
+            leading={<TopicFollowControl topic={{ id: entityId, name: data.title }} />}
+          />
+        )
       }
       footer={footer}
     />
