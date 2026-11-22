@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import type { SourceQuoteModel, SourceTemplateModel } from '../models';
+import type { EntityActionCallbacks, SourceQuoteModel, SourceTemplateModel } from '../models';
 import {
   AddEntityItemPopover,
   ArrowUpRightIcon,
@@ -24,13 +24,22 @@ export interface SourceTemplateProps {
   model: SourceTemplateModel;
   headerActions?: React.ReactNode;
   footer?: React.ReactNode;
+  actionCallbacks?: EntityActionCallbacks;
+  compact?: boolean;
   className?: string;
 }
 
 /**
  * Pure, data-driven Source page template (Reports, Official documents, Datasets, Papers, Articles).
  */
-export function SourceTemplate({ model, headerActions, footer, className }: SourceTemplateProps) {
+export function SourceTemplate({
+  model,
+  headerActions,
+  footer,
+  actionCallbacks,
+  compact = false,
+  className,
+}: SourceTemplateProps) {
   const ctaLabel = (model.externalLabel ?? 'Open source').replace(/\s*↗\s*$/, '');
   const [addedQuotes, setAddedQuotes] = React.useState<SourceQuoteModel[]>([]);
   const allQuotes = [...addedQuotes, ...(model.quotes ?? [])];
@@ -41,7 +50,9 @@ export function SourceTemplate({ model, headerActions, footer, className }: Sour
       breadcrumbs={model.breadcrumbs}
       coverUrl={model.coverUrl}
       coverAlt={model.title}
+      compact={compact}
       contextByEntityId={model.contextByEntityId}
+      actionCallbacks={actionCallbacks}
       className={className}
     >
       <header className="flex flex-col gap-3.5">
@@ -49,12 +60,13 @@ export function SourceTemplate({ model, headerActions, footer, className }: Sour
           <h1 className="m-0 text-entityTitle text-pretty text-text">{model.title}</h1>
           <div className="flex shrink-0 items-center gap-2 pt-1.5">
             <EntityContextTogglePill />
-            {headerActions}
-            <EntityOverflowMenu
-              target={{ id: model.id, kind: model.sourceType ?? 'Source', title: model.title }}
-              isPageRoot
-              size="md"
-            />
+            {headerActions ?? (
+              <EntityOverflowMenu
+                target={{ id: model.id, kind: model.sourceType ?? 'Source', title: model.title }}
+                isPageRoot
+                size="md"
+              />
+            )}
           </div>
         </div>
 
@@ -108,7 +120,12 @@ export function SourceTemplate({ model, headerActions, footer, className }: Sour
             tertiaryLabel="Page or section (optional)"
             tertiaryPlaceholder="e.g. §86(1) or 07:12"
             multilinePrimary
-            onSubmit={draft =>
+            onSubmit={draft => {
+              actionCallbacks?.onAddQuote?.({
+                text: draft.primary,
+                speaker: draft.secondary,
+                location: draft.tertiary,
+              });
               setAddedQuotes(prev => [
                 {
                   id: `user-q-${Date.now()}`,
@@ -117,8 +134,8 @@ export function SourceTemplate({ model, headerActions, footer, className }: Sour
                   location: draft.tertiary,
                 },
                 ...prev,
-              ])
-            }
+              ]);
+            }}
           />
         </div>
         {allQuotes.length > 0 ? (

@@ -257,10 +257,11 @@ export function EntityPageBody(props: EntityPageBodyProps) {
 
   if (customView === 'claim') {
     const showClaimMedia = props.variant === 'sidePanel' || props.showCover !== false;
+    const useV2Claim = enableV2Templates && !isEditing;
 
     return (
       <>
-        {showClaimMedia ? (
+        {showClaimMedia && !useV2Claim ? (
           props.variant === 'route' && props.coverSlot ? (
             props.coverSlot
           ) : (
@@ -278,10 +279,18 @@ export function EntityPageBody(props: EntityPageBodyProps) {
               withAvatar
             />
           )
+        ) : showClaimMedia && props.variant === 'route' && props.coverSlot ? (
+          props.coverSlot
         ) : null}
         {routeEditInitializer}
-        {enableV2Templates && !isEditing ? (
-          <LiveClaimTemplateView entityId={entityId} spaceId={spaceId} footer={customViewFooter} />
+        {useV2Claim ? (
+          <LiveClaimTemplateView
+            entityId={entityId}
+            spaceId={spaceId}
+            serverCoverUrl={showClaimMedia && !(props.variant === 'route' && props.coverSlot) ? props.coverUrl : null}
+            compact={props.variant === 'sidePanel'}
+            footer={customViewFooter}
+          />
         ) : (
           <ClaimPageView
             entityId={entityId}
@@ -298,10 +307,11 @@ export function EntityPageBody(props: EntityPageBodyProps) {
 
   if (customView === 'topic') {
     const showTopicMedia = props.variant === 'sidePanel' || props.showCover !== false;
+    const useV2Topic = enableV2Templates && !isEditing;
 
     return (
       <>
-        {showTopicMedia ? (
+        {showTopicMedia && !useV2Topic ? (
           props.variant === 'route' && props.coverSlot ? (
             props.coverSlot
           ) : (
@@ -314,10 +324,18 @@ export function EntityPageBody(props: EntityPageBodyProps) {
               withAvatar
             />
           )
+        ) : showTopicMedia && props.variant === 'route' && props.coverSlot ? (
+          props.coverSlot
         ) : null}
         {routeEditInitializer}
-        {enableV2Templates && !isEditing ? (
-          <LiveTopicTemplateView entityId={entityId} spaceId={spaceId} footer={customViewFooter} />
+        {useV2Topic ? (
+          <LiveTopicTemplateView
+            entityId={entityId}
+            spaceId={spaceId}
+            serverCoverUrl={showTopicMedia && !(props.variant === 'route' && props.coverSlot) ? props.coverUrl : null}
+            compact={props.variant === 'sidePanel'}
+            footer={customViewFooter}
+          />
         ) : (
           <TopicPageView
             entityId={entityId}
@@ -333,35 +351,68 @@ export function EntityPageBody(props: EntityPageBodyProps) {
   }
 
   if (enableV2Templates && !isEditing) {
+    const showV2Media = props.variant === 'sidePanel' || props.showCover !== false;
+    const routeCoverSlot = showV2Media && props.variant === 'route' && props.coverSlot ? props.coverSlot : null;
+    const serverCoverUrl = showV2Media && !routeCoverSlot ? props.coverUrl : null;
+    const compact = props.variant === 'sidePanel';
+
     if (customView === 'event') {
       return (
         <>
+          {routeCoverSlot}
           {routeEditInitializer}
-          <LiveEventTemplateView entityId={entityId} spaceId={spaceId} footer={customViewFooter} />
+          <LiveEventTemplateView
+            entityId={entityId}
+            spaceId={spaceId}
+            serverCoverUrl={serverCoverUrl}
+            compact={compact}
+            footer={customViewFooter}
+          />
         </>
       );
     }
     if (customView === 'news-story') {
       return (
         <>
+          {routeCoverSlot}
           {routeEditInitializer}
-          <LiveNewsStoryTemplateView entityId={entityId} spaceId={spaceId} footer={customViewFooter} />
+          <LiveNewsStoryTemplateView
+            entityId={entityId}
+            spaceId={spaceId}
+            serverCoverUrl={serverCoverUrl}
+            compact={compact}
+            footer={customViewFooter}
+          />
         </>
       );
     }
     if (customView === 'source') {
       return (
         <>
+          {routeCoverSlot}
           {routeEditInitializer}
-          <LiveSourceTemplateView entityId={entityId} spaceId={spaceId} footer={customViewFooter} />
+          <LiveSourceTemplateView
+            entityId={entityId}
+            spaceId={spaceId}
+            serverCoverUrl={serverCoverUrl}
+            compact={compact}
+            footer={customViewFooter}
+          />
         </>
       );
     }
     if (customView === 'post') {
       return (
         <>
+          {routeCoverSlot}
           {routeEditInitializer}
-          <LivePostTemplateView entityId={entityId} spaceId={spaceId} footer={customViewFooter} />
+          <LivePostTemplateView
+            entityId={entityId}
+            spaceId={spaceId}
+            serverCoverUrl={serverCoverUrl}
+            compact={compact}
+            footer={customViewFooter}
+          />
         </>
       );
     }

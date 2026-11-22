@@ -5,10 +5,15 @@ import * as React from 'react';
 import cx from 'classnames';
 import Link from 'next/link';
 
-import type { PostContextNoteModel, PostTemplateModel } from '../models';
+import type { EntityActionCallbacks, PostContextNoteModel, PostTemplateModel } from '../models';
+import { resolveTemplateImageUrl } from '../ontology';
 import {
   ArrowUpRightIcon,
   CheckIcon,
+  EntityContextTogglePill,
+  EntityFlagsSection,
+  EntityOverflowMenu,
+  GraphConnectionsStrip,
   PlusIcon,
   RelatedListSection,
   SourceChipList,
@@ -22,6 +27,8 @@ export interface PostTemplateProps {
   model: PostTemplateModel;
   headerActions?: React.ReactNode;
   footer?: React.ReactNode;
+  actionCallbacks?: EntityActionCallbacks;
+  compact?: boolean;
   className?: string;
 }
 
@@ -31,13 +38,26 @@ const MAX_NOTE_LENGTH = 280;
 /**
  * Pure, data-driven Post template for viral / external social posts with bridging Community Notes.
  */
-export function PostTemplate({ model, headerActions, footer, className }: PostTemplateProps) {
+export function PostTemplate({
+  model,
+  headerActions,
+  footer,
+  actionCallbacks,
+  compact = false,
+  className,
+}: PostTemplateProps) {
   const [composing, setComposing] = React.useState(false);
   const [draftTag, setDraftTag] = React.useState<string>('');
   const [draftText, setDraftText] = React.useState('');
   const [draftSource, setDraftSource] = React.useState('');
   const [selectedEvidenceIds, setSelectedEvidenceIds] = React.useState<string[]>([]);
   const [draftError, setDraftError] = React.useState<string | null>(null);
+  const resolvedMediaUrl = resolveTemplateImageUrl(model.mediaUrl);
+  const postTitle =
+    model.title?.trim() ||
+    (model.authorName.toLowerCase() === model.platform.toLowerCase()
+      ? model.authorName
+      : `${model.authorName} on ${model.platform}`);
 
   const toggleEvidence = (id: string) => {
     setSelectedEvidenceIds(prev => (prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]));
@@ -69,20 +89,30 @@ export function PostTemplate({ model, headerActions, footer, className }: PostTe
   };
 
   return (
-    <TemplateShell maxWidth={1040} breadcrumbs={model.breadcrumbs} className={className}>
-      <header className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <TemplateBadge tone="post">Post</TemplateBadge>
-            <TemplateBadge tone="neutral">{model.platform}</TemplateBadge>
-            {model.viewsLabel && <TemplateBadge tone="neutral">{model.viewsLabel}</TemplateBadge>}
-            {model.when && <TemplateBadge tone="neutral">{model.when}</TemplateBadge>}
+    <TemplateShell
+      maxWidth={1040}
+      breadcrumbs={model.breadcrumbs}
+      compact={compact}
+      contextByEntityId={model.contextByEntityId}
+      actionCallbacks={actionCallbacks}
+      className={className}
+    >
+      <header className="flex flex-col gap-3.5">
+        <div className="flex items-start justify-between gap-4">
+          <h1 className="m-0 text-entityTitle text-pretty text-text">{postTitle}</h1>
+          <div className="flex shrink-0 items-center gap-2 pt-1.5">
+            <EntityContextTogglePill />
+            {headerActions ?? (
+              <EntityOverflowMenu target={{ id: model.id, kind: 'Post', title: postTitle }} isPageRoot size="md" />
+            )}
           </div>
-          {headerActions}
         </div>
-        <h1 className="m-0 text-largeTitle text-pretty text-text">
-          {model.authorName} on {model.platform}
-        </h1>
+        <div className="flex flex-wrap items-center gap-2">
+          <TemplateBadge tone="post">Post</TemplateBadge>
+          <TemplateBadge tone="neutral">{model.platform}</TemplateBadge>
+          {model.viewsLabel && <TemplateBadge tone="neutral">{model.viewsLabel}</TemplateBadge>}
+          {model.when && <TemplateBadge tone="neutral">{model.when}</TemplateBadge>}
+        </div>
       </header>
 
       <div className="grid grid-cols-1 items-start gap-7 @[780px]:grid-cols-[minmax(0,410px)_minmax(0,1fr)]">
@@ -98,10 +128,10 @@ export function PostTemplate({ model, headerActions, footer, className }: PostTe
 
           <p className="m-0 text-[16px] leading-[24px] whitespace-pre-line text-text">{model.body}</p>
 
-          {model.mediaUrl && (
+          {resolvedMediaUrl && (
             <div className="overflow-hidden rounded-lg border border-divider bg-grey-01">
               <img
-                src={model.mediaUrl}
+                src={resolvedMediaUrl}
                 alt={model.mediaAlt ?? model.authorName}
                 className="max-h-[260px] w-full object-cover"
               />
@@ -170,14 +200,16 @@ export function PostTemplate({ model, headerActions, footer, className }: PostTe
           {/* Community context notes */}
           <section aria-label="Context notes" className="flex flex-col gap-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="m-0 text-mediumTitle font-semibold text-text">Context notes ({model.notes.length})</h2>
+              <h2 className="m-0 text-mediumTitle font-semibold text-text">Context notes</h2>
               {model.onAddNote && !composing && (
                 <button
                   type="button"
                   onClick={() => setComposing(true)}
-                  className="inline-flex h-9 cursor-pointer items-center rounded-full border border-text bg-text px-4 text-[14px] font-medium text-white transition-opacity hover:opacity-90"
+                  aria-label="Add context note"
+                  title="Add context note"
+                  className="inline-grid size-7 cursor-pointer place-items-center border-0 bg-transparent text-grey-04 transition-colors hover:text-text"
                 >
-                  + Add context
+                  <PlusIcon className="size-4" />
                 </button>
               )}
             </div>
@@ -341,6 +373,13 @@ export function PostTemplate({ model, headerActions, footer, className }: PostTe
           </section>
         </div>
       </div>
+
+      <GraphConnectionsStrip
+        groups={model.graphConnections ?? []}
+        target={{ id: model.id, kind: 'Post', title: postTitle }}
+      />
+
+      <EntityFlagsSection target={{ id: model.id, kind: 'Post', title: postTitle }} />
 
       {model.sections.length > 0 && (
         <div className="flex flex-col gap-8">

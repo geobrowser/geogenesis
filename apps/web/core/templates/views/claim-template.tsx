@@ -7,6 +7,7 @@ import Link from 'next/link';
 import {
   type ClaimKind,
   type ClaimTemplateModel,
+  type EntityActionCallbacks,
   type StrongestCaseModel,
   type SubClaimModel,
   formatClaimKindLabel,
@@ -19,6 +20,7 @@ import {
   EntityInlineContext,
   EntityOverflowMenu,
   GraphConnectionsStrip,
+  InlinePagination,
   RelatedListSection,
   SourceChipList,
   SplitBars,
@@ -41,6 +43,10 @@ export interface ClaimTemplateProps {
   headerActions?: React.ReactNode;
   /** Optional footer slot (e.g. edit-mode property sheet & backlinks). */
   footer?: React.ReactNode;
+  /** Live GRC-20 persistence & search callbacks. */
+  actionCallbacks?: EntityActionCallbacks;
+  /** Compact density when rendered inside the narrow entity side panel. */
+  compact?: boolean;
   className?: string;
 }
 
@@ -51,14 +57,23 @@ export interface ClaimTemplateProps {
  * property (`Factual` / `Judgment` / `Value judgment`), while agreement state (`Where they split`
  * vs `Common ground`) is computed dynamically from community vote splits and shown in the bars.
  */
-export function ClaimTemplate({ model, headerActions, footer, className }: ClaimTemplateProps) {
+export function ClaimTemplate({
+  model,
+  headerActions,
+  footer,
+  actionCallbacks,
+  compact = false,
+  className,
+}: ClaimTemplateProps) {
   return (
     <TemplateShell
       maxWidth={860}
       breadcrumbs={model.breadcrumbs}
       coverUrl={model.coverUrl}
       coverAlt={model.title}
+      compact={compact}
       contextByEntityId={model.contextByEntityId}
+      actionCallbacks={actionCallbacks}
       className={className}
     >
       {/* Header (name first, type labels below) */}
@@ -67,8 +82,9 @@ export function ClaimTemplate({ model, headerActions, footer, className }: Claim
           <h1 className="m-0 text-entityTitle text-pretty text-text">{model.title}</h1>
           <div className="flex shrink-0 items-center gap-2 pt-1.5">
             <EntityContextTogglePill />
-            {headerActions}
-            <EntityOverflowMenu target={{ id: model.id, kind: 'Claim', title: model.title }} isPageRoot size="md" />
+            {headerActions ?? (
+              <EntityOverflowMenu target={{ id: model.id, kind: 'Claim', title: model.title }} isPageRoot size="md" />
+            )}
           </div>
         </div>
 
@@ -120,7 +136,9 @@ export function ClaimTemplate({ model, headerActions, footer, className }: Claim
       )}
 
       {/* Supporting, Opposing, and Related claims */}
-      {model.subClaims && model.subClaims.length > 0 && <GroupedSubClaimSections subClaims={model.subClaims} />}
+      {model.subClaims && model.subClaims.length > 0 && (
+        <GroupedSubClaimSections subClaims={model.subClaims} onAddClaim={actionCallbacks?.onAddClaim} />
+      )}
 
       {/* Strongest cases */}
       {model.strongestCases && model.strongestCases.length > 0 && (
@@ -172,8 +190,17 @@ function DebateCountLink({ count, href, onSelect }: { count: number; href?: stri
   return <span className="ml-1 text-[14px] text-grey-04">{text}</span>;
 }
 
-function GroupedSubClaimSections({ subClaims }: { subClaims: readonly SubClaimModel[] }) {
+const SUBCLAIMS_PER_PAGE = 6;
+
+function GroupedSubClaimSections({
+  subClaims,
+  onAddClaim,
+}: {
+  subClaims: readonly SubClaimModel[];
+  onAddClaim?: EntityActionCallbacks['onAddClaim'];
+}) {
   const [added, setAdded] = React.useState<SubClaimModel[]>([]);
+  const [pagesBySection, setPagesBySection] = React.useState<Record<string, number>>({});
   const combined = [...subClaims, ...added];
 
   const sections = [
@@ -202,43 +229,70 @@ function GroupedSubClaimSections({ subClaims }: { subClaims: readonly SubClaimMo
 
   return (
     <>
-      {sections.map(section => (
-        <section key={section.id} aria-label={section.title} className="flex flex-col gap-4">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="m-0 text-mediumTitle font-semibold text-text">{section.title}</h2>
-            <AddClaimPopover
-              label={section.addLabel}
-              onSubmit={draft =>
-                setAdded(prev => [
-                  ...prev,
-                  {
-                    id: `claim-sub-${Date.now()}`,
-                    title: draft.title,
-                    kind: draft.kind,
-                    stance: section.stance,
-                    stat: draft.note,
-                    split: { rows: [], isSplit: false },
-                    sources: [],
-                  },
-                ])
-              }
-            />
-          </div>
-          <div className={`divide-y divide-divider overflow-hidden ${TEMPLATE_CARD_SURFACE}`}>
-            {section.items.map(subClaim => (
-              <SubClaimRow key={subClaim.id} subClaim={subClaim} />
-            ))}
-          </div>
-        </section>
-      ))}
+      {sections.map(section => {
+        const totalPages = Math.max(1, Math.ceil(section.items.length / SUBCLAIMS_PER_PAGE));
+        const safePage = Math.min(pagesBySection[section.id] ?? 1, totalPages);
+        const visibleItems = section.items.slice((safePage - 1) * SUBCLAIMS_PER_PAGE, safePage * SUBCLAIMS_PER_PAGE);
+
+        return (
+          <section key={section.id} aria-label={section.title} className="flex flex-col gap-4">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="m-0 text-mediumTitle font-semibold text-text">{section.title}</h2>
+              <AddClaimPopover
+                label={section.addLabel}
+                onSubmit={draft => {
+                  onAddClaim?.({ ...draft, stance: section.stance });
+                  setAdded(prev => [
+                    {
+                      id: `claim-sub-${Date.now()}`,
+                      title: draft.title,
+                      kind: draft.kind,
+                      stance: section.stance,
+                      stat: draft.note,
+                      split: { rows: [], isSplit: false },
+                      sources: [],
+                    },
+                    ...prev,
+                  ]);
+                  setPagesBySection(prev => ({ ...prev, [section.id]: 1 }));
+                }}
+              />
+            </div>
+            <div className={`divide-y divide-divider overflow-hidden ${TEMPLATE_CARD_SURFACE}`}>
+              {visibleItems.map(subClaim => (
+                <SubClaimRow key={subClaim.id} subClaim={subClaim} />
+              ))}
+              {totalPages > 1 && (
+                <div className="px-5 py-3">
+                  <InlinePagination
+                    page={safePage}
+                    totalPages={totalPages}
+                    onPageChange={next => setPagesBySection(prev => ({ ...prev, [section.id]: next }))}
+                    label={`${section.title} pages`}
+                    className="pt-0"
+                  />
+                </div>
+              )}
+            </div>
+          </section>
+        );
+      })}
     </>
   );
 }
 
 function SubClaimRow({ subClaim }: { subClaim: SubClaimModel }) {
+  const hasBars = subClaim.split.rows.length > 0;
+
   return (
-    <article className="grid grid-cols-1 items-start gap-4 p-5 @[680px]:grid-cols-[minmax(0,1fr)_304px] @[680px]:gap-6 @[680px]:p-6">
-      <div className="flex min-w-0 flex-col gap-2">
+    <article
+      className={
+        hasBars
+          ? 'grid grid-cols-1 items-start gap-4 p-5 @[680px]:grid-cols-[minmax(0,1fr)_304px] @[680px]:gap-6 @[680px]:p-6'
+          : 'flex items-start justify-between gap-4 p-5 @[680px]:p-6'
+      }
+    >
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
         {subClaim.href ? (
           <Link
             href={subClaim.href}
@@ -273,10 +327,14 @@ function SubClaimRow({ subClaim }: { subClaim: SubClaimModel }) {
         <EntityInlineContext targetId={subClaim.id} targetTitle={subClaim.title} targetKind="Claim" />
       </div>
 
-      <div className="flex items-start justify-between gap-2 @[680px]:pt-1">
-        <SplitBars rows={subClaim.split.rows} density="compact" className="min-w-0 flex-1" />
-        <EntityOverflowMenu target={{ id: subClaim.id, kind: 'Claim', title: subClaim.title }} />
-      </div>
+      {hasBars ? (
+        <div className="flex items-start justify-between gap-2 @[680px]:pt-1">
+          <SplitBars rows={subClaim.split.rows} density="compact" className="min-w-0 flex-1" />
+          <EntityOverflowMenu target={{ id: subClaim.id, kind: 'Claim', title: subClaim.title }} />
+        </div>
+      ) : (
+        <EntityOverflowMenu target={{ id: subClaim.id, kind: 'Claim', title: subClaim.title }} className="shrink-0" />
+      )}
     </article>
   );
 }

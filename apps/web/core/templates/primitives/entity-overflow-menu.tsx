@@ -70,6 +70,7 @@ interface EntityActionContextValue {
   ) => void;
   flagVotes: Readonly<Record<string, 'agree' | 'disagree' | null>>;
   voteOnFlag: (flagId: string, choice: 'agree' | 'disagree') => void;
+  callbacks?: EntityActionCallbacks;
   popoverContainer: HTMLDivElement | null;
   showAllContext: boolean;
   toggleShowAllContext: () => void;
@@ -187,17 +188,47 @@ export function TemplateAddRelationPillPopover({
   revealOnRowHover?: boolean;
   onAdd: (label: string) => void;
 }) {
+  const ctx = React.useContext(EntityActionContext);
+  const searchEntities = ctx?.callbacks?.searchEntities;
   const popoverContainer = useTemplatePopoverContainer();
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState('');
+  const [liveResults, setLiveResults] = React.useState<readonly string[]>([]);
+
+  React.useEffect(() => {
+    if (!open || !searchEntities) {
+      setLiveResults([]);
+      return;
+    }
+    const trimmedQuery = query.trim();
+    if (trimmedQuery.length < 2) {
+      setLiveResults([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void searchEntities(trimmedQuery).then(hits => {
+        if (!cancelled) {
+          setLiveResults(hits.map(hit => hit.name));
+        }
+      });
+    }, 180);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [open, query, searchEntities]);
 
   const existingLower = React.useMemo(() => new Set(existingLabels.map(l => l.toLowerCase())), [existingLabels]);
   const suggestions = React.useMemo(() => {
+    if (searchEntities) {
+      return liveResults.filter(name => !existingLower.has(name.toLowerCase())).slice(0, 5);
+    }
     const q = query.trim().toLowerCase();
     return SUGGESTED_RELATION_ENTITIES.filter(
       name => !existingLower.has(name.toLowerCase()) && (!q || name.toLowerCase().includes(q))
     ).slice(0, 5);
-  }, [existingLower, query]);
+  }, [existingLower, liveResults, query, searchEntities]);
 
   const trimmed = query.trim();
   const canCreate = Boolean(trimmed) && !existingLower.has(trimmed.toLowerCase());
@@ -1479,6 +1510,7 @@ export function EntityActionProvider({
       inspectRelation,
       flagVotes,
       voteOnFlag,
+      callbacks,
       popoverContainer,
       showAllContext,
       toggleShowAllContext,
@@ -1496,6 +1528,7 @@ export function EntityActionProvider({
       inspectRelation,
       flagVotes,
       voteOnFlag,
+      callbacks,
       popoverContainer,
       showAllContext,
       toggleShowAllContext,

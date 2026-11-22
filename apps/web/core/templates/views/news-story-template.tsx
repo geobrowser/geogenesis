@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import type { NewsStoryTemplateModel } from '../models';
+import type { EntityActionCallbacks, NewsStoryTemplateModel } from '../models';
 import {
   ArrowUpRightIcon,
   ClaimSummaryCard,
@@ -21,18 +21,31 @@ export interface NewsStoryTemplateProps {
   model: NewsStoryTemplateModel;
   headerActions?: React.ReactNode;
   footer?: React.ReactNode;
+  actionCallbacks?: EntityActionCallbacks;
+  compact?: boolean;
   className?: string;
 }
 
 /**
  * Pure, data-driven News Story page template.
  */
-export function NewsStoryTemplate({ model, headerActions, footer, className }: NewsStoryTemplateProps) {
+export function NewsStoryTemplate({
+  model,
+  headerActions,
+  footer,
+  actionCallbacks,
+  compact = false,
+  className,
+}: NewsStoryTemplateProps) {
   return (
     <TemplateShell
       maxWidth={860}
       breadcrumbs={model.breadcrumbs}
+      coverUrl={model.coverUrl}
+      coverAlt={model.headline}
+      compact={compact}
       contextByEntityId={model.contextByEntityId}
+      actionCallbacks={actionCallbacks}
       className={className}
     >
       <header className="flex flex-col gap-3.5">
@@ -40,12 +53,13 @@ export function NewsStoryTemplate({ model, headerActions, footer, className }: N
           <h1 className="m-0 text-entityTitle text-pretty text-text">{model.headline}</h1>
           <div className="flex shrink-0 items-center gap-2 pt-1.5">
             <EntityContextTogglePill />
-            {headerActions}
-            <EntityOverflowMenu
-              target={{ id: model.id, kind: 'News story', title: model.headline }}
-              isPageRoot
-              size="md"
-            />
+            {headerActions ?? (
+              <EntityOverflowMenu
+                target={{ id: model.id, kind: 'News story', title: model.headline }}
+                isPageRoot
+                size="md"
+              />
+            )}
           </div>
         </div>
 
@@ -109,7 +123,10 @@ export function NewsStoryTemplate({ model, headerActions, footer, className }: N
         />
       )}
 
-      <GraphConnectionsStrip groups={[]} target={{ id: model.id, kind: 'News story', title: model.headline }} />
+      <GraphConnectionsStrip
+        groups={model.graphConnections ?? []}
+        target={{ id: model.id, kind: 'News story', title: model.headline }}
+      />
 
       <EntityFlagsSection target={{ id: model.id, kind: 'News story', title: model.headline }} />
 

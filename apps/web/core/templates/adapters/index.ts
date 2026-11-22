@@ -5,6 +5,7 @@ export {
   useGazaFixtureTemplates,
 } from './gaza-fixture';
 export { useLiveClaimTemplate } from './use-live-claim-template';
+export { useLiveEntityActions } from './use-live-entity-actions';
 export { useLiveEventTemplate } from './use-live-event-template';
 export { useLiveNewsStoryTemplate } from './use-live-news-story-template';
 export { useLivePostTemplate } from './use-live-post-template';

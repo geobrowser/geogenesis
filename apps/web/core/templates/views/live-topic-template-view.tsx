@@ -13,6 +13,8 @@ import { EntityPageActions } from '~/partials/entity-page/entity-page-actions';
 export interface LiveTopicTemplateViewProps {
   entityId: string;
   spaceId: string;
+  serverCoverUrl?: string | null;
+  compact?: boolean;
   footer?: React.ReactNode;
 }
 
@@ -20,8 +22,18 @@ export interface LiveTopicTemplateViewProps {
  * Live Geo container connecting `useLiveTopicTemplate` to `TopicTemplate`.
  * Rendered by `EntityPageBody` when the `entityTemplatesV2` feature flag is enabled.
  */
-export function LiveTopicTemplateView({ entityId, spaceId, footer }: LiveTopicTemplateViewProps) {
-  const { data, isLoading } = useLiveTopicTemplate({ entityId, spaceId });
+export function LiveTopicTemplateView({
+  entityId,
+  spaceId,
+  serverCoverUrl,
+  compact = false,
+  footer,
+}: LiveTopicTemplateViewProps) {
+  const { data, isLoading, actionCallbacks } = useLiveTopicTemplate({
+    entityId,
+    spaceId,
+    serverCoverUrl,
+  });
 
   if (isLoading) {
     return (
@@ -37,10 +49,13 @@ export function LiveTopicTemplateView({ entityId, spaceId, footer }: LiveTopicTe
   return (
     <TopicTemplate
       model={data}
+      actionCallbacks={actionCallbacks}
+      compact={compact}
       headerActions={
         <EntityPageActions
           entityId={entityId}
           spaceId={spaceId}
+          compact={compact}
           leading={<TopicFollowControl topic={{ id: entityId, name: data.title }} />}
         />
       }

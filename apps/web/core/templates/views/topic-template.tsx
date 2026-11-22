@@ -5,15 +5,17 @@ import * as React from 'react';
 import cx from 'classnames';
 import Link from 'next/link';
 
-import type { TopicTemplateModel, TopicTimelineHighlightModel } from '../models';
+import type { EntityActionCallbacks, TopicTemplateModel, TopicTimelineHighlightModel } from '../models';
 import {
   AddEntityItemPopover,
   ArrowRightIcon,
   ChevronRightIcon,
   ClaimExplorer,
   EntityContextTogglePill,
+  EntityFlagsSection,
   EntityInlineContext,
   EntityOverflowMenu,
+  GraphConnectionsStrip,
   RecentDebatesGallery,
   RelatedListSection,
   TemplateBadge,
@@ -26,6 +28,10 @@ export interface TopicTemplateProps {
   headerActions?: React.ReactNode;
   /** Optional footer slot (e.g. edit-mode property sheet & backlinks). */
   footer?: React.ReactNode;
+  /** Live GRC-20 persistence & search callbacks. */
+  actionCallbacks?: EntityActionCallbacks;
+  /** Compact density when rendered inside the narrow entity side panel. */
+  compact?: boolean;
   className?: string;
 }
 
@@ -34,11 +40,20 @@ export interface TopicTemplateProps {
  *
  * Clean, spacious white/black Geo layout sized to Calibre typography with restrained blue/purple touches.
  */
-export function TopicTemplate({ model, headerActions, footer, className }: TopicTemplateProps) {
+export function TopicTemplate({
+  model,
+  headerActions,
+  footer,
+  actionCallbacks,
+  compact = false,
+  className,
+}: TopicTemplateProps) {
   const contested = model.contestedClaims ?? [];
   const agreed = model.agreedClaims ?? [];
   const [addedTimelineTurns, setAddedTimelineTurns] = React.useState<TopicTimelineHighlightModel[]>([]);
   const timelineHighlights = [...addedTimelineTurns, ...(model.timelineHighlights ?? [])];
+  const hasContextOrLive = (model.graphConnections && model.graphConnections.length > 0) || Boolean(actionCallbacks);
+  const hasFlagsOrLive = Boolean(model.contextByEntityId?.[model.id]?.flags?.length) || Boolean(actionCallbacks);
 
   return (
     <TemplateShell
@@ -46,7 +61,9 @@ export function TopicTemplate({ model, headerActions, footer, className }: Topic
       breadcrumbs={model.breadcrumbs}
       coverUrl={model.coverUrl}
       coverAlt={model.title}
+      compact={compact}
       contextByEntityId={model.contextByEntityId}
+      actionCallbacks={actionCallbacks}
       className={className}
     >
       {/* Hero header (normal Geo entity page order: cover -> name -> type labels -> description) */}
@@ -55,8 +72,9 @@ export function TopicTemplate({ model, headerActions, footer, className }: Topic
           <h1 className="m-0 text-entityTitle text-pretty text-text">{model.title}</h1>
           <div className="flex shrink-0 items-center gap-2 pt-1.5">
             <EntityContextTogglePill />
-            {headerActions}
-            <EntityOverflowMenu target={{ id: model.id, kind: 'Topic', title: model.title }} isPageRoot size="md" />
+            {headerActions ?? (
+              <EntityOverflowMenu target={{ id: model.id, kind: 'Topic', title: model.title }} isPageRoot size="md" />
+            )}
           </div>
         </div>
 
@@ -113,7 +131,12 @@ export function TopicTemplate({ model, headerActions, footer, className }: Topic
                 secondaryPlaceholder="e.g. 18 Nov 2026"
                 tertiaryLabel="Summary (optional)"
                 tertiaryPlaceholder="Brief neutral summary of what happened..."
-                onSubmit={draft =>
+                onSubmit={draft => {
+                  actionCallbacks?.onAddEvent?.({
+                    title: draft.primary,
+                    when: draft.secondary,
+                    summary: draft.tertiary,
+                  });
                   setAddedTimelineTurns(prev => [
                     {
                       id: `user-ev-${Date.now()}`,
@@ -122,8 +145,8 @@ export function TopicTemplate({ model, headerActions, footer, className }: Topic
                       summary: draft.tertiary,
                     },
                     ...prev,
-                  ])
-                }
+                  ]);
+                }}
               />
             </div>
           </div>
@@ -148,6 +171,16 @@ export function TopicTemplate({ model, headerActions, footer, className }: Topic
           ))}
         </div>
       )}
+
+      {/* Context relations & Flags on live Topic pages */}
+      {hasContextOrLive && (
+        <GraphConnectionsStrip
+          groups={model.graphConnections ?? []}
+          target={{ id: model.id, kind: 'Topic', title: model.title }}
+        />
+      )}
+
+      {hasFlagsOrLive && <EntityFlagsSection target={{ id: model.id, kind: 'Topic', title: model.title }} />}
 
       {footer}
     </TemplateShell>

@@ -161,11 +161,16 @@ export interface EntityContextDataModel {
   flags?: readonly EntityFlagModel[];
 }
 
-/** Optional persistence callbacks for live GRC-20 adapters wired through `TemplateShell`. */
+/** Optional persistence & live search callbacks for live GRC-20 adapters wired through `TemplateShell`. */
 export interface EntityActionCallbacks {
   onAddTriple?: (targetId: string, predicate: string, values: readonly string[]) => void;
   onDeleteTriple?: (targetId: string, valueId: string) => void;
   onAddFlag?: (targetId: string, draft: { reason: string; body: string; sourceUrl?: string }) => void;
+  onAddClaim?: (draft: { title: string; kind: ClaimKind; stance?: ClaimStance; note?: string }) => void;
+  onAddQuote?: (draft: { text: string; speaker?: string; location?: string }) => void;
+  onAddEvent?: (draft: { title: string; when?: string; summary?: string }) => void;
+  /** Optional live Geo entity search for `+` relation popovers; falls back to fixture suggestions when omitted. */
+  searchEntities?: (query: string) => Promise<readonly { id: string; name: string }[]>;
 }
 
 export interface EntityLinkRowModel {
@@ -251,6 +256,8 @@ export interface GraphConnectionItemModel {
   meta?: string;
   href?: string;
   onSelect?: () => void;
+  /** Optional href for the relation entity itself (opened from the pill hover toolbar). */
+  relationHref?: string;
 }
 
 export interface GraphConnectionGroupModel {
@@ -503,6 +510,8 @@ export interface TopicTemplateModel {
   onOpenSources?: () => void;
   /** Attached knowledge graph triples & flags keyed by entity ID (claim, source, quote, event, debate). */
   contextByEntityId?: Readonly<Record<string, EntityContextDataModel>>;
+  /** Non-sectioned outgoing graph relations displayed in the Topic's Context section. */
+  graphConnections?: readonly GraphConnectionGroupModel[];
   /** Additional structured sections (coverage, rankings, debates, etc.). */
   sections?: readonly EntityListSectionModel[];
 }
@@ -601,6 +610,7 @@ export interface NewsStoryTemplateModel {
   authors?: readonly string[];
   date?: string;
   summary?: string;
+  coverUrl?: string | null;
   externalUrl?: string;
   archiveUrl?: string;
   breadcrumbs?: readonly BreadcrumbItem[];
@@ -691,6 +701,8 @@ export interface PostSuggestedEvidenceModel {
 
 export interface PostTemplateModel {
   id: string;
+  /** Optional headline when the post has its own title (e.g. a blog post or policy statement). */
+  title?: string;
   authorName: string;
   authorHandle?: string;
   platform: string;
@@ -715,6 +727,8 @@ export interface PostTemplateModel {
     sourceUrl: string;
     selectedEvidenceIds?: readonly string[];
   }) => void;
+  graphConnections?: readonly GraphConnectionGroupModel[];
+  contextByEntityId?: Readonly<Record<string, EntityContextDataModel>>;
   sections: readonly EntityListSectionModel[];
 }
 
@@ -727,6 +741,7 @@ export interface TemplateDataSource<TModel> {
   isLoading: boolean;
   error?: Error | null;
   source: 'live' | 'fixture';
+  actionCallbacks?: EntityActionCallbacks;
 }
 
 export type TemplateAdapter<TInput, TModel> = (input: TInput) => TemplateDataSource<TModel>;

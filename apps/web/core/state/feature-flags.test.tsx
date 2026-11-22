@@ -34,7 +34,7 @@ describe('feature flags', () => {
     expect(defaultFeatureFlags.googleSignIn).toBe(false);
     expect(defaultFeatureFlags.bountiesTab).toBe(true);
     expect(defaultFeatureFlags.signInRecoveryAutoOpen).toBe(true);
-    expect(defaultFeatureFlags.entityTemplatesV2).toBe(false);
+    expect(defaultFeatureFlags.entityTemplatesV2).toBe(true);
     expect(normalizeFeatureFlags(null)).toEqual({
       playbackDiagnostics: false,
       debugDebatesPage: false,
@@ -50,7 +50,7 @@ describe('feature flags', () => {
       googleSignIn: false,
       bountiesTab: true,
       signInRecoveryAutoOpen: true,
-      entityTemplatesV2: false,
+      entityTemplatesV2: true,
     });
   });
 
@@ -87,7 +87,7 @@ describe('feature flags', () => {
       googleSignIn: false,
       bountiesTab: true,
       signInRecoveryAutoOpen: true,
-      entityTemplatesV2: false,
+      entityTemplatesV2: true,
     });
   });
 

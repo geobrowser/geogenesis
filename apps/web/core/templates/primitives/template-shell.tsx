@@ -6,6 +6,7 @@ import cx from 'classnames';
 import Link from 'next/link';
 
 import type { BreadcrumbItem, EntityActionCallbacks, EntityContextDataModel } from '../models';
+import { resolveTemplateImageUrl } from '../ontology';
 import { EntityActionProvider } from './entity-overflow-menu';
 import { ChevronRightIcon } from './icons';
 
@@ -102,7 +103,11 @@ export function TemplateBreadcrumb({ items, className }: { items: readonly Bread
             ) : (
               <span
                 aria-current={isLast ? 'page' : undefined}
-                className={cx('text-[15px] leading-[20px]', isLast ? 'font-medium text-text' : 'text-grey-04')}
+                title={item.label}
+                className={cx(
+                  'max-w-[380px] truncate text-[15px] leading-[20px]',
+                  isLast ? 'font-medium text-text' : 'text-grey-04'
+                )}
               >
                 {item.label}
               </span>
@@ -123,6 +128,7 @@ export function TemplateShell({
   breadcrumbs,
   coverUrl,
   coverAlt = '',
+  compact = false,
   contextByEntityId,
   actionCallbacks,
   className,
@@ -132,27 +138,37 @@ export function TemplateShell({
   breadcrumbs?: readonly BreadcrumbItem[];
   coverUrl?: string | null;
   coverAlt?: string;
+  /** Tighten outer spacing and cover height when rendered inside the narrow entity side panel. */
+  compact?: boolean;
   contextByEntityId?: Readonly<Record<string, EntityContextDataModel>>;
   actionCallbacks?: EntityActionCallbacks;
   className?: string;
 }) {
+  const resolvedCoverUrl = resolveTemplateImageUrl(coverUrl);
+
   return (
     <EntityActionProvider initialContextByTarget={contextByEntityId} callbacks={actionCallbacks}>
       <div className="@container">
-        {coverUrl && (
-          <div className="mx-auto w-full max-w-[1192px] px-5 pt-6 @[600px]:px-6">
-            <div className="h-[180px] w-full overflow-hidden rounded-xl border border-black/[0.04] bg-grey-01 @[640px]:h-[260px]">
-              <img src={coverUrl} alt={coverAlt} className="h-full w-full object-cover" />
+        {resolvedCoverUrl && (
+          <div className={cx('mx-auto w-full', compact ? 'px-4 pt-4' : 'max-w-[1192px] px-5 pt-6 @[600px]:px-6')}>
+            <div
+              className={cx(
+                'w-full overflow-hidden rounded-xl border border-black/[0.04] bg-grey-01',
+                compact ? 'h-[156px]' : 'h-[180px] @[640px]:h-[260px]'
+              )}
+            >
+              <img src={resolvedCoverUrl} alt={coverAlt} className="h-full w-full object-cover" />
             </div>
           </div>
         )}
         <div
           className={cx(
-            'mx-auto flex w-full flex-col gap-8 px-5 py-8 @[600px]:gap-11 @[600px]:px-6',
-            coverUrl ? '@[600px]:pt-7 @[600px]:pb-10' : '@[600px]:py-10',
+            'mx-auto flex w-full flex-col',
+            compact ? 'gap-7 px-4 py-5' : 'gap-8 px-5 py-8 @[600px]:gap-11 @[600px]:px-6',
+            !compact && (resolvedCoverUrl ? '@[600px]:pt-7 @[600px]:pb-10' : '@[600px]:py-10'),
             className
           )}
-          style={{ maxWidth }}
+          style={compact ? undefined : { maxWidth }}
         >
           {breadcrumbs && breadcrumbs.length > 0 && <TemplateBreadcrumb items={breadcrumbs} />}
           {children}

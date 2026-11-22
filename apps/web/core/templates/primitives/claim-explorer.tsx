@@ -6,7 +6,13 @@ import cx from 'classnames';
 import Link from 'next/link';
 
 import { type ClaimSummaryModel, formatCompactCount } from '../models';
-import { AddClaimPopover, EntityInlineContext, EntityOverflowMenu, InlinePagination } from './entity-overflow-menu';
+import {
+  AddClaimPopover,
+  EntityInlineContext,
+  EntityOverflowMenu,
+  InlinePagination,
+  useEntityActionContext,
+} from './entity-overflow-menu';
 import { CheckCircleIcon, ThumbDownIcon, ThumbUpIcon } from './icons';
 import { SplitBars } from './split-bars';
 import { TEMPLATE_CARD_SURFACE } from './template-shell';
@@ -26,6 +32,7 @@ const PAGE_SIZE = 10;
  * anchored `+` claim proposal popover, and automatic pagination when more claims exist than fit on one page.
  */
 export function ClaimExplorer({ contestedClaims, agreedClaims, title = 'Claims', className }: ClaimExplorerProps) {
+  const ctx = useEntityActionContext();
   const [addedByTab, setAddedByTab] = React.useState<{ split: ClaimSummaryModel[]; agreed: ClaimSummaryModel[] }>({
     split: [],
     agreed: [],
@@ -55,6 +62,7 @@ export function ClaimExplorer({ contestedClaims, agreedClaims, title = 'Claims',
         <AddClaimPopover
           label="Add claim"
           onSubmit={draft => {
+            ctx?.callbacks?.onAddClaim?.(draft);
             const newClaim: ClaimSummaryModel = {
               id: `user-claim-${Date.now()}`,
               title: draft.title,

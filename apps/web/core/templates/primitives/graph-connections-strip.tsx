@@ -105,6 +105,7 @@ export function GraphConnectionsStrip({ groups = [], target, className }: GraphC
                           kind: item.kind,
                           href: item.href,
                           onSelect: item.onSelect,
+                          relationHref: item.relationHref,
                         };
                         return (
                           <TemplateRelationPill

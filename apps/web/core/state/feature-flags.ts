@@ -107,7 +107,7 @@ export const featureFlagDefinitions = [
     label: 'Entity templates v2',
     description:
       'Enable the redesigned Topic and Claim templates and register structured templates for News stories, Sources, Posts, and Events.',
-    enabledByDefault: false,
+    enabledByDefault: true,
   },
 ] as const;
 

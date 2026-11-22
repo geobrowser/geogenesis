@@ -12,7 +12,12 @@ import type {
   SourceMediaKind,
   SourceQuoteModel,
 } from '../models';
-import { AddEntityItemPopover, EntityInlineContext, EntityOverflowMenu } from './entity-overflow-menu';
+import {
+  AddEntityItemPopover,
+  EntityInlineContext,
+  EntityOverflowMenu,
+  InlinePagination,
+} from './entity-overflow-menu';
 import {
   ArrowUpRightIcon,
   ArticleIcon,
@@ -76,15 +81,21 @@ export interface RelatedListSectionProps {
  *   renders clean format-aware cards for videos, tweets, articles, and datasets.
  * - `layout: 'list'` renders a calm, scannable hairline list (showing type badges only when kinds are mixed).
  */
+const LIST_PAGE_SIZE = 8;
+
 export function RelatedListSection({ section, className }: RelatedListSectionProps) {
   const { title, subtitle, items, emptyText = 'Nothing linked yet.', action, layout } = section;
   const [addedItems, setAddedItems] = React.useState<EntityLinkRowModel[]>([]);
+  const [page, setPage] = React.useState(1);
   const allItems = [...addedItems, ...items];
   const isMixedList = allItems.length > 1 && allItems.some(item => item.kind !== allItems[0]?.kind);
   const useCards =
     layout === 'cards' ||
     (layout !== 'list' &&
       allItems.some(item => Boolean(item.mediaType || item.excerpt || item.duration || item.authorHandle)));
+  const totalPages = useCards ? 1 : Math.max(1, Math.ceil(allItems.length / LIST_PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const visibleItems = useCards ? allItems : allItems.slice((safePage - 1) * LIST_PAGE_SIZE, safePage * LIST_PAGE_SIZE);
 
   const isSourceSection = /source/i.test(title);
   const addLabel = isSourceSection ? 'Add source' : `Add to ${title.toLowerCase()}`;
@@ -152,9 +163,20 @@ export function RelatedListSection({ section, className }: RelatedListSectionPro
         </div>
       ) : (
         <div className={cx('divide-y divide-divider overflow-hidden', TEMPLATE_CARD_SURFACE)}>
-          {allItems.map(item => (
+          {visibleItems.map(item => (
             <RelatedListRow key={item.id} item={item} showKindBadge={isMixedList && !item.avatarPair} />
           ))}
+          {totalPages > 1 && (
+            <div className="px-5 py-3">
+              <InlinePagination
+                page={safePage}
+                totalPages={totalPages}
+                onPageChange={setPage}
+                label={`${title} pages`}
+                className="pt-0"
+              />
+            </div>
+          )}
         </div>
       )}
     </section>
@@ -391,7 +413,7 @@ function RelatedListRow({ item, showKindBadge }: { item: EntityLinkRowModel; sho
         <span className="text-[17px] leading-[23px] font-medium text-text transition-colors group-hover/row:text-[#4c1fd4]">
           {item.title}
         </span>
-        {item.meta && <span className="text-[15px] leading-[20px] text-grey-04">{item.meta}</span>}
+        {item.meta && <span className="line-clamp-2 text-[15px] leading-[21px] text-grey-04">{item.meta}</span>}
       </span>
 
       {!item.plain && (item.href || item.onSelect) && <ChevronRightIcon className="size-4 shrink-0 text-grey-03" />}

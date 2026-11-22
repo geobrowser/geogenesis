@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import Link from 'next/link';
 
-import type { EventTemplateModel } from '../models';
+import type { EntityActionCallbacks, EventTemplateModel } from '../models';
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
@@ -24,20 +24,31 @@ export interface EventTemplateProps {
   model: EventTemplateModel;
   headerActions?: React.ReactNode;
   footer?: React.ReactNode;
+  actionCallbacks?: EntityActionCallbacks;
+  compact?: boolean;
   className?: string;
 }
 
 /**
  * Pure, data-driven Event page template (e.g. News Event / Timeline turn).
  */
-export function EventTemplate({ model, headerActions, footer, className }: EventTemplateProps) {
+export function EventTemplate({
+  model,
+  headerActions,
+  footer,
+  actionCallbacks,
+  compact = false,
+  className,
+}: EventTemplateProps) {
   return (
     <TemplateShell
       maxWidth={860}
       breadcrumbs={model.breadcrumbs}
       coverUrl={model.coverUrl}
       coverAlt={model.title}
+      compact={compact}
       contextByEntityId={model.contextByEntityId}
+      actionCallbacks={actionCallbacks}
       className={className}
     >
       <header className="flex flex-col gap-3.5">
@@ -45,8 +56,9 @@ export function EventTemplate({ model, headerActions, footer, className }: Event
           <h1 className="m-0 text-entityTitle text-pretty text-text">{model.title}</h1>
           <div className="flex shrink-0 items-center gap-2 pt-1.5">
             <EntityContextTogglePill />
-            {headerActions}
-            <EntityOverflowMenu target={{ id: model.id, kind: 'Event', title: model.title }} isPageRoot size="md" />
+            {headerActions ?? (
+              <EntityOverflowMenu target={{ id: model.id, kind: 'Event', title: model.title }} isPageRoot size="md" />
+            )}
           </div>
         </div>
 

@@ -187,7 +187,7 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     expect(helpfulBtn).toHaveAttribute('aria-pressed', 'true');
 
     // Open composer and submit a new context note
-    fireEvent.click(screen.getByRole('button', { name: '+ Add context' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add context note' }));
     fireEvent.click(screen.getByRole('button', { name: 'Missing context' }));
     fireEvent.change(screen.getByLabelText(/What do the sources show/i), {
       target: { value: 'Reverse image search confirms this footage was filmed in Aleppo in 2016.' },

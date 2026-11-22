@@ -12,6 +12,8 @@ import { EntityPageActions } from '~/partials/entity-page/entity-page-actions';
 export interface LiveClaimTemplateViewProps {
   entityId: string;
   spaceId: string;
+  serverCoverUrl?: string | null;
+  compact?: boolean;
   footer?: React.ReactNode;
 }
 
@@ -19,8 +21,18 @@ export interface LiveClaimTemplateViewProps {
  * Live Geo container connecting `useLiveClaimTemplate` to `ClaimTemplate`.
  * Rendered by `EntityPageBody` when the `entityTemplatesV2` feature flag is enabled.
  */
-export function LiveClaimTemplateView({ entityId, spaceId, footer }: LiveClaimTemplateViewProps) {
-  const { data, isLoading } = useLiveClaimTemplate({ entityId, spaceId });
+export function LiveClaimTemplateView({
+  entityId,
+  spaceId,
+  serverCoverUrl,
+  compact = false,
+  footer,
+}: LiveClaimTemplateViewProps) {
+  const { data, isLoading, actionCallbacks } = useLiveClaimTemplate({
+    entityId,
+    spaceId,
+    serverCoverUrl,
+  });
 
   if (isLoading) {
     return (
@@ -36,7 +48,9 @@ export function LiveClaimTemplateView({ entityId, spaceId, footer }: LiveClaimTe
   return (
     <ClaimTemplate
       model={data}
-      headerActions={<EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable={false} />}
+      actionCallbacks={actionCallbacks}
+      compact={compact}
+      headerActions={<EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable={false} compact={compact} />}
       footer={footer}
     />
   );

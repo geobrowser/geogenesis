@@ -33,12 +33,25 @@ export function VoteBox({ prompt, split, control, className }: VoteBoxProps) {
     >
       {prompt && <p className="m-0 text-smallTitle text-text">{prompt}</p>}
 
-      <div className="grid grid-cols-1 items-start gap-6 @[680px]:grid-cols-[minmax(0,1fr)_344px]">
-        <div className="min-w-0">
-          <SplitBars rows={split.rows} density="full" />
-        </div>
+      <div
+        className={cx(
+          'grid grid-cols-1 items-start gap-6',
+          split.rows.length > 0 && '@[680px]:grid-cols-[minmax(0,1fr)_344px]'
+        )}
+      >
+        {split.rows.length > 0 && (
+          <div className="min-w-0">
+            <SplitBars rows={split.rows} density="full" />
+          </div>
+        )}
 
-        <div className="flex flex-col gap-3 border-t border-divider pt-4 @[680px]:border-t-0 @[680px]:border-l @[680px]:pt-0 @[680px]:pl-6">
+        <div
+          className={cx(
+            'flex flex-col gap-3',
+            split.rows.length > 0 &&
+              'border-t border-divider pt-4 @[680px]:border-t-0 @[680px]:border-l @[680px]:pt-0 @[680px]:pl-6'
+          )}
+        >
           <span className="text-[13.5px] font-medium text-grey-04">Do you agree?</span>
 
           <div className="flex flex-wrap items-center gap-2">

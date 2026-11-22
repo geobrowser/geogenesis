@@ -18,6 +18,8 @@ import { EntityPageActions } from '~/partials/entity-page/entity-page-actions';
 export interface LiveEntityTemplateViewProps {
   entityId: string;
   spaceId: string;
+  serverCoverUrl?: string | null;
+  compact?: boolean;
   footer?: React.ReactNode;
 }
 
@@ -30,57 +32,105 @@ function TemplateLoadingSkeleton({ maxWidth = 840 }: { maxWidth?: number }) {
   );
 }
 
-export function LiveEventTemplateView({ entityId, spaceId, footer }: LiveEntityTemplateViewProps) {
-  const { data, isLoading } = useLiveEventTemplate({ entityId, spaceId });
+export function LiveEventTemplateView({
+  entityId,
+  spaceId,
+  serverCoverUrl,
+  compact = false,
+  footer,
+}: LiveEntityTemplateViewProps) {
+  const { data, isLoading, actionCallbacks } = useLiveEventTemplate({
+    entityId,
+    spaceId,
+    serverCoverUrl,
+  });
   if (isLoading) return <TemplateLoadingSkeleton />;
   if (!data) return null;
 
   return (
     <EventTemplate
       model={data}
-      headerActions={<EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable />}
+      actionCallbacks={actionCallbacks}
+      compact={compact}
+      headerActions={<EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable compact={compact} />}
       footer={footer}
     />
   );
 }
 
-export function LiveNewsStoryTemplateView({ entityId, spaceId, footer }: LiveEntityTemplateViewProps) {
-  const { data, isLoading } = useLiveNewsStoryTemplate({ entityId, spaceId });
+export function LiveNewsStoryTemplateView({
+  entityId,
+  spaceId,
+  serverCoverUrl,
+  compact = false,
+  footer,
+}: LiveEntityTemplateViewProps) {
+  const { data, isLoading, actionCallbacks } = useLiveNewsStoryTemplate({
+    entityId,
+    spaceId,
+    serverCoverUrl,
+  });
   if (isLoading) return <TemplateLoadingSkeleton />;
   if (!data) return null;
 
   return (
     <NewsStoryTemplate
       model={data}
-      headerActions={<EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable />}
+      actionCallbacks={actionCallbacks}
+      compact={compact}
+      headerActions={<EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable compact={compact} />}
       footer={footer}
     />
   );
 }
 
-export function LiveSourceTemplateView({ entityId, spaceId, footer }: LiveEntityTemplateViewProps) {
-  const { data, isLoading } = useLiveSourceTemplate({ entityId, spaceId });
+export function LiveSourceTemplateView({
+  entityId,
+  spaceId,
+  serverCoverUrl,
+  compact = false,
+  footer,
+}: LiveEntityTemplateViewProps) {
+  const { data, isLoading, actionCallbacks } = useLiveSourceTemplate({
+    entityId,
+    spaceId,
+    serverCoverUrl,
+  });
   if (isLoading) return <TemplateLoadingSkeleton />;
   if (!data) return null;
 
   return (
     <SourceTemplate
       model={data}
-      headerActions={<EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable />}
+      actionCallbacks={actionCallbacks}
+      compact={compact}
+      headerActions={<EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable compact={compact} />}
       footer={footer}
     />
   );
 }
 
-export function LivePostTemplateView({ entityId, spaceId, footer }: LiveEntityTemplateViewProps) {
-  const { data, isLoading } = useLivePostTemplate({ entityId, spaceId });
+export function LivePostTemplateView({
+  entityId,
+  spaceId,
+  serverCoverUrl,
+  compact = false,
+  footer,
+}: LiveEntityTemplateViewProps) {
+  const { data, isLoading, actionCallbacks } = useLivePostTemplate({
+    entityId,
+    spaceId,
+    serverCoverUrl,
+  });
   if (isLoading) return <TemplateLoadingSkeleton maxWidth={1020} />;
   if (!data) return null;
 
   return (
     <PostTemplate
       model={data}
-      headerActions={<EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable />}
+      actionCallbacks={actionCallbacks}
+      compact={compact}
+      headerActions={<EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable compact={compact} />}
       footer={footer}
     />
   );
