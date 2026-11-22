@@ -89,6 +89,88 @@ const MULTI_SPACE_CLAIM_VOTES_QUERY = parse(/* GraphQL */ `
   { objectIds: string[] }
 >;
 
+interface TweetAuthorMetadata {
+  name?: string;
+  handle?: string;
+  avatarUrl?: string | null;
+}
+
+const TWEET_AUTHORS_QUERY = parse(/* GraphQL */ `
+  query TopicTweetAuthors(
+    $ids: [UUID!]!
+    $authorsPropertyId: UUID!
+    $avatarPropertyId: UUID!
+    $webUrlPropertyId: UUID!
+    $imageUrlPropertyId: UUID!
+  ) {
+    entities(first: 24, filter: { id: { in: $ids } }) {
+      id
+      valuesList(first: 6, filter: { propertyId: { is: $webUrlPropertyId } }) {
+        propertyId
+        text
+      }
+      relationsList(first: 4, filter: { typeId: { is: $authorsPropertyId } }) {
+        toEntityId
+        toEntity {
+          id
+          name
+          relationsList(first: 2, filter: { typeId: { is: $avatarPropertyId } }) {
+            toEntity {
+              valuesList(first: 4, filter: { propertyId: { is: $imageUrlPropertyId } }) {
+                propertyId
+                text
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+`) as TypedDocumentNode<
+  {
+    entities?: {
+      id: string;
+      valuesList?: { propertyId: string; text?: string | null }[] | null;
+      relationsList?:
+        | {
+            toEntityId: string;
+            toEntity?: {
+              id: string;
+              name?: string | null;
+              relationsList?:
+                | {
+                    toEntity?: {
+                      valuesList?: { propertyId: string; text?: string | null }[] | null;
+                    } | null;
+                  }[]
+                | null;
+            } | null;
+          }[]
+        | null;
+    }[];
+  },
+  {
+    ids: string[];
+    authorsPropertyId: string;
+    avatarPropertyId: string;
+    webUrlPropertyId: string;
+    imageUrlPropertyId: string;
+  }
+>;
+
+function extractHandleFromSocialUrl(rawUrl: string | null | undefined): string | undefined {
+  if (!rawUrl) return undefined;
+  try {
+    const parsed = new URL(rawUrl.trim());
+    if (!/(^|\.)(x\.com|twitter\.com)$/i.test(parsed.hostname)) return undefined;
+    const handle = parsed.pathname.split('/').filter(Boolean)[0];
+    if (!handle || /^(i|home|explore|search|intent|hashtag)$/i.test(handle)) return undefined;
+    return handle.startsWith('@') ? handle : `@${handle}`;
+  } catch {
+    return undefined;
+  }
+}
+
 type SpaceVoteBucket = {
   spaceId: string;
   positive: number;
@@ -313,6 +395,61 @@ export function useLiveTopicTemplate({
     topicId: entityId,
     spaceIds,
     first: LIVE_COVERAGE_LIMIT,
+  });
+
+  // Batch-hydrate Tweet / Post author names, @handles, and avatars for Sources & evidence cards
+  const tweetCoverageIds = React.useMemo(() => {
+    const ids: string[] = [];
+    for (const row of coverage.page.rows) {
+      const typeIds = row.types.map(t => t.id);
+      if (
+        typeIds.some(
+          id => ID.equals(id, TEMPLATE_ONTOLOGY.TWEET_TYPE_ID) || ID.equals(id, TEMPLATE_ONTOLOGY.POST_TYPE_ID)
+        )
+      ) {
+        ids.push(ID.uuidToHex(row.entityId));
+      }
+    }
+    return ids;
+  }, [coverage.page.rows]);
+
+  const tweetAuthorsQuery = useQuery({
+    queryKey: ['live-topic-template', 'tweet-authors', tweetCoverageIds.join(',')],
+    enabled: tweetCoverageIds.length > 0,
+    staleTime: 120_000,
+    queryFn: async () => {
+      const entities = await Effect.runPromise(
+        graphql({
+          query: TWEET_AUTHORS_QUERY,
+          variables: {
+            ids: tweetCoverageIds,
+            authorsPropertyId: TEMPLATE_ONTOLOGY.AUTHORS_PROPERTY_ID,
+            avatarPropertyId: TEMPLATE_ONTOLOGY.AVATAR_PROPERTY_ID,
+            webUrlPropertyId: TEMPLATE_ONTOLOGY.WEB_URL_PROPERTY_ID,
+            imageUrlPropertyId: TEMPLATE_ONTOLOGY.IMAGE_URL_PROPERTY_ID,
+          },
+          decoder: data => data.entities ?? [],
+        })
+      );
+
+      const map = new Map<string, TweetAuthorMetadata>();
+      for (const item of entities) {
+        const hex = ID.uuidToHex(item.id);
+        const urlVal = item.valuesList?.find(v => ID.equals(v.propertyId, TEMPLATE_ONTOLOGY.WEB_URL_PROPERTY_ID))?.text;
+        const handle = extractHandleFromSocialUrl(urlVal);
+        const author = item.relationsList?.[0]?.toEntity;
+        const authorName = author?.name?.trim() || undefined;
+        const rawAvatar = author?.relationsList?.[0]?.toEntity?.valuesList?.find(v =>
+          ID.equals(v.propertyId, TEMPLATE_ONTOLOGY.IMAGE_URL_PROPERTY_ID)
+        )?.text;
+        map.set(hex, {
+          name: authorName,
+          handle,
+          avatarUrl: resolveTemplateImageUrl(rawAvatar),
+        });
+      }
+      return map;
+    },
   });
 
   const directClaimRels = React.useMemo(
@@ -693,6 +830,7 @@ export function useLiveTopicTemplate({
     const recentDebates: TopicRecentDebateModel[] = (bestDebatesQuery.data ?? []).slice(0, 8).map(item => {
       const { claimTitle, speakers } = parseDebateTitle(item.title, item.debateClaim?.name);
       const claimId = item.debateClaim?.entityId ?? item.entityId;
+      const claimHex = ID.uuidToHex(claimId);
       const claimSplit = buildSplitForClaim(claimId, item.spaceName);
       const normDebateId = ID.uuidToHex(item.entityId).toLowerCase();
       const slot1Avatar = resolveTemplateImageUrl(item.debatePosters?.slot1) ?? `/api/debates/still/${normDebateId}/1`;
@@ -710,6 +848,11 @@ export function useLiveTopicTemplate({
         date: dateStr,
         duration: '',
         votesLabel,
+        agreeCount: claimSplit.agreeCount,
+        disagreeCount: claimSplit.disagreeCount,
+        userVote: claimSplit.userVote,
+        onVote: choice => setLocalVotes(prev => ({ ...prev, [claimHex]: choice })),
+        onClearVote: () => setLocalVotes(prev => ({ ...prev, [claimHex]: null })),
         participants: [
           {
             name: speakers[0],
@@ -782,6 +925,8 @@ export function useLiveTopicTemplate({
     const seenCoverageIds = new Set<string>();
     const coverageItems: EntityLinkRowModel[] = [];
 
+    const tweetAuthorsByHex = tweetAuthorsQuery.data;
+
     for (const row of coverage.page.rows) {
       const hex = ID.uuidToHex(row.entityId);
       if (seenCoverageIds.has(hex)) continue;
@@ -789,12 +934,16 @@ export function useLiveTopicTemplate({
       const typeIds = row.types.map(type => type.id);
       const firstTypeName = row.types.find(type => type.name)?.name ?? null;
       const { kind, label, mediaType } = classifyCoverage(typeIds, firstTypeName);
+      const tweetMeta = mediaType === 'tweet' ? tweetAuthorsByHex?.get(hex) : undefined;
       coverageItems.push({
         id: row.entityId,
         kind,
         kindLabel: label,
         mediaType,
-        publisher: label,
+        publisher: tweetMeta?.name ?? tweetMeta?.handle ?? label,
+        authorHandle: tweetMeta?.handle,
+        authorAvatarUrl:
+          tweetMeta?.avatarUrl ?? (mediaType === 'tweet' ? resolveTemplateImageUrl(row.imageUrl) : undefined),
         date: formatUnixSecDate(row.createdAtSec),
         title: row.title || row.entityId,
         excerpt: row.description ?? undefined,
@@ -893,6 +1042,7 @@ export function useLiveTopicTemplate({
     orderedClaimSeeds,
     serverCoverUrl,
     spaceId,
+    tweetAuthorsQuery.data,
     votesQuery.data,
   ]);
 

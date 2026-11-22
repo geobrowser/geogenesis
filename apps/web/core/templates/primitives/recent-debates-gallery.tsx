@@ -6,7 +6,7 @@ import cx from 'classnames';
 import Link from 'next/link';
 
 import type { TopicRecentDebateModel, TopicRecentDebateParticipantModel } from '../models';
-import { formatPercentInt } from '../models';
+import { formatCompactCount, formatPercentInt } from '../models';
 import { EntityInlineContext, EntityOverflowMenu } from './entity-overflow-menu';
 import { ArrowLeftIcon, ArrowRightIcon, ArrowUpRightIcon, PlayIcon, ThumbDownIcon, ThumbUpIcon } from './icons';
 import { TEMPLATE_CARD_SURFACE } from './template-shell';
@@ -278,6 +278,16 @@ function RecentDebateGalleryCard({ debate }: { debate: TopicRecentDebateModel })
             >
               <ThumbUpIcon className="size-3.5 shrink-0" />
               <span>Agree</span>
+              {debate.agreeCount !== undefined && debate.agreeCount > 0 && (
+                <span
+                  className={cx(
+                    'text-[12px] tabular-nums',
+                    debate.userVote === 'agree' ? 'text-white/80' : 'text-grey-04'
+                  )}
+                >
+                  {formatCompactCount(debate.agreeCount)}
+                </span>
+              )}
             </button>
             <button
               type="button"
@@ -292,6 +302,16 @@ function RecentDebateGalleryCard({ debate }: { debate: TopicRecentDebateModel })
             >
               <ThumbDownIcon className="size-3.5 shrink-0" />
               <span>Disagree</span>
+              {debate.disagreeCount !== undefined && debate.disagreeCount > 0 && (
+                <span
+                  className={cx(
+                    'text-[12px] tabular-nums',
+                    debate.userVote === 'disagree' ? 'text-white/80' : 'text-grey-04'
+                  )}
+                >
+                  {formatCompactCount(debate.disagreeCount)}
+                </span>
+              )}
             </button>
           </div>
         )}

@@ -193,6 +193,7 @@ export interface EntityLinkRowModel {
   quotes?: readonly SourceQuoteModel[];
   duration?: string;
   authorHandle?: string;
+  authorAvatarUrl?: string | null;
   thumbnailUrl?: string;
   externalUrl?: string;
   href?: string;
@@ -475,6 +476,8 @@ export interface TopicRecentDebateModel {
   participants: readonly [TopicRecentDebateParticipantModel, TopicRecentDebateParticipantModel];
   /** Optional community agreement percentages shown in the card's summary band. */
   split?: SplitBreakdown;
+  agreeCount?: number;
+  disagreeCount?: number;
   userVote?: VoteChoice;
   onVote?: (choice: Exclude<VoteChoice, null>) => void;
   onClearVote?: () => void;

@@ -291,6 +291,47 @@ function CardClickable({
   return <div className={className}>{children}</div>;
 }
 
+function TweetAuthorAvatar({ name, avatarUrl }: { name: string; avatarUrl?: string | null }) {
+  const resolved = resolveTemplateImageUrl(avatarUrl);
+  const [failed, setFailed] = React.useState(false);
+
+  React.useEffect(() => {
+    setFailed(false);
+  }, [resolved]);
+
+  const initials = name
+    .replace(/^@/, '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(part => part[0]?.toUpperCase() ?? '')
+    .join('');
+
+  return (
+    <span className="relative inline-grid size-9 shrink-0 place-items-center rounded-full border border-black/[0.06] bg-grey-01 text-text">
+      {resolved && !failed ? (
+        <img
+          src={resolved}
+          alt={name}
+          loading="lazy"
+          onError={() => setFailed(true)}
+          className="h-full w-full rounded-full object-cover"
+        />
+      ) : initials ? (
+        <span className="text-[12.5px] font-semibold text-grey-05">{initials}</span>
+      ) : (
+        <TweetIcon className="size-4" />
+      )}
+      <span
+        aria-hidden
+        className="absolute -right-0.5 -bottom-0.5 inline-grid size-4 place-items-center rounded-full border border-white bg-text text-white"
+      >
+        <TweetIcon className="size-2.5" />
+      </span>
+    </span>
+  );
+}
+
 function RichMediaCard({ item }: { item: EntityLinkRowModel }) {
   const mediaType = inferMediaType(item);
   const leadQuote = item.quotes?.[0];
@@ -358,21 +399,28 @@ function RichMediaCard({ item }: { item: EntityLinkRowModel }) {
   }
 
   if (mediaType === 'tweet') {
+    const accountName =
+      item.publisher && item.publisher !== 'Tweet' && item.publisher !== 'Post'
+        ? item.publisher
+        : item.authorHandle || item.publisher || item.title;
+    const secondaryHandle =
+      item.authorHandle && item.authorHandle.toLowerCase() !== accountName.toLowerCase()
+        ? item.authorHandle
+        : undefined;
+
     return (
       <article className={cardClasses}>
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between gap-2">
             <CardClickable item={item} className="min-w-0 flex-1">
-              <div className="flex min-w-0 items-center gap-2">
-                <span className="inline-grid size-8 shrink-0 place-items-center rounded-full bg-grey-01 text-text">
-                  <TweetIcon className="size-4" />
-                </span>
+              <div className="flex min-w-0 items-center gap-2.5">
+                <TweetAuthorAvatar name={accountName} avatarUrl={item.authorAvatarUrl} />
                 <div className="flex min-w-0 flex-col">
                   <span className="truncate text-[15px] leading-[19px] font-semibold text-text group-hover/link:text-[#4c1fd4]">
-                    {item.publisher ?? item.title}
+                    {accountName}
                   </span>
-                  {item.authorHandle && (
-                    <span className="truncate text-[14px] leading-[18px] text-grey-04">{item.authorHandle}</span>
+                  {secondaryHandle && (
+                    <span className="truncate text-[13.5px] leading-[17px] text-grey-04">{secondaryHandle}</span>
                   )}
                 </div>
               </div>
