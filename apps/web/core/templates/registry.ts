@@ -9,7 +9,8 @@ import { TEMPLATE_ONTOLOGY } from './ontology';
  * `event`, `news-story`, `source`, and `post` are the v2 template slots gated behind the
  * `entityTemplatesV2` feature flag while their surfaces and data adapters are built out.
  */
-export type EntityTemplateId = 'claim' | 'topic' | 'event' | 'news-story' | 'source' | 'post' | 'person';
+export type EntityTemplateId =
+  'claim' | 'topic' | 'event' | 'news-story' | 'podcast' | 'episode' | 'source' | 'post' | 'person';
 
 /** Templates enabled without the `entityTemplatesV2` feature flag. */
 export type StableEntityTemplateId = 'claim' | 'topic' | 'person';
@@ -105,6 +106,24 @@ export const ENTITY_TEMPLATE_REGISTRY: readonly EntityTemplateDefinition[] = [
     requiresSpaceCheck: false,
     requiresV2Flag: true,
     contentMaxWidth: 840,
+  },
+  {
+    id: 'podcast',
+    label: 'Podcast',
+    typeIds: [TEMPLATE_ONTOLOGY.PODCAST_TYPE_ID],
+    keepInEditMode: false,
+    requiresSpaceCheck: false,
+    requiresV2Flag: true,
+    contentMaxWidth: 960,
+  },
+  {
+    id: 'episode',
+    label: 'Episode',
+    typeIds: [TEMPLATE_ONTOLOGY.EPISODE_TYPE_ID],
+    keepInEditMode: false,
+    requiresSpaceCheck: false,
+    requiresV2Flag: true,
+    contentMaxWidth: 880,
   },
   {
     id: 'source',

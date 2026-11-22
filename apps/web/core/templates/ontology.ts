@@ -42,11 +42,14 @@ export const TEMPLATE_ONTOLOGY = {
   DATASET_TYPE_ID,
   PAPER_TYPE_ID,
   QUOTE_TYPE_ID,
+  PODCAST_TYPE_ID: '4c81561d1f9541319cdddd20ab831ba2',
   EPISODE_TYPE_ID,
   POST_TYPE_ID,
   TWEET_TYPE_ID,
   PERSON_TYPE_ID: SystemIds.PERSON_TYPE,
   PUBLISHER_TYPE_ID: ContentIds.PUBLISHER_TYPE,
+  AVATAR_PROPERTY_ID: ContentIds.AVATAR_PROPERTY,
+  IMAGE_URL_PROPERTY_ID: SystemIds.IMAGE_URL_PROPERTY,
   /** Verified on live graph (`Community notes` `To entity types` -> `Community note`). */
   COMMUNITY_NOTE_TYPE_ID: 'ba7b7d1c8f8543e7b22675e1bb243c7f',
 
@@ -130,6 +133,32 @@ export const TEMPLATE_ONTOLOGY = {
   REPLY_TO_PROPERTY_ID: '310d4a240e5b451cb2151bfce40d0fe6',
   /** Verified on live Post & Tweet schemas (`Related posts`). */
   RELATED_POSTS_PROPERTY_ID: 'b355103e27ae4e4aa911fde2a076a6ca',
+
+  // Podcast Show & Episode properties (verified on live Podcasts space & ../apps/pod)
+  /** `Podcast` relation from Episode -> Podcast show. */
+  PODCAST_PROPERTY_ID: 'f1873bbc381f4604abad76fed4f6d73f',
+  /** `Hosts` relation on Podcast & Episode. */
+  HOSTS_PROPERTY_ID: 'c72d9abbbca84e86b7e8b71e91d2b37e',
+  /** `Guests` relation on Episode. */
+  GUESTS_PROPERTY_ID: 'cb60a1a66fb548c9b936200c5c271330',
+  /** `Contributors` relation on Episode. */
+  CONTRIBUTORS_PROPERTY_ID: 'fce8953f56af4e42a869725ed0b024f0',
+  /** `Listen on` relation on Podcast & Episode (relation entity holds `Website` URL). */
+  LISTEN_ON_PROPERTY_ID: '1367bac7dcea4b8086ada4a4cdd7c2cb',
+  /** `Quotes` relation on Episode. */
+  QUOTES_PROPERTY_ID: '8d4ae49c226d40868ec3af5d5b2a65d0',
+  /** `Air date` datetime property on Episode. */
+  AIR_DATE_PROPERTY_ID: '77999397f78d44a7bbc5d93a617af47c',
+  /** `Date founded` datetime property on Podcast show. */
+  DATE_FOUNDED_PROPERTY_ID: '41aa3d9847b64a97b7ec427e575b910e',
+  /** `Duration` float property (seconds) on Episode. */
+  DURATION_PROPERTY_ID: '76996accd10f4cd59ac94a705b8e03b4',
+  /** `Audio URL` text property on Episode. */
+  AUDIO_URL_PROPERTY_ID: '87f919d5560b408cbe8d318e2c5c098b',
+  /** `Episode number` number property on Episode. */
+  EPISODE_NUMBER_PROPERTY_ID: '9b5eced95c30473b8404f474a777db3a',
+  /** `RSS feed URL` text property on Podcast show. */
+  RSS_FEED_URL_PROPERTY_ID: 'a5776138deb8436f8c983eccd100d98f',
 } as const;
 
 /** Canonical predicate name -> property ID lookup for live `+` Context relation writes. */
@@ -158,6 +187,12 @@ export const CANONICAL_PREDICATE_PROPERTY_IDS: Readonly<Record<string, { id: str
   tags: { id: TEMPLATE_ONTOLOGY.TAG_PROPERTY_ID, name: 'Tags' },
   platform: { id: TEMPLATE_ONTOLOGY.PLATFORM_PROPERTY_ID, name: 'Platform' },
   'community notes': { id: TEMPLATE_ONTOLOGY.COMMUNITY_NOTES_PROPERTY_ID, name: 'Community notes' },
+  podcast: { id: TEMPLATE_ONTOLOGY.PODCAST_PROPERTY_ID, name: 'Podcast' },
+  hosts: { id: TEMPLATE_ONTOLOGY.HOSTS_PROPERTY_ID, name: 'Hosts' },
+  guests: { id: TEMPLATE_ONTOLOGY.GUESTS_PROPERTY_ID, name: 'Guests' },
+  contributors: { id: TEMPLATE_ONTOLOGY.CONTRIBUTORS_PROPERTY_ID, name: 'Contributors' },
+  'listen on': { id: TEMPLATE_ONTOLOGY.LISTEN_ON_PROPERTY_ID, name: 'Listen on' },
+  quotes: { id: TEMPLATE_ONTOLOGY.QUOTES_PROPERTY_ID, name: 'Quotes' },
 };
 
 const HIDDEN_CONTEXT_PROPERTY_IDS = new Set<string>([

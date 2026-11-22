@@ -9,6 +9,8 @@ import {
   ENTITY_TEMPLATE_REGISTRY,
   type EntityListSectionModel,
   type GazaFixtureRoute,
+  type PodcastEpisodeTemplateModel,
+  type PodcastShowTemplateModel,
   type SplitBreakdown,
   type VoteChoice,
   computeSplitGap,
@@ -29,6 +31,8 @@ import {
   DebateTemplate,
   EventTemplate,
   NewsStoryTemplate,
+  PodcastEpisodeTemplate,
+  PodcastShowTemplate,
   PostTemplate,
   SourceLibraryTemplate,
   SourceTemplate,
@@ -36,7 +40,7 @@ import {
   TopicTemplate,
 } from '~/core/templates/views';
 
-type PreviewMode = 'prototype' | 'primitives';
+type PreviewMode = 'prototype' | 'podcast-show' | 'podcast-episode' | 'primitives';
 
 const QUICK_JUMPS: readonly { label: string; route: GazaFixtureRoute }[] = [
   { label: 'Topic', route: { kind: 'topic' } },
@@ -93,6 +97,32 @@ export function DevTemplatesPreview() {
             })}
             <button
               type="button"
+              aria-pressed={mode === 'podcast-show'}
+              onClick={() => setMode('podcast-show')}
+              className={cx(
+                'inline-flex h-9 cursor-pointer items-center rounded-full border px-4 text-[14px] font-medium transition-colors',
+                mode === 'podcast-show'
+                  ? 'border-text bg-text text-white'
+                  : 'border-grey-02 bg-white text-text hover:border-text'
+              )}
+            >
+              Podcast show
+            </button>
+            <button
+              type="button"
+              aria-pressed={mode === 'podcast-episode'}
+              onClick={() => setMode('podcast-episode')}
+              className={cx(
+                'inline-flex h-9 cursor-pointer items-center rounded-full border px-4 text-[14px] font-medium transition-colors',
+                mode === 'podcast-episode'
+                  ? 'border-text bg-text text-white'
+                  : 'border-grey-02 bg-white text-text hover:border-text'
+              )}
+            >
+              Podcast episode
+            </button>
+            <button
+              type="button"
               aria-pressed={mode === 'primitives'}
               onClick={() => setMode('primitives')}
               className={cx(
@@ -114,6 +144,10 @@ export function DevTemplatesPreview() {
 
       {mode === 'primitives' ? (
         <PrimitivesGallery />
+      ) : mode === 'podcast-show' ? (
+        <PodcastShowTemplate model={DEMO_PODCAST_SHOW(() => setMode('podcast-episode'))} />
+      ) : mode === 'podcast-episode' ? (
+        <PodcastEpisodeTemplate model={DEMO_PODCAST_EPISODE(() => setMode('podcast-show'))} />
       ) : fixture.activeRoute.kind === 'topic' && fixture.topicSource.data ? (
         <TopicTemplate model={fixture.topicSource.data} />
       ) : fixture.activeRoute.kind === 'claim' && fixture.claimSource.data ? (
@@ -347,4 +381,127 @@ function PrimitivesGallery() {
       <RelatedListSection section={mixedCitations} />
     </TemplateShell>
   );
+}
+
+function DEMO_PODCAST_SHOW(onOpenEpisode: () => void): PodcastShowTemplateModel {
+  return {
+    id: 'demo-show-the-daily',
+    title: 'The Daily',
+    breadcrumbs: [
+      { id: 'podcasts', label: 'Podcasts' },
+      { id: 'demo-show-the-daily', label: 'The Daily' },
+    ],
+    description:
+      'This is what the news should sound like. The biggest stories of our time, told by the best journalists in the world. Hosted by Michael Barbaro, Rachel Abrams and Natalie Kitroeff. Twenty minutes a day, five days a week.',
+    episodeCount: 441,
+    dateRange: '2017 – present',
+    rssFeedUrl: 'https://feeds.simplecast.com/Sl5CSM3S',
+    topics: [
+      { id: 't-news', label: 'World affairs' },
+      { id: 't-pol', label: 'US Politics' },
+      { id: 't-econ', label: 'Global trade' },
+    ],
+    episodes: [
+      {
+        id: 'demo-ep-1',
+        title: 'The Democrats’ Big Shutdown Gamble',
+        showName: 'The Daily',
+        description:
+          'Congressional correspondents Catie Edmondson and Carl Hulse walk through how the shutdown unfolded, followed by an interview with Senator Chuck Schumer.',
+        airDate: 'Oct 1, 2025',
+        durationLabel: '38 min',
+        onSelect: onOpenEpisode,
+      },
+      {
+        id: 'demo-ep-2',
+        title: 'Inside the Semiconductor Supply Chain Race',
+        showName: 'The Daily',
+        description:
+          'Why building cutting-edge chip fabrication plants takes years and tens of billions of dollars — and what export curbs mean for AI competition.',
+        airDate: 'Sep 28, 2025',
+        durationLabel: '26 min',
+        onSelect: onOpenEpisode,
+      },
+    ],
+    hosts: [
+      { id: 'h-1', name: 'Michael Barbaro', role: 'Host' },
+      { id: 'h-2', name: 'Sabrina Tavernise', role: 'Host' },
+      { id: 'h-3', name: 'Natalie Kitroeff', role: 'Host' },
+    ],
+    listenOn: [
+      { id: 'l-apple', name: 'Apple Podcasts', url: 'https://podcasts.apple.com' },
+      { id: 'l-spotify', name: 'Spotify', url: 'https://open.spotify.com/show/3IM0lmZxpFAY7CwMuv9H4g' },
+    ],
+    graphConnections: [
+      { predicate: 'Publisher', items: [{ id: 'p-nyt', label: 'The New York Times', kind: 'entity' }] },
+    ],
+  };
+}
+
+function DEMO_PODCAST_EPISODE(onOpenShow: () => void): PodcastEpisodeTemplateModel {
+  return {
+    id: 'demo-ep-1',
+    title: 'The Democrats’ Big Shutdown Gamble',
+    breadcrumbs: [
+      { id: 'podcasts', label: 'Podcasts' },
+      { id: 'demo-show-the-daily', label: 'The Daily', onSelect: onOpenShow },
+      { id: 'demo-ep-1', label: 'The Democrats’ Big Shutdown Gamble' },
+    ],
+    show: {
+      id: 'demo-show-the-daily',
+      name: 'The Daily',
+      onSelect: onOpenShow,
+    },
+    airDate: 'Oct 1, 2025',
+    durationLabel: '38 min',
+    episodeNumber: 1842,
+    audioUrl: 'https://pdst.fm/e/traffic.megaphone.fm/WSJ4216833950.mp3',
+    description:
+      'The U.S. government shut down on Wednesday morning. In an episode recorded from the Capitol, Catie Edmondson and Carl Hulse explain how leadership made the call, followed by an interview with Senator Chuck Schumer.',
+    topics: [
+      { id: 't-pol', label: 'US Politics' },
+      { id: 't-cong', label: 'Congress' },
+    ],
+    claims: [
+      {
+        id: 'ep-c1',
+        title: 'A prolonged funding impasse leads federal agencies to furlough non-essential personnel.',
+        kind: 'fact',
+        overallPercent: 86,
+        split: {
+          rows: [{ id: 'all', label: 'All spaces', color: '#202020', percent: 86, isEveryone: true }],
+          isSplit: false,
+          totalVotes: 24,
+        },
+      },
+      {
+        id: 'ep-c2',
+        title: 'Forcing a shutdown gives the minority party meaningful leverage in budget negotiations.',
+        kind: 'judgment',
+        overallPercent: 48,
+        split: {
+          rows: [{ id: 'all', label: 'All spaces', color: '#202020', percent: 48, isEveryone: true }],
+          isSplit: true,
+          totalVotes: 41,
+        },
+      },
+    ],
+    quotes: [
+      {
+        id: 'ep-q1',
+        text: 'Nobody wins a shutdown cleanly — the real contest is over which side voters blame by week two.',
+        speaker: 'Carl Hulse',
+      },
+    ],
+    hosts: [{ id: 'h-1', name: 'Michael Barbaro', role: 'Host' }],
+    guests: [
+      { id: 'g-1', name: 'Catie Edmondson', role: 'Guest' },
+      { id: 'g-2', name: 'Carl Hulse', role: 'Guest' },
+    ],
+    listenOn: [
+      { id: 'l-apple', name: 'Apple Podcasts', url: 'https://podcasts.apple.com' },
+      { id: 'l-spotify', name: 'Spotify', url: 'https://open.spotify.com' },
+    ],
+    graphConnections: [{ predicate: 'Sources', items: [{ id: 'src-rss', label: 'RSS Feed', kind: 'source' }] }],
+  };
 }

@@ -4,10 +4,14 @@ import * as React from 'react';
 
 import { useLiveEventTemplate } from '~/core/templates/adapters/use-live-event-template';
 import { useLiveNewsStoryTemplate } from '~/core/templates/adapters/use-live-news-story-template';
+import { useLivePodcastEpisodeTemplate } from '~/core/templates/adapters/use-live-podcast-episode-template';
+import { useLivePodcastShowTemplate } from '~/core/templates/adapters/use-live-podcast-show-template';
 import { useLivePostTemplate } from '~/core/templates/adapters/use-live-post-template';
 import { useLiveSourceTemplate } from '~/core/templates/adapters/use-live-source-template';
 import { EventTemplate } from '~/core/templates/views/event-template';
 import { NewsStoryTemplate } from '~/core/templates/views/news-story-template';
+import { PodcastEpisodeTemplate } from '~/core/templates/views/podcast-episode-template';
+import { PodcastShowTemplate } from '~/core/templates/views/podcast-show-template';
 import { PostTemplate } from '~/core/templates/views/post-template';
 import { SourceTemplate } from '~/core/templates/views/source-template';
 
@@ -127,6 +131,58 @@ export function LivePostTemplateView({
 
   return (
     <PostTemplate
+      model={data}
+      actionCallbacks={actionCallbacks}
+      compact={compact}
+      headerActions={<EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable compact={compact} />}
+      footer={footer}
+    />
+  );
+}
+
+export function LivePodcastShowTemplateView({
+  entityId,
+  spaceId,
+  serverCoverUrl,
+  compact = false,
+  footer,
+}: LiveEntityTemplateViewProps) {
+  const { data, isLoading, actionCallbacks } = useLivePodcastShowTemplate({
+    entityId,
+    spaceId,
+    serverCoverUrl,
+  });
+  if (isLoading) return <TemplateLoadingSkeleton maxWidth={960} />;
+  if (!data) return null;
+
+  return (
+    <PodcastShowTemplate
+      model={data}
+      actionCallbacks={actionCallbacks}
+      compact={compact}
+      headerActions={<EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable compact={compact} />}
+      footer={footer}
+    />
+  );
+}
+
+export function LivePodcastEpisodeTemplateView({
+  entityId,
+  spaceId,
+  serverCoverUrl,
+  compact = false,
+  footer,
+}: LiveEntityTemplateViewProps) {
+  const { data, isLoading, actionCallbacks } = useLivePodcastEpisodeTemplate({
+    entityId,
+    spaceId,
+    serverCoverUrl,
+  });
+  if (isLoading) return <TemplateLoadingSkeleton maxWidth={880} />;
+  if (!data) return null;
+
+  return (
+    <PodcastEpisodeTemplate
       model={data}
       actionCallbacks={actionCallbacks}
       compact={compact}

@@ -39,6 +39,8 @@ const LINK_KIND_TONE: Record<EntityLinkKind, TemplateBadgeTone> = {
   claim: 'neutral',
   event: 'event',
   'news-story': 'story',
+  podcast: 'podcast',
+  episode: 'episode',
   source: 'source',
   post: 'post',
   debate: 'judgment',

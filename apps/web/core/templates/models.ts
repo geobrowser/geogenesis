@@ -25,7 +25,8 @@ export type ClaimKind = 'fact' | 'judgment' | 'value-judgment';
  */
 export type ClaimStance = 'supports' | 'opposes' | 'addresses';
 
-export type EntityLinkKind = 'claim' | 'event' | 'news-story' | 'source' | 'post' | 'debate' | 'topic' | 'case';
+export type EntityLinkKind =
+  'claim' | 'event' | 'news-story' | 'podcast' | 'episode' | 'source' | 'post' | 'debate' | 'topic' | 'case';
 
 export type SourceMediaKind = 'article' | 'video' | 'tweet' | 'document' | 'dataset';
 
@@ -758,6 +759,90 @@ export interface PostTemplateModel {
   graphConnections?: readonly GraphConnectionGroupModel[];
   contextByEntityId?: Readonly<Record<string, EntityContextDataModel>>;
   sections: readonly EntityListSectionModel[];
+}
+
+export interface PodcastPlatformLinkModel {
+  id: string;
+  name: string;
+  url: string;
+}
+
+export interface PodcastPersonModel {
+  id: string;
+  name: string;
+  avatarUrl?: string | null;
+  role?: 'Host' | 'Guest' | 'Contributor';
+  href?: string;
+  onSelect?: () => void;
+}
+
+export interface PodcastEpisodeSummaryModel {
+  id: string;
+  title: string;
+  showName?: string;
+  description?: string;
+  airDate?: string;
+  airDateTs?: number;
+  durationLabel?: string;
+  episodeNumber?: number;
+  artworkUrl?: string | null;
+  href?: string;
+  onSelect?: () => void;
+}
+
+export interface PodcastTopicChipModel {
+  id: string;
+  label: string;
+  href?: string;
+  onSelect?: () => void;
+}
+
+export interface PodcastShowTemplateModel {
+  id: string;
+  title: string;
+  artworkUrl?: string | null;
+  breadcrumbs?: readonly BreadcrumbItem[];
+  description?: string;
+  episodeCount: number;
+  dateRange?: string;
+  rssFeedUrl?: string;
+  topics: readonly PodcastTopicChipModel[];
+  episodes: readonly PodcastEpisodeSummaryModel[];
+  hasMoreEpisodes?: boolean;
+  isLoadingMoreEpisodes?: boolean;
+  onLoadMoreEpisodes?: () => void;
+  hosts: readonly PodcastPersonModel[];
+  listenOn: readonly PodcastPlatformLinkModel[];
+  graphConnections?: readonly GraphConnectionGroupModel[];
+  contextByEntityId?: Readonly<Record<string, EntityContextDataModel>>;
+}
+
+export interface PodcastEpisodeTemplateModel {
+  id: string;
+  title: string;
+  artworkUrl?: string | null;
+  breadcrumbs?: readonly BreadcrumbItem[];
+  show?: {
+    id: string;
+    name: string;
+    artworkUrl?: string | null;
+    href?: string;
+    onSelect?: () => void;
+  };
+  airDate?: string;
+  durationLabel?: string;
+  episodeNumber?: number;
+  audioUrl?: string;
+  description?: string;
+  topics: readonly PodcastTopicChipModel[];
+  claims: readonly ClaimSummaryModel[];
+  quotes: readonly SourceQuoteModel[];
+  hosts: readonly PodcastPersonModel[];
+  guests: readonly PodcastPersonModel[];
+  contributors?: readonly PodcastPersonModel[];
+  listenOn: readonly PodcastPlatformLinkModel[];
+  graphConnections?: readonly GraphConnectionGroupModel[];
+  contextByEntityId?: Readonly<Record<string, EntityContextDataModel>>;
 }
 
 /**

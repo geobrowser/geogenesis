@@ -7,12 +7,14 @@ import { NEWS_STORY_TYPE_ID, TOPIC_TYPE_ID } from '~/core/constants';
 import {
   ARTICLE_TYPE_ID,
   DATASET_TYPE_ID,
+  EPISODE_TYPE_ID,
   OFFICIAL_DOCUMENT_TYPE_ID,
   PAPER_TYPE_ID,
   POST_TYPE_ID,
   TWEET_TYPE_ID,
 } from '~/core/topics/ontology';
 
+import { TEMPLATE_ONTOLOGY } from './ontology';
 import {
   ENTITY_TEMPLATE_REGISTRY,
   getEntityTemplateDefinition,
@@ -33,11 +35,17 @@ describe('ENTITY_TEMPLATE_REGISTRY', () => {
   it('withholds v2 templates unless includeV2 is enabled', () => {
     expect(resolveEntityTemplateFromTypes([{ id: ContentIds.NEWS_EVENT_TYPE }])).toBeNull();
     expect(resolveEntityTemplateFromTypes([{ id: NEWS_STORY_TYPE_ID }])).toBeNull();
+    expect(resolveEntityTemplateFromTypes([{ id: TEMPLATE_ONTOLOGY.PODCAST_TYPE_ID }])).toBeNull();
+    expect(resolveEntityTemplateFromTypes([{ id: EPISODE_TYPE_ID }])).toBeNull();
     expect(resolveEntityTemplateFromTypes([{ id: OFFICIAL_DOCUMENT_TYPE_ID }])).toBeNull();
     expect(resolveEntityTemplateFromTypes([{ id: TWEET_TYPE_ID }])).toBeNull();
 
     expect(resolveEntityTemplateFromTypes([{ id: ContentIds.NEWS_EVENT_TYPE }], { includeV2: true })?.id).toBe('event');
     expect(resolveEntityTemplateFromTypes([{ id: NEWS_STORY_TYPE_ID }], { includeV2: true })?.id).toBe('news-story');
+    expect(resolveEntityTemplateFromTypes([{ id: TEMPLATE_ONTOLOGY.PODCAST_TYPE_ID }], { includeV2: true })?.id).toBe(
+      'podcast'
+    );
+    expect(resolveEntityTemplateFromTypes([{ id: EPISODE_TYPE_ID }], { includeV2: true })?.id).toBe('episode');
     expect(resolveEntityTemplateFromTypes([{ id: OFFICIAL_DOCUMENT_TYPE_ID }], { includeV2: true })?.id).toBe('source');
     expect(resolveEntityTemplateFromTypes([{ id: DATASET_TYPE_ID }], { includeV2: true })?.id).toBe('source');
     expect(resolveEntityTemplateFromTypes([{ id: PAPER_TYPE_ID }], { includeV2: true })?.id).toBe('source');
@@ -70,6 +78,8 @@ describe('ENTITY_TEMPLATE_REGISTRY', () => {
       'topic',
       'event',
       'news-story',
+      'podcast',
+      'episode',
       'source',
       'post',
       'person',
@@ -79,6 +89,8 @@ describe('ENTITY_TEMPLATE_REGISTRY', () => {
     expect(getEntityTemplateDefinition('person').requiresSpaceCheck).toBe(true);
     expect(isV2EntityTemplateId('claim')).toBe(false);
     expect(isV2EntityTemplateId('news-story')).toBe(true);
+    expect(isV2EntityTemplateId('podcast')).toBe(true);
+    expect(isV2EntityTemplateId('episode')).toBe(true);
     expect(isV2EntityTemplateId('event')).toBe(true);
   });
 });

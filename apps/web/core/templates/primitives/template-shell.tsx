@@ -29,6 +29,8 @@ export type TemplateBadgeTone =
   | 'value'
   | 'event'
   | 'story'
+  | 'podcast'
+  | 'episode'
   | 'source'
   | 'post'
   | 'debate'
@@ -47,6 +49,8 @@ const BADGE_TONE_CLASSES: Record<TemplateBadgeTone, string> = {
   value: 'border border-grey-02 bg-grey-01 text-text',
   event: 'border border-divider bg-grey-01 text-grey-05',
   story: 'border border-ctaPrimary/15 bg-ctaTertiary text-ctaPrimary',
+  podcast: 'border border-purple/15 bg-purple-tint/60 text-purple',
+  episode: 'border border-purple/15 bg-purple-tint/60 text-purple',
   source: 'border border-divider bg-grey-01 text-grey-04',
   post: 'border border-purple/15 bg-purple-tint/60 text-purple',
   debate: 'border border-purple/15 bg-purple-tint/60 text-purple',

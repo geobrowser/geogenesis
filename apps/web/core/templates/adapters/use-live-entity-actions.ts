@@ -72,7 +72,7 @@ export function useLiveEntityActions({
   entityName: string;
   spaceId: string;
   entity: Entity | null | undefined;
-  ownerKind: 'topic' | 'claim' | 'source' | 'event' | 'news-story' | 'post';
+  ownerKind: 'topic' | 'claim' | 'source' | 'event' | 'news-story' | 'post' | 'podcast' | 'episode';
 }): EntityActionCallbacks {
   const { storage } = useMutate();
   const { store } = useSyncEngine();
@@ -349,6 +349,18 @@ export function useLiveEntityActions({
             toName: entityName,
           })
         );
+      } else if (ownerKind === 'episode') {
+        storage.relations.set(
+          makeLocalRelation({
+            spaceId,
+            typeId: TEMPLATE_ONTOLOGY.NOTABLE_CLAIMS_PROPERTY_ID,
+            typeName: 'Notable claims',
+            fromId: entityId,
+            fromName: entityName,
+            toId: claimId,
+            toName: title,
+          })
+        );
       } else {
         storage.relations.set(
           makeLocalRelation({
@@ -397,19 +409,33 @@ export function useLiveEntityActions({
           value: attribution,
         });
       }
-      storage.relations.set(
-        makeLocalRelation({
-          spaceId,
-          typeId: TEMPLATE_ONTOLOGY.SOURCES_PROPERTY_ID,
-          typeName: 'Sources',
-          fromId: quoteId,
-          fromName: text,
-          toId: entityId,
-          toName: entityName,
-        })
-      );
+      if (ownerKind === 'episode') {
+        storage.relations.set(
+          makeLocalRelation({
+            spaceId,
+            typeId: TEMPLATE_ONTOLOGY.QUOTES_PROPERTY_ID,
+            typeName: 'Quotes',
+            fromId: entityId,
+            fromName: entityName,
+            toId: quoteId,
+            toName: text,
+          })
+        );
+      } else {
+        storage.relations.set(
+          makeLocalRelation({
+            spaceId,
+            typeId: TEMPLATE_ONTOLOGY.SOURCES_PROPERTY_ID,
+            typeName: 'Sources',
+            fromId: quoteId,
+            fromName: text,
+            toId: entityId,
+            toName: entityName,
+          })
+        );
+      }
     },
-    [entityId, entityName, spaceId, storage.entities.name, storage.relations, storage.values]
+    [entityId, entityName, ownerKind, spaceId, storage.entities.name, storage.relations, storage.values]
   );
 
   const onAddEvent = React.useCallback(

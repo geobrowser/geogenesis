@@ -16,6 +16,8 @@ import {
   LiveClaimTemplateView,
   LiveEventTemplateView,
   LiveNewsStoryTemplateView,
+  LivePodcastEpisodeTemplateView,
+  LivePodcastShowTemplateView,
   LivePostTemplateView,
   LiveSourceTemplateView,
   LiveTopicTemplateView,
@@ -377,6 +379,36 @@ export function EntityPageBody(props: EntityPageBodyProps) {
           {routeCoverSlot}
           {routeEditInitializer}
           <LiveNewsStoryTemplateView
+            entityId={entityId}
+            spaceId={spaceId}
+            serverCoverUrl={serverCoverUrl}
+            compact={compact}
+            footer={customViewFooter}
+          />
+        </>
+      );
+    }
+    if (customView === 'podcast') {
+      return (
+        <>
+          {routeCoverSlot}
+          {routeEditInitializer}
+          <LivePodcastShowTemplateView
+            entityId={entityId}
+            spaceId={spaceId}
+            serverCoverUrl={serverCoverUrl}
+            compact={compact}
+            footer={customViewFooter}
+          />
+        </>
+      );
+    }
+    if (customView === 'episode') {
+      return (
+        <>
+          {routeCoverSlot}
+          {routeEditInitializer}
+          <LivePodcastEpisodeTemplateView
             entityId={entityId}
             spaceId={spaceId}
             serverCoverUrl={serverCoverUrl}

@@ -12,6 +12,8 @@ import { ClaimTemplate } from './claim-template';
 import { DebateTemplate } from './debate-template';
 import { EventTemplate } from './event-template';
 import { NewsStoryTemplate } from './news-story-template';
+import { PodcastEpisodeTemplate } from './podcast-episode-template';
+import { PodcastShowTemplate } from './podcast-show-template';
 import { PostTemplate } from './post-template';
 import { SourceLibraryTemplate } from './source-library-template';
 import { SourceTemplate } from './source-template';
@@ -401,5 +403,102 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     fireEvent.change(search, { target: { value: 'UNOSAT' } });
     expect(screen.getByText('UNOSAT satellite damage assessment')).toBeInTheDocument();
     expect(screen.queryByText('ICJ order in South Africa v. Israel')).toBeNull();
+  });
+
+  it('renders PodcastShowTemplate with episodes, hosts, listen links, filtering, and Context/Flags', () => {
+    render(
+      <PodcastShowTemplate
+        model={{
+          id: 'show-1',
+          title: 'The Daily',
+          description: 'Daily news reporting from journalists around the world.',
+          episodeCount: 441,
+          dateRange: '2017 – present',
+          rssFeedUrl: 'https://feeds.simplecast.com/Sl5CSM3S',
+          topics: [{ id: 't1', label: 'World affairs', href: '/space/s/t1' }],
+          episodes: Array.from({ length: 8 }, (_, idx) => ({
+            id: `ep-${idx + 1}`,
+            title: idx === 0 ? 'Semiconductor Supply Chain Race' : `Episode ${idx + 1}`,
+            airDate: 'Oct 1, 2025',
+            durationLabel: '32 min',
+            href: `/space/s/ep-${idx + 1}`,
+          })),
+          hosts: [{ id: 'h1', name: 'Michael Barbaro', role: 'Host', href: '/space/s/h1' }],
+          listenOn: [
+            { id: 'p1', name: 'Apple Podcasts', url: 'https://podcasts.apple.com/show/1' },
+            { id: 'p2', name: 'Spotify', url: 'https://open.spotify.com/show/1' },
+          ],
+          graphConnections: [],
+        }}
+      />
+    );
+
+    expect(screen.getByRole('heading', { name: 'The Daily' })).toBeInTheDocument();
+    expect(screen.getByText(/441 episodes · 2017 – present/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Apple Podcasts/i })).toHaveAttribute(
+      'href',
+      'https://podcasts.apple.com/show/1'
+    );
+    expect(screen.getByRole('link', { name: /Spotify/i })).toHaveAttribute('href', 'https://open.spotify.com/show/1');
+    expect(screen.getByText('Michael Barbaro')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Context' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Flags' })).toBeInTheDocument();
+
+    const filter = screen.getByRole('searchbox', { name: 'Filter episodes' });
+    fireEvent.change(filter, { target: { value: 'Semiconductor' } });
+    expect(screen.getByText('Semiconductor Supply Chain Race')).toBeInTheDocument();
+    expect(screen.queryByText('Episode 2')).toBeNull();
+  });
+
+  it('renders PodcastEpisodeTemplate with show link, claims, quotes, people, audio player, and Context/Flags', () => {
+    render(
+      <PodcastEpisodeTemplate
+        model={{
+          id: 'ep-1',
+          title: 'Pilots Killed in LaGuardia Crash',
+          show: { id: 'show-wsj', name: 'WSJ What’s News', href: '/space/s/show-wsj' },
+          airDate: 'Mar 22, 2026',
+          durationLabel: '14 min',
+          audioUrl: 'https://example.com/episode.mp3',
+          description: 'A.M. Edition covering aviation safety and global trade.',
+          topics: [{ id: 't1', label: 'Middle East', href: '/space/s/t1' }],
+          claims: [
+            {
+              id: 'c1',
+              title: 'Helium is a critical component in semiconductor manufacturing.',
+              kind: 'fact',
+              overallPercent: 92,
+              split: {
+                rows: [{ id: 'all', label: 'All spaces', color: '#202020', percent: 92, isEveryone: true }],
+                isSplit: false,
+                totalVotes: 12,
+              },
+              href: '/space/s/c1',
+            },
+          ],
+          quotes: [
+            { id: 'q1', text: 'Helium bottlenecks ripple immediately across wafer fabs.', speaker: 'Shelby Holliday' },
+          ],
+          hosts: [{ id: 'h1', name: 'Luke Vargas', role: 'Host', href: '/space/s/h1' }],
+          guests: [{ id: 'g1', name: 'Shelby Holliday', role: 'Guest', href: '/space/s/g1' }],
+          listenOn: [{ id: 'p1', name: 'Spotify', url: 'https://open.spotify.com/episode/1' }],
+          graphConnections: [],
+        }}
+      />
+    );
+
+    expect(screen.getByRole('heading', { name: 'Pilots Killed in LaGuardia Crash' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'WSJ What’s News' })).toHaveAttribute('href', '/space/s/show-wsj');
+    expect(screen.getByText('Helium is a critical component in semiconductor manufacturing.')).toBeInTheDocument();
+    expect(screen.getByText(/92% agree · 12 votes/)).toBeInTheDocument();
+    expect(screen.getByText(/Helium bottlenecks ripple immediately across wafer fabs/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Luke Vargas/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Shelby Holliday/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Context' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Flags' })).toBeInTheDocument();
+
+    // Toggle inline audio player
+    fireEvent.click(screen.getByRole('button', { name: /Play episode/i }));
+    expect(screen.getByRole('button', { name: /Hide audio player/i })).toBeInTheDocument();
   });
 });
