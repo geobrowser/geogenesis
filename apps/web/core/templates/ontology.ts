@@ -112,6 +112,10 @@ export const TEMPLATE_ONTOLOGY = {
   HIGHLIGHTED_RELATED_ENTITIES_PROPERTY_ID: ContentIds.HIGHLIGHTED_RELATED_ENTIRIES_PROPERTY,
 
   // NewsStory & Post specific relations
+  BLOCKS_PROPERTY_ID: SystemIds.BLOCKS,
+  COLLECTION_ITEM_PROPERTY_ID: SystemIds.COLLECTION_ITEM_RELATION_TYPE,
+  /** Verified on live NewsStory schema (`Associated timelines`). */
+  ASSOCIATED_TIMELINES_PROPERTY_ID: '6384a9b0b9be42fab705d7223aa37ac2',
   /** Verified on live NewsStory schema (`Related stories`). */
   RELATED_STORIES_PROPERTY_ID: 'ff5c1866e5ea41ebbbd93b30536ec020',
   /** Verified on live NewsStory schema (`Perspectives`). */
@@ -350,6 +354,21 @@ export function outletInitialsFrom(name: string): string {
   const words = trimmed.split(/\s+/).filter(word => /^[A-Za-z0-9]/.test(word));
   const initials = words.map(word => word[0]?.toUpperCase() ?? '').join('');
   return (initials || trimmed[0]?.toUpperCase() || 'G').slice(0, 3);
+}
+
+/** Derives a clean publication display name from an article URL when no Publisher relation exists. */
+export function publicationFromUrl(rawUrl: string | null | undefined): string | undefined {
+  if (!rawUrl) return undefined;
+  try {
+    const host = new URL(rawUrl).hostname.replace(/^www\./i, '');
+    const parts = host.split('.').filter(Boolean);
+    if (parts.length === 0) return undefined;
+    // Pick the registrable label (e.g. markets.businessinsider.com -> businessinsider)
+    const label = parts.length >= 3 && parts[parts.length - 1]!.length >= 2 ? parts[parts.length - 2]! : parts[0]!;
+    return label.charAt(0).toUpperCase() + label.slice(1);
+  } catch {
+    return undefined;
+  }
 }
 
 const OUTLET_PALETTE = ['#202020', '#6833ff', '#3963fe', '#35363a'] as const;

@@ -601,12 +601,30 @@ export interface EventTemplateModel {
   nextEvent?: { id: string; title: string; when: string; href?: string; onSelect?: () => void };
 }
 
+export interface NewsStoryClaimGroupModel {
+  id: string;
+  title: string;
+  description?: string;
+  claims: readonly ClaimSummaryModel[];
+}
+
+export interface NewsStorySourceModel {
+  id: string;
+  title: string;
+  publication?: string;
+  date?: string;
+  url?: string;
+  href?: string;
+  onSelect?: () => void;
+}
+
 export interface NewsStoryTemplateModel {
   id: string;
   headline: string;
-  outlet: string;
-  outletInitials: string;
-  outletColor: string;
+  /** Optional single-outlet attribution (present for single-publisher stories; omitted for aggregated Geo News stories). */
+  outlet?: string;
+  outletInitials?: string;
+  outletColor?: string;
   authors?: readonly string[];
   date?: string;
   summary?: string;
@@ -614,6 +632,11 @@ export interface NewsStoryTemplateModel {
   externalUrl?: string;
   archiveUrl?: string;
   breadcrumbs?: readonly BreadcrumbItem[];
+  associatedTimelines?: readonly { id: string; title: string; href?: string }[];
+  /** Ordered narrative claim sections (`Blocks` / `Perspectives`) rendered in Geo News bulleted reading style. */
+  claimGroups?: readonly NewsStoryClaimGroupModel[];
+  /** Rich aggregated source articles (`Sources` with publication, date, and external link). */
+  sources?: readonly NewsStorySourceModel[];
   graphConnections?: readonly GraphConnectionGroupModel[];
   accuracyRating?: {
     prompt: string;
