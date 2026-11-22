@@ -280,12 +280,14 @@ function TimelineHighlightRow({
 
       {/* Continuous vertical timeline spine directly on page */}
       <div className="relative hidden justify-center @[680px]:flex">
-        {!isFirst && <span aria-hidden className="absolute top-0 h-[26px] w-[2px] bg-grey-02/80" />}
-        {!isLast && <span aria-hidden className="absolute top-[26px] bottom-0 w-[2px] bg-grey-02/80" />}
+        {!isFirst && <span aria-hidden className="absolute top-0 h-[28px] w-px bg-grey-02" />}
+        {!isLast && <span aria-hidden className="absolute top-[28px] bottom-0 w-px bg-grey-02" />}
         <span
           aria-hidden
-          className="relative z-10 mt-[21px] inline-block size-3 shrink-0 rounded-full bg-text ring-4 ring-white"
-        />
+          className="relative z-10 mt-[19px] inline-grid size-[18px] shrink-0 place-items-center rounded-full border border-grey-02 bg-white"
+        >
+          <span className="size-2 rounded-full bg-text" />
+        </span>
       </div>
 
       {/* Right: event milestone headline + concise summary + overflow menu */}

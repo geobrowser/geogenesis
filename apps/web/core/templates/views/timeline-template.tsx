@@ -312,15 +312,14 @@ function TimelineTurnItem({
 
       {/* Continuous vertical timeline track + milestone node */}
       <div className="relative flex justify-center">
-        {!isFirst && <span aria-hidden className="absolute top-0 h-[14px] w-[2px] bg-grey-02/80" />}
-        {!isLast && <span aria-hidden className="absolute top-[14px] bottom-0 w-[2px] bg-grey-02/80" />}
+        {!isFirst && <span aria-hidden className="absolute top-0 h-[15px] w-px bg-grey-02" />}
+        {!isLast && <span aria-hidden className="absolute top-[15px] bottom-0 w-px bg-grey-02" />}
         <span
           aria-hidden
-          className={cx(
-            'relative z-10 mt-[7px] shrink-0 rounded-full ring-4 ring-white',
-            turn.isKey ? 'size-3 bg-text' : 'size-2.5 border-2 border-grey-03 bg-white'
-          )}
-        />
+          className="relative z-10 mt-[6px] inline-grid size-[18px] shrink-0 place-items-center rounded-full border border-grey-02 bg-white"
+        >
+          <span className={cx('size-2 rounded-full', turn.isKey ? 'bg-text' : 'bg-grey-03')} />
+        </span>
       </div>
 
       {/* Turn body */}

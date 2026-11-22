@@ -378,9 +378,15 @@ function RichMediaCard({ item }: { item: EntityLinkRowModel }) {
               </div>
             </CardClickable>
 
-            <div className="flex shrink-0 items-center gap-1.5">
-              {item.date && <span className="text-[14px] text-grey-04">{item.date}</span>}
+            <div className="flex shrink-0 items-center gap-1">
+              {item.date && <span className="mr-1 text-[14px] text-grey-04">{item.date}</span>}
               {overflow}
+              <CardClickable
+                item={item}
+                className="inline-grid size-7 !w-7 shrink-0 place-items-center rounded-full text-grey-03 hover:text-text"
+              >
+                <ArrowUpRightIcon className="size-4" />
+              </CardClickable>
             </div>
           </div>
 
@@ -390,13 +396,6 @@ function RichMediaCard({ item }: { item: EntityLinkRowModel }) {
 
           {leadQuote && <SourceQuoteBlock quote={leadQuote} />}
           <EntityInlineContext targetId={item.id} targetTitle={item.title} targetKind={item.kindLabel || 'Source'} />
-        </div>
-
-        <div className="flex items-center justify-between border-t border-divider pt-2.5 text-[14px] text-grey-04">
-          <span>{item.meta ?? 'Social post'}</span>
-          <CardClickable item={item} className="inline-flex !w-auto shrink-0 items-center text-grey-03 hover:text-text">
-            <ArrowUpRightIcon className="size-4" />
-          </CardClickable>
         </div>
       </article>
     );
