@@ -268,6 +268,20 @@ export function resolveTemplateImageUrl(raw: string | null | undefined): string 
   return getImagePath(trimmed);
 }
 
+/** The `@handle` in an x.com / twitter.com post or profile URL; undefined for any other link. */
+export function handleFromSocialUrl(rawUrl: string | null | undefined): string | undefined {
+  if (!rawUrl) return undefined;
+  try {
+    const parsed = new URL(rawUrl.trim());
+    if (!/(^|\.)(x\.com|twitter\.com)$/i.test(parsed.hostname)) return undefined;
+    const handle = parsed.pathname.split('/').filter(Boolean)[0];
+    if (!handle || /^(i|home|explore|search|intent|hashtag)$/i.test(handle)) return undefined;
+    return handle.startsWith('@') ? handle : `@${handle}`;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Extract all non-sectioned outgoing graph relations on an entity into grouped `Context` rows.
  * Deduplicates by `(predicate, toEntityId)` and excludes structural Geo properties (Types, Cover,

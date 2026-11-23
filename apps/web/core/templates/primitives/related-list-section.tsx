@@ -317,14 +317,6 @@ function estimateCardWeight(item: EntityLinkRowModel): number {
 }
 
 /**
- * Horizontally scrollable masonry rail:
- * - For 1–3 cards (e.g. News story Sources), renders a single horizontal snap-scroll row of
- *   crisp fixed-width cards.
- * - For 4+ cards (e.g. Topic `Sources & evidence`), packs cards into balanced 2-card vertical
- *   masonry columns inside a horizontal snap-scroll strip so tall media cards never leave awkward
- *   vertical whitespace AND users can smoothly swipe or click `←` `→` horizontally through all cards.
- */
-/**
  * Column widths that fit a whole number of columns in the rail (`100cqw` is the rail's width).
  *
  * Fixed pixel widths cut the last visible card at whatever point the page width happened to put
@@ -334,6 +326,14 @@ function estimateCardWeight(item: EntityLinkRowModel): number {
  */
 const RAIL_COLUMN_WIDTH_CLASS = 'w-[84cqw] @[540px]:w-[calc((100cqw-1rem)/2)] @[1000px]:w-[calc((100cqw-2rem)/3)]';
 
+/**
+ * Horizontally scrollable masonry rail:
+ * - For 1–3 cards (e.g. News story Sources), renders a single horizontal snap-scroll row with
+ *   one card per column (widths from `RAIL_COLUMN_WIDTH_CLASS`).
+ * - For 4+ cards (e.g. Topic `Sources & evidence`), packs cards into balanced 2-card vertical
+ *   masonry columns inside a horizontal snap-scroll strip so tall media cards never leave awkward
+ *   vertical whitespace AND users can smoothly swipe or click `←` `→` horizontally through all cards.
+ */
 function HorizontalMasonryRail({
   items,
   scrollerRef,

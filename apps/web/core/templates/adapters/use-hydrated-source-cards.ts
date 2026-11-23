@@ -23,6 +23,7 @@ import type { EntityLinkKind, EntityLinkRowModel, SourceMediaKind } from '../mod
 import {
   TEMPLATE_ONTOLOGY,
   formatOntologyDate,
+  handleFromSocialUrl,
   publicationFromUrl,
   readEntityRelations,
   readEntityTextValue,
@@ -139,7 +140,7 @@ export async function fetchPostAuthorMetadata(postIds: readonly string[]): Promi
     const urlVal = item.valuesList?.find(v => ID.equals(v.propertyId, TEMPLATE_ONTOLOGY.WEB_URL_PROPERTY_ID))?.text;
     const author = item.relationsList?.[0]?.toEntity;
     const authorX = author?.valuesList?.find(v => ID.equals(v.propertyId, X_PROPERTY))?.text;
-    const handle = extractHandleFromSocialUrl(urlVal) ?? handleFromXValue(authorX);
+    const handle = handleFromSocialUrl(urlVal) ?? handleFromXValue(authorX);
     const authorName = author?.name?.trim() || undefined;
     const rawAvatar = author?.relationsList
       ?.flatMap(rel => rel.toEntity?.valuesList ?? [])
@@ -170,23 +171,10 @@ function handleFromXValue(raw: string | null | undefined): string | undefined {
   const trimmed = raw?.trim();
   if (!trimmed) return undefined;
   if (/^https?:\/\//i.test(trimmed) || /^(www\.)?(x|twitter)\.com\//i.test(trimmed)) {
-    return extractHandleFromSocialUrl(/^https?:/i.test(trimmed) ? trimmed : `https://${trimmed}`);
+    return handleFromSocialUrl(/^https?:/i.test(trimmed) ? trimmed : `https://${trimmed}`);
   }
   if (/^@?[A-Za-z0-9_]{1,15}$/.test(trimmed)) return trimmed.startsWith('@') ? trimmed : `@${trimmed}`;
   return undefined;
-}
-
-function extractHandleFromSocialUrl(rawUrl: string | null | undefined): string | undefined {
-  if (!rawUrl) return undefined;
-  try {
-    const parsed = new URL(rawUrl.trim());
-    if (!/(^|\.)(x\.com|twitter\.com)$/i.test(parsed.hostname)) return undefined;
-    const handle = parsed.pathname.split('/').filter(Boolean)[0];
-    if (!handle || /^(i|home|explore|search|intent|hashtag)$/i.test(handle)) return undefined;
-    return handle.startsWith('@') ? handle : `@${handle}`;
-  } catch {
-    return undefined;
-  }
 }
 
 function isSocialPostUrl(rawUrl: string | undefined): boolean {
@@ -336,7 +324,7 @@ export function useHydratedSourceCards({
         mediaType,
         title: hydrated?.name?.trim() || src.name?.trim() || src.id,
         publisher,
-        authorHandle: mediaType === 'tweet' ? (tweetMeta?.handle ?? extractHandleFromSocialUrl(webUrl)) : undefined,
+        authorHandle: mediaType === 'tweet' ? (tweetMeta?.handle ?? handleFromSocialUrl(webUrl)) : undefined,
         authorAvatarUrl:
           mediaType === 'tweet'
             ? (tweetMeta?.avatarUrl ?? resolveTemplateImageUrl(hydrated ? Entities.avatar(hydrated.relations) : null))

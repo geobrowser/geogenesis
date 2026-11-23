@@ -190,7 +190,7 @@ describe('useLivePostTemplate author card', () => {
     expect(model.body).toBe('Ben Cohen analyzes the contest to succeed Guterres.');
   });
 
-  it('never uses a tweet\'s own text as its author when it has none', () => {
+  it("never uses a tweet's own text as its author when it has none", () => {
     state.entity = { ...tweet(), relations: [] };
 
     const { result } = renderHook(() => useLivePostTemplate({ entityId: state.entity!.id, spaceId: SPACE }));
@@ -228,5 +228,55 @@ describe('useLivePostTemplate author card', () => {
     expect(model.authorName).toBe('Unknown author');
     expect(model.title).toBe('The UN secretary-general race is steeped in intrigue. Should we care?');
     expect(model.body).toBe('Ben Cohen analyzes the contest to succeed Guterres.');
+  });
+
+  it("reads an author-less tweet's handle from its own X URL before the author query lands", () => {
+    state.entity = {
+      ...tweet(),
+      relations: [],
+      values: [value(TEMPLATE_ONTOLOGY.WEB_URL_PROPERTY_ID, 'https://x.com/shashj/status/1990000000000000000')],
+    };
+
+    const { result } = renderHook(() => useLivePostTemplate({ entityId: state.entity!.id, spaceId: SPACE }));
+    const model = result.current.data!;
+
+    expect(model.authorName).toBe('@shashj');
+    expect(model.title).toBe('@shashj on X');
+  });
+
+  it('treats an Authors relation to a nameless entity as no author', () => {
+    state.entity = {
+      ...tweet(),
+      relations: [relation(TEMPLATE_ONTOLOGY.AUTHORS_PROPERTY_ID, 'b82f4143c93049c558b523204448ec32', '  ')],
+    };
+
+    const { result } = renderHook(() => useLivePostTemplate({ entityId: state.entity!.id, spaceId: SPACE }));
+    const model = result.current.data!;
+
+    expect(model.authorName).toBe('Unknown author');
+    expect(model.title).toBe('Post on X');
+  });
+
+  it('prefers the local Authors relation over the cached author query', () => {
+    state.entity = tweet();
+    state.authorMeta = { name: 'Old Name', handle: '@shashj', avatarUrl: null };
+
+    const { result } = renderHook(() => useLivePostTemplate({ entityId: state.entity!.id, spaceId: SPACE }));
+
+    expect(result.current.data!.authorName).toBe('Shashank Joshi');
+  });
+
+  it('never uses the "Unknown author" placeholder as image alt text', () => {
+    state.entity = { ...tweet(), relations: [] };
+    expect(
+      renderHook(() => useLivePostTemplate({ entityId: state.entity!.id, spaceId: SPACE })).result.current.data!
+        .mediaAlt
+    ).toBe('');
+
+    state.entity = tweet();
+    expect(
+      renderHook(() => useLivePostTemplate({ entityId: state.entity!.id, spaceId: SPACE })).result.current.data!
+        .mediaAlt
+    ).toBe('Shashank Joshi');
   });
 });

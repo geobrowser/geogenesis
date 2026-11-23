@@ -23,6 +23,7 @@ import {
   extractEntityFlags,
   extractGraphConnections,
   formatOntologyDate,
+  handleFromSocialUrl,
   readEntityRelations,
   readEntityTextValue,
 } from '../ontology';
@@ -96,13 +97,17 @@ export function useLivePostTemplate({
     const platforms = readEntityRelations(entity, TEMPLATE_ONTOLOGY.PLATFORM_PROPERTY_ID);
     const platform = platforms[0]?.toEntity.name ?? (isTweet ? 'X' : 'Geo');
     const authors = readEntityRelations(entity, TEMPLATE_ONTOLOGY.AUTHORS_PROPERTY_ID);
+    const externalUrl = readEntityTextValue(entity, TEMPLATE_ONTOLOGY.WEB_URL_PROPERTY_ID) ?? undefined;
+    // The post's own X URL gives the handle without waiting for the author query, so an author-less
+    // tweet doesn't read "Unknown author" until that query lands (same order as the source-card rail).
+    const handle = authorMeta?.handle ?? handleFromSocialUrl(externalUrl);
     // Never the post's own name: a tweet's name is its text and a Post's is its headline, so an
     // author-less post would otherwise be titled "<its own text> on X" with that text as its author.
-    const knownAuthor = authorMeta?.name || authors[0]?.toEntity.name?.trim() || authorMeta?.handle || undefined;
+    // The local Authors relation comes first so an unpublished edit to it shows straight away.
+    const knownAuthor = authors[0]?.toEntity.name?.trim() || authorMeta?.name || handle || undefined;
     const authorName = knownAuthor ?? 'Unknown author';
-    const authorHandle = authorMeta?.handle && authorMeta.handle !== authorName ? authorMeta.handle : undefined;
+    const authorHandle = handle && handle !== authorName ? handle : undefined;
     const when = formatOntologyDate(readEntityTextValue(entity, TEMPLATE_ONTOLOGY.PUBLISH_DATE_PROPERTY_ID));
-    const externalUrl = readEntityTextValue(entity, TEMPLATE_ONTOLOGY.WEB_URL_PROPERTY_ID) ?? undefined;
     const topics = readEntityRelations(entity, TEMPLATE_ONTOLOGY.TOPICS_PROPERTY_ID);
     const communityNotes = readEntityRelations(entity, TEMPLATE_ONTOLOGY.COMMUNITY_NOTES_PROPERTY_ID);
     const quotedPosts = readEntityRelations(entity, TEMPLATE_ONTOLOGY.QUOTED_POSTS_PROPERTY_ID);
@@ -251,6 +256,8 @@ export function useLivePostTemplate({
       body: bodyText,
       externalUrl,
       mediaUrl: Entities.cover(entity.relations) ?? serverCoverUrl ?? null,
+      // The image's alt is its author when known; never the "Unknown author" placeholder.
+      mediaAlt: knownAuthor ?? '',
       breadcrumbs,
       claims,
       notes: [...localNotes, ...graphNotes],
