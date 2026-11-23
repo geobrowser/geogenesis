@@ -265,7 +265,9 @@ export function TopicTemplate({
             <div
               className={
                 hasContextOrLive && hasFlagsOrLive
-                  ? 'grid grid-cols-1 items-start gap-8 @[720px]:grid-cols-2'
+                  ? // Auto columns: either section can hide itself when empty (GEO-3819), and the
+                    // other then takes the full width instead of half of it.
+                    'grid grid-cols-1 items-start gap-8 @[720px]:auto-cols-fr @[720px]:grid-flow-col'
                   : undefined
               }
             >

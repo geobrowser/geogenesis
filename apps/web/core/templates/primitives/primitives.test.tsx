@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 
 import * as React from 'react';
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   type ClaimSummaryModel,
@@ -12,11 +12,13 @@ import {
   computeSplitGap,
   isClaimSplit,
 } from '../models';
+import { TEMPLATE_ACTIONS } from '../template-actions';
 import {
   ClaimExplorer,
   ClaimSummaryCard,
   EntityActionProvider,
   EntityFlagsSection,
+  EntityOverflowMenu,
   GraphConnectionsStrip,
   RelatedListSection,
   SourceChipList,
@@ -26,6 +28,12 @@ import {
 } from './index';
 
 afterEach(cleanup);
+
+// The shipped switch, read before any test flips it, and put back after each one that does.
+const SHIPPED_TEMPLATE_ACTIONS = { ...TEMPLATE_ACTIONS };
+function restoreTemplateActions() {
+  Object.assign(TEMPLATE_ACTIONS, SHIPPED_TEMPLATE_ACTIONS);
+}
 
 const CONTESTED_SPLIT: SplitBreakdown = {
   isSplit: true,
@@ -250,6 +258,13 @@ describe('TemplateBreadcrumb', () => {
 });
 
 describe('Context & Disputes empty states, inline pill +, and pagination', () => {
+  // The add flows below run with the actions switched on; the defaults hide them (GEO-3819).
+  beforeEach(() => {
+    TEMPLATE_ACTIONS.addContext = true;
+    TEMPLATE_ACTIONS.dispute = true;
+  });
+  afterEach(restoreTemplateActions);
+
   it('renders empty Context and Disputes sections cleanly and paginates when rows exceed page size', () => {
     const target = { id: 'e-pag', kind: 'Claim', title: 'Paginated claim' };
     const manyGroups = Array.from({ length: 7 }, (_, i) => ({
@@ -367,5 +382,77 @@ describe('ListRanking header control & workspace', () => {
     const firstRestored = screen.getByText('First global claim');
     const thirdRestored = screen.getByText('Third global claim');
     expect(firstRestored.compareDocumentPosition(thirdRestored) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});
+
+describe('Add context and Dispute switch (GEO-3819)', () => {
+  const target = { id: 'e-off', kind: 'Claim', title: 'Switched-off claim' };
+  const groups = [{ predicate: 'Related actors', items: [{ id: 'i-1', label: 'UN OCHA', kind: 'entity' as const }] }];
+
+  afterEach(restoreTemplateActions);
+
+  it('drops the overflow menu items, and the trigger when nothing is left in the menu', () => {
+    render(
+      <EntityActionProvider>
+        <EntityOverflowMenu target={target} />
+        <EntityOverflowMenu target={{ id: 'root', kind: 'Topic', title: 'Page root' }} isPageRoot />
+      </EntityActionProvider>
+    );
+
+    // A row with no context of its own: the menu would be empty, so there is no "..." at all.
+    expect(screen.queryByRole('button', { name: `More actions for ${target.title}` })).toBeNull();
+
+    // The page root keeps its read-only "Show all context" toggle, without the write actions.
+    fireEvent.click(screen.getByRole('button', { name: 'More actions for Page root' }));
+    const menu = screen.getByRole('menu');
+    expect(within(menu).getByText('Show all context')).toBeInTheDocument();
+    expect(within(menu).queryByText('Add context')).toBeNull();
+    expect(within(menu).queryByText('Dispute')).toBeNull();
+  });
+
+  it('shows Add context and Dispute in the menu again when switched on', () => {
+    TEMPLATE_ACTIONS.addContext = true;
+    TEMPLATE_ACTIONS.dispute = true;
+    render(
+      <EntityActionProvider>
+        <EntityOverflowMenu target={target} />
+      </EntityActionProvider>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: `More actions for ${target.title}` }));
+    const menu = screen.getByRole('menu');
+    expect(within(menu).getByText('Add context')).toBeInTheDocument();
+    expect(within(menu).getByText('Dispute')).toBeInTheDocument();
+  });
+
+  it('renders no empty Disputes or Context section, and no add pill inside Context', () => {
+    const { rerender } = render(
+      <EntityActionProvider>
+        <GraphConnectionsStrip groups={[]} target={target} />
+        <EntityFlagsSection target={target} />
+      </EntityActionProvider>
+    );
+    expect(screen.queryByRole('region', { name: 'Context' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Disputes' })).toBeNull();
+
+    rerender(
+      <EntityActionProvider>
+        <GraphConnectionsStrip groups={groups} target={target} />
+      </EntityActionProvider>
+    );
+    const context = screen.getByRole('region', { name: 'Context' });
+    expect(within(context).getByText('UN OCHA')).toBeInTheDocument();
+    expect(within(context).queryByRole('button', { name: 'Add context' })).toBeNull();
+    expect(within(context).queryByRole('button', { name: 'Add Related actors' })).toBeNull();
+  });
+
+  it('keeps the add pill inside Context when Add context is on', () => {
+    TEMPLATE_ACTIONS.addContext = true;
+    render(
+      <EntityActionProvider>
+        <GraphConnectionsStrip groups={groups} target={target} />
+      </EntityActionProvider>
+    );
+    expect(screen.getByRole('button', { name: 'Add Related actors' })).toBeInTheDocument();
   });
 });

@@ -21,6 +21,7 @@ import {
   TemplateBadge,
   TemplateShell,
 } from '../primitives';
+import { TEMPLATE_ACTIONS } from '../template-actions';
 
 export interface PostTemplateProps {
   model: PostTemplateModel;
@@ -62,6 +63,8 @@ export function PostTemplate({
     setSelectedEvidenceIds(prev => (prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]));
     setDraftError(null);
   };
+
+  const canAddNote = TEMPLATE_ACTIONS.addContext && Boolean(model.onAddNote);
 
   const handleSubmitNote = (event: React.FormEvent) => {
     event.preventDefault();
@@ -196,180 +199,185 @@ export function PostTemplate({
             </section>
           )}
 
-          {/* Community context notes */}
-          <section aria-label="Context notes" className="flex flex-col gap-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="m-0 text-mediumTitle font-semibold text-text">Context notes</h2>
-              {model.onAddNote && !composing && (
-                <button
-                  type="button"
-                  onClick={() => setComposing(true)}
-                  aria-label="Add context note"
-                  title="Add context note"
-                  className="inline-grid size-7 cursor-pointer place-items-center border-0 bg-transparent text-grey-04 transition-colors hover:text-text"
-                >
-                  <PlusIcon className="size-4" />
-                </button>
-              )}
-            </div>
-
-            {model.bridgingRule && <p className="m-0 text-[15px] leading-[22px] text-grey-04">{model.bridgingRule}</p>}
-
-            {composing && model.onAddNote && (
-              <form
-                onSubmit={handleSubmitNote}
-                className="flex flex-col gap-4 rounded-xl border border-text bg-white p-5"
-              >
-                <div className="flex items-center justify-between">
-                  <strong className="text-[17px] text-text">Add a context note</strong>
+          {/* Community context notes. With Add context off (GEO-3819) there is no composer, and the
+              section shows only when there are notes to read. */}
+          {(canAddNote || model.notes.length > 0) && (
+            <section aria-label="Context notes" className="flex flex-col gap-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 className="m-0 text-mediumTitle font-semibold text-text">Context notes</h2>
+                {canAddNote && !composing && (
                   <button
                     type="button"
-                    onClick={() => {
-                      setComposing(false);
-                      setDraftError(null);
-                    }}
-                    className="cursor-pointer border-0 bg-transparent p-0 text-[14px] text-grey-04 hover:text-text"
+                    onClick={() => setComposing(true)}
+                    aria-label="Add context note"
+                    title="Add context note"
+                    className="inline-grid size-7 cursor-pointer place-items-center border-0 bg-transparent text-grey-04 transition-colors hover:text-text"
                   >
-                    Cancel
+                    <PlusIcon className="size-4" />
                   </button>
-                </div>
+                )}
+              </div>
 
-                <div className="flex flex-wrap gap-2">
-                  {NOTE_TAGS.map(tag => (
+              {model.bridgingRule && (
+                <p className="m-0 text-[15px] leading-[22px] text-grey-04">{model.bridgingRule}</p>
+              )}
+
+              {composing && canAddNote && (
+                <form
+                  onSubmit={handleSubmitNote}
+                  className="flex flex-col gap-4 rounded-xl border border-text bg-white p-5"
+                >
+                  <div className="flex items-center justify-between">
+                    <strong className="text-[17px] text-text">Add a context note</strong>
                     <button
-                      key={tag}
                       type="button"
-                      aria-pressed={draftTag === tag}
                       onClick={() => {
-                        setDraftTag(tag);
+                        setComposing(false);
                         setDraftError(null);
                       }}
-                      className={cx(
-                        'cursor-pointer rounded-full border px-3.5 py-1.5 text-[14px] font-medium transition-colors',
-                        draftTag === tag
-                          ? 'border-text bg-text text-white'
-                          : 'border-grey-02 bg-white text-text hover:border-text'
-                      )}
+                      className="cursor-pointer border-0 bg-transparent p-0 text-[14px] text-grey-04 hover:text-text"
                     >
-                      {tag}
+                      Cancel
                     </button>
-                  ))}
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <label htmlFor="post-context-note-body" className="text-[15px] font-medium text-text">
-                      What do the sources show?
-                    </label>
-                    <span className="text-[13px] font-normal text-grey-04 tabular-nums">
-                      {draftText.length} / {MAX_NOTE_LENGTH}
-                    </span>
                   </div>
-                  <textarea
-                    id="post-context-note-body"
-                    value={draftText}
-                    onChange={e => setDraftText(e.target.value.slice(0, MAX_NOTE_LENGTH))}
-                    rows={3}
-                    placeholder="Write a concise, sourced explanation..."
-                    className="w-full rounded-lg border border-grey-02 p-3 text-[16px] font-normal text-text focus:border-text focus:outline-hidden"
-                  />
-                </div>
 
-                {model.suggestedEvidence && model.suggestedEvidence.length > 0 && (
-                  <div className="flex flex-col gap-2">
-                    <span className="text-[15px] font-medium text-text">Attach suggested evidence</span>
-                    <div className="flex flex-col gap-2">
-                      {model.suggestedEvidence.map(item => {
-                        const isSelected = selectedEvidenceIds.includes(item.id);
-                        return (
-                          <button
-                            key={item.id}
-                            type="button"
-                            aria-pressed={isSelected}
-                            onClick={() => toggleEvidence(item.id)}
-                            className={cx(
-                              'flex w-full cursor-pointer items-center justify-between gap-3 rounded-lg border px-3.5 py-2.5 text-left transition-colors',
-                              isSelected
-                                ? 'border-ctaPrimary bg-ctaTertiary/40 text-text'
-                                : 'border-divider bg-bg text-text hover:border-grey-02'
-                            )}
-                          >
-                            <span className="flex min-w-0 flex-col gap-0.5">
-                              <span className="text-[15px] font-medium text-text">{item.title}</span>
-                              <span className="text-[13.5px] text-grey-04">{item.meta}</span>
-                            </span>
-                            <span
-                              className={cx(
-                                'grid size-7 shrink-0 place-items-center rounded-full border',
-                                isSelected
-                                  ? 'border-ctaPrimary bg-ctaPrimary text-white'
-                                  : 'border-grey-02 bg-white text-grey-04'
-                              )}
-                            >
-                              {isSelected ? <CheckIcon className="size-3.5" /> : <PlusIcon className="size-3.5" />}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
+                  <div className="flex flex-wrap gap-2">
+                    {NOTE_TAGS.map(tag => (
+                      <button
+                        key={tag}
+                        type="button"
+                        aria-pressed={draftTag === tag}
+                        onClick={() => {
+                          setDraftTag(tag);
+                          setDraftError(null);
+                        }}
+                        className={cx(
+                          'cursor-pointer rounded-full border px-3.5 py-1.5 text-[14px] font-medium transition-colors',
+                          draftTag === tag
+                            ? 'border-text bg-text text-white'
+                            : 'border-grey-02 bg-white text-text hover:border-text'
+                        )}
+                      >
+                        {tag}
+                      </button>
+                    ))}
                   </div>
-                )}
 
-                <label className="flex flex-col gap-1.5 text-[15px] font-medium text-text">
-                  Additional source link (optional)
-                  <input
-                    type="url"
-                    value={draftSource}
-                    onChange={e => setDraftSource(e.target.value)}
-                    placeholder="https://..."
-                    className="w-full rounded-lg border border-grey-02 px-3 py-2.5 text-[16px] font-normal text-text focus:border-text focus:outline-hidden"
-                  />
-                </label>
-
-                {draftTag && (
-                  <div className="flex flex-col gap-2 rounded-lg border border-divider bg-bg p-3.5">
+                  <div className="flex flex-col gap-1.5">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[13.5px] font-medium text-grey-04">Live preview</span>
-                      <span className="text-[13px] text-grey-04">
-                        {selectedEvidenceIds.length + (draftSource.trim() ? 1 : 0)}{' '}
-                        {selectedEvidenceIds.length + (draftSource.trim() ? 1 : 0) === 1 ? 'source' : 'sources'}
+                      <label htmlFor="post-context-note-body" className="text-[15px] font-medium text-text">
+                        What do the sources show?
+                      </label>
+                      <span className="text-[13px] font-normal text-grey-04 tabular-nums">
+                        {draftText.length} / {MAX_NOTE_LENGTH}
                       </span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <TemplateBadge tone="post">{draftTag}</TemplateBadge>
-                      <span className="text-[14px] text-grey-04">Needs ratings from both communities</span>
-                    </div>
-                    <p className="m-0 text-[15px] leading-[22px] text-text">
-                      {draftText.trim() || 'Your explanation will appear here as you type.'}
-                    </p>
+                    <textarea
+                      id="post-context-note-body"
+                      value={draftText}
+                      onChange={e => setDraftText(e.target.value.slice(0, MAX_NOTE_LENGTH))}
+                      rows={3}
+                      placeholder="Write a concise, sourced explanation..."
+                      className="w-full rounded-lg border border-grey-02 p-3 text-[16px] font-normal text-text focus:border-text focus:outline-hidden"
+                    />
                   </div>
-                )}
 
-                {draftError && <p className="m-0 text-[14px] font-medium text-red-01">{draftError}</p>}
+                  {model.suggestedEvidence && model.suggestedEvidence.length > 0 && (
+                    <div className="flex flex-col gap-2">
+                      <span className="text-[15px] font-medium text-text">Attach suggested evidence</span>
+                      <div className="flex flex-col gap-2">
+                        {model.suggestedEvidence.map(item => {
+                          const isSelected = selectedEvidenceIds.includes(item.id);
+                          return (
+                            <button
+                              key={item.id}
+                              type="button"
+                              aria-pressed={isSelected}
+                              onClick={() => toggleEvidence(item.id)}
+                              className={cx(
+                                'flex w-full cursor-pointer items-center justify-between gap-3 rounded-lg border px-3.5 py-2.5 text-left transition-colors',
+                                isSelected
+                                  ? 'border-ctaPrimary bg-ctaTertiary/40 text-text'
+                                  : 'border-divider bg-bg text-text hover:border-grey-02'
+                              )}
+                            >
+                              <span className="flex min-w-0 flex-col gap-0.5">
+                                <span className="text-[15px] font-medium text-text">{item.title}</span>
+                                <span className="text-[13.5px] text-grey-04">{item.meta}</span>
+                              </span>
+                              <span
+                                className={cx(
+                                  'grid size-7 shrink-0 place-items-center rounded-full border',
+                                  isSelected
+                                    ? 'border-ctaPrimary bg-ctaPrimary text-white'
+                                    : 'border-grey-02 bg-white text-grey-04'
+                                )}
+                              >
+                                {isSelected ? <CheckIcon className="size-3.5" /> : <PlusIcon className="size-3.5" />}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
 
-                <div className="flex justify-end">
-                  <button
-                    type="submit"
-                    className="inline-flex h-10 cursor-pointer items-center rounded-full border border-text bg-text px-5 text-button text-white hover:opacity-90"
-                  >
-                    Submit note
-                  </button>
+                  <label className="flex flex-col gap-1.5 text-[15px] font-medium text-text">
+                    Additional source link (optional)
+                    <input
+                      type="url"
+                      value={draftSource}
+                      onChange={e => setDraftSource(e.target.value)}
+                      placeholder="https://..."
+                      className="w-full rounded-lg border border-grey-02 px-3 py-2.5 text-[16px] font-normal text-text focus:border-text focus:outline-hidden"
+                    />
+                  </label>
+
+                  {draftTag && (
+                    <div className="flex flex-col gap-2 rounded-lg border border-divider bg-bg p-3.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[13.5px] font-medium text-grey-04">Live preview</span>
+                        <span className="text-[13px] text-grey-04">
+                          {selectedEvidenceIds.length + (draftSource.trim() ? 1 : 0)}{' '}
+                          {selectedEvidenceIds.length + (draftSource.trim() ? 1 : 0) === 1 ? 'source' : 'sources'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <TemplateBadge tone="post">{draftTag}</TemplateBadge>
+                        <span className="text-[14px] text-grey-04">Needs ratings from both communities</span>
+                      </div>
+                      <p className="m-0 text-[15px] leading-[22px] text-text">
+                        {draftText.trim() || 'Your explanation will appear here as you type.'}
+                      </p>
+                    </div>
+                  )}
+
+                  {draftError && <p className="m-0 text-[14px] font-medium text-red-01">{draftError}</p>}
+
+                  <div className="flex justify-end">
+                    <button
+                      type="submit"
+                      className="inline-flex h-10 cursor-pointer items-center rounded-full border border-text bg-text px-5 text-button text-white hover:opacity-90"
+                    >
+                      Submit note
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {model.notes.length === 0 ? (
+                <p className="m-0 rounded-xl border border-dashed border-grey-02 p-5 text-[15px] text-grey-04">
+                  No context notes yet.
+                </p>
+              ) : (
+                <div className="flex flex-col gap-3.5">
+                  {model.notes.map(note => (
+                    <ContextNoteCard key={note.id} note={note} />
+                  ))}
                 </div>
-              </form>
-            )}
-
-            {model.notes.length === 0 ? (
-              <p className="m-0 rounded-xl border border-dashed border-grey-02 p-5 text-[15px] text-grey-04">
-                No context notes yet.
-              </p>
-            ) : (
-              <div className="flex flex-col gap-3.5">
-                {model.notes.map(note => (
-                  <ContextNoteCard key={note.id} note={note} />
-                ))}
-              </div>
-            )}
-          </section>
+              )}
+            </section>
+          )}
         </div>
       </div>
 

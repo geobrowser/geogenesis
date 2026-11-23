@@ -5,6 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import type { GraphConnectionGroupModel } from '../models';
+import { TEMPLATE_ACTIONS } from '../template-actions';
 import {
   AddContextPopover,
   type EntityActionTarget,
@@ -67,7 +68,8 @@ export function GraphConnectionsStrip({ groups = [], target, className }: GraphC
     setPage(1);
   }, [target?.id]);
 
-  if (visibleGroups.length === 0 && !target) return null;
+  // Nothing to read and (with Add context off, GEO-3819) nothing to add: no section.
+  if (visibleGroups.length === 0 && (!target || !TEMPLATE_ACTIONS.addContext)) return null;
 
   const totalPages = Math.max(1, Math.ceil(visibleGroups.length / GROUPS_PER_PAGE));
   const safePage = Math.min(page, totalPages);
@@ -150,7 +152,7 @@ export function GraphConnectionsStrip({ groups = [], target, className }: GraphC
                       </button>
                     )}
 
-                    {target && ctx && (
+                    {target && ctx && TEMPLATE_ACTIONS.addContext && (
                       <TemplateAddRelationPillPopover
                         predicate={group.predicate}
                         existingLabels={group.items.map(i => i.label)}
@@ -186,7 +188,7 @@ export function EntityContextAndDisputes({
   className?: string;
 }) {
   return (
-    <div className={cx('grid grid-cols-1 items-start gap-8 @[720px]:grid-cols-2', className)}>
+    <div className={cx('grid grid-cols-1 items-start gap-8 @[720px]:auto-cols-fr @[720px]:grid-flow-col', className)}>
       <GraphConnectionsStrip groups={groups ?? []} target={target} />
       <EntityFlagsSection target={target} />
     </div>
