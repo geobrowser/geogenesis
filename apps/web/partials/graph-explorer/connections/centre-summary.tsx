@@ -7,7 +7,7 @@ import cx from 'classnames';
 import { CLAIM_BAND_LABELS, type ClaimBand } from '~/core/graph-explorer/claim-band';
 import type { GraphNode } from '~/core/graph-explorer/fetch-graph-neighbourhood';
 import { GRAPH_KINDS, GRAPH_KIND_LABELS, type GraphKind } from '~/core/graph-explorer/graph-kinds';
-import { MAX_STANCE_ROWS, summaryPercent } from '~/core/graph-explorer/topic-claims-summary';
+import { summaryPercent } from '~/core/graph-explorer/topic-claims-summary';
 import { useTopicClaimsSummary } from '~/core/graph-explorer/use-graph-explorer';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -70,14 +70,18 @@ export function TopicClaimsSummary({
     <section aria-label="How people responded" className="flex flex-col gap-3 rounded-xl bg-grey-01 p-3">
       <h3 className="text-metadataMedium text-text">How people responded</h3>
       {claims.length === 0 ? (
-        <p className="text-metadata text-grey-04">No claims about this topic have responses in this space yet.</p>
+        <p className="text-metadata text-grey-04">
+          {truncated
+            ? 'This space has more responses than could be read here, so how people responded to this topic’s claims isn’t known yet.'
+            : 'No claims about this topic have responses in this space yet.'}
+        </p>
       ) : (
         <>
           <p className="text-metadata text-grey-04">
             {truncated ? 'At least ' : claims.length < 10 ? 'Only ' : ''}
             {claims.length} {claims.length === 1 ? 'claim' : 'claims'} about this topic{' '}
             {claims.length === 1 ? 'has' : 'have'} responses in this space so far
-            {truncated ? `; these counts cover the first ${MAX_STANCE_ROWS.toLocaleString('en-US')} responses.` : '.'}
+            {truncated ? '; these counts cover only part of this space’s responses.' : '.'}
           </p>
           <ul className="flex flex-col gap-1">
             {(Object.keys(CLAIM_BAND_LABELS) as ClaimBand[]).map(band => (

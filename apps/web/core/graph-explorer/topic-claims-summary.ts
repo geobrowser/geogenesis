@@ -28,7 +28,6 @@ export type TopicClaimsSummary = {
 
 /** About 1.2s of reading; World affairs held 1,600 stance rows in Nov 2026. */
 export const MAX_STANCE_PAGES = 5;
-export const MAX_STANCE_ROWS = MAX_STANCE_PAGES * CLAIM_RESPONSE_SUMMARY_PAGE_SIZE;
 const CLAIM_LOOKUP_SIZE = 1000;
 
 /** Bands and order for the topic's claims, from the space's stance rows (one per user, latest wins). */
@@ -64,7 +63,9 @@ export async function readStanceRows(
   for (let page = 0; page < maxPages; page++) {
     const result = await fetchPage(after);
     rows.push(...result.items);
-    if (!result.hasNextPage || !result.endCursor || result.endCursor === after) return { rows, truncated: false };
+    if (!result.hasNextPage) return { rows, truncated: false };
+    if (!result.endCursor || result.endCursor === after)
+      throw new Error('Stance responses have a next page but no new cursor');
     after = result.endCursor;
   }
   const last = rows.at(-1)?.objectId;

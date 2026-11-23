@@ -60,4 +60,9 @@ describe('readStanceRows', () => {
     expect(truncated).toBe(true);
     expect(rows.map(entry => entry.objectId)).toEqual(['a', 'b', 'b']);
   });
+
+  it('fails rather than undercount when the cursor chain breaks', async () => {
+    const broken = async () => ({ items: [row('a', 'u1', 0)], endCursor: null, hasNextPage: true });
+    await expect(readStanceRows(broken)).rejects.toThrow();
+  });
 });
