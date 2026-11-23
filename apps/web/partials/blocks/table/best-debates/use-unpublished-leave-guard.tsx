@@ -16,8 +16,9 @@ import { RankingFlowDialog } from './ranking-flow-dialog';
  *   the prompt instead of leaving;
  * - closing or reloading the tab, by `beforeunload`, which can only show the browser's own prompt.
  *
- * Nothing is armed while there is nothing unpublished, so right after a publish nothing fires. The
- * spare Back entry can't be removed then without navigating, so a Back that spends it carries on.
+ * Nothing asks while there is nothing unpublished. Right after a publish the spare Back entry is still
+ * there and can't be removed without navigating, so every way out spends it first: a Back that lands
+ * on the entry under it carries on, and the back arrow and in-app links step off it before leaving.
  *
  * Once the person has chosen to leave (Leave without publishing, or Publish and leave), every catch
  * stands down until the screen is gone: the leave itself (spending the spare Back entry, a full-page
@@ -83,14 +84,32 @@ export function useUnpublishedLeaveGuard({
     };
   }, [rearm]);
 
-  /** Runs `leave` now, or once the person has chosen in the prompt. */
-  const guard = React.useCallback((leave: () => void) => {
-    if (!activeRef.current || leavingRef.current) {
-      leave();
+  /** Steps off the spare entry, if there is one (it is this screen, so nothing navigates), then runs `then`. */
+  const spendSpare = React.useCallback((then: () => void) => {
+    if (!sentinelRef.current) {
+      then();
       return;
     }
-    setPending(() => leave);
+    sentinelRef.current = false;
+    window.addEventListener('popstate', () => then(), { once: true });
+    window.history.back();
   }, []);
+
+  /** Runs `leave` now, or once the person has chosen in the prompt. */
+  const guard = React.useCallback(
+    (leave: () => void) => {
+      if (leavingRef.current) {
+        leave();
+        return;
+      }
+      if (!activeRef.current) {
+        spendSpare(leave);
+        return;
+      }
+      setPending(() => leave);
+    },
+    [spendSpare]
+  );
 
   // Tab close and reload.
   React.useEffect(() => {
@@ -104,10 +123,11 @@ export function useUnpublishedLeaveGuard({
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [active]);
 
-  // In-app links.
+  // In-app links: asked about while there are changes; after a publish, followed once the spare entry
+  // is spent, or Back from the link's page would land on this screen twice.
   React.useEffect(() => {
-    if (!active) return;
     const onClick = (event: MouseEvent) => {
+      if (!activeRef.current && !sentinelRef.current) return;
       if (leavingRef.current || event.defaultPrevented || event.button !== 0) return;
       if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       const anchor = (event.target as Element | null)?.closest?.('a[href]') as HTMLAnchorElement | null;
@@ -117,11 +137,16 @@ export function useUnpublishedLeaveGuard({
       if (url.pathname === window.location.pathname && url.search === window.location.search) return;
       event.preventDefault();
       event.stopPropagation();
+      if (!activeRef.current) {
+        // Clicked again once the spare is spent, this listener lets it through to the app's router.
+        spendSpare(() => (anchor.isConnected ? anchor.click() : window.location.assign(url.toString())));
+        return;
+      }
       setPending(() => () => window.location.assign(url.toString()));
     };
     document.addEventListener('click', onClick, true);
     return () => document.removeEventListener('click', onClick, true);
-  }, [active]);
+  }, [spendSpare]);
 
   // The browser's Back: a spare history entry while there are changes, spent by Back.
   // The address as of the last render, and the one Back left. The screen rewrites its query in place
@@ -131,6 +156,9 @@ export function useUnpublishedLeaveGuard({
   const hrefRef = React.useRef('');
   const leftHrefRef = React.useRef<string | null>(null);
   React.useEffect(() => {
+    // The router re-renders on popstate before this hook's listener runs (synchronously, in React
+    // 19), so a render on the entry under the spare one is Back's landing, not the left address.
+    if (baseTokenRef.current && window.history.state?.rankingLeaveGuardBase === baseTokenRef.current) return;
     hrefRef.current = window.location.href;
   });
   React.useEffect(() => {
@@ -176,15 +204,8 @@ export function useUnpublishedLeaveGuard({
         if (window.location.href === from) rearm();
       }, LEAVE_SETTLE_MS);
     };
-    // A spare entry still in place would make Back land on this screen again: spend it first (it is
-    // this same URL, so nothing navigates), then leave once the browser says it's gone.
-    if (sentinelRef.current) {
-      sentinelRef.current = false;
-      window.addEventListener('popstate', run, { once: true });
-      window.history.back();
-      return;
-    }
-    run();
+    // A spare entry still in place would make Back land on this screen again.
+    spendSpare(run);
   };
 
   const dialog = pending ? (
