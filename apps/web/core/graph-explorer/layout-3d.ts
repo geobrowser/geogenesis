@@ -73,6 +73,11 @@ export function simulateLayout({
         let dx = A[0] - B[0];
         let dy = A[1] - B[1];
         let dz = A[2] - B[2];
+        // Coincident nodes have no direction to repel along; give each pair a fixed one.
+        if (dx * dx + dy * dy + dz * dz < 1e-6) {
+          const pair = `${ids[i]}|${ids[j]}`;
+          [dx, dy, dz] = [hash01(`${pair}x`) - 0.5, hash01(`${pair}y`) - 0.5, hash01(`${pair}z`) - 0.5];
+        }
         const d2 = dx * dx + dy * dy + dz * dz + 1;
         const push = settings.repulsion / d2;
         const d = Math.sqrt(d2);

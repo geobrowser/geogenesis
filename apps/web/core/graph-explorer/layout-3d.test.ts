@@ -54,6 +54,26 @@ describe('simulateLayout', () => {
     expect(p.get('n0')).toEqual([-400, 0, 0]);
   });
 
+  it('separates nodes that start at the same point', () => {
+    // A selection that lands before the previous one has moved starts its new nodes on their parent.
+    const stacked = simulateLayout({
+      ids: ['c', 'a', 'b'],
+      links: [
+        { a: 'c', b: 'a', hop: 1 },
+        { a: 'c', b: 'b', hop: 1 },
+      ],
+      centreId: 'c',
+      previous: new Map([
+        ['c', [0, 0, 0]],
+        ['a', [0, 0, 0]],
+        ['b', [0, 0, 0]],
+      ]),
+      settings: PHONE_LAYOUT,
+    });
+    const [a, b] = [stacked.get('a')!, stacked.get('b')!];
+    expect(Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])).toBeGreaterThan(100);
+  });
+
   it('lays out the design’s largest graph quickly', () => {
     const start = performance.now();
     simulateLayout({ ids, links, centreId: 'n0', previous: new Map(), settings: DESKTOP_LAYOUT });
