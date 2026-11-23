@@ -22,9 +22,8 @@ export type ClaimAbout = {
 export type ClaimsAboutPage = { claims: ClaimAbout[]; endCursor: string | null; hasNextPage: boolean };
 
 /**
- * Claims with an about-relation (CLAIM_ABOUT_PROPERTY_IDS) to the entity. Relations are per space,
- * so the relation's space is filtered too. With `filter.claimsTopicId`, the claim must also carry
- * that topic through `Topics`. No totalCount: it is too slow on large topics.
+ * Claims about the entity, optionally also carrying `filter.claimsTopicId` via `Topics`.
+ * Relation spaces are filtered too, since relations are per space. No totalCount: too slow.
  */
 function claimsAboutQuery(withTopic: boolean) {
   const about =
@@ -91,11 +90,7 @@ type ClaimsAboutResponse = {
   } | null;
 };
 
-/**
- * The space a claim is read, linked and voted in: `resolveEntitySpaceId` against the topic page's
- * space, the rule TopicClaimCard uses, so both surfaces count and take votes in the same space.
- * Without a requested space, the helper's own fallback (`entityHomeSpaceId`).
- */
+/** Where a claim is read and voted in: TopicClaimCard's rule, so both surfaces use the same space. */
 export function claimSpaceId(
   claim: { spaceIds: string[]; values: Array<{ propertyId: string; spaceId: string; text: string | null }> },
   requestedSpaceId: string | null
