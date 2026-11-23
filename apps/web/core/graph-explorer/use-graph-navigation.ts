@@ -28,9 +28,8 @@ function markPushed(href: string) {
 }
 
 /**
- * Moves through the graph with the browser's history: each hop is a push, and returning to the
- * previous centre is a browser Back when this tab reached the current URL by an explorer push
- * (kept in sessionStorage, so it survives a reload). Otherwise, as on a shared link, it replaces.
+ * Each hop is a push. Returning to the previous centre is a browser Back if this tab pushed the
+ * current URL (sessionStorage, so it survives a reload); otherwise, as on a shared link, a replace.
  */
 export function useGraphNavigation(history: GraphHistory, params: URLSearchParams) {
   const router = useRouter();

@@ -52,7 +52,7 @@ function ClaimPage({ claims }: { claims: ClaimAbout[] }) {
   );
 }
 
-/** A failed batch counts as settled, so rows say "Responses unavailable" rather than load forever. */
+/** A failed batch counts as settled, so its rows show "Responses unavailable". */
 function SpaceBatch({
   spaceId,
   claimIds,
