@@ -10,6 +10,11 @@ import { ActionSurface } from '~/core/action-context-provider';
 import type { Debate, DebateParticipant } from '~/core/debates/api';
 import type { ClaimMarker } from '~/core/debates/claim-ticker';
 import type { DebatePagePlayerState } from '~/core/debates/debate-page-outcome';
+import {
+  forgetDebatePosition,
+  useDebateResume,
+  useRememberDebatePosition,
+} from '~/core/debates/debate-resume-positions';
 import { DebatePositionChip } from '~/core/debates/debate-video-tile';
 import { isOpenRoundsDebate } from '~/core/debates/open-rounds';
 import { usePairReadiness } from '~/core/debates/pair-readiness';
@@ -317,6 +322,8 @@ function PairedDebateFeedPlayer({
   ref,
 }: DebateFeedPlayerProps) {
   const reducedOverlays = reducedOverlaysProp || editorMode;
+  // Read first, so whatever decides how the debate opens can see a saved position.
+  const resumeSeconds = useDebateResume(debate.id);
   // A tap-to-play card has its own hold, below, and keeps out of the feeds' one entirely.
   const holdFullPlayback = holdFullPlaybackProp && !tapToPlay;
   const [fullPlaybackStarted, setFullPlaybackStarted] = useAtom(feedFullPlaybackStartedAtom);
@@ -488,9 +495,11 @@ function PairedDebateFeedPlayer({
     setStartedDebateId(debate.id);
     if (!active) onPlaybackRequest?.();
   };
-  const playFromStart = () => {
-    measurement.control('replay');
+  const playFromStart = (control: 'replay' | 'start_over' = 'replay') => {
+    measurement.control(control);
     resetAnimationSeek();
+    setStartOverId(null);
+    forgetDebatePosition(debate.id);
     pair.release();
     void playFromStartRaw();
   };
@@ -633,6 +642,38 @@ function PairedDebateFeedPlayer({
     resetAnimationSeek();
     seekBothRaw(initialSeekSeconds);
   }, [debate.id, initialSeekSeconds, ready, seekBothRaw]);
+
+  /**
+   * Pick up where this browser's viewer stopped (`resumeSeconds`, read at the top), once per debate.
+   * A link that named a moment wins, and is not followed by a resume once it is dropped (browser
+   * Back), which the `?t=` latch alone would allow.
+   *
+   * Does not wait for the elements: on a held or released card the seek waits as a pending seek,
+   * and the Stream recordings start loading from it when they attach (GEO-3604) rather than from
+   * 0:00 and then seeking. Waits for the debate's length: a seek is capped at it, so before it is
+   * known the resume would land at 0. Placed before the autoplay effect, which runs in the same
+   * commit: the pair starts from here, not from the top. An unmeasured player (the moments editor)
+   * is not a viewer's, so it neither resumes nor saves a position.
+   */
+  const [resumeSettledId, setResumeSettledId] = React.useState<string | null>(null);
+
+  const [startOverId, setStartOverId] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    if (resumeSettledId === debate.id) return;
+    if (measure && initialSeekSeconds == null && resumeSeconds != null) {
+      if (!ready || timelineSeconds <= 0) return;
+      resetAnimationSeek();
+      seekBothRaw(resumeSeconds);
+      setStartOverId(debate.id);
+    }
+    setResumeSettledId(debate.id);
+  }, [debate.id, initialSeekSeconds, measure, ready, resumeSeconds, resumeSettledId, seekBothRaw, timelineSeconds]);
+  useRememberDebatePosition({
+    debateId: debate.id,
+    playheadSeconds,
+    timelineSeconds,
+    recording: measure && active && ready && playing && !isScrubbing && resumeSettledId === debate.id,
+  });
 
   /**
    * Stopped, and only a tap will start it.
@@ -1045,44 +1086,50 @@ function PairedDebateFeedPlayer({
     : roundBadge;
   // Watched to the end, whichever layout it ended in — a compact tile never shows the end card, and
   // a debate finished there must not come back as a suggestion.
+  // Finished, too, is where a resume stops: the next visit opens at the beginning.
   React.useEffect(() => {
-    if (showReplay && measure) markDebateWatched(debate.id);
+    if (!showReplay || !measure) return;
+    markDebateWatched(debate.id);
+    forgetDebatePosition(debate.id);
   }, [showReplay, debate.id, measure]);
   // Loaded while the debate is the active one, so its numbers are there when the video ends rather
   // than drawing empty bars and filling them in.
 
   /*
-   * Replay from the end card, held until this player may play.
+   * Replay from the end card, or Start over on a resumed debate, held until this player may play.
    *
    * In a row of cards only one holds playback, and pressing Replay on another first hands playback
    * over — which `active` reports a render later. Playing at once would run this debate beside the
    * one still holding playback; dropping the press made Replay take two taps, because an ended
    * debate does not resume by itself once it is handed playback. So the press asks for playback,
-   * is kept, and is carried out the moment playback arrives. It lapses if the debate stops being
-   * ended in the meantime.
+   * is kept, and is carried out the moment playback arrives. A Replay lapses if the debate stops
+   * being ended in the meantime; a Start over if it ends, or the card moves to another debate.
    */
-  const [replayPending, setReplayPending] = React.useState(false);
-  const replayFromEndCard = () => {
+  const [restartPending, setRestartPending] = React.useState<'replay' | 'start_over' | null>(null);
+  const restartWhenActive = (control: 'replay' | 'start_over') => {
     if (active) {
-      playFromStart();
+      playFromStart(control);
       return;
     }
-    setReplayPending(true);
+    setRestartPending(control);
     onPlaybackRequest?.();
   };
-  // An effect event, so the effect runs on the three facts that decide it rather than on every render
+  const replayFromEndCard = () => restartWhenActive('replay');
+  // An effect event, so the effect runs on the facts that decide it rather than on every render
   // for a `playFromStart` that is a fresh function each time.
-  const replayNow = React.useEffectEvent(() => playFromStart());
+  const restartNow = React.useEffectEvent((control: 'replay' | 'start_over') => playFromStart(control));
+  const startOverOffered = startOverId === debate.id;
   React.useEffect(() => {
-    if (!replayPending) return;
-    if (!playbackEnded) {
-      setReplayPending(false);
+    if (restartPending == null) return;
+    const lapsed = restartPending === 'replay' ? !playbackEnded : playbackEnded || !startOverOffered;
+    if (lapsed) {
+      setRestartPending(null);
       return;
     }
     if (!active) return;
-    setReplayPending(false);
-    replayNow();
-  }, [active, playbackEnded, replayPending]);
+    setRestartPending(null);
+    restartNow(restartPending);
+  }, [active, playbackEnded, restartPending, startOverOffered]);
   // Refused even muted (GEO-3602): dim the frame and show one "Watch the debate" button so it doesn't
   // read as paused. Active card only: `autoplayBlocked` outlives scrolling away. Not on compact tiles,
   // which have no room for the label.
@@ -1468,13 +1515,34 @@ function PairedDebateFeedPlayer({
                 >
                   {mutedByUser ? <SpeakerMuted /> : <Speaker />}
                 </ControlCircle>
+                {startOverOffered && !refusedPrompt && (
+                  <button
+                    type="button"
+                    onClick={event => {
+                      event.stopPropagation();
+                      restartWhenActive('start_over');
+                    }}
+                    className={cx(
+                      'flex h-10.5 items-center gap-1 rounded-full bg-white text-smallButton text-text shadow-light',
+                      reducedOverlays
+                        ? 'w-10.5 justify-center [&>svg]:scale-[1.3]'
+                        : 'px-3 @max-md:w-10.5 @max-md:justify-center @max-md:px-0 @max-md:[&>svg]:scale-[1.3]'
+                    )}
+                  >
+                    <RetrySmall />
+                    <span className={reducedOverlays ? 'sr-only' : '@max-md:sr-only'}>Start over</span>
+                  </button>
+                )}
                 {/* Not a button, so a tap on it is a page tap and gives sound; Unmute is the control
                   a screen reader gets. */}
                 {soundHint && (
                   <span
                     aria-hidden
                     data-debate-sound-hint
-                    className="flex h-8 items-center rounded-full bg-white px-3 text-[0.8125rem] leading-none text-text shadow-light"
+                    className={cx(
+                      'flex h-8 items-center rounded-full bg-white px-3 text-[0.8125rem] leading-none text-text shadow-light',
+                      startOverOffered && !refusedPrompt && '@max-md:hidden'
+                    )}
                   >
                     Tap for sound
                   </span>
@@ -1652,7 +1720,7 @@ function PairedDebateFeedPlayer({
           <button
             type="button"
             aria-label={showReplay ? 'Replay debate' : 'Resume debate'}
-            onClick={showReplay ? playFromStart : () => togglePlayback()}
+            onClick={showReplay ? () => playFromStart() : () => togglePlayback()}
             className={cx(
               CENTERED_PLAYBACK_CONTROL_CLASS,
               'z-30',
