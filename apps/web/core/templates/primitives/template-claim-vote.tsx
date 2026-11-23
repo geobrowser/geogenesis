@@ -275,11 +275,26 @@ export function ClaimVoteBinding({
   return <>{children(localVoteBinding({ userVote, agreeCount, disagreeCount, onVote, onClearVote }))}</>;
 }
 
-/** The Agree / Disagree pill pair a claim list row draws from its binding. */
-export function ClaimVotePills({ title, vote }: { title: string; vote: TemplateVoteBinding }) {
+/**
+ * The Agree / Disagree pill pair a claim list row draws from its binding. `fill` stretches the pair
+ * across its container, as a Recent debates card does.
+ */
+export function ClaimVotePills({
+  title,
+  vote,
+  fill = false,
+}: {
+  title: string;
+  vote: TemplateVoteBinding;
+  fill?: boolean;
+}) {
   return (
-    <span className="flex shrink-0 flex-col gap-1">
-      <div className="flex shrink-0 items-center gap-1.5" role="group" aria-label={`Vote on ${title}`}>
+    <span className={cx('flex flex-col gap-1', fill ? 'w-full' : 'shrink-0')}>
+      <div
+        className={cx('flex items-center gap-1.5', fill ? 'pt-0.5' : 'shrink-0')}
+        role="group"
+        aria-label={`Vote on ${title}`}
+      >
         {(['agree', 'disagree'] as const).map(choice => {
           const pressed = vote.userVote === choice;
           const count = choice === 'agree' ? vote.agreeCount : vote.disagreeCount;
@@ -294,6 +309,7 @@ export function ClaimVotePills({ title, vote }: { title: string; vote: TemplateV
               onClick={() => vote.press(choice)}
               className={cx(
                 'inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full border px-2.5 text-[13px] font-medium whitespace-nowrap transition-colors disabled:cursor-default disabled:opacity-60',
+                fill && 'flex-1 justify-center',
                 pressed ? 'border-text bg-text text-white' : 'border-grey-02 bg-white text-text hover:border-text'
               )}
             >

@@ -5,6 +5,8 @@ import * as React from 'react';
 import cx from 'classnames';
 import Link from 'next/link';
 
+import { ActionContextProvider } from '~/core/action-context-provider';
+
 import { type ClaimKind, type ClaimSummaryModel, formatClaimKindLabel, formatCompactCount } from '../models';
 import {
   AddClaimPopover,
@@ -189,12 +191,13 @@ export function ClaimExplorer({ contestedClaims, agreedClaims, title = 'Claims',
         <TemplateVoteRows targets={visible.map(claim => claim.voteTarget)}>
           <div className="divide-y divide-divider">
             {visible.map((claim, index) => (
-              <RankedClaimRow
+              // Names the list and the row on every action taken in it, a vote included.
+              <ActionContextProvider
                 key={claim.id}
-                rank={startIndex + index + 1}
-                claim={claim}
-                isAgreed={activeTab === 'agreed'}
-              />
+                value={{ list_id: 'template_claims', item_position: startIndex + index + 1 }}
+              >
+                <RankedClaimRow rank={startIndex + index + 1} claim={claim} isAgreed={activeTab === 'agreed'} />
+              </ActionContextProvider>
             ))}
           </div>
         </TemplateVoteRows>

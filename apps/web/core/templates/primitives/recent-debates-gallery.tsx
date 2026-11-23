@@ -5,12 +5,14 @@ import * as React from 'react';
 import cx from 'classnames';
 import Link from 'next/link';
 
+import { ActionContextProvider } from '~/core/action-context-provider';
+
 import type { TopicRecentDebateModel, TopicRecentDebateParticipantModel } from '../models';
-import { formatCompactCount, formatPercentInt } from '../models';
+import { formatPercentInt } from '../models';
 import { EntityInlineContext, EntityOverflowMenu } from './entity-overflow-menu';
-import { ArrowLeftIcon, ArrowRightIcon, ArrowUpRightIcon, PlayIcon, ThumbDownIcon, ThumbUpIcon } from './icons';
+import { ArrowLeftIcon, ArrowRightIcon, ArrowUpRightIcon, PlayIcon } from './icons';
 import { ListRankingHeaderControl, ListRankingWorkspace, type RankableListItem, useListRanking } from './list-ranking';
-import { ClaimVoteBinding, TemplateVoteRows } from './template-claim-vote';
+import { ClaimVoteBinding, ClaimVotePills, TemplateVoteRows } from './template-claim-vote';
 import { TEMPLATE_CARD_SURFACE } from './template-shell';
 
 export interface RecentDebatesGalleryProps {
@@ -186,8 +188,14 @@ export function RecentDebatesGallery({
         >
           {/* One geo-chat lookup for every card that votes, rather than one per card. */}
           <TemplateVoteRows targets={displayDebates.map(debate => debate.voteTarget)}>
-            {displayDebates.map(debate => (
-              <RecentDebateGalleryCard key={debate.id} debate={debate} />
+            {displayDebates.map((debate, index) => (
+              // Names the list and the card on every action taken in it, a vote included.
+              <ActionContextProvider
+                key={debate.id}
+                value={{ list_id: 'template_recent_debates', item_position: index + 1 }}
+              >
+                <RecentDebateGalleryCard debate={debate} />
+              </ActionContextProvider>
             ))}
           </TemplateVoteRows>
         </div>
@@ -309,75 +317,7 @@ function RecentDebateGalleryCard({ debate }: { debate: TopicRecentDebateModel })
           onVote={debate.onVote}
           onClearVote={debate.onClearVote}
         >
-          {vote =>
-            vote && (
-              <>
-                <div
-                  className="flex items-center gap-1.5 pt-0.5"
-                  role="group"
-                  aria-label={`Vote on ${debate.claimTitle}`}
-                >
-                  <button
-                    type="button"
-                    disabled={vote.disabled}
-                    title={vote.titleFor('agree')}
-                    aria-pressed={vote.userVote === 'agree'}
-                    onClick={() => vote.press('agree')}
-                    className={cx(
-                      'inline-flex h-7 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-full border px-2.5 text-[13px] font-medium whitespace-nowrap transition-colors disabled:cursor-default disabled:opacity-60',
-                      vote.userVote === 'agree'
-                        ? 'border-text bg-text text-white'
-                        : 'border-grey-02 bg-white text-text hover:border-text'
-                    )}
-                  >
-                    <ThumbUpIcon className="size-3.5 shrink-0" />
-                    <span>Agree</span>
-                    {vote.agreeCount !== undefined && vote.agreeCount > 0 && (
-                      <span
-                        className={cx(
-                          'text-[12px] tabular-nums',
-                          vote.userVote === 'agree' ? 'text-white/80' : 'text-grey-04'
-                        )}
-                      >
-                        {formatCompactCount(vote.agreeCount)}
-                      </span>
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={vote.disabled}
-                    title={vote.titleFor('disagree')}
-                    aria-pressed={vote.userVote === 'disagree'}
-                    onClick={() => vote.press('disagree')}
-                    className={cx(
-                      'inline-flex h-7 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-full border px-2.5 text-[13px] font-medium whitespace-nowrap transition-colors disabled:cursor-default disabled:opacity-60',
-                      vote.userVote === 'disagree'
-                        ? 'border-text bg-text text-white'
-                        : 'border-grey-02 bg-white text-text hover:border-text'
-                    )}
-                  >
-                    <ThumbDownIcon className="size-3.5 shrink-0" />
-                    <span>Disagree</span>
-                    {vote.disagreeCount !== undefined && vote.disagreeCount > 0 && (
-                      <span
-                        className={cx(
-                          'text-[12px] tabular-nums',
-                          vote.userVote === 'disagree' ? 'text-white/80' : 'text-grey-04'
-                        )}
-                      >
-                        {formatCompactCount(vote.disagreeCount)}
-                      </span>
-                    )}
-                  </button>
-                </div>
-                {vote.error && (
-                  <span role="alert" className="text-[12.5px] text-red-01">
-                    {vote.error}
-                  </span>
-                )}
-              </>
-            )
-          }
+          {vote => vote && <ClaimVotePills title={debate.claimTitle} vote={vote} fill />}
         </ClaimVoteBinding>
 
         {debate.split && debate.split.rows.length > 0 && (

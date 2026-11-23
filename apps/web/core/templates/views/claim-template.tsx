@@ -4,6 +4,8 @@ import * as React from 'react';
 
 import Link from 'next/link';
 
+import { ActionContextProvider } from '~/core/action-context-provider';
+
 import {
   type ClaimKind,
   type ClaimTemplateModel,
@@ -390,7 +392,13 @@ function SubClaimGroupSection({
         {/* One geo-chat lookup for the page of sub-claims, rather than one per row. */}
         <TemplateVoteRows targets={visibleItems.map(subClaim => subClaim.voteTarget)}>
           {visibleItems.map((subClaim, idx) => (
-            <SubClaimRow key={subClaim.id} rank={startIndex + idx + 1} subClaim={subClaim} />
+            // Names the list and the row on every action taken in it, a vote included.
+            <ActionContextProvider
+              key={subClaim.id}
+              value={{ list_id: 'template_sub_claims', item_position: startIndex + idx + 1 }}
+            >
+              <SubClaimRow rank={startIndex + idx + 1} subClaim={subClaim} />
+            </ActionContextProvider>
           ))}
         </TemplateVoteRows>
         {totalPages > 1 && (

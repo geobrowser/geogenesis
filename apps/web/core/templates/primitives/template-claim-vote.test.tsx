@@ -5,12 +5,15 @@ import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ClaimSummaryModel, ClaimVoteTarget } from '../models';
+import { useActionScope } from '~/core/action-context-provider';
+
+import type { ClaimSummaryModel, ClaimVoteTarget, TopicRecentDebateModel } from '../models';
 import {
   ClaimExplorer,
   ClaimVoteBinding,
   ClaimVotePills,
   EntityActionProvider,
+  RecentDebatesGallery,
   SplitBars,
   TemplateClaimVote,
   TemplateVoteRows,
@@ -24,6 +27,8 @@ const mocks = vi.hoisted(() => ({
   useDebateClaimsBySpaces: vi.fn(),
   useClaimResponseState: vi.fn(),
   useClaimPositionControl: vi.fn(),
+  /** The action scope each control was rendered under: what its vote's analytics would carry. */
+  scopes: [] as Array<{ claimId: string; list_id?: string; item_position?: number }>,
 }));
 
 vi.mock('~/core/debates/hooks', () => ({
@@ -34,7 +39,13 @@ vi.mock('~/core/claims/browse/use-claim-response-state', () => ({
   useClaimResponseState: (...args: unknown[]) => mocks.useClaimResponseState(...args),
 }));
 vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
-  useClaimPositionControl: (...args: unknown[]) => mocks.useClaimPositionControl(...args),
+  useClaimPositionControl: (...args: unknown[]) => {
+    // The real control reads this scope for its `action_completed` / `local_vote` attribution.
+    const scope = useActionScope();
+    const { claim } = args[0] as { claim: { claim_entity_id: string } };
+    mocks.scopes.push({ claimId: claim.claim_entity_id, list_id: scope.list_id, item_position: scope.item_position });
+    return mocks.useClaimPositionControl(...args);
+  },
 }));
 
 const TARGET: ClaimVoteTarget = { claimId: 'claim-1', spaceId: 'space-1', title: 'Rents fall when supply rises' };
@@ -68,10 +79,14 @@ function setState(overrides: Record<string, unknown> = {}) {
 }
 
 beforeEach(() => {
+  mocks.scopes = [];
   mocks.respond.mockReset();
   mocks.useDebateClaims.mockReset().mockReturnValue({ data: undefined });
   mocks.useDebateClaimsBySpaces.mockReset().mockReturnValue({ claims: [] });
-  mocks.useClaimResponseState.mockReset().mockImplementation(() => mocks.state);
+  mocks.useClaimResponseState.mockReset().mockImplementation((args: { claimId: string }) => ({
+    ...mocks.state,
+    claim: { ...(mocks.state.claim as object), claim_entity_id: args.claimId },
+  }));
   mocks.useClaimPositionControl.mockReset().mockImplementation(() => mocks.control);
   setControl();
   setState();
@@ -289,6 +304,56 @@ describe('ClaimExplorer voting', () => {
     expect(onVote).toHaveBeenCalledWith('agree');
     expect(mocks.useClaimPositionControl).not.toHaveBeenCalled();
     expect(mocks.useDebateClaimsBySpaces).not.toHaveBeenCalled();
+  });
+});
+
+describe('list attribution on template votes', () => {
+  const lastScope = (claimId: string) => mocks.scopes.filter(scope => scope.claimId === claimId).at(-1);
+  const second: ClaimVoteTarget = { claimId: 'claim-2', spaceId: 'space-1', title: 'Second claim' };
+
+  it('names the Claims list and the row on a vote from it', () => {
+    const row = (target: ClaimVoteTarget): ClaimSummaryModel => ({
+      id: target.claimId,
+      title: target.title,
+      split: { rows: [], isSplit: true },
+      voteTarget: target,
+    });
+    render(
+      <EntityActionProvider>
+        <ClaimExplorer contestedClaims={[row(TARGET), row(second)]} agreedClaims={[]} />
+      </EntityActionProvider>
+    );
+
+    expect(lastScope('claim-1')).toMatchObject({ list_id: 'template_claims', item_position: 1 });
+    expect(lastScope('claim-2')).toMatchObject({ list_id: 'template_claims', item_position: 2 });
+  });
+
+  it('names the Recent debates list and the card, and draws the card pills from the binding', () => {
+    const debate = (id: string, target: ClaimVoteTarget): TopicRecentDebateModel => ({
+      id,
+      claimId: target.claimId,
+      claimTitle: target.title,
+      date: 'Nov 20',
+      duration: '12 min',
+      votesLabel: '3 votes',
+      participants: [
+        { name: 'Ada', position: 'Agree', communityColor: '#000' },
+        { name: 'Bo', position: 'Disagree', communityColor: '#000' },
+      ],
+      voteTarget: target,
+    });
+    render(
+      <EntityActionProvider>
+        <RecentDebatesGallery debates={[debate('debate-1', TARGET), debate('debate-2', second)]} />
+      </EntityActionProvider>
+    );
+
+    expect(lastScope('claim-1')).toMatchObject({ list_id: 'template_recent_debates', item_position: 1 });
+    expect(lastScope('claim-2')).toMatchObject({ list_id: 'template_recent_debates', item_position: 2 });
+
+    const group = screen.getByRole('group', { name: `Vote on ${second.title}` });
+    fireEvent.click(within(group).getByRole('button', { name: /^Disagree/ }));
+    expect(mocks.respond).toHaveBeenCalledWith(false);
   });
 });
 

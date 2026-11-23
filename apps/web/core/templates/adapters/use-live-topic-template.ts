@@ -55,6 +55,7 @@ import {
   readEntityTextValue,
   resolveTemplateImageUrl,
 } from '../ontology';
+import { type ActiveClaimVote, aggregateClaimVotes, baselineVoteFor } from './topic-claim-votes';
 import { resolveDebateStillSrc, useDebateParticipantsBatch } from './use-debate-participants-batch';
 import { useInitialHydrationGate } from './use-initial-hydration-gate';
 import { useLiveEntityActions } from './use-live-entity-actions';
@@ -173,21 +174,6 @@ function extractHandleFromSocialUrl(rawUrl: string | null | undefined): string |
     return undefined;
   }
 }
-
-type SpaceVoteBucket = {
-  spaceId: string;
-  positive: number;
-  negative: number;
-};
-
-type ClaimMultiSpaceVotes = {
-  totalPositive: number;
-  totalNegative: number;
-  viewerVote: VoteChoice;
-  /** The viewer's vote in each space (hex id), so a row voting in one space swaps only that vote. */
-  viewerVoteBySpace: Map<string, Exclude<VoteChoice, null>>;
-  bySpace: SpaceVoteBucket[];
-};
 
 const SUBSPACE_PALETTE = ['#6833ff', '#3963fe', '#0f766e', '#b45309'] as const;
 
@@ -582,10 +568,7 @@ export function useLiveTopicTemplate({
       );
 
       // Deduplicate by (objectId, spaceId, userId) so a single user counts once per space
-      const activeByKey = new Map<
-        string,
-        { objectHex: string; spaceHex: string; userId: string; isPositive: boolean }
-      >();
+      const activeByKey = new Map<string, ActiveClaimVote>();
       const spaceIdsSet = new Set<string>();
 
       for (const row of response) {
@@ -615,51 +598,7 @@ export function useLiveTopicTemplate({
         }
       }
 
-      const byClaim = new Map<string, ClaimMultiSpaceVotes>();
-      const byClaimSpace = new Map<string, Map<string, SpaceVoteBucket>>();
-
-      for (const entry of activeByKey.values()) {
-        let claimAgg = byClaim.get(entry.objectHex);
-        if (!claimAgg) {
-          claimAgg = {
-            totalPositive: 0,
-            totalNegative: 0,
-            viewerVote: null,
-            viewerVoteBySpace: new Map(),
-            bySpace: [],
-          };
-          byClaim.set(entry.objectHex, claimAgg);
-        }
-        if (entry.isPositive) claimAgg.totalPositive += 1;
-        else claimAgg.totalNegative += 1;
-
-        if (personalSpaceId && ID.equals(entry.userId, personalSpaceId)) {
-          claimAgg.viewerVote = entry.isPositive ? 'agree' : 'disagree';
-          claimAgg.viewerVoteBySpace.set(entry.spaceHex, claimAgg.viewerVote);
-        }
-
-        let spaceMap = byClaimSpace.get(entry.objectHex);
-        if (!spaceMap) {
-          spaceMap = new Map();
-          byClaimSpace.set(entry.objectHex, spaceMap);
-        }
-        let bucket = spaceMap.get(entry.spaceHex);
-        if (!bucket) {
-          bucket = { spaceId: entry.spaceHex, positive: 0, negative: 0 };
-          spaceMap.set(entry.spaceHex, bucket);
-        }
-        if (entry.isPositive) bucket.positive += 1;
-        else bucket.negative += 1;
-      }
-
-      for (const [claimHex, spaceMap] of byClaimSpace.entries()) {
-        const agg = byClaim.get(claimHex);
-        if (agg) {
-          agg.bySpace = Array.from(spaceMap.values()).sort(
-            (a, b) => b.positive + b.negative - (a.positive + a.negative)
-          );
-        }
-      }
+      const byClaim = aggregateClaimVotes(activeByKey.values(), personalSpaceId);
 
       return { byClaim, spaceNameByHex };
     },
@@ -781,8 +720,7 @@ export function useLiveTopicTemplate({
       claimId,
       spaceId: voteSpaceId,
       title,
-      baselineVote:
-        votesQuery.data?.byClaim.get(ID.uuidToHex(claimId))?.viewerVoteBySpace.get(ID.uuidToHex(voteSpaceId)) ?? null,
+      baselineVote: baselineVoteFor(votesQuery.data?.byClaim, claimId, voteSpaceId),
       onSettled: refreshVotes,
     });
 
