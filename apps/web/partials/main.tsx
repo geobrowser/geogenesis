@@ -10,7 +10,7 @@ import { usePathname } from 'next/navigation';
 import { isSpaceCallPath } from '~/core/space-calls/routes';
 import { useDiff } from '~/core/state/diff-store';
 
-import { debateFullscreenActiveAtom } from '~/atoms';
+import { debateFullscreenActiveAtom, graphExplorerActiveAtom } from '~/atoms';
 
 type MainProps = {
   children: React.ReactNode;
@@ -25,8 +25,10 @@ export const Main = ({ children }: MainProps) => {
   // knows. Wrapping that takeover in the page chrome below makes the document taller than the
   // viewport, so the feed scrolls up under the sticky navbar.
   const debateFullscreenActive = useAtomValue(debateFullscreenActiveAtom);
+  const graphExplorerActive = useAtomValue(graphExplorerActiveAtom);
   const isFullWidth =
     debateFullscreenActive ||
+    graphExplorerActive ||
     /^\/space\/[^/]+\/community\/call\/[^/]+$/.test(pathname) ||
     // Debates and claims are both full-bleed browse surfaces — see `SpaceChromeGate`, which strips
     // the space header and tabs from the same two routes. The patterns are separate because that

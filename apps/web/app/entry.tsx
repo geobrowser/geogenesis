@@ -4,6 +4,7 @@ import { Analytics } from '@vercel/analytics/react';
 
 import * as React from 'react';
 
+import cx from 'classnames';
 import { useAtomValue } from 'jotai';
 import dynamic from 'next/dynamic';
 import { usePathname, useSearchParams } from 'next/navigation';
@@ -59,6 +60,7 @@ import { PageViewTracker } from '~/app/page-view-tracker';
 import {
   entitySidePanelWantsEditAtom,
   exploreDebateClaimsPanelAtom,
+  graphExplorerActiveAtom,
   rankingFullscreenActiveAtom,
   rankingFullscreenFocusTargetAtom,
 } from '~/atoms';
@@ -296,7 +298,8 @@ export function App({ children }: { children: React.ReactNode }) {
   const mobileBrowseButtonRef = React.useRef<HTMLButtonElement>(null);
   const navbarRef = React.useRef<HTMLElement>(null);
   const sidebarOpen = useAtomValue(browseSidebarShownAtom);
-  const fullscreenActive = useAtomValue(rankingFullscreenActiveAtom);
+  const graphExplorerActive = useAtomValue(graphExplorerActiveAtom);
+  const fullscreenActive = useAtomValue(rankingFullscreenActiveAtom) || graphExplorerActive;
   const rankingFullscreenFocusTarget = useAtomValue(rankingFullscreenFocusTargetAtom);
 
   const { isReviewOpen, setIsReviewOpen } = useDiff();
@@ -335,15 +338,17 @@ export function App({ children }: { children: React.ReactNode }) {
         </React.Suspense>
         <div className="mobile:hidden">{!fullscreenActive && <BrowseSidebar />}</div>
         <div className="flex min-w-0 flex-1 flex-col">
-          <Navbar
-            browseOpen={mobileBrowseOpen && !fullscreenActive}
-            browseButtonRef={mobileBrowseButtonRef}
-            navbarRef={navbarRef}
-            onBrowseClick={() => setMobileBrowseOpen(true)}
-            onSearchClick={() => setOpen(true)}
-            hideLogo={sidebarOpen && !fullscreenActive}
-            showBrowseButton={!fullscreenActive}
-          />
+          {!graphExplorerActive && (
+            <Navbar
+              browseOpen={mobileBrowseOpen && !fullscreenActive}
+              browseButtonRef={mobileBrowseButtonRef}
+              navbarRef={navbarRef}
+              onBrowseClick={() => setMobileBrowseOpen(true)}
+              onSearchClick={() => setOpen(true)}
+              hideLogo={sidebarOpen && !fullscreenActive}
+              showBrowseButton={!fullscreenActive}
+            />
+          )}
           <MobileBrowseDrawer
             open={mobileBrowseOpen && !fullscreenActive}
             fallbackFocusRef={navbarRef}
@@ -357,7 +362,7 @@ export function App({ children }: { children: React.ReactNode }) {
               leaves a vertical rail across this column with nothing holding the space — the same
               condition that draws it below. */}
           <EntityStickyHeaderHost railInset={!sidebarOpen && !fullscreenActive} />
-          <div className="min-w-0 flex-1 2xl:px-[2ch]">
+          <div className={cx('min-w-0 flex-1', !graphExplorerActive && '2xl:px-[2ch]')}>
             <Main>{children}</Main>
           </div>
         </div>

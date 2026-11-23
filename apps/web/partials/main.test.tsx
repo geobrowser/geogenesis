@@ -5,7 +5,7 @@ import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Main } from './main';
-import { debateFullscreenActiveAtom } from '~/atoms';
+import { debateFullscreenActiveAtom, graphExplorerActiveAtom } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({ pathname: '/space/space-1/entity-1' }));
 
@@ -50,6 +50,12 @@ describe('Main', () => {
     const main = renderMain();
 
     expect(main).toHaveClass('min-w-0', 'flex-1');
+    for (const className of CHROME) expect(main).not.toHaveClass(className);
+  });
+
+  it('drops the chrome while the graph explorer is mounted', () => {
+    store.set(graphExplorerActiveAtom, true);
+    const main = renderMain();
     for (const className of CHROME) expect(main).not.toHaveClass(className);
   });
 
