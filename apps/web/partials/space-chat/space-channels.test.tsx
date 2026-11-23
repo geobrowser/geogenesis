@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   listedAt: 1,
   rooms: [] as SpaceChatRoom[],
   canManage: false,
+  channelsEnabled: true,
   panel: vi.fn(),
 }));
 
@@ -35,7 +36,12 @@ vi.mock('~/core/space-chat/people', () => ({ useSpaceChatParticipants: () => [] 
 vi.mock('~/core/space-chat/hooks', () => ({
   useChatViewer: () => ({ userId: 'viewer', personId: null }),
   useSpaceChatRooms: () => ({
-    data: { supported: true, rooms: mocks.rooms, channelsEnabled: true, canManageChannels: mocks.canManage },
+    data: {
+      supported: true,
+      rooms: mocks.rooms,
+      channelsEnabled: mocks.channelsEnabled,
+      canManageChannels: mocks.canManage,
+    },
     isSuccess: true,
     isFetching: false,
     isError: false,
@@ -83,6 +89,7 @@ beforeEach(() => {
   mocks.listedAt = 1;
   mocks.rooms = [GENERAL, EDITORS, MARKETS, OLD];
   mocks.canManage = false;
+  mocks.channelsEnabled = true;
   mocks.replace.mockReset();
   mocks.panel.mockReset();
 });
@@ -101,6 +108,17 @@ describe('SpaceChannels', () => {
     expect(screen.getByTestId('panel')).toHaveTextContent('general · Everyone can read. Members can post.');
     expect(within(list()).queryByRole('button', { name: SPACE_CHANNELS_COPY.newChannel })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: SPACE_CHANNELS_COPY.settings })).not.toBeInTheDocument();
+  });
+
+  it('shows #general and #editors alone while geo-chat has channels switched off', () => {
+    mocks.channelsEnabled = false;
+    mocks.canManage = true;
+    mocks.rooms = [GENERAL, EDITORS];
+    render(<SpaceChannels spaceId={SPACE} />);
+    const links = within(list()).getAllByRole('link');
+    expect(links.map(link => link.textContent?.replace(/\d+$/, ''))).toEqual(['# general', '# editors']);
+    expect(screen.getByTestId('panel')).toHaveTextContent('general');
+    expect(within(list()).queryByRole('button', { name: SPACE_CHANNELS_COPY.newChannel })).not.toBeInTheDocument();
   });
 
   it('gives editors New channel and Settings', () => {

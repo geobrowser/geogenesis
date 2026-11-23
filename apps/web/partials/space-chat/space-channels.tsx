@@ -81,6 +81,8 @@ export function SpaceChannels({ spaceId }: { spaceId: string }) {
   const listed = React.useMemo(() => sortChannels((all ?? []).filter(room => !room.archived)), [all]);
   const current = React.useMemo(() => (all ? findChannel(all, wanted) : null), [all, wanted]);
   const canManage = rooms.data?.canManageChannels === true;
+  // New channels only while geo-chat has channels switched on; #general and #editors stay either way.
+  const canCreate = canManage && rooms.data?.channelsEnabled === true;
 
   const [dialog, setDialog] = React.useState<DialogState>(null);
   const [notice, setNotice] = React.useState<string | null>(null);
@@ -142,7 +144,7 @@ export function SpaceChannels({ spaceId }: { spaceId: string }) {
           channels={listed}
           current={current}
           name={name}
-          canManage={canManage}
+          canManage={canCreate}
           onNewChannel={openNew}
         />
       </span>
@@ -180,7 +182,7 @@ export function SpaceChannels({ spaceId }: { spaceId: string }) {
           spaceId={spaceId}
           channels={listed}
           current={current}
-          canManage={canManage}
+          canManage={canCreate}
           onNewChannel={openNew}
         />
         {current ? (

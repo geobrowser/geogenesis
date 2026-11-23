@@ -10,8 +10,6 @@ import { useSpaceChatRoomScope } from '~/core/debates/debate-gateway';
 import { useGeoChatAuth } from '~/core/debates/hooks';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 import { useGeoChatAccountStatus, useGeoChatViewer } from '~/core/debates/use-geo-chat-account-status';
-import { useHydrated } from '~/core/hooks/use-hydrated';
-import { useFeatureFlag } from '~/core/state/feature-flags';
 import { normId } from '~/core/utils/norm-id';
 
 import {
@@ -75,10 +73,8 @@ export function useSpaceChatAuth(): { ready: boolean; auth: SpaceChatAuth | null
  */
 export function useSpaceChatRooms(spaceId: string, enabled: boolean, { pollSignedOut = false } = {}) {
   const { ready, auth } = useSpaceChatAuth();
-  // One list per viewer: with channels, archived ones too, which the channel view filters out.
-  const includeArchived = useFeatureFlag('spaceChannels');
-  // The flag reads its default until hydrated; waiting keeps the first read on the right list.
-  const hydrated = useHydrated();
+  // One list per viewer, archived channels included; the channel view filters them out.
+  const includeArchived = true;
   const query = useQuery({
     queryKey: spaceChatQueryKeys.rooms(spaceId, auth?.accountKey ?? null, includeArchived),
     queryFn: async ({ signal }): Promise<SpaceChatRoomsData> => {
@@ -97,7 +93,7 @@ export function useSpaceChatRooms(spaceId: string, enabled: boolean, { pollSigne
         throw error;
       }
     },
-    enabled: enabled && ready && hydrated,
+    enabled: enabled && ready,
     staleTime: 60_000,
     // Signed out there is no space scope for `space.channels_changed`, so the channel list polls.
     refetchInterval: pollSignedOut && ready && auth === null ? ROOM_LIST_POLL_MS : false,

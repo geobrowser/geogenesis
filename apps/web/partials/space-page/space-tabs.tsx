@@ -282,7 +282,6 @@ export function SpaceTabs({
   const isDebugDebatesPageEnabled = useDebugDebatesPageEnabled();
   const isSpaceCallsEnabled = useFeatureFlag('spaceCalls');
   const isSpaceChatEnabled = useFeatureFlag('spaceChat');
-  const isSpaceChannelsEnabled = useFeatureFlag('spaceChannels');
   const { personalSpaceId } = usePersonalSpaceId();
   const isOwner = Boolean(personalSpaceId && ID.equals(personalSpaceId, spaceId));
 
@@ -336,10 +335,7 @@ export function SpaceTabs({
   // Chat follows Calls (GEO-3422), except where geo-chat says the space has no rooms.
   const chatRooms = useSpaceChatRooms(spaceId, showCommunity && isSpaceChatEnabled);
   const showChat = showCommunity && isSpaceChatEnabled && chatRooms.data?.supported !== false;
-  const chatUnread =
-    isSpaceChannelsEnabled && chatRooms.data?.channelsEnabled
-      ? unreadLabel(spaceUnreadCount(chatRooms.data.rooms))
-      : null;
+  const chatUnread = chatRooms.data?.channelsEnabled ? unreadLabel(spaceUnreadCount(chatRooms.data.rooms)) : null;
   const chatTab = showChat
     ? [{ label: 'Chat', href: spaceChatTabPath(spaceId), ...(chatUnread ? { badge: chatUnread } : {}) }]
     : [];
