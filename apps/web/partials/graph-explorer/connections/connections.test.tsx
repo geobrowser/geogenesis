@@ -156,6 +156,51 @@ describe('ConnectionsCanvas', () => {
   });
 });
 
+describe('ConnectionsCanvas leaving nodes', () => {
+  const ring = (centreN: number): GraphSelection => {
+    const middle = node(centreN, 'topic', `Centre ${centreN}`);
+    const around = [1, 2, 3, 4].map(k => node(centreN * 10 + k, 'ent', `Around ${centreN}.${k}`));
+    return {
+      nodes: [
+        { node: middle, hop: 0, parentId: null },
+        ...around.map(entry => ({ node: entry, hop: 1 as const, parentId: middle.id })),
+      ],
+      links: [],
+    };
+  };
+
+  it('fades leaving nodes out, and removes them all when the next selection lands mid-fade', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const props = {
+        phone: false,
+        onSelect: vi.fn(),
+        renderNode: (entry: { node: GraphNode }) => entry.node.name,
+        labelFor: () => 'label',
+      };
+      const { container, rerender } = render(<ConnectionsCanvas selection={ring(3)} {...props} />);
+      const count = () => container.querySelectorAll('[data-node-id]').length;
+      for (const centreN of [4, 5, 6, 7, 8]) {
+        now += 100;
+        act(() => vi.advanceTimersByTime(100));
+        rerender(<ConnectionsCanvas selection={ring(centreN)} {...props} />);
+        if (centreN === 4) expect(count()).toBe(10);
+      }
+      now += 1000;
+      act(() => vi.advanceTimersByTime(1000));
+      expect([...container.querySelectorAll('[data-node-id]')].map(element => element.textContent)).toEqual([
+        'Centre 8',
+        'Around 8.1',
+        'Around 8.2',
+        'Around 8.3',
+        'Around 8.4',
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe('GraphTopBar chips', () => {
   const bar = (kinds: GraphKind[]) =>
     render(

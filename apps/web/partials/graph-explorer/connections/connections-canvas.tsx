@@ -37,6 +37,9 @@ type NodeView = {
   hop: 0 | 1 | 2;
   born: number;
   alive: boolean;
+  /** When it left the selection; it fades out and is removed LEAVE_MS later. */
+  died: number;
+  entry: SelectedNode;
   /** Screen offset keeping it clear of the centre on phone, eased frame to frame. */
   push: [number, number];
   /** Opacity factor while a nearer card covers it on phone, eased frame to frame. */
@@ -98,10 +101,18 @@ export function ConnectionsCanvas({
   const elements = React.useRef(new Map<string, HTMLButtonElement>());
   const moved = React.useRef(false);
   const dragging = React.useRef(false);
-  /** What was on screen before the current selection, so leaving nodes can fade out. */
-  const rendered = React.useRef<SelectedNode[]>([]);
-  /** Anchor offsets per node, measured once per selection; reading layout every frame would thrash. */
+  /** Removal timers; a new selection must not cancel the last one's or its leaving nodes stay. */
+  const leaveTimers = React.useRef(new Set<number>());
+  /** Card boxes, measured once per selection and again when a card resizes; reading layout every frame would thrash. */
   const anchors = React.useRef(new Map<string, Box>());
+  const resizes = React.useRef<ResizeObserver | null>(null);
+  // Created on first use: node refs attach before effects run. A resize only drops the box; the next frame re-measures.
+  const watchSize = (element: HTMLElement) => {
+    resizes.current ??= new ResizeObserver(entries => {
+      for (const entry of entries) anchors.current.delete((entry.target as HTMLElement).dataset.nodeId ?? '');
+    });
+    resizes.current.observe(element);
+  };
   const engine = React.useRef<Engine>({
     views: new Map(),
     links: [],
@@ -152,6 +163,7 @@ export function ConnectionsCanvas({
     for (const view of state.views.values()) {
       if (!kept.has(view.id) && view.alive) {
         view.alive = false;
+        view.died = now;
         view.from = view.p;
         view.to = view.p;
         gone.push(view.id);
@@ -165,10 +177,23 @@ export function ConnectionsCanvas({
         existing.from = existing.p;
         existing.to = to;
         existing.hop = entry.hop;
+        existing.entry = entry;
       } else {
         const parent = entry.parentId ? state.views.get(entry.parentId) : null;
         const p: Vec3 = parent?.alive ? [...parent.p] : [0, 0, 0];
-        state.views.set(id, { id, p, from: p, to, hop: entry.hop, born: now, alive: true, push: [0, 0], dim: 1 });
+        state.views.set(id, {
+          id,
+          p,
+          from: p,
+          to,
+          hop: entry.hop,
+          born: now,
+          alive: true,
+          died: 0,
+          entry,
+          push: [0, 0],
+          dim: 1,
+        });
       }
     }
     state.links = selection.links.map(link => ({
@@ -186,21 +211,35 @@ export function ConnectionsCanvas({
     state.distanceFrom = state.distance;
     state.anim = { t0: now, duration: reduceMotion ? 0 : MOVE_MS };
 
-    const previousEntries = new Map(rendered.current.map(entry => [entry.node.id, entry]));
-    const leavingEntries = gone.flatMap(id => previousEntries.get(id) ?? []);
-    setLeaving(current => [...current.filter(entry => !kept.has(entry.node.id)), ...leavingEntries]);
+    const sweep = () => {
+      const cutoff = performance.now() - LEAVE_MS;
+      for (const view of state.views.values()) if (!view.alive && view.died <= cutoff) state.views.delete(view.id);
+      setLeaving([...state.views.values()].filter(view => !view.alive).map(view => view.entry));
+    };
+    sweep();
+    if (gone.length === 0) return;
+    const timers = leaveTimers.current;
+    // A frame of slack, so timer rounding never leaves a node behind.
     const timer = window.setTimeout(() => {
-      for (const id of gone) if (!state.views.get(id)?.alive) state.views.delete(id);
-      setLeaving(current => current.filter(entry => !gone.includes(entry.node.id)));
-    }, LEAVE_MS);
-    return () => window.clearTimeout(timer);
+      timers.delete(timer);
+      sweep();
+    }, LEAVE_MS + 16);
+    timers.add(timer);
   }, [selection, phone, reduceMotion]);
+
+  React.useEffect(() => {
+    const timers = leaveTimers.current;
+    return () => {
+      timers.forEach(timer => window.clearTimeout(timer));
+      resizes.current?.disconnect();
+      resizes.current = null;
+    };
+  }, []);
 
   const shown = React.useMemo(() => {
     const ids = new Set(selection.nodes.map(entry => entry.node.id));
     return [...selection.nodes, ...leaving.filter(entry => !ids.has(entry.node.id))];
   }, [leaving, selection]);
-  rendered.current = shown;
 
   // Size the canvas to the stage.
   React.useLayoutEffect(() => {
@@ -558,8 +597,14 @@ export function ConnectionsCanvas({
             <button
               key={id}
               ref={element => {
-                if (element) elements.current.set(id, element);
-                else elements.current.delete(id);
+                if (element) {
+                  elements.current.set(id, element);
+                  watchSize(element);
+                } else {
+                  const old = elements.current.get(id);
+                  if (old) resizes.current?.unobserve(old);
+                  elements.current.delete(id);
+                }
               }}
               type="button"
               data-node-id={id}
