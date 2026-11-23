@@ -812,3 +812,18 @@ describe('Add context and Dispute switched off (GEO-3819 defaults)', () => {
     }
   });
 });
+
+describe('Topic Context & Disputes row with nothing in it (GEO-3819)', () => {
+  it('hides the wrapper instead of leaving an empty row and its gap on a live Topic', () => {
+    const { container } = render(
+      <TopicTemplate model={{ id: 'topic-empty', title: 'Quiet topic', lede: '' }} actionCallbacks={{}} />
+    );
+    // Live (callbacks set), but no context and no disputes: both sections hide themselves.
+    expect(screen.queryByRole('region', { name: 'Context' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Disputes' })).toBeNull();
+    // jsdom applies no Tailwind; the wrapper must be empty and carry the class that hides it.
+    const wrapper = container.querySelector('[class~="empty:hidden"]');
+    expect(wrapper).not.toBeNull();
+    expect(wrapper).toBeEmptyDOMElement();
+  });
+});

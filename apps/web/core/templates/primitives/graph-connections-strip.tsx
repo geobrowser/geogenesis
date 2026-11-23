@@ -188,7 +188,12 @@ export function EntityContextAndDisputes({
   className?: string;
 }) {
   return (
-    <div className={cx('grid grid-cols-1 items-start gap-8 @[720px]:auto-cols-fr @[720px]:grid-flow-col', className)}>
+    <div
+      className={cx(
+        'grid grid-cols-1 items-start gap-8 empty:hidden @[720px]:auto-cols-fr @[720px]:grid-flow-col',
+        className
+      )}
+    >
       <GraphConnectionsStrip groups={groups ?? []} target={target} />
       <EntityFlagsSection target={target} />
     </div>

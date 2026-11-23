@@ -263,12 +263,12 @@ export function TopicTemplate({
           {/* Context relations & Disputes side-by-side on live Topic pages */}
           {(hasContextOrLive || hasFlagsOrLive) && (
             <div
+              // Either section can hide itself when empty (GEO-3819): auto columns let the other take
+              // the full width, and `empty:hidden` drops the wrapper (and its gap) when both hide.
               className={
                 hasContextOrLive && hasFlagsOrLive
-                  ? // Auto columns: either section can hide itself when empty (GEO-3819), and the
-                    // other then takes the full width instead of half of it.
-                    'grid grid-cols-1 items-start gap-8 @[720px]:auto-cols-fr @[720px]:grid-flow-col'
-                  : undefined
+                  ? 'grid grid-cols-1 items-start gap-8 empty:hidden @[720px]:auto-cols-fr @[720px]:grid-flow-col'
+                  : 'empty:hidden'
               }
             >
               {hasContextOrLive && (

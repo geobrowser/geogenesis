@@ -1,8 +1,28 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { type IngestionLink, buildIngestionLinkRelation, ingestionPromptText } from './ingestion-link';
+import type { Relation } from '~/core/types';
+
+import {
+  type IngestionLink,
+  buildIngestionLinkRelation,
+  ingestionPromptText,
+  stageIngestionLink,
+} from './ingestion-link';
 import type { SerializedOp } from './inject-types';
 import { resolveUrlIngestionSeed } from './resolve-url-ingestion-seed';
+
+const sync = vi.hoisted(() => ({
+  setRelation: vi.fn(),
+  relationsFrom: [] as unknown[],
+  relationsTo: [] as unknown[],
+}));
+vi.mock('~/core/sync/use-mutate', () => ({ storage: { relations: { set: sync.setRelation } } }));
+vi.mock('~/core/sync/use-sync-engine', () => ({
+  store: {
+    getResolvedRelations: () => sync.relationsFrom,
+    getRelationsToEntity: () => sync.relationsTo,
+  },
+}));
 
 const STORY = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const TOPIC = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
@@ -131,5 +151,66 @@ describe('resolveUrlIngestionSeed with a link', () => {
       mode: 'ingestion',
       url: 'https://example.com/a',
     });
+  });
+});
+
+describe('stageIngestionLink', () => {
+  beforeEach(() => {
+    sync.setRelation.mockReset();
+    sync.relationsFrom = [];
+    sync.relationsTo = [];
+  });
+
+  function existing(from: string, to: string, type = SOURCES_PROP, isDeleted = false): Relation {
+    return {
+      id: 'existing',
+      entityId: 'existing-entity',
+      spaceId: SPACE,
+      renderableType: 'RELATION',
+      type: { id: type, name: null },
+      fromEntity: { id: from, name: null },
+      toEntity: { id: to, name: null, value: to },
+      isDeleted,
+    } as Relation;
+  }
+
+  it('stages page --Sources--> the import once its ops are applied', () => {
+    const staged = stageIngestionLink({
+      link: storyLink,
+      primaryEntityId: SOURCE,
+      primaryEntityName: 'Reuters report',
+      spaceId: SPACE,
+      ops: [],
+    });
+    expect(sync.setRelation).toHaveBeenCalledTimes(1);
+    expect(sync.setRelation).toHaveBeenCalledWith(staged);
+    expect(staged).toMatchObject({ fromEntity: { id: STORY }, toEntity: { id: SOURCE }, spaceId: SPACE });
+  });
+
+  it('stages nothing for an enrich of a source the page already lists', () => {
+    // Pasting the URL of a story the page already has: the enrich restates no relation, the store has it.
+    sync.relationsFrom = [existing(STORY, SOURCE)];
+    expect(
+      stageIngestionLink({ link: storyLink, primaryEntityId: SOURCE, primaryEntityName: null, spaceId: SPACE, ops: [] })
+    ).toBeNull();
+
+    // Same for a Topic: the source already carries Topics -> topic (seen as a backlink of the topic).
+    sync.relationsFrom = [];
+    sync.relationsTo = [existing(SOURCE, TOPIC, TOPICS_PROP)];
+    expect(
+      stageIngestionLink({ link: topicLink, primaryEntityId: SOURCE, primaryEntityName: null, spaceId: SPACE, ops: [] })
+    ).toBeNull();
+    expect(sync.setRelation).not.toHaveBeenCalled();
+  });
+
+  it('still links when the only matching relation was deleted, and skips without a primary entity', () => {
+    sync.relationsFrom = [existing(STORY, SOURCE, SOURCES_PROP, true)];
+    expect(
+      stageIngestionLink({ link: storyLink, primaryEntityId: SOURCE, primaryEntityName: null, spaceId: SPACE, ops: [] })
+    ).not.toBeNull();
+    expect(
+      stageIngestionLink({ link: storyLink, primaryEntityId: null, primaryEntityName: null, spaceId: SPACE, ops: [] })
+    ).toBeNull();
+    expect(sync.setRelation).toHaveBeenCalledTimes(1);
   });
 });

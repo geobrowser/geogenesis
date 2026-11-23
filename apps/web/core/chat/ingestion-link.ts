@@ -1,6 +1,8 @@
 import { IdUtils, Position } from '@geoprotocol/geo-sdk/lite';
 
 import { ID } from '~/core/id';
+import { storage } from '~/core/sync/use-mutate';
+import { store } from '~/core/sync/use-sync-engine';
 import type { Relation } from '~/core/types';
 
 import type { SerializedOp } from './inject-types';
@@ -50,7 +52,8 @@ export function ingestionPromptText(url: string, link?: IngestionLink | null): s
 /**
  * The relation that links an injected source to the page it was added from, or null when there is
  * nothing to add: the source is the page itself (an enrich of that same story), or the inject batch
- * already made the same link.
+ * or the graph already has the same link. An enrich of a source the page already lists restates
+ * neither, so `existingRelations` is what stops a second, duplicate Sources / Topics relation.
  */
 export function buildIngestionLinkRelation({
   link,
@@ -58,12 +61,14 @@ export function buildIngestionLinkRelation({
   sourceEntityName,
   spaceId,
   ops = [],
+  existingRelations = [],
 }: {
   link: IngestionLink;
   sourceEntityId: string;
   sourceEntityName: string | null;
   spaceId: string;
   ops?: readonly SerializedOp[];
+  existingRelations?: readonly Relation[];
 }): Relation | null {
   if (ID.equals(sourceEntityId, link.targetEntityId)) return null;
 
@@ -76,13 +81,21 @@ export function buildIngestionLinkRelation({
       ? { id: sourceEntityId, name: sourceEntityName }
       : { id: link.targetEntityId, name: link.targetEntityName };
 
-  const alreadyLinked = ops.some(
-    op =>
-      op.type === 'createRelation' &&
-      ID.equals(op.relationType, link.propertyId) &&
-      ID.equals(op.from, from.id) &&
-      ID.equals(op.to, to.id)
-  );
+  const alreadyLinked =
+    ops.some(
+      op =>
+        op.type === 'createRelation' &&
+        ID.equals(op.relationType, link.propertyId) &&
+        ID.equals(op.from, from.id) &&
+        ID.equals(op.to, to.id)
+    ) ||
+    existingRelations.some(
+      relation =>
+        !relation.isDeleted &&
+        ID.equals(relation.type.id, link.propertyId) &&
+        ID.equals(relation.fromEntity.id, from.id) &&
+        ID.equals(relation.toEntity.id, to.id)
+    );
   if (alreadyLinked) return null;
 
   return {
@@ -98,4 +111,36 @@ export function buildIngestionLinkRelation({
     fromEntity: from,
     toEntity: { ...to, value: to.id },
   };
+}
+
+/**
+ * Once an inject's ops are applied: stage the relation that links its primary entity back to the
+ * page the link was added from (GEO-3819), unless the batch or the store already has it.
+ */
+export function stageIngestionLink({
+  link,
+  primaryEntityId,
+  primaryEntityName,
+  spaceId,
+  ops,
+}: {
+  link: IngestionLink;
+  primaryEntityId: string | null;
+  primaryEntityName: string | null;
+  spaceId: string;
+  ops: readonly SerializedOp[];
+}): Relation | null {
+  if (!primaryEntityId) return null;
+  const fromId = link.direction === 'target-to-source' ? link.targetEntityId : primaryEntityId;
+  const toId = link.direction === 'target-to-source' ? primaryEntityId : link.targetEntityId;
+  const relation = buildIngestionLinkRelation({
+    link,
+    sourceEntityId: primaryEntityId,
+    sourceEntityName: primaryEntityName,
+    spaceId,
+    ops,
+    existingRelations: [...store.getResolvedRelations(fromId), ...store.getRelationsToEntity(toId)],
+  });
+  if (relation) storage.relations.set(relation);
+  return relation;
 }

@@ -17,6 +17,7 @@ import {
   ClaimExplorer,
   ClaimSummaryCard,
   EntityActionProvider,
+  EntityContextAndDisputes,
   EntityFlagsSection,
   EntityOverflowMenu,
   GraphConnectionsStrip,
@@ -454,5 +455,17 @@ describe('Add context and Dispute switch (GEO-3819)', () => {
       </EntityActionProvider>
     );
     expect(screen.getByRole('button', { name: 'Add Related actors' })).toBeInTheDocument();
+  });
+
+  it('leaves no empty Context & Disputes row behind to add a blank gap to the page', () => {
+    const { container } = render(
+      <EntityActionProvider>
+        <EntityContextAndDisputes groups={[]} target={target} />
+      </EntityActionProvider>
+    );
+    const row = container.querySelector('.grid') as HTMLElement;
+    expect(row).toBeEmptyDOMElement();
+    // jsdom applies no Tailwind, so check the class that hides it (`:empty { display: none }`).
+    expect(row).toHaveClass('empty:hidden');
   });
 });

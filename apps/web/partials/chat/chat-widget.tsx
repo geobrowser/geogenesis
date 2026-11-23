@@ -17,7 +17,7 @@ import { BOTTOM_INSET_OFFSET_CLASS } from '~/core/app-bottom-inset';
 import { applyInjectOpsToStore } from '~/core/chat/apply-inject-ops';
 import { hasPendingClientToolCall, shouldResubmitAfterClientExecution } from '~/core/chat/client-tools';
 import { useEditDispatcher } from '~/core/chat/edit-dispatcher';
-import { type IngestionLink, buildIngestionLinkRelation, ingestionPromptText } from '~/core/chat/ingestion-link';
+import { type IngestionLink, ingestionPromptText, stageIngestionLink } from '~/core/chat/ingestion-link';
 import type { InjectType } from '~/core/chat/inject-types';
 import {
   COMPACT_AT_INPUT_TOKENS,
@@ -48,7 +48,6 @@ import {
 import { useDiff } from '~/core/state/diff-store';
 import { useEditable } from '~/core/state/editable-store';
 import { useReportError } from '~/core/state/status-bar-store';
-import { storage } from '~/core/sync/use-mutate';
 import { reportError as captureAssistantError } from '~/core/telemetry/logger';
 import { describeError } from '~/core/utils/error-diagnostics';
 import { NavUtils } from '~/core/utils/utils';
@@ -1034,15 +1033,14 @@ export function ChatWidget({ openOnMount = null }: { openOnMount?: string | null
       const result = applyInjectOpsToStore(injectState.ops, injectJob.spaceId);
       // Added from a page's Sources `+`: link the new source back to that page so it shows in the
       // section it was added from (GEO-3819). Staged with the rest of the import.
-      if (injectJob.link && result.primaryEntityId) {
-        const linkRelation = buildIngestionLinkRelation({
+      if (injectJob.link) {
+        stageIngestionLink({
           link: injectJob.link,
-          sourceEntityId: result.primaryEntityId,
-          sourceEntityName: result.primaryEntityName,
+          primaryEntityId: result.primaryEntityId,
+          primaryEntityName: result.primaryEntityName,
           spaceId: injectJob.spaceId,
           ops: injectState.ops,
         });
-        if (linkRelation) storage.relations.set(linkRelation);
       }
       // Ingestion genuinely succeeded here (job polled to `completed` and its ops
       // applied to the store), so this is the only place we mark the daily upload
