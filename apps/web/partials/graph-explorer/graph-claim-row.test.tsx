@@ -51,14 +51,19 @@ describe('GraphClaimRow', () => {
 
     expect(mocks.summary).toHaveBeenCalledWith(claim.id, CLAIM_SPACE, 'stance');
     expect(mocks.voteButtons).toHaveBeenCalledWith(
-      expect.objectContaining({ entityId: claim.id, spaceId: CLAIM_SPACE, responseKind: 'stance' })
+      expect.objectContaining({
+        entityId: claim.id,
+        spaceId: CLAIM_SPACE,
+        responseKind: 'stance',
+        hideEmptyClaimShare: true,
+      })
     );
     expect(screen.getByRole('link', { name: claim.name }).getAttribute('href')).toBe(
       `/space/${CLAIM_SPACE}/${claim.id}`
     );
   });
 
-  it('says there are no responses rather than showing an empty bar', () => {
+  it('says there are no responses, with no share or bar, and keeps the vote buttons', () => {
     mocks.summary.mockReturnValue(summary({}));
     render(
       <ul>
@@ -66,17 +71,20 @@ describe('GraphClaimRow', () => {
       </ul>
     );
     expect(screen.getByText('No responses yet')).toBeTruthy();
+    expect(screen.queryByText(/%/)).toBeNull();
+    expect(screen.queryByRole('img')).toBeNull();
+    expect(screen.getByText('vote buttons')).toBeTruthy();
   });
 
-  it('shows the overall agree share', () => {
+  it('shows the split and the count once anyone has answered', () => {
     mocks.summary.mockReturnValue(summary({ positive: 3, negative: 1, total: 4, percent: 75 }));
     render(
       <ul>
         <GraphClaimRow claim={claim} />
       </ul>
     );
-    expect(screen.getByText('75% agree · 4 responses')).toBeTruthy();
-    expect(screen.getByRole('img', { name: '75% agree' })).toBeTruthy();
+    expect(screen.getByText('4 responses')).toBeTruthy();
+    expect(screen.getByRole('img', { name: /^75% / })).toBeTruthy();
   });
 
   it('does not claim emptiness when the counts did not answer', () => {
