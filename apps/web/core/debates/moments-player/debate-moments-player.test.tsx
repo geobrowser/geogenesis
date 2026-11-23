@@ -328,6 +328,44 @@ describe('DebateMomentsPlayer', () => {
     expect(screen.queryByText('Couldn’t play this debate.')).not.toBeInTheDocument();
   });
 
+  it('reloads a failed clip when the picture is tapped, keeping Retry until it plays', () => {
+    render(<DebateMomentsPlayer debateId={DEBATE} label="Debate A" moments={MOMENTS} />);
+    const video = videoOf(screen.getByRole('region', { name: 'Debate A' }));
+    fireEvent.error(video);
+    // The broken media refuses to play, as a browser's does.
+    mocks.play.mockImplementationOnce(() => Promise.reject(new DOMException('', 'NotSupportedError')));
+    mocks.play.mockImplementationOnce(() => Promise.reject(new DOMException('', 'NotSupportedError')));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    expect(mocks.load.mock.contexts).toContain(video);
+
+    fireEvent.error(video);
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+    mocks.load.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'Previous moment' }));
+    expect(mocks.load.mock.contexts).toContain(video);
+    fireEvent.error(video);
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+  });
+
+  it('reloads a failed full debate from where it failed when the picture is tapped', () => {
+    render(<DebateMomentsPlayer debateId={DEBATE} label="Debate B" moments={[]} />);
+    const video = videoOf(screen.getByRole('region', { name: 'Debate B' }));
+    Object.defineProperty(video, 'duration', { configurable: true, value: 300 });
+    Object.defineProperty(video, 'currentTime', { configurable: true, writable: true, value: 0 });
+    Object.defineProperty(video, 'readyState', { configurable: true, value: HTMLMediaElement.HAVE_METADATA });
+    fireEvent.loadedMetadata(video);
+    video.currentTime = 95;
+    fireEvent.timeUpdate(video);
+
+    fireEvent.error(video);
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    expect(mocks.load).toHaveBeenCalled();
+    fireEvent.loadedMetadata(video);
+    expect(video.currentTime).toBe(95);
+    expect(mocks.play.mock.contexts).toContain(video);
+  });
+
   it('retries the full debate from where it failed, not from the top', () => {
     render(<DebateMomentsPlayer debateId={DEBATE} label="Debate B" moments={[]} />);
     const video = videoOf(screen.getByRole('region', { name: 'Debate B' }));
