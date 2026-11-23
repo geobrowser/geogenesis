@@ -16,6 +16,7 @@ const centre: GraphCentre = {
   spaceIds: [WORLD, PODCASTS],
   types: [],
   image: null,
+  namedSpaceIds: [WORLD, PODCASTS],
   texts: [
     { propertyId: NAME, spaceId: WORLD, text: 'Israel-Gaza war' },
     { propertyId: DESCRIPTION, spaceId: WORLD, text: 'Armed conflict centered on the Gaza Strip.' },

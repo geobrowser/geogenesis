@@ -1,4 +1,7 @@
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+
 import { normId } from '~/core/utils/norm-id';
+import { entityHomeSpaceId } from '~/core/utils/space/entity-home-space';
 import { getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
 
 import type { GraphEntity, GraphHop, GraphRelation } from './fetch-graph-hop';
@@ -28,21 +31,39 @@ export function relationLabel(relation: Pick<GraphRelation, 'propertyId' | 'prop
 }
 
 /**
- * The space an entity's data is read from: its top-ranked space inside the filter, else its
- * top-ranked space at all, else the space the relation came from. Never a fixed space.
+ * The space to read an entity in: where it is named inside the filter, else `entityHomeSpaceId`
+ * (named anywhere, then ranked), else `fallbackSpaceId`. A space that only cites it never wins.
  */
-export function pickEntitySpaceId(
-  entitySpaceIds: readonly string[],
+export function entitySpaceId(
+  entity: { spaceIds: readonly string[]; namedSpaceIds: readonly string[] },
   allowedSpaceIds: readonly string[] | undefined,
   fallbackSpaceId: string | null
 ): string | null {
-  const own = entitySpaceIds.map(normId);
+  const named = entity.namedSpaceIds.map(normId);
   if (allowedSpaceIds) {
     const allowed = new Set(allowedSpaceIds.map(normId));
-    const inScope = own.filter(id => allowed.has(id));
-    if (inScope.length > 0) return getTopRankedSpaceId(inScope);
+    const inScope = getTopRankedSpaceId(named.filter(id => allowed.has(id)));
+    if (inScope) return inScope;
   }
-  return getTopRankedSpaceId(own) ?? fallbackSpaceId;
+  const home = entityHomeSpaceId({
+    spaces: entity.spaceIds.map(normId),
+    values: named.map(spaceId => ({ property: { id: SystemIds.NAME_PROPERTY }, spaceId, value: 'named' })),
+  });
+  return home ?? fallbackSpaceId;
+}
+
+/** Spaces holding a live, non-empty name among an entity's store values. */
+export function namedSpaceIds(
+  values: ReadonlyArray<{ isDeleted?: boolean; property: { id: string }; spaceId: string; value: unknown }>
+): string[] {
+  const named = values.filter(
+    value =>
+      value.isDeleted !== true &&
+      normId(value.property.id) === normId(SystemIds.NAME_PROPERTY) &&
+      typeof value.value === 'string' &&
+      value.value.trim().length > 0
+  );
+  return [...new Set(named.map(value => normId(value.spaceId)))];
 }
 
 /**
@@ -101,7 +122,7 @@ export function buildSpokes(hop: GraphHop, centreId: string, filter: GraphFilter
     })
     .map(({ order: _order, ...spoke }) => ({
       ...spoke,
-      nodeSpaceId: pickEntitySpaceId(spoke.entity.spaceIds, filter.spaceIds, spoke.edgeSpaceIds[0] ?? null),
+      nodeSpaceId: entitySpaceId(spoke.entity, filter.spaceIds, spoke.edgeSpaceIds[0] ?? null),
     }));
 }
 

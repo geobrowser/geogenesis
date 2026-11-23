@@ -7,7 +7,7 @@ import * as React from 'react';
 import { useSearchParams } from 'next/navigation';
 
 import { parseGraphFilterOverrides } from '~/core/graph-explorer/graph-filter';
-import { pickEntitySpaceId } from '~/core/graph-explorer/spokes';
+import { entitySpaceId, namedSpaceIds } from '~/core/graph-explorer/spokes';
 import { useTopicGraphScope } from '~/core/graph-explorer/use-graph-explorer';
 import { useHydrated } from '~/core/hooks/use-hydrated';
 import { useQueryEntity } from '~/core/sync/use-store';
@@ -60,7 +60,13 @@ function TopicGraph({
   const { entity: topic } = useQueryEntity({ id: topicId, spaceId: routeSpaceId ?? undefined });
   const topicSpaceId =
     routeSpaceId ??
-    (topic ? pickEntitySpaceId(topic.spaces ?? [], scope?.kind === 'spaces' ? scope.spaceIds : undefined, null) : null);
+    (topic
+      ? entitySpaceId(
+          { spaceIds: topic.spaces ?? [], namedSpaceIds: namedSpaceIds(topic.values ?? []) },
+          scope?.kind === 'spaces' ? scope.spaceIds : undefined,
+          null
+        )
+      : null);
 
   return (
     <>

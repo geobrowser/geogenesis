@@ -10,7 +10,7 @@ import {
   SPOKE_CAP_PHONE,
   type Spoke,
   buildSpokes,
-  pickEntitySpaceId,
+  entitySpaceId,
 } from '~/core/graph-explorer/spokes';
 import { useClaimsAbout, useGraphHop, usePrefetchGraphHop } from '~/core/graph-explorer/use-graph-explorer';
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
@@ -40,8 +40,6 @@ export function GraphViewer({
   const [tab, setTab] = React.useState<EntityPanelTab>('details');
   // Names of entities already seen, for "Back to X" before the previous hop is refetched.
   const [names, setNames] = React.useState<Record<string, string>>({});
-  // The space each re-centred entity was drawn from, so its page reads the same text there.
-  const [nodeSpaces, setNodeSpaces] = React.useState<Record<string, string>>({});
 
   React.useEffect(() => setHistory(startGraphHistory(startEntityId)), [startEntityId]);
 
@@ -67,7 +65,6 @@ export function GraphViewer({
 
   const select = React.useCallback((spoke: Spoke) => {
     if (spoke.entity.name) setNames(current => ({ ...current, [spoke.entity.id]: spoke.entity.name! }));
-    if (spoke.nodeSpaceId) setNodeSpaces(current => ({ ...current, [spoke.entity.id]: spoke.nodeSpaceId! }));
     setHistory(current => recentre(current, spoke.entity.id));
   }, []);
 
@@ -115,8 +112,7 @@ export function GraphViewer({
 
   const centreSpaceId =
     (topic?.spaceId && rawCentre.id === normId(topic.id) ? normId(topic.spaceId) : null) ??
-    nodeSpaces[rawCentre.id] ??
-    pickEntitySpaceId(rawCentre.spaceIds, filter.spaceIds, null);
+    entitySpaceId(rawCentre, filter.spaceIds, null);
   const centre = { ...rawCentre, ...centreTextInSpace(rawCentre, centreSpaceId) };
   const emptyMessages = {
     relationships: relationshipsEmptyMessage(filter),

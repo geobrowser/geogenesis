@@ -17,6 +17,8 @@ export type GraphEntity = {
   id: string;
   name: string | null;
   spaceIds: string[];
+  /** Spaces that write a non-empty name for it: where it has content, not just a citation. */
+  namedSpaceIds: string[];
   types: Array<{ id: string; name: string | null }>;
   /** Avatar, else cover; an `ipfs://` or http URL. */
   image: string | null;
@@ -52,6 +54,7 @@ const NEIGHBOUR_FIELDS = /* GraphQL */ `
   id
   name
   spaceIds
+  names: valuesList(filter: { propertyId: { is: $namePropertyId } }) { spaceId text }
   types { id name }
   relationsList(filter: { typeId: { in: [$avatarPropertyId, $coverPropertyId] } }) {
     typeId
@@ -73,6 +76,7 @@ const graphHopDocument = parse(/* GraphQL */ `
     $coverPropertyId: UUID!
     $imageUrlPropertyId: UUID!
     $textPropertyIds: [UUID!]
+    $namePropertyId: UUID!
   ) {
     entity(id: $id) {
       ${NEIGHBOUR_FIELDS}
@@ -112,6 +116,7 @@ type RawEntity = {
   id: string;
   name: string | null;
   spaceIds: string[] | null;
+  names?: Array<{ spaceId: string; text: string | null }> | null;
   types: Array<{ id: string; name: string | null }> | null;
   relationsList: Array<{ typeId: string; toEntity: { valuesList: Array<{ text: string | null }> } | null }> | null;
 };
@@ -156,6 +161,9 @@ function decodeEntity(entity: RawEntity): GraphEntity {
     id: normId(entity.id),
     name: entity.name?.trim() ? entity.name.trim() : null,
     spaceIds: (entity.spaceIds ?? []).map(normId),
+    namedSpaceIds: [
+      ...new Set((entity.names ?? []).filter(value => value.text?.trim()).map(value => normId(value.spaceId))),
+    ],
     types: entity.types ?? [],
     image: imageOf(entity),
   };
@@ -208,6 +216,7 @@ export function graphHopVariables(entityId: string, filter: GraphFilter) {
     coverPropertyId: COVER_PROPERTY_ID,
     imageUrlPropertyId: IMAGE_URL_PROPERTY_ID,
     textPropertyIds: [normId(SystemIds.NAME_PROPERTY), normId(SystemIds.DESCRIPTION_PROPERTY)],
+    namePropertyId: normId(SystemIds.NAME_PROPERTY),
   };
 }
 

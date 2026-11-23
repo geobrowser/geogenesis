@@ -52,7 +52,13 @@ describe('decodeGraphHop', () => {
             position: null,
             typeId: 'q'.repeat(32),
             type: null,
-            fromEntity: raw('2'.repeat(32), 'In'),
+            fromEntity: {
+              ...raw('2'.repeat(32), 'In'),
+              names: [
+                { spaceId: 'B'.repeat(32), text: 'In' },
+                { spaceId: 'c'.repeat(32), text: ' ' },
+              ],
+            },
           },
           { id: 'r3', spaceId: 'a'.repeat(32), position: null, typeId: 'q'.repeat(32), type: null, fromEntity: null },
         ],
@@ -70,6 +76,7 @@ describe('decodeGraphHop', () => {
     ]);
     expect(hop.relations[0].entity.image).toBe('ipfs://avatar');
     expect(hop.relations[0].entity.spaceIds).toEqual(['a'.repeat(32)]);
+    expect(hop.relations[1].entity.namedSpaceIds).toEqual(['b'.repeat(32)]);
     expect(hop.truncated).toBe(true);
   });
 

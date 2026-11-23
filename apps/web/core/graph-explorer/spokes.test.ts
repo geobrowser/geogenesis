@@ -11,7 +11,7 @@ import {
   TOPIC_TYPE_ID,
   UNNAMED_SUBTOPIC_PROPERTY_ID,
 } from './ontology';
-import { buildSpokes, groupSpokesByLabel, pickEntitySpaceId, relationLabel } from './spokes';
+import { buildSpokes, entitySpaceId, groupSpokesByLabel, relationLabel } from './spokes';
 
 // Ranking by id order keeps these tests independent of the real space ranking table.
 vi.mock('~/core/utils/space/space-ranking', () => ({
@@ -23,8 +23,14 @@ const SPACE_A = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const SPACE_B = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 const PERSON = NEIGHBOUR_KIND_TYPE_IDS.person[0];
 
-function entity(id: string, name: string | null, typeIds: string[], spaceIds = [SPACE_A]): GraphEntity {
-  return { id, name, spaceIds, types: typeIds.map(typeId => ({ id: typeId, name: null })), image: null };
+function entity(
+  id: string,
+  name: string | null,
+  typeIds: string[],
+  spaceIds = [SPACE_A],
+  namedSpaceIds = spaceIds
+): GraphEntity {
+  return { id, name, spaceIds, namedSpaceIds, types: typeIds.map(typeId => ({ id: typeId, name: null })), image: null };
 }
 
 function relation(
@@ -176,11 +182,38 @@ describe('buildSpokes', () => {
   });
 });
 
-describe('pickEntitySpaceId', () => {
-  it('prefers spaces in the filter, then any space, then the fallback', () => {
-    expect(pickEntitySpaceId([SPACE_B, 'f'.repeat(32)], [SPACE_B], null)).toBe(SPACE_B);
-    expect(pickEntitySpaceId(['f'.repeat(32)], [SPACE_A], null)).toBe('f'.repeat(32));
-    expect(pickEntitySpaceId([], [SPACE_A], SPACE_A)).toBe(SPACE_A);
+describe('entitySpaceId', () => {
+  const CITING = '0'.repeat(32);
+  const HOME = 'f'.repeat(32);
+
+  it('reads an entity where it is named, even when a space that only cites it outranks that', () => {
+    // The test ranking puts CITING first.
+    expect(entitySpaceId({ spaceIds: [CITING, HOME], namedSpaceIds: [HOME] }, undefined, null)).toBe(HOME);
+    expect(entitySpaceId({ spaceIds: [CITING, HOME], namedSpaceIds: [HOME] }, [CITING, HOME], null)).toBe(HOME);
+  });
+
+  it('prefers a named space inside the filter, then any named space', () => {
+    expect(entitySpaceId({ spaceIds: [SPACE_A, SPACE_B], namedSpaceIds: [SPACE_A, SPACE_B] }, [SPACE_B], null)).toBe(
+      SPACE_B
+    );
+    expect(entitySpaceId({ spaceIds: [SPACE_A, HOME], namedSpaceIds: [HOME] }, [SPACE_A], null)).toBe(HOME);
+  });
+
+  it('falls back to its ranked spaces, then the fallback, when it is named nowhere', () => {
+    expect(entitySpaceId({ spaceIds: [SPACE_B], namedSpaceIds: [] }, [SPACE_A], null)).toBe(SPACE_B);
+    expect(entitySpaceId({ spaceIds: [], namedSpaceIds: [] }, [SPACE_A], SPACE_A)).toBe(SPACE_A);
+  });
+});
+
+describe('buildSpokes node space', () => {
+  it('reads a neighbour where it is named, not in a higher-ranked space that only cites it', () => {
+    const cited = entity('c'.repeat(32), 'Cited', [PERSON], ['0'.repeat(32), SPACE_B], [SPACE_B]);
+    const [spoke] = buildSpokes(
+      hop([relation({ entity: cited, propertyId: RELATED_PEOPLE_PROPERTY_ID, direction: 'out' })]),
+      CENTRE,
+      filter
+    );
+    expect(spoke.nodeSpaceId).toBe(SPACE_B);
   });
 });
 
