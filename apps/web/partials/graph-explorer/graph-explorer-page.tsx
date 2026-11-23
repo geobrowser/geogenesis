@@ -22,8 +22,8 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { GraphViewer } from './graph-viewer';
 
 /**
- * Full-screen shell under the app navbar (which keeps search and Log in), over the sidebar and page
- * chrome. Desktop scrolls the panel only; narrower screens scroll the whole view.
+ * Full-screen shell over the app navbar, sidebar and page chrome; its own top bar has search and close.
+ * Desktop scrolls the panel only; narrower screens scroll the whole view.
  */
 export function GraphExplorerPage({ entityId: routeEntityId }: { entityId: string }) {
   const searchParams = useSearchParams();
