@@ -71,6 +71,12 @@ function choiceFromPosition(position: boolean | null | undefined): VoteChoice {
   return null;
 }
 
+function choiceFromDirection(direction: 'positive' | 'negative' | null | undefined): VoteChoice {
+  if (direction === 'positive') return 'agree';
+  if (direction === 'negative') return 'disagree';
+  return null;
+}
+
 /**
  * A side's count with the viewer's server vote swapped for the vote drawn now, so a press moves the
  * count at once and a vote the server already counted is never counted twice.
@@ -166,6 +172,10 @@ export function TemplateClaimVote({
   const ownCounts = !usesBaseline && state.summary.hasCounts;
   const baseAgree = ownCounts ? state.summary.positive : (agreeCount ?? 0);
   const baseDisagree = ownCounts ? state.summary.negative : (disagreeCount ?? 0);
+  // The vote the base counts already hold for the viewer. The summary counts a vote still being
+  // indexed (`viewerDirection` is that side), while `serverVote` waits for the index: swapping
+  // `serverVote` there would count a fresh press twice until the index caught up.
+  const countedVote: VoteChoice = ownCounts ? choiceFromDirection(state.summary.viewerDirection) : serverVote;
 
   // `respond` has no double-press guard of its own: a second press before the bundler has the write
   // would send a retraction. The pills carry the gate, as `ResponseButton` does on master.
@@ -175,8 +185,8 @@ export function TemplateClaimVote({
     <>
       {children({
         userVote: liveVote,
-        agreeCount: adjustedVoteCount(baseAgree, 'agree', serverVote, liveVote),
-        disagreeCount: adjustedVoteCount(baseDisagree, 'disagree', serverVote, liveVote),
+        agreeCount: adjustedVoteCount(baseAgree, 'agree', countedVote, liveVote),
+        disagreeCount: adjustedVoteCount(baseDisagree, 'disagree', countedVote, liveVote),
         disabled,
         error: control.responseError,
         titleFor: choice => control.actionTitle(choice === 'agree'),

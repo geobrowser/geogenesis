@@ -191,10 +191,15 @@ export function ClaimExplorer({ contestedClaims, agreedClaims, title = 'Claims',
         <TemplateVoteRows targets={visible.map(claim => claim.voteTarget)}>
           <div className="divide-y divide-divider">
             {visible.map((claim, index) => (
-              // Names the list and the row on every action taken in it, a vote included.
+              // Names the list, the tab (positions restart on each) and the row on every action taken
+              // in it, a vote included.
               <ActionContextProvider
                 key={claim.id}
-                value={{ list_id: 'template_claims', item_position: startIndex + index + 1 }}
+                value={{
+                  list_id: 'template_claims',
+                  list_section_id: activeTab,
+                  item_position: startIndex + index + 1,
+                }}
               >
                 <RankedClaimRow rank={startIndex + index + 1} claim={claim} isAgreed={activeTab === 'agreed'} />
               </ActionContextProvider>

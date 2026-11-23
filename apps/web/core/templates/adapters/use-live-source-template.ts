@@ -4,8 +4,6 @@ import * as React from 'react';
 
 import { useSpace } from '~/core/hooks/use-space';
 import { ID } from '~/core/id';
-import { claimResponseTargetKey } from '~/core/responses/claim-response-summaries';
-import { useClaimResponseSummaryBatch } from '~/core/responses/use-claim-response-summaries';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import type { Entity, Relation } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
@@ -34,6 +32,7 @@ import {
 } from '../ontology';
 import { useInitialHydrationGate } from './use-initial-hydration-gate';
 import { useLiveEntityActions } from './use-live-entity-actions';
+import { useTemplateClaimVoteCounts } from './use-template-claim-vote-counts';
 import { useTopicMediaBatch } from './use-topic-media-batch';
 
 /**
@@ -205,15 +204,12 @@ export function useLiveSourceTemplate({
     return Array.from(byHex.values());
   }, [citingClaims, hydratedOutgoingClaims, outgoingClaimRelations, spaceId]);
 
-  const claimBatchTargets = React.useMemo(
-    () => combinedClaimSeeds.map(claim => ({ entityId: claim.id, responseKind: 'stance' as const })),
+  // Each row's counts in the space it votes in, the counts its pills draw (GEO-3819).
+  const voteCountTargets = React.useMemo(
+    () => combinedClaimSeeds.map(claim => ({ claimId: claim.id, spaceId: claim.spaceId })),
     [combinedClaimSeeds]
   );
-  const responseBatch = useClaimResponseSummaryBatch({
-    spaceId,
-    targets: claimBatchTargets,
-    enabled: claimBatchTargets.length > 0,
-  });
+  const voteCounts = useTemplateClaimVoteCounts({ pageSpaceId: spaceId, targets: voteCountTargets });
 
   const actionCallbacks = useLiveEntityActions({
     entityId,
@@ -278,9 +274,9 @@ export function useLiveSourceTemplate({
 
     const supportedClaims: ClaimSummaryModel[] = combinedClaimSeeds
       .map(claim => {
-        const batch = responseBatch.data?.get(claimResponseTargetKey({ entityId: claim.id, responseKind: 'stance' }));
-        const pos = batch?.counts.positive ?? 0;
-        const neg = batch?.counts.negative ?? 0;
+        const counts = voteCounts.countsFor(claim.id);
+        const pos = counts?.positive ?? 0;
+        const neg = counts?.negative ?? 0;
         const total = pos + neg;
         const pct = total > 0 ? Math.round((pos / total) * 100) : undefined;
         const isAccepted = total >= 2 && pct !== undefined && (pct >= 75 || pct <= 25);
@@ -298,8 +294,8 @@ export function useLiveSourceTemplate({
               total > 0 && pct !== undefined
                 ? [
                     {
-                      id: spaceId,
-                      label: spaceLabel,
+                      id: claim.spaceId,
+                      label: voteCounts.labelFor(claim.spaceId, spaceLabel),
                       color: '#202020',
                       percent: pct,
                       voterCount: total,
@@ -383,7 +379,7 @@ export function useLiveSourceTemplate({
     citingStories,
     combinedClaimSeeds,
     entity,
-    responseBatch.data,
+    voteCounts,
     serverCoverUrl,
     sourceQuotes,
     space?.entity?.name,

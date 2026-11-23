@@ -392,10 +392,15 @@ function SubClaimGroupSection({
         {/* One geo-chat lookup for the page of sub-claims, rather than one per row. */}
         <TemplateVoteRows targets={visibleItems.map(subClaim => subClaim.voteTarget)}>
           {visibleItems.map((subClaim, idx) => (
-            // Names the list and the row on every action taken in it, a vote included.
+            // Names the list, the group (positions restart in each) and the row on every action taken
+            // in it, a vote included.
             <ActionContextProvider
               key={subClaim.id}
-              value={{ list_id: 'template_sub_claims', item_position: startIndex + idx + 1 }}
+              value={{
+                list_id: 'template_sub_claims',
+                list_section_id: section.stance,
+                item_position: startIndex + idx + 1,
+              }}
             >
               <SubClaimRow rank={startIndex + idx + 1} subClaim={subClaim} />
             </ActionContextProvider>

@@ -11,8 +11,6 @@ import { useDebateClaims } from '~/core/debates/hooks';
 import { useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { useSpace } from '~/core/hooks/use-space';
 import { ID } from '~/core/id';
-import { claimResponseTargetKey } from '~/core/responses/claim-response-summaries';
-import { useClaimResponseSummaryBatch } from '~/core/responses/use-claim-response-summaries';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import { Entities } from '~/core/utils/entity';
 import { resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
@@ -44,6 +42,7 @@ import { resolveDebateStillSrc, useDebateParticipantsBatch } from './use-debate-
 import { useHydratedSourceCards } from './use-hydrated-source-cards';
 import { useInitialHydrationGate } from './use-initial-hydration-gate';
 import { useLiveEntityActions } from './use-live-entity-actions';
+import { useTemplateClaimVoteCounts } from './use-template-claim-vote-counts';
 import { useTopicMediaBatch } from './use-topic-media-batch';
 
 function parseDebateTitle(rawTitle: string, fallbackClaim: string): { claimTitle: string; speakers: [string, string] } {
@@ -336,16 +335,12 @@ export function useLiveClaimTemplate({
     return map;
   }, [hydratedSubClaims]);
 
-  const subClaimBatchTargets = React.useMemo(
-    () => subClaimSeedList.map(item => ({ entityId: item.id, responseKind: 'stance' as const })),
+  // Each sub-claim's counts in the space its row votes in, the counts its pills draw (GEO-3819).
+  const subClaimVoteCountTargets = React.useMemo(
+    () => subClaimSeedList.map(item => ({ claimId: item.id, spaceId: item.spaceId })),
     [subClaimSeedList]
   );
-
-  const subClaimResponseBatch = useClaimResponseSummaryBatch({
-    spaceId,
-    targets: subClaimBatchTargets,
-    enabled: subClaimBatchTargets.length > 0,
-  });
+  const subClaimVoteCounts = useTemplateClaimVoteCounts({ pageSpaceId: spaceId, targets: subClaimVoteCountTargets });
 
   const actionCallbacks = useLiveEntityActions({
     entityId,
@@ -396,11 +391,9 @@ export function useLiveClaimTemplate({
     const subClaims: SubClaimModel[] = subClaimSeedList
       .map(item => {
         const hex = ID.uuidToHex(item.id);
-        const batch = subClaimResponseBatch.data?.get(
-          claimResponseTargetKey({ entityId: item.id, responseKind: 'stance' })
-        );
-        const pos = batch?.counts.positive ?? 0;
-        const neg = batch?.counts.negative ?? 0;
+        const counts = subClaimVoteCounts.countsFor(item.id);
+        const pos = counts?.positive ?? 0;
+        const neg = counts?.negative ?? 0;
         const total = pos + neg;
         const pct = total > 0 ? Math.round((pos / total) * 100) : undefined;
 
@@ -418,8 +411,8 @@ export function useLiveClaimTemplate({
               total > 0 && pct !== undefined
                 ? [
                     {
-                      id: spaceId,
-                      label: spaceLabel,
+                      id: item.spaceId,
+                      label: subClaimVoteCounts.labelFor(item.spaceId, spaceLabel),
                       color: '#202020',
                       percent: pct,
                       voterCount: total,
@@ -666,7 +659,7 @@ export function useLiveClaimTemplate({
     space?.entity?.name,
     spaceId,
     state,
-    subClaimResponseBatch.data,
+    subClaimVoteCounts,
     subClaimSeedList,
     topicMediaQuery.data,
     topicRelations,

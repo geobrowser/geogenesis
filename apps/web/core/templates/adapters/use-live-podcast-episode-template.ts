@@ -4,8 +4,6 @@ import * as React from 'react';
 
 import { useSpace } from '~/core/hooks/use-space';
 import { ID } from '~/core/id';
-import { claimResponseTargetKey } from '~/core/responses/claim-response-summaries';
-import { useClaimResponseSummaryBatch } from '~/core/responses/use-claim-response-summaries';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import type { Entity } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
@@ -35,6 +33,7 @@ import {
 } from '../ontology';
 import { formatPodcastDuration } from '../views/podcast-shared';
 import { useLiveEntityActions } from './use-live-entity-actions';
+import { useTemplateClaimVoteCounts } from './use-template-claim-vote-counts';
 
 function fallbackPlatformUrl(name: string): string | null {
   const lower = name.toLowerCase();
@@ -64,7 +63,8 @@ function readAvatarUrlFromEntity(entity: Entity | undefined, imageEntitiesById: 
  *
  * Hydrates episode artwork, parent Podcast Show (with fallback artwork), air date, duration,
  * episode number, direct audio stream URL, Topics, Notable claims (with live vote splits via
- * `useClaimResponseSummaryBatch`), Notable quotes, Hosts, Guests, Contributors (with portraits),
+ * `useTemplateClaimVoteCounts`, in each claim's own vote space), Notable quotes, Hosts, Guests,
+ * Contributors (with portraits),
  * Listen on platform links, Context, Flags, and `useMutate` actions.
  */
 export function useLivePodcastEpisodeTemplate({
@@ -195,16 +195,21 @@ export function useLivePodcastEpisodeTemplate({
     return map;
   }, [firstHopById, secondHopEntities]);
 
-  // Batch-fetch live vote summaries for all Notable claims on this episode
-  const claimBatchTargets = React.useMemo(
-    () => claimRelations.slice(0, 40).map(rel => ({ entityId: rel.toEntity.id, responseKind: 'stance' as const })),
-    [claimRelations]
+  // The space a Notable claim's row links to and votes in, so a vote shows on the claim's own page.
+  const notableClaimSpaceId = React.useCallback(
+    (rel: (typeof claimRelations)[number]) => {
+      const claimEntity = hydratedById.get(ID.uuidToHex(rel.toEntity.id));
+      return claimEntity ? resolveEntitySpaceId(claimEntity, spaceId) : (rel.toSpaceId ?? spaceId);
+    },
+    [hydratedById, spaceId]
   );
-  const responseBatch = useClaimResponseSummaryBatch({
-    spaceId,
-    targets: claimBatchTargets,
-    enabled: claimBatchTargets.length > 0,
-  });
+
+  // Live vote counts for the Notable claims, each in the space its row votes in (GEO-3819).
+  const voteCountTargets = React.useMemo(
+    () => claimRelations.slice(0, 40).map(rel => ({ claimId: rel.toEntity.id, spaceId: notableClaimSpaceId(rel) })),
+    [claimRelations, notableClaimSpaceId]
+  );
+  const voteCounts = useTemplateClaimVoteCounts({ pageSpaceId: spaceId, targets: voteCountTargets });
 
   const actionCallbacks = useLiveEntityActions({
     entityId,
@@ -274,13 +279,10 @@ export function useLivePodcastEpisodeTemplate({
         if (!claimTitle) return null;
         const claimHex = ID.uuidToHex(rel.toEntity.id);
         const claimEntity = hydratedById.get(claimHex);
-        const summary = responseBatch.data?.get(
-          claimResponseTargetKey({ entityId: rel.toEntity.id, responseKind: 'stance' })
-        );
-        const pos = summary?.counts.positive ?? 0;
-        const neg = summary?.counts.negative ?? 0;
-        // The space the row links to and votes in, so a vote shows on the claim's own page.
-        const claimSpaceId = claimEntity ? resolveEntitySpaceId(claimEntity, spaceId) : (rel.toSpaceId ?? spaceId);
+        const claimSpaceId = notableClaimSpaceId(rel);
+        const counts = voteCounts.countsFor(rel.toEntity.id);
+        const pos = counts?.positive ?? 0;
+        const neg = counts?.negative ?? 0;
         const total = pos + neg;
         const pct = total > 0 ? Math.round((pos / total) * 100) : 0;
         const isAccepted = total >= 2 && (pct >= 75 || pct <= 25);
@@ -303,8 +305,8 @@ export function useLivePodcastEpisodeTemplate({
               total > 0
                 ? [
                     {
-                      id: spaceId,
-                      label: spaceLabel,
+                      id: claimSpaceId,
+                      label: voteCounts.labelFor(claimSpaceId, spaceLabel),
                       color: '#202020',
                       percent: pct,
                       voterCount: total,
@@ -415,6 +417,7 @@ export function useLivePodcastEpisodeTemplate({
   }, [
     claimRelations,
     contributorRelations,
+    notableClaimSpaceId,
     entity,
     guestRelations,
     hostRelations,
@@ -422,7 +425,7 @@ export function useLivePodcastEpisodeTemplate({
     listenOnRelations,
     podcastRelations,
     quoteRelations,
-    responseBatch.data,
+    voteCounts,
     serverCoverUrl,
     space?.entity?.name,
     spaceId,

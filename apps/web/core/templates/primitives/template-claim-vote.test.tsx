@@ -7,7 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useActionScope } from '~/core/action-context-provider';
 
-import type { ClaimSummaryModel, ClaimVoteTarget, TopicRecentDebateModel } from '../models';
+import type { ClaimSummaryModel, ClaimVoteTarget, SubClaimModel, TopicRecentDebateModel } from '../models';
+import { ClaimTemplate } from '../views/claim-template';
 import {
   ClaimExplorer,
   ClaimVoteBinding,
@@ -28,7 +29,7 @@ const mocks = vi.hoisted(() => ({
   useClaimResponseState: vi.fn(),
   useClaimPositionControl: vi.fn(),
   /** The action scope each control was rendered under: what its vote's analytics would carry. */
-  scopes: [] as Array<{ claimId: string; list_id?: string; item_position?: number }>,
+  scopes: [] as Array<{ claimId: string; list_id?: string; list_section_id?: string; item_position?: number }>,
 }));
 
 vi.mock('~/core/debates/hooks', () => ({
@@ -43,7 +44,12 @@ vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
     // The real control reads this scope for its `action_completed` / `local_vote` attribution.
     const scope = useActionScope();
     const { claim } = args[0] as { claim: { claim_entity_id: string } };
-    mocks.scopes.push({ claimId: claim.claim_entity_id, list_id: scope.list_id, item_position: scope.item_position });
+    mocks.scopes.push({
+      claimId: claim.claim_entity_id,
+      list_id: scope.list_id,
+      list_section_id: scope.list_section_id,
+      item_position: scope.item_position,
+    });
     return mocks.useClaimPositionControl(...args);
   },
 }));
@@ -204,13 +210,27 @@ describe('TemplateClaimVote', () => {
 
   it("draws the target space's own counts when the adapter gives no baseline", () => {
     setState({
-      summary: { positive: 7, negative: 2, total: 9, hasCounts: true },
+      summary: { positive: 7, negative: 2, total: 9, hasCounts: true, viewerDirection: 'positive' },
       readiness: { response_kind: 'stance', viewer_response: { position: true } },
     });
     setControl({ viewerPosition: true });
     renderVote(TARGET, { agree: 99, disagree: 99 });
 
     expect(within(agreePill()).getByText('7')).toBeInTheDocument();
+    expect(within(disagreePill()).getByText('2')).toBeInTheDocument();
+  });
+
+  it("does not count a press twice while the target space's summary already counts it", () => {
+    // Signed in, pressed Agree, not indexed yet: the summary's optimistic delta already moved the
+    // count from 7 to 8 and reports the side, while the indexed answer still says no vote.
+    setState({
+      summary: { positive: 8, negative: 2, total: 10, hasCounts: true, viewerDirection: 'positive' },
+      readiness: { response_kind: 'stance', viewer_response: null },
+    });
+    setControl({ viewerPosition: true, isResponsePending: true });
+    renderVote(TARGET);
+
+    expect(within(agreePill()).getByText('8')).toBeInTheDocument();
     expect(within(disagreePill()).getByText('2')).toBeInTheDocument();
   });
 
@@ -324,8 +344,52 @@ describe('list attribution on template votes', () => {
       </EntityActionProvider>
     );
 
-    expect(lastScope('claim-1')).toMatchObject({ list_id: 'template_claims', item_position: 1 });
-    expect(lastScope('claim-2')).toMatchObject({ list_id: 'template_claims', item_position: 2 });
+    expect(lastScope('claim-1')).toMatchObject({
+      list_id: 'template_claims',
+      list_section_id: 'split',
+      item_position: 1,
+    });
+    expect(lastScope('claim-2')).toMatchObject({
+      list_id: 'template_claims',
+      list_section_id: 'split',
+      item_position: 2,
+    });
+  });
+
+  it('tells the Claim page sub-claim groups apart, since each numbers its rows from 1', () => {
+    const subClaim = (target: ClaimVoteTarget, stance: 'supports' | 'opposes'): SubClaimModel => ({
+      id: target.claimId,
+      title: target.title,
+      kind: 'judgment',
+      stance,
+      split: { rows: [], isSplit: false },
+      sources: [],
+      voteTarget: target,
+    });
+    render(
+      <ClaimTemplate
+        model={{
+          id: 'parent',
+          title: 'Parent claim',
+          kind: 'judgment',
+          split: { rows: [], isSplit: false },
+          voteBox: { userVote: null, countSummary: '0 votes', onVote: vi.fn() },
+          sections: [],
+          subClaims: [subClaim(TARGET, 'supports'), subClaim(second, 'opposes')],
+        }}
+      />
+    );
+
+    expect(lastScope('claim-1')).toMatchObject({
+      list_id: 'template_sub_claims',
+      list_section_id: 'supports',
+      item_position: 1,
+    });
+    expect(lastScope('claim-2')).toMatchObject({
+      list_id: 'template_sub_claims',
+      list_section_id: 'opposes',
+      item_position: 1,
+    });
   });
 
   it('names the Recent debates list and the card, and draws the card pills from the binding', () => {
