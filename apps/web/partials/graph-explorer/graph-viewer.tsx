@@ -18,11 +18,9 @@ import { normId } from '~/core/utils/norm-id';
 
 import { Skeleton } from '~/design-system/skeleton';
 
-import { claimsEmptyMessage } from './empty-states';
+import { claimsEmptyMessage, descriptionEmptyMessage, relationshipsEmptyMessage } from './empty-states';
 import { EntityPanel, type EntityPanelTab } from './entity-panel';
 import { GraphCanvas } from './graph-canvas';
-
-export const NO_RELATIONSHIPS_MESSAGE = 'No relationships in the knowledge graph yet.';
 
 /** Hub-and-spoke view of an entity's relations. `scope` null means still resolving: nothing is queried. */
 export function GraphViewer({
@@ -120,6 +118,11 @@ export function GraphViewer({
     nodeSpaces[rawCentre.id] ??
     pickEntitySpaceId(rawCentre.spaceIds, filter.spaceIds, null);
   const centre = { ...rawCentre, ...centreTextInSpace(rawCentre, centreSpaceId) };
+  const emptyMessages = {
+    relationships: relationshipsEmptyMessage(filter),
+    claims: claimsEmptyMessage(filter, topic?.name ?? null),
+    description: descriptionEmptyMessage(centreSpaceId),
+  };
   const claimList = claims.data?.pages.flatMap(page => page.claims) ?? [];
 
   return (
@@ -132,7 +135,7 @@ export function GraphViewer({
             spokes={shown}
             onSelect={select}
             onPrefetch={prefetch}
-            emptyMessage={spokes.length === 0 ? NO_RELATIONSHIPS_MESSAGE : null}
+            emptyMessage={spokes.length === 0 ? emptyMessages.relationships : null}
           />
         </div>
         {spokes.length > shown.length && (
@@ -162,7 +165,7 @@ export function GraphViewer({
           onTabChange={setTab}
           onSelect={select}
           truncated={hopData.truncated}
-          claimsEmptyMessage={claimsEmptyMessage(filter, topic?.name ?? null)}
+          emptyMessages={emptyMessages}
         />
       </div>
     </div>

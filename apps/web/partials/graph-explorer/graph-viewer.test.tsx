@@ -7,7 +7,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import type { GraphHop } from '~/core/graph-explorer/fetch-graph-hop';
 import { NEIGHBOUR_KIND_TYPE_IDS, RELATED_PEOPLE_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/graph-explorer/ontology';
 
-import { GraphViewer, NO_RELATIONSHIPS_MESSAGE } from './graph-viewer';
+import { GraphViewer } from './graph-viewer';
 
 const TOPIC = '11111111111111111111111111111111';
 const PERSON = '22222222222222222222222222222222';
@@ -133,7 +133,9 @@ describe('GraphViewer', () => {
     fireEvent.click(screen.getByRole('button', { name: /Isaac Herzog, Related person/ }));
 
     expect(hooks.useGraphHop).toHaveBeenLastCalledWith(PERSON, expect.anything());
-    expect(screen.getByText(NO_RELATIONSHIPS_MESSAGE)).toBeTruthy();
+    expect(
+      screen.getAllByText('No relationships of the shown types in this topic’s spaces yet.').length
+    ).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole('button', { name: 'Back to Israel-Gaza war' }));
     expect(hooks.useGraphHop).toHaveBeenLastCalledWith(TOPIC, expect.anything());
@@ -144,7 +146,7 @@ describe('GraphViewer', () => {
     render(<GraphViewer startEntityId={TOPIC} scope={scope} />);
     expect(screen.getByText('A topic.')).toBeTruthy();
     fireEvent.click(screen.getByRole('tab', { name: 'Claims (0)' }));
-    expect(screen.getByText('No claims in the knowledge graph are linked to this yet.')).toBeTruthy();
+    expect(screen.getByText('No claims in this topic’s spaces are linked to this yet.')).toBeTruthy();
   });
 
   it('lists claims about the centre', () => {

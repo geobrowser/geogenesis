@@ -15,6 +15,8 @@ import { GraphClaimRow } from './graph-claim-row';
 
 export type EntityPanelTab = 'details' | 'relationships' | 'claims';
 
+export type EntityPanelEmptyMessages = { relationships: string; claims: string; description: string };
+
 export function typeNames(entity: { types: Array<{ name: string | null }> }): string[] {
   return [...new Set(entity.types.map(type => type.name).filter((name): name is string => Boolean(name)))];
 }
@@ -29,7 +31,7 @@ export function EntityPanel({
   onTabChange,
   onSelect,
   truncated,
-  claimsEmptyMessage,
+  emptyMessages,
 }: {
   centre: GraphCentre;
   centreSpaceId: string | null;
@@ -46,7 +48,7 @@ export function EntityPanel({
   onTabChange: (tab: EntityPanelTab) => void;
   onSelect: (spoke: Spoke) => void;
   truncated: boolean;
-  claimsEmptyMessage: string;
+  emptyMessages: EntityPanelEmptyMessages;
 }) {
   const claimsCount = claimsState.isLoading ? '…' : `${claims.length}${claimsState.hasNextPage ? '+' : ''}`;
   const tabs: Array<{ id: EntityPanelTab; label: string }> = [
@@ -91,21 +93,38 @@ export function EntityPanel({
       </div>
 
       <div role="tabpanel" id={`graph-tabpanel-${tab}`} aria-labelledby={`graph-tab-${tab}`} className="min-h-0">
-        {tab === 'details' && <DetailsTab centre={centre} centreSpaceId={centreSpaceId} />}
-        {tab === 'relationships' && <RelationshipsTab spokes={spokes} onSelect={onSelect} truncated={truncated} />}
-        {tab === 'claims' && <ClaimsTab claims={claims} state={claimsState} emptyMessage={claimsEmptyMessage} />}
+        {tab === 'details' && (
+          <DetailsTab centre={centre} centreSpaceId={centreSpaceId} emptyMessage={emptyMessages.description} />
+        )}
+        {tab === 'relationships' && (
+          <RelationshipsTab
+            spokes={spokes}
+            onSelect={onSelect}
+            truncated={truncated}
+            emptyMessage={emptyMessages.relationships}
+          />
+        )}
+        {tab === 'claims' && <ClaimsTab claims={claims} state={claimsState} emptyMessage={emptyMessages.claims} />}
       </div>
     </section>
   );
 }
 
-function DetailsTab({ centre, centreSpaceId }: { centre: GraphCentre; centreSpaceId: string | null }) {
+function DetailsTab({
+  centre,
+  centreSpaceId,
+  emptyMessage,
+}: {
+  centre: GraphCentre;
+  centreSpaceId: string | null;
+  emptyMessage: string;
+}) {
   return (
     <div className="flex flex-col gap-3">
       {centre.description ? (
         <p className="text-body whitespace-pre-line text-text">{centre.description}</p>
       ) : (
-        <p className="text-body text-grey-04">No description in the knowledge graph yet.</p>
+        <p className="text-body text-grey-04">{emptyMessage}</p>
       )}
       {centreSpaceId && (
         <Link
@@ -123,12 +142,14 @@ function RelationshipsTab({
   spokes,
   onSelect,
   truncated,
+  emptyMessage,
 }: {
   spokes: Spoke[];
+  emptyMessage: string;
   onSelect: (spoke: Spoke) => void;
   truncated: boolean;
 }) {
-  if (spokes.length === 0) return <EmptyNote>No relationships in the knowledge graph yet.</EmptyNote>;
+  if (spokes.length === 0) return <EmptyNote>{emptyMessage}</EmptyNote>;
 
   return (
     <div className="flex flex-col gap-4">
