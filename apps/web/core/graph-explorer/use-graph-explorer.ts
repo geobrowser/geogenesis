@@ -1,6 +1,6 @@
 'use client';
 
-import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -9,7 +9,9 @@ import { useTopicSpaceScope } from '~/core/topics/use-topic-space-scope';
 
 import { type ClaimsAboutPage, fetchClaimsAbout } from './claims-about';
 import { fetchGraphHop } from './fetch-graph-hop';
+import { fetchCrossLinks, fetchHop1, fetchHop2 } from './fetch-graph-neighbourhood';
 import { type GraphFilter, type GraphScope, graphFilterKey } from './graph-filter';
+import { type GraphCaps, type GraphKindFilter, presentKinds, selectGraph, selectHop1 } from './select-graph';
 
 const STALE_MS = 60_000;
 
@@ -71,6 +73,11 @@ export function usePrefetchGraphHop(filter: GraphFilter | null) {
           queryFn: ({ signal }) => fetchGraphHop(entityId, filter, signal),
           staleTime: STALE_MS,
         });
+        void queryClient.prefetchQuery({
+          queryKey: [...neighbourhoodKey('hop1', filter), entityId],
+          queryFn: ({ signal }) => fetchHop1(entityId, filter, signal),
+          staleTime: STALE_MS,
+        });
       }, GRAPH_HOP_PREFETCH_DELAY_MS);
     },
     [filter, queryClient]
@@ -93,4 +100,99 @@ export function useClaimsAbout(entityId: string, filter: GraphFilter | null, req
     enabled: filter !== null,
     staleTime: STALE_MS,
   });
+}
+
+const neighbourhoodKey = (part: string, filter: GraphFilter) =>
+  ['graph-explorer', 'neighbourhood', part, ...graphFilterKey(filter)] as const;
+
+/**
+ * The 3D view's data: hop 1, then hop 2 for the hop-1 picks, then cross-links among everything
+ * shown. Each stage renders as it lands; the earlier selection stays until the next is ready.
+ */
+export function useGraphNeighbourhood({
+  centreId,
+  filter,
+  caps,
+  kindFilter,
+  hubId,
+}: {
+  centreId: string;
+  filter: GraphFilter | null;
+  caps: GraphCaps;
+  kindFilter: GraphKindFilter;
+  /** Not expanded in hop 2: the scope's topic, whose thousands of backlinks would swamp it. */
+  hubId: string | null;
+}) {
+  const hop1 = useQuery({
+    queryKey: filter ? [...neighbourhoodKey('hop1', filter), centreId] : ['graph-explorer', 'neighbourhood', 'pending'],
+    queryFn: ({ signal }) => fetchHop1(centreId, filter!, signal),
+    enabled: filter !== null,
+    staleTime: STALE_MS,
+    // The previous graph stays on screen until the next centre's lands, then eases into it.
+    placeholderData: keepPreviousData,
+  });
+  const hop1Data = hop1.data ?? null;
+  const noExpand = React.useMemo(() => new Set(hubId ? [hubId] : []), [hubId]);
+
+  const expandIds = React.useMemo(() => {
+    if (!hop1Data) return [];
+    return selectHop1(centreId, hop1Data.neighbours, caps, kindFilter)
+      .map(({ node }) => node.id)
+      .filter(id => !noExpand.has(id))
+      .sort();
+  }, [caps, centreId, hop1Data, kindFilter, noExpand]);
+
+  const hop2 = useQuery({
+    queryKey: filter
+      ? [...neighbourhoodKey('hop2', filter), expandIds.join(',')]
+      : ['graph-explorer', 'hop2', 'pending'],
+    queryFn: ({ signal }) => fetchHop2(expandIds, filter!, signal),
+    enabled: filter !== null && expandIds.length > 0,
+    staleTime: STALE_MS,
+  });
+  const hop2Data = hop2.data ?? null;
+
+  const withoutCross = React.useMemo(() => {
+    if (!hop1Data?.centre) return null;
+    return selectGraph({
+      centre: hop1Data.centre,
+      neighbours: hop1Data.neighbours,
+      hop2: hop2Data,
+      crossLinks: null,
+      caps,
+      kindFilter,
+      noExpand,
+    });
+  }, [caps, hop1Data, hop2Data, kindFilter, noExpand]);
+
+  const shownIds = React.useMemo(
+    () => (withoutCross && hop2Data ? withoutCross.nodes.map(({ node }) => node.id).sort() : []),
+    [hop2Data, withoutCross]
+  );
+  const cross = useQuery({
+    queryKey: filter
+      ? [...neighbourhoodKey('cross', filter), shownIds.join(',')]
+      : ['graph-explorer', 'cross', 'pending'],
+    queryFn: ({ signal }) => fetchCrossLinks(shownIds, filter!, signal),
+    enabled: filter !== null && shownIds.length > 1,
+    staleTime: STALE_MS,
+  });
+
+  const selection = React.useMemo(() => {
+    if (!hop1Data?.centre || !withoutCross) return null;
+    if (!cross.data) return withoutCross;
+    return selectGraph({
+      centre: hop1Data.centre,
+      neighbours: hop1Data.neighbours,
+      hop2: hop2Data,
+      crossLinks: cross.data,
+      caps,
+      kindFilter,
+      noExpand,
+    });
+  }, [caps, cross.data, hop1Data, hop2Data, kindFilter, noExpand, withoutCross]);
+
+  const kinds = React.useMemo(() => (hop1Data ? presentKinds(hop1Data.neighbours) : []), [hop1Data]);
+
+  return { hop1, centre: hop1Data?.centre ?? null, selection, kinds, isSwitching: hop1.isPlaceholderData };
 }

@@ -66,13 +66,16 @@ const hooks = vi.hoisted(() => ({
   useGraphHop: vi.fn(),
   useClaimsAbout: vi.fn(),
   prefetch: vi.fn(),
+  useGraphNeighbourhood: vi.fn(),
 }));
 
 vi.mock('~/core/graph-explorer/use-graph-explorer', () => ({
   useGraphHop: hooks.useGraphHop,
   useClaimsAbout: hooks.useClaimsAbout,
   usePrefetchGraphHop: () => hooks.prefetch,
+  useGraphNeighbourhood: hooks.useGraphNeighbourhood,
 }));
+vi.mock('~/core/hooks/use-media-query', () => ({ useMediaQuery: () => false }));
 vi.mock('~/core/sync/use-store', () => ({ useQueryEntity: () => ({ entity: null, isLoading: false }) }));
 vi.mock('~/core/hooks/use-is-mobile-layout', () => ({ useIsMobileLayout: () => false }));
 vi.mock('~/design-system/prefetch-link', () => ({
@@ -101,7 +104,45 @@ beforeAll(() => {
   } as unknown as typeof ResizeObserver;
 });
 
+/** The 3D view's selection, built from the same hop fixtures. */
+function neighbourhood({ centreId }: { centreId: string }) {
+  const hop = hops[centreId];
+  if (!hop?.centre) return { selection: null, kinds: [], hop1: { isError: false }, centre: null, isSwitching: false };
+  const node = (entity: GraphHop['relations'][number]['entity'], kind: 'topic' | 'ent') => ({
+    ...entity,
+    kind,
+    typeRank: 0,
+    placedSpaceIds: [],
+    date: null,
+    agrees: 0,
+    disagrees: 0,
+  });
+  const nodes = [
+    { node: node(hop.centre, centreId === TOPIC ? 'topic' : 'ent'), hop: 0, parentId: null },
+    ...hop.relations.map(relation => ({ node: node(relation.entity, 'ent'), hop: 1, parentId: centreId })),
+  ];
+  const links = hop.relations.map(relation => ({
+    hop: 1,
+    edge: {
+      id: relation.id,
+      fromId: relation.direction === 'out' ? centreId : relation.entity.id,
+      toId: relation.direction === 'out' ? relation.entity.id : centreId,
+      propertyId: relation.propertyId,
+      propertyName: relation.propertyName,
+      spaceId: relation.spaceId,
+    },
+  }));
+  return {
+    selection: { nodes, links },
+    kinds: ['ent'],
+    hop1: { isError: false },
+    centre: hop.centre,
+    isSwitching: false,
+  };
+}
+
 beforeEach(() => {
+  hooks.useGraphNeighbourhood.mockImplementation(neighbourhood);
   hooks.useGraphHop.mockImplementation((id: string, filter: unknown) =>
     filter
       ? { data: hops[id], isLoading: false, isError: false, refetch: vi.fn() }
@@ -140,15 +181,15 @@ describe('GraphViewer', () => {
     expect(screen.queryByText('Isaac Herzog')).toBeNull();
   });
 
-  it('draws the centre’s relations with their labels', () => {
+  it('draws the centre and its neighbours as buttons', () => {
     render(<Viewer start={TOPIC} scope={scope} />);
-    expect(screen.getByRole('button', { name: /Isaac Herzog, Related person/ })).toBeTruthy();
-    expect(screen.getAllByText('Related person').length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'Isaac Herzog' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Israel-Gaza war', current: true })).toBeTruthy();
   });
 
   it('re-centres on a clicked node, offers Back, and says plainly when a node has no relations', () => {
     render(<Viewer start={TOPIC} scope={scope} />);
-    fireEvent.click(screen.getByRole('button', { name: /Isaac Herzog, Related person/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Isaac Herzog' }));
 
     expect(hooks.useGraphHop).toHaveBeenLastCalledWith(PERSON, expect.anything());
     expect(
@@ -255,7 +296,7 @@ describe('GraphViewer', () => {
     render(<Viewer start={TOPIC} scope={{ ...scope, topicId: TOPIC, topicSpaceId: OTHER_SPACE }} />);
     expect(screen.getByText('As another space describes it.')).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: /Isaac Herzog, Related person/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Isaac Herzog' }));
     expect(screen.getByText('President of Israel.')).toBeTruthy();
   });
 });

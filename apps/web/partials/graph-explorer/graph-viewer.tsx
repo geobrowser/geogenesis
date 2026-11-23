@@ -3,25 +3,19 @@
 import * as React from 'react';
 
 import { centreTextInSpace } from '~/core/graph-explorer/centre-text';
+import type { GraphNode } from '~/core/graph-explorer/fetch-graph-neighbourhood';
 import { type GraphFilterOverrides, type GraphScope, resolveGraphFilter } from '~/core/graph-explorer/graph-filter';
 import { type GraphHistory, goBack, recentre } from '~/core/graph-explorer/history';
-import {
-  SPOKE_CAP_DESKTOP,
-  SPOKE_CAP_PHONE,
-  type Spoke,
-  buildSpokes,
-  entitySpaceId,
-} from '~/core/graph-explorer/spokes';
+import { type Spoke, buildSpokes, entitySpaceId } from '~/core/graph-explorer/spokes';
 import { useClaimsAbout, useGraphHop, usePrefetchGraphHop } from '~/core/graph-explorer/use-graph-explorer';
-import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { normId } from '~/core/utils/norm-id';
 
 import { Skeleton } from '~/design-system/skeleton';
 
+import { ConnectionsView } from './connections/connections-view';
 import { claimsEmptyMessage, descriptionEmptyMessage, relationshipsEmptyMessage } from './empty-states';
 import { EntityPanel, type EntityPanelTab } from './entity-panel';
-import { GraphCanvas } from './graph-canvas';
 
 /** Hub-and-spoke view of an entity's relations. `scope` null means still resolving: nothing is queried. */
 export function GraphViewer({
@@ -49,15 +43,12 @@ export function GraphViewer({
   const claims = useClaimsAbout(centreId, filter, scope?.topicSpaceId ?? null);
   const claimPages = React.useMemo(() => claims.data?.pages.map(page => page.claims) ?? [], [claims.data]);
   const prefetch = usePrefetchGraphHop(filter);
-  const isMobile = useIsMobileLayout();
 
   const hopData = hop.data ?? null;
   const spokes = React.useMemo(
     () => (hopData && filter ? buildSpokes(hopData, centreId, filter) : []),
     [centreId, filter, hopData]
   );
-  const cap = isMobile ? SPOKE_CAP_PHONE : SPOKE_CAP_DESKTOP;
-  const shown = spokes.slice(0, cap);
 
   React.useEffect(() => {
     const centreName = hopData?.centre?.name;
@@ -69,6 +60,14 @@ export function GraphViewer({
     (spoke: Spoke) => {
       if (spoke.entity.name) setNames(current => ({ ...current, [spoke.entity.id]: spoke.entity.name! }));
       onNavigate(recentre(history, spoke.entity.id));
+    },
+    [history, onNavigate]
+  );
+
+  const selectNode = React.useCallback(
+    (node: GraphNode) => {
+      if (node.name) setNames(current => ({ ...current, [node.id]: node.name! }));
+      onNavigate(recentre(history, node.id));
     },
     [history, onNavigate]
   );
@@ -132,24 +131,17 @@ export function GraphViewer({
     <div className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)_400px] gap-6 lg:h-auto lg:grid-cols-1 lg:gap-4">
       <div className="flex min-h-0 flex-col gap-2">
         {backButton}
-        <div className="min-h-[420px] flex-1 rounded-lg border border-grey-02 lg:h-[440px] lg:min-h-0 lg:flex-none">
-          <GraphCanvas
-            centre={centre}
-            spokes={shown}
-            onSelect={select}
+        <div className="min-h-[420px] flex-1 overflow-hidden rounded-lg lg:h-[62vh] lg:min-h-[400px] lg:flex-none">
+          <ConnectionsView
+            centreId={centreId}
+            filter={filter}
+            hubId={scope?.topicId ? normId(scope.topicId) : null}
+            topicSpaceId={scope?.topicSpaceId ?? null}
+            onSelect={selectNode}
             onPrefetch={prefetch}
-            emptyMessage={spokes.length === 0 ? emptyMessages.relationships : null}
+            emptyMessage={emptyMessages.relationships}
           />
         </div>
-        {spokes.length > shown.length && (
-          <button
-            type="button"
-            className="self-start text-metadata text-grey-04 hover:text-text"
-            onClick={() => setTab('relationships')}
-          >
-            +{spokes.length - shown.length} more in Relationships
-          </button>
-        )}
       </div>
       <div className="min-h-0 overflow-y-auto pr-1 lg:overflow-visible lg:pr-0">
         <EntityPanel

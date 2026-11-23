@@ -172,3 +172,18 @@ export function fetchClaimsAbout(
     })
   );
 }
+
+/** `claimSpaceId` for a graph node, whose `namedSpaceIds` already hold only non-empty names. */
+export function nodeClaimSpaceId(
+  node: { spaceIds: string[]; namedSpaceIds: string[]; placedSpaceIds: string[] },
+  requestedSpaceId: string | null
+): string | null {
+  return claimSpaceId(
+    {
+      spaceIds: node.spaceIds,
+      names: node.namedSpaceIds.map(spaceId => ({ spaceId, text: 'named' })),
+      placedSpaceIds: node.placedSpaceIds,
+    },
+    requestedSpaceId
+  );
+}
