@@ -74,7 +74,11 @@ describe('Sources section +', () => {
     auth.authenticated = true;
     const seed = { mode: 'ingestion', url: 'https://example.com/story', link };
     resolveSeed.mockResolvedValue(seed);
-    const store = renderSection();
+    const listed = 'cccccccccccccccccccccccccccccccc';
+    const store = renderSection({
+      ...sources,
+      items: [{ id: listed, kind: 'source', kindLabel: 'Source', title: 'Reuters report' }],
+    });
 
     fireEvent.click(screen.getByRole('button', { name: 'Add source' }));
     expect(auth.promptSignIn).not.toHaveBeenCalled();
@@ -89,7 +93,11 @@ describe('Sources section +', () => {
     });
 
     await waitFor(() => expect(resolveSeed).toHaveBeenCalledTimes(1));
-    expect(resolveSeed).toHaveBeenCalledWith('https://example.com/story', 'TemplateSourcesSection', link);
+    // The link carries the rows the section already shows, so an enrich of one isn't linked twice.
+    expect(resolveSeed).toHaveBeenCalledWith('https://example.com/story', 'TemplateSourcesSection', {
+      ...link,
+      listedEntityIds: [listed],
+    });
     expect(store.get(assistantSeedAtom)).toEqual(seed);
     expect(store.get(isChatOpenAtom)).toBe(true);
     // The popover closes once the assistant has the link.

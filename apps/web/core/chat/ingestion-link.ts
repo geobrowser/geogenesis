@@ -24,7 +24,21 @@ export type IngestionLink = {
   propertyId: string;
   propertyName: string;
   direction: 'target-to-source' | 'source-to-target';
+  /**
+   * The entities the section already lists when the `+` was pressed. A Topic's rows come from a
+   * query that never reaches the sync store, so the store alone can't tell that an enrich is of a
+   * story the Topic already shows.
+   */
+  listedEntityIds?: readonly string[];
 };
+
+type LinkEnd = { id: string; name: string | null };
+
+/** The relation's from / to ends for a source linked through `link`. */
+function linkEnds(link: IngestionLink, source: LinkEnd): { from: LinkEnd; to: LinkEnd } {
+  const target = { id: link.targetEntityId, name: link.targetEntityName };
+  return link.direction === 'target-to-source' ? { from: target, to: source } : { from: source, to: target };
+}
 
 function quoteName(link: IngestionLink): string {
   return link.targetEntityName ? `"${link.targetEntityName}"` : 'the page I added it from';
@@ -72,29 +86,14 @@ export function buildIngestionLinkRelation({
 }): Relation | null {
   if (ID.equals(sourceEntityId, link.targetEntityId)) return null;
 
-  const from =
-    link.direction === 'target-to-source'
-      ? { id: link.targetEntityId, name: link.targetEntityName }
-      : { id: sourceEntityId, name: sourceEntityName };
-  const to =
-    link.direction === 'target-to-source'
-      ? { id: sourceEntityId, name: sourceEntityName }
-      : { id: link.targetEntityId, name: link.targetEntityName };
+  const { from, to } = linkEnds(link, { id: sourceEntityId, name: sourceEntityName });
+  const sameLink = (typeId: string, fromId: string, toId: string) =>
+    ID.equals(typeId, link.propertyId) && ID.equals(fromId, from.id) && ID.equals(toId, to.id);
 
   const alreadyLinked =
-    ops.some(
-      op =>
-        op.type === 'createRelation' &&
-        ID.equals(op.relationType, link.propertyId) &&
-        ID.equals(op.from, from.id) &&
-        ID.equals(op.to, to.id)
-    ) ||
+    ops.some(op => op.type === 'createRelation' && sameLink(op.relationType, op.from, op.to)) ||
     existingRelations.some(
-      relation =>
-        !relation.isDeleted &&
-        ID.equals(relation.type.id, link.propertyId) &&
-        ID.equals(relation.fromEntity.id, from.id) &&
-        ID.equals(relation.toEntity.id, to.id)
+      relation => !relation.isDeleted && sameLink(relation.type.id, relation.fromEntity.id, relation.toEntity.id)
     );
   if (alreadyLinked) return null;
 
@@ -115,7 +114,8 @@ export function buildIngestionLinkRelation({
 
 /**
  * Once an inject's ops are applied: stage the relation that links its primary entity back to the
- * page the link was added from (GEO-3819), unless the batch or the store already has it.
+ * page the link was added from (GEO-3819), unless the section already lists it or the batch or the
+ * store already has the link (the store also holds a link staged earlier in this session).
  */
 export function stageIngestionLink({
   link,
@@ -131,15 +131,16 @@ export function stageIngestionLink({
   ops: readonly SerializedOp[];
 }): Relation | null {
   if (!primaryEntityId) return null;
-  const fromId = link.direction === 'target-to-source' ? link.targetEntityId : primaryEntityId;
-  const toId = link.direction === 'target-to-source' ? primaryEntityId : link.targetEntityId;
+  // An enrich of something the section already shows: nothing to link.
+  if (link.listedEntityIds?.some(id => ID.equals(id, primaryEntityId))) return null;
+  const { from, to } = linkEnds(link, { id: primaryEntityId, name: primaryEntityName });
   const relation = buildIngestionLinkRelation({
     link,
     sourceEntityId: primaryEntityId,
     sourceEntityName: primaryEntityName,
     spaceId,
     ops,
-    existingRelations: [...store.getResolvedRelations(fromId), ...store.getRelationsToEntity(toId)],
+    existingRelations: [...store.getResolvedRelations(from.id), ...store.getRelationsToEntity(to.id)],
   });
   if (relation) storage.relations.set(relation);
   return relation;

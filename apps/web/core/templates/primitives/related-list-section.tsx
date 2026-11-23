@@ -96,6 +96,12 @@ export function RelatedListSection({ section, className }: RelatedListSectionPro
   const [addedItems, setAddedItems] = React.useState<EntityLinkRowModel[]>([]);
   const [page, setPage] = React.useState(1);
   const allItems = React.useMemo(() => [...addedItems, ...items], [addedItems, items]);
+  // The rows this section shows, so a pasted link that enriches one of them isn't linked a second
+  // time (GEO-3819).
+  const ingestionLink = React.useMemo(
+    () => section.ingestionLink && { ...section.ingestionLink, listedEntityIds: items.map(item => item.id) },
+    [section.ingestionLink, items]
+  );
   const rankingKey = React.useMemo(() => {
     const sig = allItems
       .slice(0, 3)
@@ -247,7 +253,7 @@ export function RelatedListSection({ section, className }: RelatedListSectionPro
           {isSourceSection ? (
             // Sources take a pasted link through the same ingestion as the Add data panel, and the
             // new source is linked to this page (GEO-3819).
-            <SourceIngestionPopover label={addLabel} link={section.ingestionLink} />
+            <SourceIngestionPopover label={addLabel} link={ingestionLink} />
           ) : (
             <AddEntityItemPopover
               label={addLabel}

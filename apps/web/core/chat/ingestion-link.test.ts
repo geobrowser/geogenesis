@@ -203,6 +203,27 @@ describe('stageIngestionLink', () => {
     expect(sync.setRelation).not.toHaveBeenCalled();
   });
 
+  it('stages nothing for an enrich of a row the section lists, even when the store has no backlink', () => {
+    // A Topic's "Sources & evidence" rows come from a query that never reaches the store, so the
+    // store has nothing here; the section's own rows (UUID-form ids from GraphQL) are what tell.
+    const listed = { ...topicLink, listedEntityIds: ['cccccccc-cccc-cccc-cccc-cccccccccccc'] };
+    expect(
+      stageIngestionLink({ link: listed, primaryEntityId: SOURCE, primaryEntityName: null, spaceId: SPACE, ops: [] })
+    ).toBeNull();
+    expect(sync.setRelation).not.toHaveBeenCalled();
+
+    // A new source the section doesn't list is still linked.
+    expect(
+      stageIngestionLink({
+        link: { ...topicLink, listedEntityIds: [STORY] },
+        primaryEntityId: SOURCE,
+        primaryEntityName: null,
+        spaceId: SPACE,
+        ops: [],
+      })
+    ).toMatchObject({ fromEntity: { id: SOURCE }, toEntity: { id: TOPIC } });
+  });
+
   it('still links when the only matching relation was deleted, and skips without a primary entity', () => {
     sync.relationsFrom = [existing(STORY, SOURCE, SOURCES_PROP, true)];
     expect(
