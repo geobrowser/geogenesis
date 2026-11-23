@@ -10,7 +10,7 @@ import { graphql } from '~/core/io/graphql-client';
 import { AVATAR_PROPERTY_ID, COVER_PROPERTY_ID, IMAGE_URL_PROPERTY_ID } from '~/core/io/subgraph/space-image';
 import { normId } from '~/core/utils/norm-id';
 
-import { type GraphCentreText, type GraphEntity, type RawEntity, decodeEntity } from './fetch-graph-hop';
+import { type GraphCentreText, type GraphEntity, type GraphHop, type RawEntity, decodeEntity } from './fetch-graph-hop';
 import type { GraphFilter } from './graph-filter';
 import {
   DATE_PROPERTY_IDS,
@@ -410,4 +410,21 @@ export function fetchCrossLinks(ids: readonly string[], filter: GraphFilter, sig
       signal,
     })
   );
+}
+
+/** Hop 1 as a flat hop, so the panel lists the same relations the map draws. */
+export function hop1AsGraphHop(hop1: GraphHop1): GraphHop {
+  return {
+    centre: hop1.centre,
+    relations: hop1.neighbours.map(({ node, edge }) => ({
+      id: edge.id,
+      direction: edge.fromId === hop1.centre?.id ? ('out' as const) : ('in' as const),
+      propertyId: edge.propertyId,
+      propertyName: edge.propertyName,
+      spaceId: edge.spaceId,
+      position: null,
+      entity: node,
+    })),
+    truncated: false,
+  };
 }

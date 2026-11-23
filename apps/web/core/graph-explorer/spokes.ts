@@ -72,7 +72,8 @@ export function namedSpaceIds(
  * One spoke per named neighbour the filter keeps, merging relations to the same neighbour.
  * Order: outgoing first, then curator `position`, then name.
  */
-export function buildSpokes(hop: GraphHop, centreId: string, filter: GraphFilter): Spoke[] {
+/** `keepAll` skips the type allowlist, for relations already chosen by kind (the 3D neighbourhood). */
+export function buildSpokes(hop: GraphHop, centreId: string, filter: GraphFilter, keepAll = false): Spoke[] {
   const centre = normId(centreId);
   const byId = new Map<string, Spoke & { order: string }>();
 
@@ -80,6 +81,7 @@ export function buildSpokes(hop: GraphHop, centreId: string, filter: GraphFilter
     const entity = relation.entity;
     if (entity.id === centre || !entity.name) continue;
     if (
+      !keepAll &&
       !keepNeighbour(
         entity.types.map(type => type.id),
         filter

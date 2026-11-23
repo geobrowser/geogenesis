@@ -74,6 +74,11 @@ vi.mock('~/core/graph-explorer/use-graph-explorer', () => ({
   useClaimsAbout: hooks.useClaimsAbout,
   usePrefetchGraphHop: () => hooks.prefetch,
   useGraphNeighbourhood: hooks.useGraphNeighbourhood,
+  useTopicClaimsSummary: () => ({
+    isLoading: false,
+    isError: false,
+    data: { claims: [], bands: { agreed: 0, contested: 0, rejected: 0 } },
+  }),
 }));
 vi.mock('~/core/hooks/use-media-query', () => ({ useMediaQuery: () => false }));
 vi.mock('~/core/sync/use-store', () => ({ useQueryEntity: () => ({ entity: null, isLoading: false }) }));
@@ -105,9 +110,10 @@ beforeAll(() => {
 });
 
 /** The 3D view's selection, built from the same hop fixtures. */
-function neighbourhood({ centreId }: { centreId: string }) {
+function neighbourhood({ centreId, filter }: { centreId: string; filter: unknown }) {
   const hop = hops[centreId];
-  if (!hop?.centre) return { selection: null, kinds: [], hop1: { isError: false }, centre: null, isSwitching: false };
+  if (!filter || !hop?.centre)
+    return { selection: null, kinds: [], hop1: { isError: false }, centre: null, isSwitching: false };
   const node = (entity: GraphHop['relations'][number]['entity'], kind: 'topic' | 'ent') => ({
     ...entity,
     kind,
@@ -298,5 +304,36 @@ describe('GraphViewer', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Isaac Herzog' }));
     expect(screen.getByText('President of Israel.')).toBeTruthy();
+  });
+
+  it('lists the relations the map draws, news included, once the neighbourhood answers', () => {
+    const STORY = '33333333333333333333333333333333';
+    const base = neighbourhood({ centreId: TOPIC, filter: {} });
+    const story = {
+      ...base.selection!.nodes[1].node,
+      id: STORY,
+      name: 'A news story',
+      kind: 'story',
+      types: [{ id: 'cccccccccccccccccccccccccccccccc', name: 'News story' }],
+    };
+    const edge = { id: 'e2', fromId: STORY, toId: TOPIC, propertyId: 'p', propertyName: 'Topics', spaceId: SPACE };
+    hooks.useGraphNeighbourhood.mockReturnValue({
+      ...base,
+      hop1: {
+        isError: false,
+        data: {
+          centre: base.selection!.nodes[0].node,
+          neighbours: [
+            ...base.selection!.links.map((link, i) => ({ node: base.selection!.nodes[i + 1].node, edge: link.edge })),
+            { node: story, edge },
+          ],
+          moreKinds: [],
+        },
+      },
+      centre: base.selection!.nodes[0].node,
+    });
+    render(<Viewer start={TOPIC} scope={scope} />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Relationships (2)' }));
+    expect(screen.getByText('A news story')).toBeTruthy();
   });
 });

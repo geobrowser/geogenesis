@@ -120,6 +120,8 @@ export function ConnectionsCanvas({
   });
   const [leaving, setLeaving] = React.useState<SelectedNode[]>([]);
   const [layoutMs, setLayoutMs] = React.useState<number | null>(null);
+  const [hinted, setHinted] = React.useState(false);
+  const canHover = useCanHover();
   const labelForRef = React.useRef(labelFor);
   labelForRef.current = labelFor;
 
@@ -381,6 +383,7 @@ export function ConnectionsCanvas({
     const pointers = new Map<number, [number, number]>();
     let origin: [number, number] | null = null;
     const active = () => {
+      setHinted(true);
       engine.current.lastActive = performance.now();
     };
     const down = (event: PointerEvent) => {
@@ -558,7 +561,26 @@ export function ConnectionsCanvas({
         ))}
       </div>
       {children}
+      <p
+        aria-hidden
+        className={cx(
+          'pointer-events-none absolute top-4 left-1/2 z-[9999] -translate-x-1/2 rounded-full bg-white/10 px-[14px] py-[6px] text-[13px] whitespace-nowrap text-[#e6e6e6] transition-opacity duration-500 md:text-[12px]',
+          hinted && 'opacity-0'
+        )}
+      >
+        {canHover
+          ? 'Drag to turn · Scroll to zoom · Click anything to explore'
+          : 'Drag to turn · Pinch to zoom · Tap anything to explore'}
+      </p>
     </div>
+  );
+}
+
+function useCanHover() {
+  return React.useSyncExternalStore(
+    () => () => {},
+    () => window.matchMedia?.('(hover: hover)').matches ?? true,
+    () => true
   );
 }
 

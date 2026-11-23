@@ -10,7 +10,7 @@ import { NavUtils } from '~/core/utils/utils';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
-import { EntityAvatar } from './graph-canvas';
+import { EntityAvatar } from './entity-avatar';
 import { GraphClaimList } from './graph-claim-list';
 
 export type EntityPanelTab = 'details' | 'relationships' | 'claims';
@@ -32,6 +32,7 @@ export function EntityPanel({
   onSelect,
   truncated,
   emptyMessages,
+  summary,
 }: {
   centre: GraphCentre;
   centreSpaceId: string | null;
@@ -50,6 +51,8 @@ export function EntityPanel({
   onSelect: (spoke: Spoke) => void;
   truncated: boolean;
   emptyMessages: EntityPanelEmptyMessages;
+  /** Shown between the header and the tabs. */
+  summary?: React.ReactNode;
 }) {
   const claimCount = claimPages.reduce((total, page) => total + page.length, 0);
   const claimsCount = claimsState.isLoading ? '…' : `${claimCount}${claimsState.hasNextPage ? '+' : ''}`;
@@ -74,6 +77,8 @@ export function EntityPanel({
           </div>
         </div>
       </div>
+
+      {summary}
 
       <div role="tablist" aria-label="Entity details" className="flex gap-4 border-b border-grey-02">
         {tabs.map(entry => (

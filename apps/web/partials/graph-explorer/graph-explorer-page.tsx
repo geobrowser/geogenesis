@@ -41,7 +41,7 @@ export function GraphExplorerPage({ entityId: routeEntityId }: { entityId: strin
   const hydrated = useHydrated();
 
   return (
-    <div className="fixed inset-x-0 top-[44px] bottom-0 z-50 flex flex-col overflow-hidden bg-white lg:overflow-y-auto">
+    <div className="fixed inset-0 z-[300] flex flex-col overflow-hidden bg-white md:overflow-y-auto">
       {!hydrated ? null : topicId ? (
         <TopicGraph
           entityId={entityId}
@@ -88,31 +88,22 @@ function TopicGraph({
 
   return (
     <>
-      <header className="flex shrink-0 items-center gap-3 border-b border-grey-02 px-6 py-3 lg:px-4">
-        {topicSpaceId ? (
-          <Link
-            href={NavUtils.toEntity(topicSpaceId, topicId)}
-            className="text-metadataMedium text-grey-04 transition-colors hover:text-text"
-          >
-            ← {topic?.name ?? 'Topic'}
-          </Link>
-        ) : (
-          <span className="text-metadataMedium text-grey-04">{topic?.name ?? 'Topic'}</span>
-        )}
-        <span aria-hidden className="text-grey-03">
-          ·
-        </span>
-        <h1 className="text-metadataMedium text-text">Graph explorer</h1>
-      </header>
-      <div className="min-h-0 flex-1 px-6 py-6 lg:px-4 lg:py-4">
-        <GraphViewer
-          history={history}
-          onNavigate={navigate}
-          scope={scope}
-          overrides={overrides}
-          topicName={topic?.name ?? null}
-        />
-      </div>
+      <h1 className="sr-only">Graph explorer{topic?.name ? `: ${topic.name}` : ''}</h1>
+      <GraphViewer
+        history={history}
+        onNavigate={navigate}
+        scope={scope}
+        overrides={overrides}
+        topicName={topic?.name ?? null}
+        close={
+          topicSpaceId
+            ? {
+                href: NavUtils.toEntity(topicSpaceId, topicId),
+                label: `Close the map and go to ${topic?.name ?? 'the topic'}`,
+              }
+            : null
+        }
+      />
     </>
   );
 }
