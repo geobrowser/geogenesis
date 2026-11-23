@@ -33,6 +33,7 @@ export function EntityPanel({
   truncated,
   emptyMessages,
   summary,
+  showClaims = true,
 }: {
   centre: GraphCentre;
   centreSpaceId: string | null;
@@ -53,14 +54,17 @@ export function EntityPanel({
   emptyMessages: EntityPanelEmptyMessages;
   /** Shown between the header and the tabs. */
   summary?: React.ReactNode;
+  /** False for a claim centre, whose related claims are already among its relations. */
+  showClaims?: boolean;
 }) {
   const claimCount = claimPages.reduce((total, page) => total + page.length, 0);
   const claimsCount = claimsState.isLoading ? '…' : `${claimCount}${claimsState.hasNextPage ? '+' : ''}`;
   const tabs: Array<{ id: EntityPanelTab; label: string }> = [
     { id: 'details', label: 'Details' },
     { id: 'relationships', label: `Relationships (${spokes.length}${truncated ? '+' : ''})` },
-    { id: 'claims', label: `Claims (${claimsCount})` },
+    ...(showClaims ? [{ id: 'claims' as const, label: `Claims (${claimsCount})` }] : []),
   ];
+  const current = tabs.some(entry => entry.id === tab) ? tab : 'details';
 
   return (
     <section aria-label={`About ${centre.name ?? centre.id}`} className="flex min-h-0 flex-col gap-4">
@@ -87,10 +91,10 @@ export function EntityPanel({
             type="button"
             role="tab"
             id={`graph-tab-${entry.id}`}
-            aria-selected={tab === entry.id}
+            aria-selected={current === entry.id}
             aria-controls={`graph-tabpanel-${entry.id}`}
             className={`-mb-px border-b-2 pb-2 text-metadataMedium transition-colors ${
-              tab === entry.id ? 'border-text text-text' : 'border-transparent text-grey-04 hover:text-text'
+              current === entry.id ? 'border-text text-text' : 'border-transparent text-grey-04 hover:text-text'
             }`}
             onClick={() => onTabChange(entry.id)}
           >
@@ -99,11 +103,16 @@ export function EntityPanel({
         ))}
       </div>
 
-      <div role="tabpanel" id={`graph-tabpanel-${tab}`} aria-labelledby={`graph-tab-${tab}`} className="min-h-0">
-        {tab === 'details' && (
+      <div
+        role="tabpanel"
+        id={`graph-tabpanel-${current}`}
+        aria-labelledby={`graph-tab-${current}`}
+        className="min-h-0"
+      >
+        {current === 'details' && (
           <DetailsTab centre={centre} centreSpaceId={centreSpaceId} emptyMessage={emptyMessages.description} />
         )}
-        {tab === 'relationships' && (
+        {current === 'relationships' && (
           <RelationshipsTab
             spokes={spokes}
             onSelect={onSelect}
@@ -111,7 +120,9 @@ export function EntityPanel({
             emptyMessage={emptyMessages.relationships}
           />
         )}
-        {tab === 'claims' && <ClaimsTab pages={claimPages} state={claimsState} emptyMessage={emptyMessages.claims} />}
+        {current === 'claims' && (
+          <ClaimsTab pages={claimPages} state={claimsState} emptyMessage={emptyMessages.claims} />
+        )}
       </div>
     </section>
   );

@@ -6,6 +6,7 @@ import { centreTextInSpace } from '~/core/graph-explorer/centre-text';
 import { nodeClaimSpaceId } from '~/core/graph-explorer/claims-about';
 import { type GraphNode, hop1AsGraphHop } from '~/core/graph-explorer/fetch-graph-neighbourhood';
 import { type GraphFilterOverrides, type GraphScope, resolveGraphFilter } from '~/core/graph-explorer/graph-filter';
+import { graphKindOf } from '~/core/graph-explorer/graph-kinds';
 import { type GraphHistory, goBack, recentre } from '~/core/graph-explorer/history';
 import { DESKTOP_GRAPH_CAPS, type GraphKindFilter, PHONE_GRAPH_CAPS } from '~/core/graph-explorer/select-graph';
 import { type Spoke, buildSpokes, entitySpaceId } from '~/core/graph-explorer/spokes';
@@ -236,6 +237,7 @@ export function GraphViewer({
           claims: claimsEmptyMessage(filter, topicName),
           description: descriptionEmptyMessage(centreSpaceId),
         }}
+        showClaims={graphKindOf(rawCentre.types.map(type => type.id)) !== 'claim'}
         summary={
           summary || counts ? (
             <>

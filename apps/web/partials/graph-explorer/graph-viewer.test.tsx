@@ -6,7 +6,12 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 
 import type { GraphHop } from '~/core/graph-explorer/fetch-graph-hop';
 import { startGraphHistory } from '~/core/graph-explorer/history';
-import { NEIGHBOUR_KIND_TYPE_IDS, RELATED_PEOPLE_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/graph-explorer/ontology';
+import {
+  CLAIM_TYPE_ID,
+  NEIGHBOUR_KIND_TYPE_IDS,
+  RELATED_PEOPLE_PROPERTY_ID,
+  TOPIC_TYPE_ID,
+} from '~/core/graph-explorer/ontology';
 
 import { GraphViewer } from './graph-viewer';
 
@@ -335,5 +340,16 @@ describe('GraphViewer', () => {
     render(<Viewer start={TOPIC} scope={scope} />);
     fireEvent.click(screen.getByRole('tab', { name: 'Relationships (2)' }));
     expect(screen.getByText('A news story')).toBeTruthy();
+  });
+
+  it('has no Claims tab when the centre is itself a claim', () => {
+    hooks.useGraphHop.mockImplementation(() => ({
+      data: { ...hops[TOPIC], centre: { ...hops[TOPIC].centre!, types: [{ id: CLAIM_TYPE_ID, name: 'Claim' }] } },
+      isLoading: false,
+      isError: false,
+    }));
+    render(<Viewer start={TOPIC} scope={scope} />);
+    expect(screen.getByRole('tab', { name: 'Details' })).toBeTruthy();
+    expect(screen.queryByRole('tab', { name: /^Claims/ })).toBeNull();
   });
 });
