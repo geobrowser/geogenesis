@@ -133,15 +133,17 @@ export function useGraphNeighbourhood({
     placeholderData: keepPreviousData,
   });
   const hop1Data = hop1.data ?? null;
+  // Placeholder data belongs to the previous centre, so everything below follows the data's centre.
+  const dataCentreId = hop1Data?.centre?.id ?? null;
   const noExpand = React.useMemo(() => new Set(hubId ? [hubId] : []), [hubId]);
 
   const expandIds = React.useMemo(() => {
-    if (!hop1Data) return [];
-    return selectHop1(centreId, hop1Data.neighbours, caps, kindFilter)
+    if (!hop1Data || !dataCentreId) return [];
+    return selectHop1(dataCentreId, hop1Data.neighbours, caps, kindFilter)
       .map(({ node }) => node.id)
       .filter(id => !noExpand.has(id))
       .sort();
-  }, [caps, centreId, hop1Data, kindFilter, noExpand]);
+  }, [caps, dataCentreId, hop1Data, kindFilter, noExpand]);
 
   const hop2 = useQuery({
     queryKey: filter
@@ -150,6 +152,8 @@ export function useGraphNeighbourhood({
     queryFn: ({ signal }) => fetchHop2(expandIds, filter!, signal),
     enabled: filter !== null && expandIds.length > 0,
     staleTime: STALE_MS,
+    // Keyed by parent, so a previous ring only fills nodes the new hop 1 shares, until its own lands.
+    placeholderData: keepPreviousData,
   });
   const hop2Data = hop2.data ?? null;
 
@@ -166,9 +170,11 @@ export function useGraphNeighbourhood({
     });
   }, [caps, hop1Data, hop2Data, kindFilter, noExpand]);
 
+  // Cross-links only for a settled set, not one built on placeholder hop 2.
+  const hop2Settled = hop2Data !== null && !hop2.isPlaceholderData;
   const shownIds = React.useMemo(
-    () => (withoutCross && hop2Data ? withoutCross.nodes.map(({ node }) => node.id).sort() : []),
-    [hop2Data, withoutCross]
+    () => (withoutCross && hop2Settled ? withoutCross.nodes.map(({ node }) => node.id).sort() : []),
+    [hop2Settled, withoutCross]
   );
   const cross = useQuery({
     queryKey: filter
@@ -177,6 +183,8 @@ export function useGraphNeighbourhood({
     queryFn: ({ signal }) => fetchCrossLinks(shownIds, filter!, signal),
     enabled: filter !== null && shownIds.length > 1,
     staleTime: STALE_MS,
+    // Cross-links are drawn only between shown nodes, so the previous set's are safe until these land.
+    placeholderData: keepPreviousData,
   });
 
   const selection = React.useMemo(() => {
