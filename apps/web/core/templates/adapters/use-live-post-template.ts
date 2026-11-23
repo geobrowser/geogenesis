@@ -26,6 +26,7 @@ import {
   readEntityRelations,
   readEntityTextValue,
 } from '../ontology';
+import { sourcesIngestionLink } from './source-ingestion-links';
 import { useHydratedSourceCards } from './use-hydrated-source-cards';
 import { useLiveEntityActions } from './use-live-entity-actions';
 
@@ -195,6 +196,7 @@ export function useLivePostTemplate({
         title: 'Sources',
         layout: 'cards',
         items: hydratedSourceCards,
+        ingestionLink: sourcesIngestionLink(entity.id, entity.name),
       });
     }
 

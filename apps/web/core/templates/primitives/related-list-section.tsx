@@ -31,6 +31,7 @@ import {
   TweetIcon,
 } from './icons';
 import { ListRankingHeaderControl, ListRankingWorkspace, type RankableListItem, useListRanking } from './list-ranking';
+import { SourceIngestionPopover } from './source-ingestion-popover';
 import {
   TEMPLATE_CARD_SURFACE,
   TEMPLATE_INTERACTIVE_CARD_SURFACE,
@@ -243,28 +244,29 @@ export function RelatedListSection({ section, className }: RelatedListSectionPro
             disabled={allItems.length < 2}
           />
 
-          <AddEntityItemPopover
-            label={addLabel}
-            primaryLabel={isSourceSection ? 'Source title' : 'Title'}
-            primaryPlaceholder={isSourceSection ? 'e.g. UN OCHA Situation Report' : `Add ${title.toLowerCase()}...`}
-            secondaryLabel={isSourceSection ? 'Publisher (optional)' : 'Details (optional)'}
-            secondaryPlaceholder={isSourceSection ? 'e.g. UN OCHA · Nov 2026' : 'Date or short summary...'}
-            tertiaryLabel={isSourceSection ? 'URL (optional)' : undefined}
-            tertiaryPlaceholder={isSourceSection ? 'https://...' : undefined}
-            onSubmit={draft => {
-              const newItem: EntityLinkRowModel = {
-                id: `user-${section.id}-${Date.now()}`,
-                kind: isSourceSection ? 'source' : (allItems[0]?.kind ?? 'case'),
-                kindLabel: isSourceSection ? 'Source' : (allItems[0]?.kindLabel ?? 'Item'),
-                mediaType: isSourceSection ? 'article' : undefined,
-                title: draft.primary,
-                publisher: isSourceSection ? draft.secondary : undefined,
-                meta: draft.secondary,
-                externalUrl: draft.tertiary,
-              };
-              setAddedItems(prev => [newItem, ...prev]);
-            }}
-          />
+          {isSourceSection ? (
+            // Sources take a pasted link through the same ingestion as the Add data panel, and the
+            // new source is linked to this page (GEO-3819).
+            <SourceIngestionPopover label={addLabel} link={section.ingestionLink} />
+          ) : (
+            <AddEntityItemPopover
+              label={addLabel}
+              primaryLabel="Title"
+              primaryPlaceholder={`Add ${title.toLowerCase()}...`}
+              secondaryLabel="Details (optional)"
+              secondaryPlaceholder="Date or short summary..."
+              onSubmit={draft => {
+                const newItem: EntityLinkRowModel = {
+                  id: `user-${section.id}-${Date.now()}`,
+                  kind: allItems[0]?.kind ?? 'case',
+                  kindLabel: allItems[0]?.kindLabel ?? 'Item',
+                  title: draft.primary,
+                  meta: draft.secondary,
+                };
+                setAddedItems(prev => [newItem, ...prev]);
+              }}
+            />
+          )}
         </div>
       </div>
 

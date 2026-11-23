@@ -2,14 +2,18 @@ import type { UIMessage } from 'ai';
 import { atom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 
+import type { IngestionLink } from '~/core/chat/ingestion-link';
 import type { InjectType } from '~/core/chat/inject-types';
 
 export const isChatOpenAtom = atom(false);
 
 export const hasSeenAssistantAtom = atomWithStorage('geo:has-seen-assistant', false);
 
+// `link`: the page the link was added from, when it came from a section's `+`; the new source is
+// linked back to it (GEO-3819).
 export type AssistantSeed =
-  { mode: 'ingestion'; url: string } | { mode: 'inject'; url: string; jobId: string; injectType: InjectType };
+  | { mode: 'ingestion'; url: string; link?: IngestionLink }
+  | { mode: 'inject'; url: string; jobId: string; injectType: InjectType; link?: IngestionLink };
 
 // Active in-flight inject job inline UI state. Shared via atom so
 // `chat-messages` can render a custom inline progress UI in place of the

@@ -40,6 +40,7 @@ import {
   readClaimKind,
   readEntityRelations,
 } from '../ontology';
+import { sourcesIngestionLink } from './source-ingestion-links';
 import { resolveDebateStillSrc, useDebateParticipantsBatch } from './use-debate-participants-batch';
 import { useHydratedSourceCards } from './use-hydrated-source-cards';
 import { useInitialHydrationGate } from './use-initial-hydration-gate';
@@ -555,6 +556,7 @@ export function useLiveClaimTemplate({
       layout: 'cards',
       items: hydratedSourceCards,
       emptyText: 'No sources',
+      ingestionLink: sourcesIngestionLink(entity.id, title),
     });
 
     // Filter out claims already displayed in Supporting / Opposing / Related subclaims.

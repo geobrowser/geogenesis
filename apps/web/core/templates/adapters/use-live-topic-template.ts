@@ -54,6 +54,7 @@ import {
   readEntityTextValue,
   resolveTemplateImageUrl,
 } from '../ontology';
+import { topicCoverageIngestionLink } from './source-ingestion-links';
 import { resolveDebateStillSrc, useDebateParticipantsBatch } from './use-debate-participants-batch';
 import { useInitialHydrationGate } from './use-initial-hydration-gate';
 import { useLiveEntityActions } from './use-live-entity-actions';
@@ -986,6 +987,7 @@ export function useLiveTopicTemplate({
         layout: 'cards',
         items: coverageItems,
         emptyText: 'No sources',
+        ingestionLink: topicCoverageIngestionLink(entity.id, entity.name),
       },
     ];
 

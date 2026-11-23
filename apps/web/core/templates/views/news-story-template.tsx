@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import Link from 'next/link';
 
+import { sourcesIngestionLink } from '../adapters/source-ingestion-links';
 import {
   type ClaimSummaryModel,
   type ClaimTopicPillModel,
@@ -79,6 +80,7 @@ export function NewsStoryTemplate({
       title: 'Sources',
       layout: 'cards',
       emptyText: 'No sources',
+      ingestionLink: sourcesIngestionLink(model.id, model.headline),
       items: rawSources.map(source => ({
         id: source.id,
         kind: 'source',
@@ -94,7 +96,7 @@ export function NewsStoryTemplate({
         onSelect: source.onSelect,
       })),
     };
-  }, [hasSourcesInSections, model.sources]);
+  }, [hasSourcesInSections, model.headline, model.id, model.sources]);
 
   const sourceCount = model.sources?.length ?? 0;
   const resolvedCover = resolveTemplateImageUrl(model.coverUrl);

@@ -17,6 +17,7 @@ import { BOTTOM_INSET_OFFSET_CLASS } from '~/core/app-bottom-inset';
 import { applyInjectOpsToStore } from '~/core/chat/apply-inject-ops';
 import { hasPendingClientToolCall, shouldResubmitAfterClientExecution } from '~/core/chat/client-tools';
 import { useEditDispatcher } from '~/core/chat/edit-dispatcher';
+import { type IngestionLink, buildIngestionLinkRelation, ingestionPromptText } from '~/core/chat/ingestion-link';
 import type { InjectType } from '~/core/chat/inject-types';
 import {
   COMPACT_AT_INPUT_TOKENS,
@@ -47,6 +48,7 @@ import {
 import { useDiff } from '~/core/state/diff-store';
 import { useEditable } from '~/core/state/editable-store';
 import { useReportError } from '~/core/state/status-bar-store';
+import { storage } from '~/core/sync/use-mutate';
 import { reportError as captureAssistantError } from '~/core/telemetry/logger';
 import { describeError } from '~/core/utils/error-diagnostics';
 import { NavUtils } from '~/core/utils/utils';
@@ -259,6 +261,7 @@ export function ChatWidget({ openOnMount = null }: { openOnMount?: string | null
     injectType: InjectType;
     assistantMessageId: string;
     applied: boolean;
+    link?: IngestionLink;
   } | null>(null);
   const injectState = useInjectJob({ jobId: injectJob?.jobId ?? null, enabled: injectJob !== null });
 
@@ -931,14 +934,14 @@ export function ChatWidget({ openOnMount = null }: { openOnMount?: string | null
         injectType: seed.injectType,
         assistantMessageId,
         applied: false,
+        link: seed.link,
       });
       setSeed(null);
       return;
     }
 
     modeRef.current = seed.mode;
-    // Backtick-wrap the URL so markdown doesn't mangle special chars.
-    const text = `Please ingest this URL into this space and stage the entities: \`${seed.url}\``;
+    const text = ingestionPromptText(seed.url, seed.link);
     trackAssistantMessage(text, 'typed');
     sendMessageRef.current({ text });
     setSeed(null);
@@ -1029,6 +1032,18 @@ export function ChatWidget({ openOnMount = null }: { openOnMount?: string | null
         return;
       }
       const result = applyInjectOpsToStore(injectState.ops, injectJob.spaceId);
+      // Added from a page's Sources `+`: link the new source back to that page so it shows in the
+      // section it was added from (GEO-3819). Staged with the rest of the import.
+      if (injectJob.link && result.primaryEntityId) {
+        const linkRelation = buildIngestionLinkRelation({
+          link: injectJob.link,
+          sourceEntityId: result.primaryEntityId,
+          sourceEntityName: result.primaryEntityName,
+          spaceId: injectJob.spaceId,
+          ops: injectState.ops,
+        });
+        if (linkRelation) storage.relations.set(linkRelation);
+      }
       // Ingestion genuinely succeeded here (job polled to `completed` and its ops
       // applied to the store), so this is the only place we mark the daily upload
       // activity done — not at submission time, where the job could still fail.
@@ -1080,7 +1095,7 @@ export function ChatWidget({ openOnMount = null }: { openOnMount?: string | null
       updateAssistantText(`News pipeline didn't return results (${reason}) — falling back to the standard import.`);
       setInjectInline(null);
       modeRef.current = 'ingestion';
-      const fallbackText = `Please ingest this URL into this space and stage the entities: \`${injectJob.url}\``;
+      const fallbackText = ingestionPromptText(injectJob.url, injectJob.link);
       trackAssistantMessage(fallbackText, 'typed');
       sendMessageRef.current({ text: fallbackText });
       setInjectJob(null);
