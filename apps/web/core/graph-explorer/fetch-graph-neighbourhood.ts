@@ -4,12 +4,12 @@ import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { Effect } from 'effect';
 import { parse } from 'graphql';
 
-import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { HIDDEN_PROPERTIES } from '~/core/constants';
 import { graphql } from '~/core/io/graphql-client';
 import { AVATAR_PROPERTY_ID, COVER_PROPERTY_ID, IMAGE_URL_PROPERTY_ID } from '~/core/io/subgraph/space-image';
 import { normId } from '~/core/utils/norm-id';
 
+import { TOPIC_LENS_FILTER, TOPIC_LENS_VARIABLES, topicLensVariables } from './claims-about';
 import { type GraphCentreText, type GraphEntity, type GraphHop, type RawEntity, decodeEntity } from './fetch-graph-hop';
 import type { GraphFilter } from './graph-filter';
 import {
@@ -28,8 +28,12 @@ export const HOP1_PER_KIND = 8;
 export const HOP2_PER_NODE = 6;
 export const CROSS_LINKS_PAGE = 200;
 
-/** Kinds the topic lens narrows: content must also carry the topic. People, topics and cases never do. */
-const LENSED_KINDS: readonly GraphKind[] = ['claim', 'story', 'event', 'src'];
+/** Content kinds the topic lens narrows. People, organisations, places and topics are never narrowed. */
+export const LENSED_KINDS: readonly GraphKind[] = ['claim', 'story', 'event', 'src', 'case'];
+
+function lensedTypeIds(kinds: readonly GraphKind[]) {
+  return kinds.filter(kind => LENSED_KINDS.includes(kind)).flatMap(kind => GRAPH_KIND_TYPE_IDS[kind]);
+}
 
 export type GraphNode = GraphEntity & {
   kind: GraphKind;
@@ -91,13 +95,17 @@ const NODE_VARIABLES = `
   $imageUrlPropertyId: UUID!
 `;
 
-const LENS = `relations: { some: { typeId: { is: $topicsPropertyId }, toEntityId: { is: $topicId }, spaceId: { in: $spaceIds } } }`;
-
 function kindConnection(kind: GraphKind, direction: 'in' | 'out', lensed: boolean) {
   const self = direction === 'out' ? 'fromEntityId' : 'toEntityId';
   const end = direction === 'out' ? 'toEntity' : 'fromEntity';
-  const lens = lensed && direction === 'in' && LENSED_KINDS.includes(kind) ? LENS : '';
-  const notNewsEvent = kind === 'claim' ? `not: { ${end}: { typeIds: { overlaps: [$newsEventTypeId] } } }` : '';
+  const lens = lensed && LENSED_KINDS.includes(kind) ? TOPIC_LENS_FILTER : '';
+  // A Topic typed as content too reads as that content, so the lens applies to it there.
+  const exclude =
+    kind === 'claim'
+      ? `not: { ${end}: { typeIds: { overlaps: [$newsEventTypeId] } } }`
+      : kind === 'topic' && lensed
+        ? `not: { ${end}: { typeIds: { overlaps: $lensedTypeIds } } }`
+        : '';
   return `${kind}_${direction}: relationsConnection(
     first: $first
     filter: {
@@ -105,7 +113,7 @@ function kindConnection(kind: GraphKind, direction: 'in' | 'out', lensed: boolea
       spaceId: { in: $spaceIds }
       typeId: { notIn: $plumbingPropertyIds }
       ${end}: { typeIds: { overlaps: $${kind}TypeIds } ${lens} }
-      ${notNewsEvent}
+      ${exclude}
     }
   ) {
     nodes { id spaceId typeId type { name } ${end} { ${NODE_FIELDS} } }
@@ -129,7 +137,8 @@ export function hop1Document(kinds: readonly GraphKind[], lensed: boolean) {
       $textPropertyIds: [UUID!]
       ${kinds.includes('claim') ? '$newsEventTypeId: UUID!' : ''}
       ${kinds.map(kind => `$${kind}TypeIds: [UUID!]`).join('\n')}
-      ${lensed ? '$topicsPropertyId: UUID!\n$topicId: UUID!' : ''}
+      ${lensed ? TOPIC_LENS_VARIABLES : ''}
+      ${lensed && kinds.includes('topic') ? '$lensedTypeIds: [UUID!]' : ''}
       ${NODE_VARIABLES}
     ) {
       entity(id: $id) {
@@ -144,10 +153,9 @@ export function hop1Document(kinds: readonly GraphKind[], lensed: boolean) {
   return document;
 }
 
-/** The topic the lens asks content to carry; none when the centre is the topic itself. */
-export function lensTopicFor(centreId: string, filter: GraphFilter): string | null {
-  const topicId = filter.claimsTopicId ? normId(filter.claimsTopicId) : null;
-  return topicId && topicId !== normId(centreId) ? topicId : null;
+/** The topic content on the map must carry; also around the topic, where some links aren't `Topics`. */
+export function lensTopicFor(filter: GraphFilter): string | null {
+  return filter.topicLensId ? normId(filter.topicLensId) : null;
 }
 
 function nodeVariables() {
@@ -162,7 +170,7 @@ function nodeVariables() {
 }
 
 export function hop1Variables(centreId: string, filter: GraphFilter) {
-  const topicId = lensTopicFor(centreId, filter);
+  const topicId = lensTopicFor(filter);
   return {
     id: normId(centreId),
     spaceIds: filter.spaceIds ?? null,
@@ -171,7 +179,8 @@ export function hop1Variables(centreId: string, filter: GraphFilter) {
     textPropertyIds: [normId(SystemIds.NAME_PROPERTY), normId(SystemIds.DESCRIPTION_PROPERTY)],
     ...(filter.kinds.includes('claim') ? { newsEventTypeId: NEWS_EVENT_TYPE_ID } : {}),
     ...Object.fromEntries(filter.kinds.map(kind => [`${kind}TypeIds`, GRAPH_KIND_TYPE_IDS[kind]])),
-    ...(topicId ? { topicsPropertyId: TOPICS_PROPERTY_ID, topicId } : {}),
+    ...(topicId ? topicLensVariables(topicId) : {}),
+    ...(topicId && filter.kinds.includes('topic') ? { lensedTypeIds: lensedTypeIds(filter.kinds) } : {}),
     ...nodeVariables(),
   };
 }
@@ -266,7 +275,7 @@ export function decodeHop1(response: Hop1Response, centreId: string, kinds: read
 export function fetchHop1(centreId: string, filter: GraphFilter, signal?: AbortSignal) {
   return Effect.runPromise(
     graphql({
-      query: hop1Document(filter.kinds, lensTopicFor(centreId, filter) !== null),
+      query: hop1Document(filter.kinds, lensTopicFor(filter) !== null),
       decoder: (response: Hop1Response) => decodeHop1(response, centreId, filter.kinds),
       variables: hop1Variables(centreId, filter),
       signal,
@@ -274,8 +283,14 @@ export function fetchHop1(centreId: string, filter: GraphFilter, signal?: AbortS
   );
 }
 
-/** Ids go in the document as literals: one alias pair per hop-1 node. */
-export function hop2Document(ids: readonly string[]) {
+/** Ids go in the document as literals: one alias pair per hop-1 node. Lensed: content must carry the topic. */
+export function hop2Document(ids: readonly string[], lensed: boolean) {
+  const kinds = lensed
+    ? `or: [
+        { typeIds: { overlaps: $openTypeIds }, not: { typeIds: { overlaps: $lensedTypeIds } } }
+        { typeIds: { overlaps: $lensedTypeIds } ${TOPIC_LENS_FILTER} }
+      ]`
+    : 'typeIds: { overlaps: $kindTypeIds }';
   const connection = (id: string, index: number, direction: 'in' | 'out') => {
     const self = direction === 'out' ? 'fromEntityId' : 'toEntityId';
     const end = direction === 'out' ? 'toEntity' : 'fromEntity';
@@ -285,7 +300,7 @@ export function hop2Document(ids: readonly string[]) {
         ${self}: { is: "${normId(id)}" }
         spaceId: { in: $spaceIds }
         typeId: { notIn: $plumbingPropertyIds }
-        ${end}: { typeIds: { overlaps: $kindTypeIds } }
+        ${end}: { ${kinds} }
       }
     ) { nodes { id spaceId typeId type { name } ${end} { ${NODE_FIELDS} } } }`;
   };
@@ -293,7 +308,7 @@ export function hop2Document(ids: readonly string[]) {
     query GraphNeighbourhoodHop2(
       $spaceIds: [UUID!]
       $plumbingPropertyIds: [UUID!]
-      $kindTypeIds: [UUID!]
+      ${lensed ? `$openTypeIds: [UUID!]\n$lensedTypeIds: [UUID!]\n${TOPIC_LENS_VARIABLES}` : '$kindTypeIds: [UUID!]'}
       $first: Int
       ${NODE_VARIABLES}
     ) {
@@ -303,10 +318,20 @@ export function hop2Document(ids: readonly string[]) {
 }
 
 export function hop2Variables(filter: GraphFilter) {
+  const topicId = lensTopicFor(filter);
+  const kinds = topicId
+    ? {
+        openTypeIds: filter.kinds
+          .filter(kind => !LENSED_KINDS.includes(kind))
+          .flatMap(kind => GRAPH_KIND_TYPE_IDS[kind]),
+        lensedTypeIds: lensedTypeIds(filter.kinds),
+        ...topicLensVariables(topicId),
+      }
+    : { kindTypeIds: filter.kinds.flatMap(kind => GRAPH_KIND_TYPE_IDS[kind]) };
   return {
     spaceIds: filter.spaceIds ?? null,
     plumbingPropertyIds: PLUMBING_RELATION_TYPE_IDS,
-    kindTypeIds: filter.kinds.flatMap(kind => GRAPH_KIND_TYPE_IDS[kind]),
+    ...kinds,
     first: HOP2_PER_NODE,
     ...nodeVariables(),
   };
@@ -331,7 +356,7 @@ export function fetchHop2(ids: readonly string[], filter: GraphFilter, signal?: 
   if (ids.length === 0) return Promise.resolve({});
   return Effect.runPromise(
     graphql({
-      query: hop2Document(ids),
+      query: hop2Document(ids, lensTopicFor(filter) !== null),
       decoder: (response: Record<string, RawConnection>) => decodeHop2(response, ids),
       variables: hop2Variables(filter),
       signal,

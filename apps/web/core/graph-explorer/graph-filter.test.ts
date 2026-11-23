@@ -56,25 +56,27 @@ describe('space source', () => {
   });
 
   it('keeps the topic lens without a space scope', () => {
-    expect(resolveGraphFilter({ spaceIds: null, topicId: B, topicSpaceId: null }).claimsTopicId).toBe(B);
+    expect(resolveGraphFilter({ spaceIds: null, topicId: B, topicSpaceId: null }).topicLensId).toBe(B);
   });
 });
 
 describe('claims topic', () => {
   it('requires the topic on claims in a topic scope', () => {
-    expect(resolveGraphFilter({ spaceIds: [A], topicId: B, topicSpaceId: null }).claimsTopicId).toBe(B);
+    expect(resolveGraphFilter({ spaceIds: [A], topicId: B, topicSpaceId: null }).topicLensId).toBe(B);
   });
 
-  it('is lifted by ?claims=all and absent in the global view', () => {
-    expect(resolveGraphFilter({ spaceIds: [A], topicId: B, topicSpaceId: null }, { claims: 'all' }).claimsTopicId).toBe(
+  it('is lifted by ?lens=off and absent in the global view', () => {
+    expect(resolveGraphFilter({ spaceIds: [A], topicId: B, topicSpaceId: null }, { lens: 'off' }).topicLensId).toBe(
       undefined
     );
-    expect(resolveGraphFilter({ spaceIds: null, topicId: null, topicSpaceId: null }).claimsTopicId).toBeUndefined();
+    expect(resolveGraphFilter({ spaceIds: null, topicId: null, topicSpaceId: null }).topicLensId).toBeUndefined();
   });
 
-  it('reads ?claims=all and ignores other values', () => {
-    expect(parseGraphFilterOverrides(new URLSearchParams('claims=all')).claims).toBe('all');
-    expect(parseGraphFilterOverrides(new URLSearchParams('claims=topic')).claims).toBeUndefined();
+  it('reads ?lens=off, and ?claims=all as the same, ignoring other values', () => {
+    expect(parseGraphFilterOverrides(new URLSearchParams('lens=off')).lens).toBe('off');
+    expect(parseGraphFilterOverrides(new URLSearchParams('claims=all')).lens).toBe('off');
+    expect(parseGraphFilterOverrides(new URLSearchParams('lens=on')).lens).toBeUndefined();
+    expect(parseGraphFilterOverrides(new URLSearchParams('claims=topic')).lens).toBeUndefined();
   });
 });
 

@@ -269,7 +269,7 @@ describe('GraphViewer', () => {
     );
     expect(hooks.useClaimsAbout).toHaveBeenLastCalledWith(
       TOPIC,
-      expect.objectContaining({ claimsTopicId: TOPIC, spaceSource: 'all' }),
+      expect.objectContaining({ topicLensId: TOPIC, spaceSource: 'all' }),
       null
     );
     fireEvent.click(screen.getByRole('tab', { name: 'Claims (0)' }));

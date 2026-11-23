@@ -23,15 +23,23 @@ export type ClaimAbout = {
 
 export type ClaimsAboutPage = { claims: ClaimAbout[]; endCursor: string | null; hasNextPage: boolean };
 
+/** The topic lens as entity filter fields: tagged with `$topicId` through `Topics` in the filter's spaces. */
+export const TOPIC_LENS_FILTER =
+  'relations: { some: { typeId: { is: $topicsPropertyId }, toEntityId: { is: $topicId }, spaceId: { in: $spaceIds } } }';
+export const TOPIC_LENS_VARIABLES = '$topicsPropertyId: UUID!\n$topicId: UUID!';
+
+export function topicLensVariables(topicId: string) {
+  return { topicsPropertyId: TOPICS_PROPERTY_ID, topicId: normId(topicId) };
+}
+
 /**
- * Claims about the entity, optionally also carrying `filter.claimsTopicId` via `Topics`.
+ * Claims about the entity, optionally also carrying `filter.topicLensId` via `Topics`.
  * Relation spaces are filtered too, since relations are per space. No totalCount: too slow.
  */
 function claimsAboutQuery(withTopic: boolean) {
   const about =
     '{ relations: { some: { typeId: { in: $aboutPropertyIds }, toEntityId: { is: $id }, spaceId: { in: $spaceIds } } } }';
-  const topic =
-    '{ relations: { some: { typeId: { is: $topicsPropertyId }, toEntityId: { is: $topicId }, spaceId: { in: $spaceIds } } } }';
+  const topic = `{ ${TOPIC_LENS_FILTER} }`;
   return parse(/* GraphQL */ `
     query GraphClaimsAbout(
       $id: UUID!
@@ -40,7 +48,7 @@ function claimsAboutQuery(withTopic: boolean) {
       $claimTypeId: UUID!
       $namePropertyId: UUID!
       $unplacingPropertyIds: [UUID!]
-      ${withTopic ? '$topicsPropertyId: UUID!\n      $topicId: UUID!' : ''}
+      ${withTopic ? TOPIC_LENS_VARIABLES : ''}
       $first: Int
       $after: Cursor
     ) {
@@ -80,7 +88,7 @@ const claimsAboutTopicDocument = claimsAboutQuery(true);
 
 /** The topic to require of claims about `entityId`, if any. The topic's own claims need no second check. */
 export function claimsTopicFor(entityId: string, filter: GraphFilter): string | null {
-  const topicId = filter.claimsTopicId;
+  const topicId = filter.topicLensId;
   return topicId && topicId !== normId(entityId) ? topicId : null;
 }
 
@@ -150,7 +158,7 @@ export function claimsAboutVariables(entityId: string, filter: GraphFilter, afte
     claimTypeId: CLAIM_TYPE_ID,
     namePropertyId: NAME_PROPERTY_ID,
     unplacingPropertyIds: [NAME_PROPERTY_ID, ...[...HIDDEN_PROPERTIES].map(normId)],
-    ...(topicId ? { topicsPropertyId: TOPICS_PROPERTY_ID, topicId } : {}),
+    ...(topicId ? topicLensVariables(topicId) : {}),
     first: CLAIMS_ABOUT_PAGE_SIZE,
     after,
   };

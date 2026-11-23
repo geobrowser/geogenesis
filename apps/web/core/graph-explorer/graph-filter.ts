@@ -25,8 +25,8 @@ export type GraphFilter = {
   relationTypeIds: string[];
   /** Node kinds the 3D view may show, in priority order. */
   kinds: readonly GraphKind[];
-  /** Claims tab keeps only claims that also carry this topic. Unset shows every claim about the centre. */
-  claimsTopicId?: string;
+  /** The topic lens: content on the map and claims in the Claims tab must carry this topic. */
+  topicLensId?: string;
 };
 
 export const DEFAULT_GRAPH_FILTER: Pick<GraphFilter, 'includeTypeIds' | 'excludeTypeIds' | 'relationTypeIds'> = {
@@ -44,8 +44,8 @@ export type GraphFilterOverrides = {
   relations?: string[];
   /** `?kinds=ent,claim` narrows the node kinds. */
   kinds?: GraphKind[];
-  /** `?claims=all` lifts the topic filter on the Claims tab. */
-  claims?: 'all';
+  /** `?lens=off` (or the older `?claims=all`) lifts the topic lens. */
+  lens?: 'off';
 };
 
 const OVERRIDE_PARAMS = ['spaces', 'addSpaces', 'types', 'excludeTypes', 'relations'] as const;
@@ -67,7 +67,7 @@ export function parseGraphFilterOverrides(params: Pick<URLSearchParams, 'get'>):
     const ids = parseIdList(params.get(key));
     if (ids) overrides[key] = ids;
   }
-  if (params.get('claims') === 'all') overrides.claims = 'all';
+  if (params.get('lens') === 'off' || params.get('claims') === 'all') overrides.lens = 'off';
   const kinds = parseGraphKinds(params.get('kinds'));
   if (kinds) overrides.kinds = kinds;
   return overrides;
@@ -88,7 +88,7 @@ export function resolveGraphFilter(scope: GraphScope | null, overrides: GraphFil
     excludeTypeIds: overrides.excludeTypes ?? DEFAULT_GRAPH_FILTER.excludeTypeIds,
     relationTypeIds: nonEmpty(overrides.relations) ?? DEFAULT_GRAPH_FILTER.relationTypeIds,
     kinds: overrides.kinds ?? GRAPH_KINDS,
-    claimsTopicId: scope?.topicId && overrides.claims !== 'all' ? normId(scope.topicId) : undefined,
+    topicLensId: scope?.topicId && overrides.lens !== 'off' ? normId(scope.topicId) : undefined,
   };
 }
 
@@ -117,6 +117,6 @@ export function graphFilterKey(filter: GraphFilter) {
     [...filter.excludeTypeIds].sort().join(','),
     [...filter.relationTypeIds].sort().join(','),
     filter.kinds.join(','),
-    filter.claimsTopicId ?? '*',
+    filter.topicLensId ?? '*',
   ];
 }

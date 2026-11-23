@@ -25,7 +25,7 @@ describe('empty states', () => {
     expect(claimsEmptyMessage(scoped, 'Israel-Gaza war')).toBe('No claims about this in Israel-Gaza war yet.');
     expect(
       claimsEmptyMessage(
-        resolveGraphFilter({ spaceIds: [SPACE], topicId: TOPIC, topicSpaceId: null }, { claims: 'all' }),
+        resolveGraphFilter({ spaceIds: [SPACE], topicId: TOPIC, topicSpaceId: null }, { lens: 'off' }),
         null
       )
     ).toBe('No claims in this topic’s spaces are linked to this yet.');

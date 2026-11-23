@@ -20,7 +20,7 @@ export function relationshipsEmptyMessage(filter: GraphFilter): string {
 }
 
 export function claimsEmptyMessage(filter: GraphFilter, topicName: string | null): string {
-  if (filter.claimsTopicId) return `No claims about this in ${topicName ?? 'this topic'} yet.`;
+  if (filter.topicLensId) return `No claims about this in ${topicName ?? 'this topic'} yet.`;
   return `No claims ${where(filter)} are linked to this yet.`;
 }
 

@@ -129,7 +129,7 @@ describe('claims topic filter', () => {
   });
 
   it('adds nothing when the filter is lifted', () => {
-    const all = resolveGraphFilter({ spaceIds: [SPACE_A], topicId: TOPIC, topicSpaceId: null }, { claims: 'all' });
+    const all = resolveGraphFilter({ spaceIds: [SPACE_A], topicId: TOPIC, topicSpaceId: null }, { lens: 'off' });
     expect(claimsAboutVariables(ENTITY, all, null)).not.toHaveProperty('topicId');
   });
 });
