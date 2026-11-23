@@ -9,7 +9,7 @@ const C = 'cccccccccccccccccccccccccccccccc';
 
 describe('resolveGraphFilter', () => {
   it('uses the scope spaces and the defaults', () => {
-    const filter = resolveGraphFilter({ kind: 'spaces', spaceIds: [B, A] });
+    const filter = resolveGraphFilter({ spaceIds: [B, A], topicId: null, topicSpaceId: null });
     expect(filter.spaceIds).toEqual([A, B]);
     expect(filter.includeTypeIds).toBe(DEFAULT_GRAPH_FILTER.includeTypeIds);
     expect(filter.excludeTypeIds).toBe(DEFAULT_GRAPH_FILTER.excludeTypeIds);
@@ -17,38 +17,59 @@ describe('resolveGraphFilter', () => {
   });
 
   it('applies no space filter for the global scope', () => {
-    expect(resolveGraphFilter({ kind: 'global' }).spaceIds).toBeUndefined();
+    expect(resolveGraphFilter({ spaceIds: null, topicId: null, topicSpaceId: null }).spaceIds).toBeUndefined();
   });
 
   it('replaces the spaces with `spaces` and widens them with `addSpaces`', () => {
-    const scope = { kind: 'spaces', spaceIds: [A] } as const;
+    const scope = { spaceIds: [A], topicId: null, topicSpaceId: null } as const;
     expect(resolveGraphFilter(scope, { spaces: [C] }).spaceIds).toEqual([C]);
     expect(resolveGraphFilter(scope, { addSpaces: [C, A] }).spaceIds).toEqual([A, C]);
   });
 
   it('keeps the defaults when an override is empty', () => {
-    const filter = resolveGraphFilter({ kind: 'global' }, { types: [], relations: [] });
+    const filter = resolveGraphFilter(
+      { spaceIds: null, topicId: null, topicSpaceId: null },
+      { types: [], relations: [] }
+    );
     expect(filter.includeTypeIds).toBe(DEFAULT_GRAPH_FILTER.includeTypeIds);
     expect(filter.relationTypeIds).toBe(DEFAULT_GRAPH_FILTER.relationTypeIds);
   });
 
   it('replaces the type lists', () => {
-    const filter = resolveGraphFilter({ kind: 'global' }, { types: [A], excludeTypes: [] });
+    const filter = resolveGraphFilter(
+      { spaceIds: null, topicId: null, topicSpaceId: null },
+      { types: [A], excludeTypes: [] }
+    );
     expect(filter.includeTypeIds).toEqual([A]);
     expect(filter.excludeTypeIds).toEqual([]);
   });
 });
 
+describe('space source', () => {
+  const topicScope = { spaceIds: [A], topicId: B, topicSpaceId: null };
+
+  it('says where the spaces came from', () => {
+    expect(resolveGraphFilter(topicScope).spaceSource).toBe('topic');
+    expect(resolveGraphFilter(topicScope, { spaces: [C] }).spaceSource).toBe('selected');
+    expect(resolveGraphFilter(topicScope, { addSpaces: [C] }).spaceSource).toBe('selected');
+    expect(resolveGraphFilter({ spaceIds: null, topicId: B, topicSpaceId: null }).spaceSource).toBe('all');
+  });
+
+  it('keeps the topic lens without a space scope', () => {
+    expect(resolveGraphFilter({ spaceIds: null, topicId: B, topicSpaceId: null }).claimsTopicId).toBe(B);
+  });
+});
+
 describe('claims topic', () => {
   it('requires the topic on claims in a topic scope', () => {
-    expect(resolveGraphFilter({ kind: 'spaces', spaceIds: [A], topicId: B }).claimsTopicId).toBe(B);
+    expect(resolveGraphFilter({ spaceIds: [A], topicId: B, topicSpaceId: null }).claimsTopicId).toBe(B);
   });
 
   it('is lifted by ?claims=all and absent in the global view', () => {
-    expect(resolveGraphFilter({ kind: 'spaces', spaceIds: [A], topicId: B }, { claims: 'all' }).claimsTopicId).toBe(
+    expect(resolveGraphFilter({ spaceIds: [A], topicId: B, topicSpaceId: null }, { claims: 'all' }).claimsTopicId).toBe(
       undefined
     );
-    expect(resolveGraphFilter({ kind: 'global' }).claimsTopicId).toBeUndefined();
+    expect(resolveGraphFilter({ spaceIds: null, topicId: null, topicSpaceId: null }).claimsTopicId).toBeUndefined();
   });
 
   it('reads ?claims=all and ignores other values', () => {
@@ -73,7 +94,7 @@ describe('parseGraphFilterOverrides', () => {
 });
 
 describe('keepNeighbour', () => {
-  const filter = resolveGraphFilter({ kind: 'global' });
+  const filter = resolveGraphFilter({ spaceIds: null, topicId: null, topicSpaceId: null });
 
   it('keeps the Who’s who kinds', () => {
     expect(keepNeighbour([TOPIC_TYPE_ID], filter)).toBe(true);

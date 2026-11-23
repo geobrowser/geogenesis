@@ -74,7 +74,11 @@ describe('claimSpaceId', () => {
 
 describe('claimsAboutVariables', () => {
   it('asks for claims about the entity through every about-relation, scoped to the filter', () => {
-    const variables = claimsAboutVariables(ENTITY, resolveGraphFilter({ kind: 'spaces', spaceIds: [SPACE_A] }), null);
+    const variables = claimsAboutVariables(
+      ENTITY,
+      resolveGraphFilter({ spaceIds: [SPACE_A], topicId: null, topicSpaceId: null }),
+      null
+    );
     expect(variables).toMatchObject({
       id: ENTITY,
       aboutPropertyIds: CLAIM_ABOUT_PROPERTY_IDS,
@@ -85,13 +89,16 @@ describe('claimsAboutVariables', () => {
   });
 
   it('sends null spaces for the global scope, which the API reads as no filter', () => {
-    expect(claimsAboutVariables(ENTITY, resolveGraphFilter({ kind: 'global' }), 'c').spaceIds).toBeNull();
+    expect(
+      claimsAboutVariables(ENTITY, resolveGraphFilter({ spaceIds: null, topicId: null, topicSpaceId: null }), 'c')
+        .spaceIds
+    ).toBeNull();
   });
 });
 
 describe('claims topic filter', () => {
   const TOPIC = '44444444444444444444444444444444';
-  const topicFilter = resolveGraphFilter({ kind: 'spaces', spaceIds: [SPACE_A], topicId: TOPIC });
+  const topicFilter = resolveGraphFilter({ spaceIds: [SPACE_A], topicId: TOPIC, topicSpaceId: null });
 
   it('asks claims about another entity to carry the topic too', () => {
     expect(claimsTopicFor(ENTITY, topicFilter)).toBe(TOPIC);
@@ -107,7 +114,7 @@ describe('claims topic filter', () => {
   });
 
   it('adds nothing when the filter is lifted', () => {
-    const all = resolveGraphFilter({ kind: 'spaces', spaceIds: [SPACE_A], topicId: TOPIC }, { claims: 'all' });
+    const all = resolveGraphFilter({ spaceIds: [SPACE_A], topicId: TOPIC, topicSpaceId: null }, { claims: 'all' });
     expect(claimsAboutVariables(ENTITY, all, null)).not.toHaveProperty('topicId');
   });
 });

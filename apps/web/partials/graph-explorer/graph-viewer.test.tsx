@@ -116,7 +116,7 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-const scope = { kind: 'spaces', spaceIds: [SPACE] } as const;
+const scope = { spaceIds: [SPACE], topicId: null, topicSpaceId: null } as const;
 
 describe('GraphViewer', () => {
   it('waits for the scope before asking for anything', () => {
@@ -189,15 +189,32 @@ describe('GraphViewer', () => {
     render(
       <GraphViewer
         startEntityId={TOPIC}
-        scope={{ kind: 'spaces', spaceIds: [SPACE], topicId: TOPIC }}
-        topic={{ id: TOPIC, name: 'Israel-Gaza war', spaceId: SPACE }}
+        scope={{ spaceIds: [SPACE], topicId: TOPIC, topicSpaceId: null }}
+        topicName="Israel-Gaza war"
       />
     );
     fireEvent.click(screen.getByRole('tab', { name: 'Claims (0)' }));
     expect(screen.getByText('No claims about this in Israel-Gaza war yet.')).toBeTruthy();
   });
 
-  it('reads the topic’s text in the space its topic page uses, and a node’s in the space it was drawn from', () => {
+  it('keeps the topic lens when the topic has no space scope', () => {
+    render(
+      <GraphViewer
+        startEntityId={TOPIC}
+        scope={{ spaceIds: null, topicId: TOPIC, topicSpaceId: null }}
+        topicName="Israel-Gaza war"
+      />
+    );
+    expect(hooks.useClaimsAbout).toHaveBeenLastCalledWith(
+      TOPIC,
+      expect.objectContaining({ claimsTopicId: TOPIC, spaceSource: 'all' }),
+      null
+    );
+    fireEvent.click(screen.getByRole('tab', { name: 'Claims (0)' }));
+    expect(screen.getByText('No claims about this in Israel-Gaza war yet.')).toBeTruthy();
+  });
+
+  it('reads the topic’s text in the space its topic page uses, and a node’s where it is named', () => {
     const OTHER_SPACE = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
     const NAME = 'a126ca530c8e48d5b88882c734c38935';
     const DESCRIPTION = '9b1f76ff9711404c861e59dc3fa7d037';
@@ -219,10 +236,9 @@ describe('GraphViewer', () => {
         isError: false,
       };
     });
-    render(
-      <GraphViewer startEntityId={TOPIC} scope={scope} topic={{ id: TOPIC, name: 'Israel-Gaza war', spaceId: SPACE }} />
-    );
-    expect(screen.getByText('As World affairs describes it.')).toBeTruthy();
+    // The topic is named only in SPACE, so only `topicSpaceId` can send it to OTHER_SPACE.
+    render(<GraphViewer startEntityId={TOPIC} scope={{ ...scope, topicId: TOPIC, topicSpaceId: OTHER_SPACE }} />);
+    expect(screen.getByText('As another space describes it.')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: /Isaac Herzog, Related person/ }));
     expect(screen.getByText('President of Israel.')).toBeTruthy();

@@ -27,13 +27,13 @@ export function GraphViewer({
   startEntityId,
   scope,
   overrides,
-  topic,
+  topicName = null,
 }: {
   startEntityId: string;
   scope: GraphScope | null;
   overrides?: GraphFilterOverrides;
-  /** The topic the view opened from. `spaceId` is the space its topic page reads it in. */
-  topic?: { id: string; name: string | null; spaceId: string | null };
+  /** For copy only; the topic's id and space are in `scope`. */
+  topicName?: string | null;
 }) {
   const filter = React.useMemo(() => (scope ? resolveGraphFilter(scope, overrides) : null), [scope, overrides]);
   const [history, setHistory] = React.useState<GraphHistory>(() => startGraphHistory(startEntityId));
@@ -45,7 +45,7 @@ export function GraphViewer({
 
   const centreId = history.centreId;
   const hop = useGraphHop(centreId, filter);
-  const claims = useClaimsAbout(centreId, filter, topic?.spaceId ?? null);
+  const claims = useClaimsAbout(centreId, filter, scope?.topicSpaceId ?? null);
   const prefetch = usePrefetchGraphHop(filter);
   const isMobile = useIsMobileLayout();
 
@@ -111,12 +111,13 @@ export function GraphViewer({
   }
 
   const centreSpaceId =
-    (topic?.spaceId && rawCentre.id === normId(topic.id) ? normId(topic.spaceId) : null) ??
-    entitySpaceId(rawCentre, filter.spaceIds, null);
+    (scope?.topicSpaceId && scope.topicId && rawCentre.id === normId(scope.topicId)
+      ? normId(scope.topicSpaceId)
+      : null) ?? entitySpaceId(rawCentre, filter.spaceIds, null);
   const centre = { ...rawCentre, ...centreTextInSpace(rawCentre, centreSpaceId) };
   const emptyMessages = {
     relationships: relationshipsEmptyMessage(filter),
-    claims: claimsEmptyMessage(filter, topic?.name ?? null),
+    claims: claimsEmptyMessage(filter, topicName),
     description: descriptionEmptyMessage(centreSpaceId),
   };
   const claimList = claims.data?.pages.flatMap(page => page.claims) ?? [];

@@ -11,6 +11,7 @@ import { entitySpaceId, namedSpaceIds } from '~/core/graph-explorer/spokes';
 import { useTopicGraphScope } from '~/core/graph-explorer/use-graph-explorer';
 import { useHydrated } from '~/core/hooks/use-hydrated';
 import { useQueryEntity } from '~/core/sync/use-store';
+import { useTopicSpaceScope } from '~/core/topics/use-topic-space-scope';
 import { normId } from '~/core/utils/norm-id';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -56,17 +57,18 @@ function TopicGraph({
   routeSpaceId: string | null;
   overrides: ReturnType<typeof parseGraphFilterOverrides>;
 }) {
-  const scope = useTopicGraphScope(routeSpaceId, topicId);
+  const topicSpaces = useTopicSpaceScope(routeSpaceId);
   const { entity: topic } = useQueryEntity({ id: topicId, spaceId: routeSpaceId ?? undefined });
   const topicSpaceId =
     routeSpaceId ??
     (topic
       ? entitySpaceId(
           { spaceIds: topic.spaces ?? [], namedSpaceIds: namedSpaceIds(topic.values ?? []) },
-          scope?.kind === 'spaces' ? scope.spaceIds : undefined,
+          topicSpaces,
           null
         )
       : null);
+  const scope = useTopicGraphScope(routeSpaceId, topicId, topicSpaceId);
 
   return (
     <>
@@ -87,12 +89,7 @@ function TopicGraph({
         <h1 className="text-metadataMedium text-text">Graph explorer</h1>
       </header>
       <div className="min-h-0 flex-1 px-6 py-6 lg:px-4 lg:py-4">
-        <GraphViewer
-          startEntityId={entityId}
-          scope={scope}
-          overrides={overrides}
-          topic={{ id: topicId, name: topic?.name ?? null, spaceId: topicSpaceId }}
-        />
+        <GraphViewer startEntityId={entityId} scope={scope} overrides={overrides} topicName={topic?.name ?? null} />
       </div>
     </>
   );

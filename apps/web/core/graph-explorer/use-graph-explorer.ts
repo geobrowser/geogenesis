@@ -17,13 +17,17 @@ const STALE_MS = 60_000;
  * The topic view's scope: the same spaces the topic page draws from. Null while the allowlist is
  * resolving, so the graph waits rather than drawing an unscoped graph and then re-drawing it.
  */
-export function useTopicGraphScope(routeSpaceId: string | null, topicId: string): GraphScope | null {
+export function useTopicGraphScope(
+  routeSpaceId: string | null,
+  topicId: string,
+  topicSpaceId: string | null
+): GraphScope | null {
   const { allowlist } = useClaimSpaceAllowlist();
   const spaceIds = useTopicSpaceScope(routeSpaceId);
   return React.useMemo(() => {
     if (allowlist === null) return null;
-    return spaceIds ? { kind: 'spaces', spaceIds, topicId } : { kind: 'global' };
-  }, [allowlist, spaceIds, topicId]);
+    return { spaceIds: spaceIds ?? null, topicId, topicSpaceId };
+  }, [allowlist, spaceIds, topicId, topicSpaceId]);
 }
 
 const graphHopQueryKey = (entityId: string, filter: GraphFilter) =>

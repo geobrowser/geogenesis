@@ -53,7 +53,7 @@ function hop(relations: GraphRelation[]): GraphHop {
   };
 }
 
-const filter = resolveGraphFilter({ kind: 'spaces', spaceIds: [SPACE_A, SPACE_B] });
+const filter = resolveGraphFilter({ spaceIds: [SPACE_A, SPACE_B], topicId: null, topicSpaceId: null });
 
 describe('relationLabel', () => {
   it('reads the same relation differently from each end', () => {

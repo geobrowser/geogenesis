@@ -2,14 +2,23 @@ import { normId } from '~/core/utils/norm-id';
 
 import { DEFAULT_EXCLUDE_TYPE_IDS, DEFAULT_INCLUDE_TYPE_IDS, DEFAULT_SPOKE_RELATION_TYPE_IDS } from './ontology';
 
-/**
- * Where the graph may draw from. `spaces` is the topic view; `global` is the later all-graph view.
- */
-export type GraphScope = { kind: 'spaces'; spaceIds: readonly string[]; topicId?: string } | { kind: 'global' };
+/** What the view is about. Independent: an empty space scope keeps the topic lens. */
+export type GraphScope = {
+  /** The topic's spaces; null means no space filter. */
+  spaceIds: readonly string[] | null;
+  /** The topic lens: claims must also carry this topic. */
+  topicId: string | null;
+  /** Where the topic page reads the topic; claims resolve their vote space against it. */
+  topicSpaceId: string | null;
+};
+
+/** Where `GraphFilter.spaceIds` came from, for copy that says what was searched. */
+export type GraphSpaceSource = 'topic' | 'selected' | 'all';
 
 /** What may appear on the graph. `spaceIds` undefined means no space filter. */
 export type GraphFilter = {
   spaceIds?: string[];
+  spaceSource: GraphSpaceSource;
   includeTypeIds: string[];
   excludeTypeIds: string[];
   relationTypeIds: string[];
@@ -17,7 +26,7 @@ export type GraphFilter = {
   claimsTopicId?: string;
 };
 
-export const DEFAULT_GRAPH_FILTER: Omit<GraphFilter, 'spaceIds'> = {
+export const DEFAULT_GRAPH_FILTER: Pick<GraphFilter, 'includeTypeIds' | 'excludeTypeIds' | 'relationTypeIds'> = {
   includeTypeIds: DEFAULT_INCLUDE_TYPE_IDS,
   excludeTypeIds: DEFAULT_EXCLUDE_TYPE_IDS,
   relationTypeIds: DEFAULT_SPOKE_RELATION_TYPE_IDS,
@@ -59,17 +68,19 @@ export function parseGraphFilterOverrides(params: Pick<URLSearchParams, 'get'>):
 
 /** Scope + defaults + overrides. An empty include override keeps the default, never a match-nothing filter. */
 export function resolveGraphFilter(scope: GraphScope | null, overrides: GraphFilterOverrides = {}): GraphFilter {
-  const scoped = scope?.kind === 'spaces' ? scope.spaceIds : undefined;
-  const base = overrides.spaces && overrides.spaces.length > 0 ? overrides.spaces : scoped;
+  const replaced = overrides.spaces && overrides.spaces.length > 0;
+  const base = replaced ? overrides.spaces : (scope?.spaceIds ?? undefined);
+  const added = Boolean(base && overrides.addSpaces?.length);
   const spaceIds = base ? [...new Set([...base, ...(overrides.addSpaces ?? [])].map(normId))].sort() : undefined;
+  const hasSpaces = Boolean(spaceIds && spaceIds.length > 0);
 
   return {
-    spaceIds: spaceIds && spaceIds.length > 0 ? spaceIds : undefined,
+    spaceIds: hasSpaces ? spaceIds : undefined,
+    spaceSource: !hasSpaces ? 'all' : replaced || added ? 'selected' : 'topic',
     includeTypeIds: nonEmpty(overrides.types) ?? DEFAULT_GRAPH_FILTER.includeTypeIds,
     excludeTypeIds: overrides.excludeTypes ?? DEFAULT_GRAPH_FILTER.excludeTypeIds,
     relationTypeIds: nonEmpty(overrides.relations) ?? DEFAULT_GRAPH_FILTER.relationTypeIds,
-    claimsTopicId:
-      scope?.kind === 'spaces' && scope.topicId && overrides.claims !== 'all' ? normId(scope.topicId) : undefined,
+    claimsTopicId: scope?.topicId && overrides.claims !== 'all' ? normId(scope.topicId) : undefined,
   };
 }
 
@@ -93,6 +104,7 @@ export function keepNeighbour(typeIds: readonly string[], filter: GraphFilter): 
 export function graphFilterKey(filter: GraphFilter) {
   return [
     filter.spaceIds?.join(',') ?? '*',
+    filter.spaceSource,
     [...filter.includeTypeIds].sort().join(','),
     [...filter.excludeTypeIds].sort().join(','),
     [...filter.relationTypeIds].sort().join(','),

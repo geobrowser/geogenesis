@@ -1,11 +1,17 @@
 import type { GraphFilter } from '~/core/graph-explorer/graph-filter';
 
 /**
- * Every empty state the explorer shows, worded for what was actually queried: the filter's spaces
- * and types, not the whole knowledge graph, unless the filter has no spaces.
+ * Every empty state the explorer shows, worded for what was actually queried: the spaces, by where
+ * they came from, and the types.
  */
+const WHERE: Record<GraphFilter['spaceSource'], string> = {
+  topic: 'in this topic’s spaces',
+  selected: 'in the selected spaces',
+  all: 'in the knowledge graph',
+};
+
 function where(filter: GraphFilter) {
-  return filter.spaceIds ? 'in this topic’s spaces' : 'in the knowledge graph';
+  return WHERE[filter.spaceSource];
 }
 
 /** Types are always filtered (server-side, then client-side), so the copy always says so. */

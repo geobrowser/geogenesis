@@ -91,7 +91,7 @@ describe('decodeGraphHop', () => {
 
 describe('graphHopVariables', () => {
   it('sends null spaces for no space filter and the filter lists as given', () => {
-    const filter = resolveGraphFilter({ kind: 'global' });
+    const filter = resolveGraphFilter({ spaceIds: null, topicId: null, topicSpaceId: null });
     const variables = graphHopVariables('c'.repeat(32), filter);
     expect(variables.spaceIds).toBeNull();
     expect(variables.includeTypeIds).toBe(filter.includeTypeIds);
