@@ -88,4 +88,45 @@ describe('useGraphNeighbourhood across a hop', () => {
     expect(api.fetchHop2).toHaveBeenLastCalledWith([id('r')], filter, expect.anything());
     expect(api.fetchHop2).toHaveBeenCalledTimes(2);
   });
+
+  it('does not fill a new scope with the old scope’s outer ring', async () => {
+    const other = resolveGraphFilter({ spaceIds: ['b'.repeat(32)], topicId: null, topicSpaceId: null });
+    let landOther: (value: GraphHop1) => void = () => {};
+    api.fetchHop1.mockImplementation((_: string, asked: typeof filter) =>
+      asked === filter ? Promise.resolve(hop1('a', 'p')) : new Promise(resolve => (landOther = resolve))
+    );
+    api.fetchHop2.mockImplementation(async (ids: string[]) =>
+      Object.fromEntries(
+        ids.map(parent => [parent, [{ node: node(`${parent[0]}x`), edge: edge(parent[0], `${parent[0]}x`) }]])
+      )
+    );
+    api.fetchCrossLinks.mockResolvedValue([]);
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    const { result, rerender } = renderHook(
+      ({ scoped }) =>
+        useGraphNeighbourhood({
+          centreId: id('a'),
+          filter: scoped,
+          caps: DESKTOP_GRAPH_CAPS,
+          kindFilter: 'all',
+          hubId: null,
+        }),
+      { wrapper, initialProps: { scoped: filter } }
+    );
+    const names = () => result.current.selection?.nodes.map(entry => entry.node.name).sort();
+    await waitFor(() => expect(names()).toEqual(['a', 'p', 'px']));
+
+    rerender({ scoped: other });
+    await waitFor(() => expect(api.fetchHop1).toHaveBeenCalledWith(id('a'), other, expect.anything()));
+    expect(names()).toEqual(['a', 'p']);
+    expect(api.fetchHop2).toHaveBeenCalledTimes(1);
+
+    landOther(hop1('a', 'p'));
+    await waitFor(() => expect(names()).toEqual(['a', 'p', 'px']));
+    expect(api.fetchHop2).toHaveBeenLastCalledWith([id('p')], other, expect.anything());
+  });
 });

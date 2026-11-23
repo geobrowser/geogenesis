@@ -1,6 +1,13 @@
 'use client';
 
-import { keepPreviousData, useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  type QueryKey,
+  hashKey,
+  keepPreviousData,
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -106,6 +113,11 @@ export function useClaimsAbout(entityId: string, filter: GraphFilter | null, req
 const neighbourhoodKey = (part: string, filter: GraphFilter) =>
   ['graph-explorer', 'neighbourhood', part, ...graphFilterKey(filter)] as const;
 
+/** Whether `queryKey` was asked under `filterKey`; another scope's answer must not stand in for this one. */
+function underFilter(queryKey: QueryKey | undefined, filterKey: QueryKey | null) {
+  return !!queryKey && !!filterKey && hashKey(queryKey.slice(0, filterKey.length)) === hashKey(filterKey);
+}
+
 /**
  * The 3D view's data: hop 1, then hop 2 for the hop-1 picks, then cross-links among everything
  * shown. Each stage renders as it lands; the earlier selection stays until the next is ready.
@@ -138,12 +150,13 @@ export function useGraphNeighbourhood({
   const noExpand = React.useMemo(() => new Set(hubId ? [hubId] : []), [hubId]);
 
   const expandIds = React.useMemo(() => {
-    if (!hop1Data || !dataCentreId) return [];
+    // Wait for the new centre's own hop 1; the placeholder ring stays meanwhile.
+    if (!hop1Data || !dataCentreId || hop1.isPlaceholderData) return [];
     return selectHop1(dataCentreId, hop1Data.neighbours, caps, kindFilter)
       .map(({ node }) => node.id)
       .filter(id => !noExpand.has(id))
       .sort();
-  }, [caps, dataCentreId, hop1Data, kindFilter, noExpand]);
+  }, [caps, dataCentreId, hop1.isPlaceholderData, hop1Data, kindFilter, noExpand]);
 
   const hop2 = useQuery({
     queryKey: filter
@@ -153,7 +166,8 @@ export function useGraphNeighbourhood({
     enabled: filter !== null && expandIds.length > 0,
     staleTime: STALE_MS,
     // Keyed by parent, so a previous ring only fills nodes the new hop 1 shares, until its own lands.
-    placeholderData: keepPreviousData,
+    placeholderData: (previous, previousQuery) =>
+      underFilter(previousQuery?.queryKey, filter && neighbourhoodKey('hop2', filter)) ? previous : undefined,
   });
   const hop2Data = hop2.data ?? null;
 
@@ -184,7 +198,8 @@ export function useGraphNeighbourhood({
     enabled: filter !== null && shownIds.length > 1,
     staleTime: STALE_MS,
     // Cross-links are drawn only between shown nodes, so the previous set's are safe until these land.
-    placeholderData: keepPreviousData,
+    placeholderData: (previous, previousQuery) =>
+      underFilter(previousQuery?.queryKey, filter && neighbourhoodKey('cross', filter)) ? previous : undefined,
   });
 
   const selection = React.useMemo(() => {
