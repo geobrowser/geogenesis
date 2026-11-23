@@ -78,6 +78,10 @@ vi.mock('~/core/hooks/use-is-mobile-layout', () => ({ useIsMobileLayout: () => f
 vi.mock('~/design-system/prefetch-link', () => ({
   PrefetchLink: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
 }));
+vi.mock('~/core/responses/use-claim-response-summaries', () => ({
+  ClaimResponseBatchBoundary: ({ children }: { children: React.ReactNode }) => children,
+  useClaimResponseSummaryBatch: () => ({ isSuccess: true, isPlaceholderData: false, isError: false }),
+}));
 vi.mock('./graph-claim-row', () => ({
   GraphClaimRow: ({ claim }: { claim: { name: string } }) => <li>{claim.name}</li>,
 }));

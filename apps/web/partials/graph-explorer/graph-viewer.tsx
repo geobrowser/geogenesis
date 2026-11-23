@@ -47,6 +47,7 @@ export function GraphViewer({
   const centreId = history.centreId;
   const hop = useGraphHop(centreId, filter);
   const claims = useClaimsAbout(centreId, filter, scope?.topicSpaceId ?? null);
+  const claimPages = React.useMemo(() => claims.data?.pages.map(page => page.claims) ?? [], [claims.data]);
   const prefetch = usePrefetchGraphHop(filter);
   const isMobile = useIsMobileLayout();
 
@@ -126,7 +127,6 @@ export function GraphViewer({
     claims: claimsEmptyMessage(filter, topicName),
     description: descriptionEmptyMessage(centreSpaceId),
   };
-  const claimList = claims.data?.pages.flatMap(page => page.claims) ?? [];
 
   return (
     <div className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)_400px] gap-6 lg:h-auto lg:grid-cols-1 lg:gap-4">
@@ -156,7 +156,7 @@ export function GraphViewer({
           centre={centre}
           centreSpaceId={centreSpaceId}
           spokes={spokes}
-          claims={claimList}
+          claimPages={claimPages}
           claimsState={{
             isLoading: claims.isLoading,
             isError: claims.isError,

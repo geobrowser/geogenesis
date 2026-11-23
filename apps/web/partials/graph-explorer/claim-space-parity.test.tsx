@@ -33,11 +33,13 @@ const HEALTH = '52c7ae149838b6d47ce0f3b2a5974546';
 const CLAIM = '0888a2f8621e4ee8bd77d1d57237927f';
 const NAME = SystemIds.NAME_PROPERTY as string;
 
-// Named in Podcasts and Datasets, cited from World affairs by a relation only.
-const spaces = [WORLD_AFFAIRS, PODCASTS, DATASETS];
-const named = [
-  { propertyId: NAME, spaceId: PODCASTS, text: 'Netanyahu stated intentions to destroy Hamas' },
-  { propertyId: NAME, spaceId: DATASETS, text: 'Netanyahu stated intentions to destroy Hamas' },
+const TITLE = 'Netanyahu stated intentions to destroy Hamas';
+// Named in Podcasts and Datasets, described in Health, cited from World affairs by a relation only.
+const spaces = [WORLD_AFFAIRS, PODCASTS, DATASETS, HEALTH];
+const values = [
+  { propertyId: NAME, spaceId: PODCASTS, text: TITLE },
+  { propertyId: NAME, spaceId: DATASETS, text: TITLE },
+  { propertyId: SystemIds.DESCRIPTION_PROPERTY as string, spaceId: HEALTH, text: 'A description' },
 ];
 
 function graphSpace(routeSpaceId: string) {
@@ -45,7 +47,13 @@ function graphSpace(routeSpaceId: string) {
     {
       entitiesConnection: {
         nodes: [
-          { id: CLAIM, name: 'Netanyahu stated intentions to destroy Hamas', spaceIds: spaces, valuesList: named },
+          {
+            id: CLAIM,
+            name: TITLE,
+            spaceIds: spaces,
+            names: values.filter(value => value.propertyId === NAME),
+            placed: values.filter(value => value.propertyId !== NAME).map(value => ({ spaceId: value.spaceId })),
+          },
         ],
         pageInfo: { hasNextPage: false, endCursor: null },
       },
@@ -59,12 +67,12 @@ function cardSpace(routeSpaceId: string) {
   mocks.cardSpaceIds.length = 0;
   const claim = {
     id: CLAIM,
-    name: 'Netanyahu stated intentions to destroy Hamas',
+    name: TITLE,
     description: null,
     spaces,
     types: [],
     relations: [],
-    values: named.map(value => ({ property: { id: value.propertyId }, spaceId: value.spaceId, value: value.text })),
+    values: values.map(value => ({ property: { id: value.propertyId }, spaceId: value.spaceId, value: value.text })),
   } as unknown as Entity;
   render(<TopicClaimCard claim={claim} fallbackSpaceId={routeSpaceId} />);
   return mocks.cardSpaceIds[0];
@@ -76,7 +84,8 @@ describe('graph explorer and topic page resolve a claim to the same space', () =
   it.each([
     ['a route space the claim is named in', PODCASTS],
     ['a route space that only cites it', WORLD_AFFAIRS],
-    ['a route space it is absent from', HEALTH],
+    ['a route space holding only its description', HEALTH],
+    ['a route space it is absent from', '41e851610e13a19441c4d980f2f2ce6b'],
   ])('with %s', (_case, routeSpaceId) => {
     const card = cardSpace(routeSpaceId);
     expect(card).toBeTruthy();

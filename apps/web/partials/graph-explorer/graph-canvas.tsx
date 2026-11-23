@@ -79,7 +79,8 @@ export function GraphCanvas({
   spokes: Spoke[];
   /** Spokes beyond the cap, listed in the Relationships tab. */
   onSelect: (spoke: Spoke) => void;
-  onPrefetch: (entityId: string) => void;
+  /** A node held under the pointer or focus; `null` when it leaves. */
+  onPrefetch: (entityId: string | null) => void;
   emptyMessage: string | null;
 }) {
   const [ref, { width, height }] = useSize<HTMLDivElement>();
@@ -131,6 +132,8 @@ export function GraphCanvas({
               onClick={() => onSelect(spoke)}
               onMouseEnter={() => onPrefetch(spoke.entity.id)}
               onFocus={() => onPrefetch(spoke.entity.id)}
+              onMouseLeave={() => onPrefetch(null)}
+              onBlur={() => onPrefetch(null)}
             >
               <EntityAvatar entity={spoke.entity} size={40} />
               <span className="text-metadataMedium leading-tight text-text">{shortName(name)}</span>

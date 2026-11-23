@@ -1,8 +1,10 @@
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 
 import { Effect } from 'effect';
 import { parse } from 'graphql';
 
+import { HIDDEN_PROPERTIES } from '~/core/constants';
 import { graphql } from '~/core/io/graphql-client';
 import { normId } from '~/core/utils/norm-id';
 import { entityHomeSpaceId, resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
@@ -36,6 +38,8 @@ function claimsAboutQuery(withTopic: boolean) {
       $aboutPropertyIds: [UUID!]
       $spaceIds: [UUID!]
       $claimTypeId: UUID!
+      $namePropertyId: UUID!
+      $unplacingPropertyIds: [UUID!]
       ${withTopic ? '$topicsPropertyId: UUID!\n      $topicId: UUID!' : ''}
       $first: Int
       $after: Cursor
@@ -54,10 +58,12 @@ function claimsAboutQuery(withTopic: boolean) {
           id
           name
           spaceIds
-          valuesList {
-            propertyId
+          names: valuesList(filter: { propertyId: { is: $namePropertyId } }) {
             spaceId
             text
+          }
+          placed: valuesList(filter: { propertyId: { notIn: $unplacingPropertyIds } }) {
+            spaceId
           }
         }
         pageInfo {
@@ -84,27 +90,34 @@ type ClaimsAboutResponse = {
       id: string;
       name: string | null;
       spaceIds: string[] | null;
-      valuesList: Array<{ propertyId: string; spaceId: string; text: string | null }> | null;
+      names: Array<{ spaceId: string; text: string | null }> | null;
+      placed: Array<{ spaceId: string }> | null;
     }>;
     pageInfo: { hasNextPage: boolean; endCursor: string | null };
   } | null;
 };
 
-/** Where a claim is read and voted in: TopicClaimCard's rule, so both surfaces use the same space. */
+/**
+ * Where a claim is read and voted in: TopicClaimCard's rule, so both surfaces use the same space.
+ * `resolveEntitySpaceId` reads only names and which spaces hold any other non-hidden value.
+ */
 export function claimSpaceId(
-  claim: { spaceIds: string[]; values: Array<{ propertyId: string; spaceId: string; text: string | null }> },
+  claim: { spaceIds: string[]; names: Array<{ spaceId: string; text: string | null }>; placedSpaceIds: string[] },
   requestedSpaceId: string | null
 ): string | null {
   const entity = {
     spaces: claim.spaceIds,
-    values: claim.values.map(value => ({
-      property: { id: value.propertyId },
-      spaceId: value.spaceId,
-      value: value.text,
-    })),
+    values: [
+      ...claim.names.map(name => ({ property: { id: NAME_PROPERTY_ID }, spaceId: name.spaceId, value: name.text })),
+      ...claim.placedSpaceIds.map(spaceId => ({ property: { id: PLACED_PROPERTY }, spaceId, value: true })),
+    ],
   };
   return requestedSpaceId ? resolveEntitySpaceId(entity, requestedSpaceId) : entityHomeSpaceId(entity);
 }
+
+/** Stands for any other non-hidden value: all the space rule needs to know is that one exists. */
+const PLACED_PROPERTY = 'placed';
+const NAME_PROPERTY_ID = normId(SystemIds.NAME_PROPERTY);
 
 export function decodeClaimsAbout(response: ClaimsAboutResponse, requestedSpaceId: string | null): ClaimsAboutPage {
   const connection = response.entitiesConnection;
@@ -114,11 +127,8 @@ export function decodeClaimsAbout(response: ClaimsAboutResponse, requestedSpaceI
     const spaceId = claimSpaceId(
       {
         spaceIds: (node.spaceIds ?? []).map(normId),
-        values: (node.valuesList ?? []).map(value => ({
-          propertyId: normId(value.propertyId),
-          spaceId: normId(value.spaceId),
-          text: value.text,
-        })),
+        names: (node.names ?? []).map(value => ({ spaceId: normId(value.spaceId), text: value.text })),
+        placedSpaceIds: [...new Set((node.placed ?? []).map(value => normId(value.spaceId)))],
       },
       requestedSpaceId ? normId(requestedSpaceId) : null
     );
@@ -138,6 +148,8 @@ export function claimsAboutVariables(entityId: string, filter: GraphFilter, afte
     aboutPropertyIds: CLAIM_ABOUT_PROPERTY_IDS,
     spaceIds: filter.spaceIds ?? null,
     claimTypeId: CLAIM_TYPE_ID,
+    namePropertyId: NAME_PROPERTY_ID,
+    unplacingPropertyIds: [NAME_PROPERTY_ID, ...[...HIDDEN_PROPERTIES].map(normId)],
     ...(topicId ? { topicsPropertyId: TOPICS_PROPERTY_ID, topicId } : {}),
     first: CLAIMS_ABOUT_PAGE_SIZE,
     after,

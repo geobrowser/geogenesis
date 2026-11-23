@@ -13,8 +13,6 @@ const SPACE_B = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 const SPACE_C = 'cccccccccccccccccccccccccccccccc';
 const ENTITY = '11111111111111111111111111111111';
 
-const NAME = 'a126ca530c8e48d5b88882c734c38935';
-
 describe('decodeClaimsAbout', () => {
   it('drops unnamed claims and resolves each claim in its own space', () => {
     const page = decodeClaimsAbout(
@@ -25,9 +23,10 @@ describe('decodeClaimsAbout', () => {
               id: '22222222-2222-2222-2222-222222222222',
               name: ' A claim ',
               spaceIds: [SPACE_A, SPACE_B],
-              valuesList: [{ propertyId: NAME, spaceId: SPACE_B, text: 'A claim' }],
+              names: [{ spaceId: SPACE_B, text: 'A claim' }],
+              placed: [],
             },
-            { id: '33333333333333333333333333333333', name: '', spaceIds: [SPACE_B], valuesList: [] },
+            { id: '33333333333333333333333333333333', name: '', spaceIds: [SPACE_B], names: [], placed: [] },
           ],
           pageInfo: { hasNextPage: true, endCursor: 'cursor-1' },
         },
@@ -53,11 +52,16 @@ describe('decodeClaimsAbout', () => {
 describe('claimSpaceId', () => {
   const claim = {
     spaceIds: [SPACE_A, SPACE_B, SPACE_C],
-    values: [
-      { propertyId: NAME, spaceId: SPACE_A, text: 'Named in A' },
-      { propertyId: NAME, spaceId: SPACE_B, text: 'Named in B' },
+    names: [
+      { spaceId: SPACE_A, text: 'Named in A' },
+      { spaceId: SPACE_B, text: 'Named in B' },
     ],
+    placedSpaceIds: [],
   };
+
+  it('keeps the requested space when the claim holds any other content there', () => {
+    expect(claimSpaceId({ ...claim, placedSpaceIds: [SPACE_C] }, SPACE_C)).toBe(SPACE_C);
+  });
 
   it('keeps the requested space when the claim has content there', () => {
     expect(claimSpaceId(claim, SPACE_B)).toBe(SPACE_B);
@@ -73,6 +77,17 @@ describe('claimSpaceId', () => {
 });
 
 describe('claimsAboutVariables', () => {
+  it('asks only for names and for which spaces hold other non-hidden values', () => {
+    const variables = claimsAboutVariables(
+      ENTITY,
+      resolveGraphFilter({ spaceIds: null, topicId: null, topicSpaceId: null }),
+      null
+    );
+    expect(variables.namePropertyId).toBe('a126ca530c8e48d5b88882c734c38935');
+    expect(variables.unplacingPropertyIds).toContain('a126ca530c8e48d5b88882c734c38935');
+    expect(variables.unplacingPropertyIds.length).toBeGreaterThan(1);
+  });
+
   it('asks for claims about the entity through every about-relation, scoped to the filter', () => {
     const variables = claimsAboutVariables(
       ENTITY,

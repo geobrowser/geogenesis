@@ -42,17 +42,36 @@ export function useGraphHop(entityId: string, filter: GraphFilter | null) {
   });
 }
 
-/** Warms the next hop when a node is hovered or focused. */
+export const GRAPH_HOP_PREFETCH_DELAY_MS = 150;
+
+/**
+ * Warms the hop for a node held under the pointer or focus for `GRAPH_HOP_PREFETCH_DELAY_MS`, so a
+ * sweep across the spokes fires nothing. One pending node at a time; `null` cancels it.
+ */
 export function usePrefetchGraphHop(filter: GraphFilter | null) {
   const queryClient = useQueryClient();
+  const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  React.useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    []
+  );
+
   return React.useCallback(
-    (entityId: string) => {
-      if (!filter) return;
-      void queryClient.prefetchQuery({
-        queryKey: graphHopQueryKey(entityId, filter),
-        queryFn: ({ signal }) => fetchGraphHop(entityId, filter, signal),
-        staleTime: STALE_MS,
-      });
+    (entityId: string | null) => {
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = null;
+      if (!filter || !entityId) return;
+      timer.current = setTimeout(() => {
+        timer.current = null;
+        void queryClient.prefetchQuery({
+          queryKey: graphHopQueryKey(entityId, filter),
+          queryFn: ({ signal }) => fetchGraphHop(entityId, filter, signal),
+          staleTime: STALE_MS,
+        });
+      }, GRAPH_HOP_PREFETCH_DELAY_MS);
     },
     [filter, queryClient]
   );

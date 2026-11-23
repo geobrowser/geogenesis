@@ -11,7 +11,7 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
 import { EntityAvatar } from './graph-canvas';
-import { GraphClaimRow } from './graph-claim-row';
+import { GraphClaimList } from './graph-claim-list';
 
 export type EntityPanelTab = 'details' | 'relationships' | 'claims';
 
@@ -25,7 +25,7 @@ export function EntityPanel({
   centre,
   centreSpaceId,
   spokes,
-  claims,
+  claimPages,
   claimsState,
   tab,
   onTabChange,
@@ -36,7 +36,8 @@ export function EntityPanel({
   centre: GraphCentre;
   centreSpaceId: string | null;
   spokes: Spoke[];
-  claims: ClaimAbout[];
+  /** Claims about the centre, one array per loaded page. */
+  claimPages: ClaimAbout[][];
   claimsState: {
     isLoading: boolean;
     isError: boolean;
@@ -50,7 +51,8 @@ export function EntityPanel({
   truncated: boolean;
   emptyMessages: EntityPanelEmptyMessages;
 }) {
-  const claimsCount = claimsState.isLoading ? '…' : `${claims.length}${claimsState.hasNextPage ? '+' : ''}`;
+  const claimCount = claimPages.reduce((total, page) => total + page.length, 0);
+  const claimsCount = claimsState.isLoading ? '…' : `${claimCount}${claimsState.hasNextPage ? '+' : ''}`;
   const tabs: Array<{ id: EntityPanelTab; label: string }> = [
     { id: 'details', label: 'Details' },
     { id: 'relationships', label: `Relationships (${spokes.length}${truncated ? '+' : ''})` },
@@ -104,7 +106,7 @@ export function EntityPanel({
             emptyMessage={emptyMessages.relationships}
           />
         )}
-        {tab === 'claims' && <ClaimsTab claims={claims} state={claimsState} emptyMessage={emptyMessages.claims} />}
+        {tab === 'claims' && <ClaimsTab pages={claimPages} state={claimsState} emptyMessage={emptyMessages.claims} />}
       </div>
     </section>
   );
@@ -184,11 +186,11 @@ function RelationshipsTab({
 }
 
 function ClaimsTab({
-  claims,
+  pages,
   state,
   emptyMessage,
 }: {
-  claims: ClaimAbout[];
+  pages: ClaimAbout[][];
   emptyMessage: string;
   state: {
     isLoading: boolean;
@@ -199,16 +201,13 @@ function ClaimsTab({
   };
 }) {
   if (state.isLoading) return <Skeleton className="h-[120px] w-full rounded-lg" />;
-  if (state.isError && claims.length === 0) return <EmptyNote>Couldn’t load claims.</EmptyNote>;
-  if (claims.length === 0) return <EmptyNote>{emptyMessage}</EmptyNote>;
+  const empty = pages.every(page => page.length === 0);
+  if (state.isError && empty) return <EmptyNote>Couldn’t load claims.</EmptyNote>;
+  if (empty) return <EmptyNote>{emptyMessage}</EmptyNote>;
 
   return (
     <div className="flex flex-col gap-3">
-      <ul className="flex flex-col gap-2">
-        {claims.map(claim => (
-          <GraphClaimRow key={claim.id} claim={claim} />
-        ))}
-      </ul>
+      <GraphClaimList pages={pages} />
       {state.hasNextPage && (
         <button
           type="button"
