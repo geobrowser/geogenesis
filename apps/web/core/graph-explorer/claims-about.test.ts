@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { claimHomeSpaceId, claimsAboutVariables, claimsTopicFor, decodeClaimsAbout } from './claims-about';
+import { claimSpaceId, claimsAboutVariables, claimsTopicFor, decodeClaimsAbout } from './claims-about';
 import { resolveGraphFilter } from './graph-filter';
 import { CLAIM_ABOUT_PROPERTY_IDS, CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from './ontology';
 
@@ -13,26 +13,10 @@ const SPACE_B = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 const SPACE_C = 'cccccccccccccccccccccccccccccccc';
 const ENTITY = '11111111111111111111111111111111';
 
-describe('claimHomeSpaceId', () => {
-  it('uses a space the claim is named in, inside the filter', () => {
-    expect(
-      claimHomeSpaceId({ spaceIds: [SPACE_A, SPACE_B, SPACE_C], nameSpaceIds: [SPACE_A, SPACE_C] }, [SPACE_C])
-    ).toBe(SPACE_C);
-  });
-
-  it('falls back to where it is named when none of those is in the filter', () => {
-    expect(claimHomeSpaceId({ spaceIds: [SPACE_A, SPACE_B], nameSpaceIds: [SPACE_B] }, [SPACE_C])).toBe(SPACE_B);
-  });
-
-  it('falls back to the claim’s spaces when no name space is known', () => {
-    expect(claimHomeSpaceId({ spaceIds: [SPACE_B], nameSpaceIds: [] }, undefined)).toBe(SPACE_B);
-  });
-});
+const NAME = 'a126ca530c8e48d5b88882c734c38935';
 
 describe('decodeClaimsAbout', () => {
-  const filter = resolveGraphFilter({ kind: 'spaces', spaceIds: [SPACE_B] });
-
-  it('gives each claim its own space and drops unnamed claims', () => {
+  it('drops unnamed claims and resolves each claim in its own space', () => {
     const page = decodeClaimsAbout(
       {
         entitiesConnection: {
@@ -41,14 +25,14 @@ describe('decodeClaimsAbout', () => {
               id: '22222222-2222-2222-2222-222222222222',
               name: ' A claim ',
               spaceIds: [SPACE_A, SPACE_B],
-              valuesList: [{ spaceId: SPACE_B }],
+              valuesList: [{ propertyId: NAME, spaceId: SPACE_B, text: 'A claim' }],
             },
             { id: '33333333333333333333333333333333', name: '', spaceIds: [SPACE_B], valuesList: [] },
           ],
           pageInfo: { hasNextPage: true, endCursor: 'cursor-1' },
         },
       },
-      filter
+      SPACE_C
     );
     expect(page).toEqual({
       claims: [{ id: '22222222222222222222222222222222', name: 'A claim', spaceId: SPACE_B }],
@@ -58,11 +42,33 @@ describe('decodeClaimsAbout', () => {
   });
 
   it('reads an empty answer as no claims', () => {
-    expect(decodeClaimsAbout({ entitiesConnection: null }, filter)).toEqual({
+    expect(decodeClaimsAbout({ entitiesConnection: null }, SPACE_A)).toEqual({
       claims: [],
       endCursor: null,
       hasNextPage: false,
     });
+  });
+});
+
+describe('claimSpaceId', () => {
+  const claim = {
+    spaceIds: [SPACE_A, SPACE_B, SPACE_C],
+    values: [
+      { propertyId: NAME, spaceId: SPACE_A, text: 'Named in A' },
+      { propertyId: NAME, spaceId: SPACE_B, text: 'Named in B' },
+    ],
+  };
+
+  it('keeps the requested space when the claim has content there', () => {
+    expect(claimSpaceId(claim, SPACE_B)).toBe(SPACE_B);
+  });
+
+  it('moves to the claim’s own space when the requested one holds nothing of it', () => {
+    expect(claimSpaceId(claim, SPACE_C)).toBe(SPACE_A);
+  });
+
+  it('uses the claim’s home space with no requested space', () => {
+    expect(claimSpaceId(claim, null)).toBe(SPACE_A);
   });
 });
 

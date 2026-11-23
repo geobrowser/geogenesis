@@ -54,10 +54,17 @@ export function usePrefetchGraphHop(filter: GraphFilter | null) {
   );
 }
 
-export function useClaimsAbout(entityId: string, filter: GraphFilter | null) {
+/** `requestedSpaceId` is the topic page's space, which claims resolve their voting space against. */
+export function useClaimsAbout(entityId: string, filter: GraphFilter | null, requestedSpaceId: string | null) {
   return useInfiniteQuery({
-    queryKey: ['graph-explorer', 'claims-about', entityId, ...(filter ? graphFilterKey(filter) : ['pending'])],
-    queryFn: ({ pageParam, signal }) => fetchClaimsAbout(entityId, filter!, pageParam, signal),
+    queryKey: [
+      'graph-explorer',
+      'claims-about',
+      entityId,
+      requestedSpaceId ?? '*',
+      ...(filter ? graphFilterKey(filter) : ['pending']),
+    ],
+    queryFn: ({ pageParam, signal }) => fetchClaimsAbout(entityId, filter!, requestedSpaceId, pageParam, signal),
     initialPageParam: null as string | null,
     getNextPageParam: (last: ClaimsAboutPage) => (last.hasNextPage ? last.endCursor : undefined),
     enabled: filter !== null,

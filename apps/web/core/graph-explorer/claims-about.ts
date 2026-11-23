@@ -1,4 +1,3 @@
-import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 
 import { Effect } from 'effect';
@@ -6,17 +5,17 @@ import { parse } from 'graphql';
 
 import { graphql } from '~/core/io/graphql-client';
 import { normId } from '~/core/utils/norm-id';
+import { entityHomeSpaceId, resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
 
 import type { GraphFilter } from './graph-filter';
 import { CLAIM_ABOUT_PROPERTY_IDS, CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from './ontology';
-import { pickEntitySpaceId } from './spokes';
 
 export const CLAIMS_ABOUT_PAGE_SIZE = 20;
 
 export type ClaimAbout = {
   id: string;
   name: string;
-  /** The claim's own space: where it is read, linked and voted in. Never the topic's space. */
+  /** Where the claim is read, linked and voted in (`claimSpaceId`). */
   spaceId: string;
 };
 
@@ -38,7 +37,6 @@ function claimsAboutQuery(withTopic: boolean) {
       $aboutPropertyIds: [UUID!]
       $spaceIds: [UUID!]
       $claimTypeId: UUID!
-      $namePropertyId: UUID!
       ${withTopic ? '$topicsPropertyId: UUID!\n      $topicId: UUID!' : ''}
       $first: Int
       $after: Cursor
@@ -57,8 +55,10 @@ function claimsAboutQuery(withTopic: boolean) {
           id
           name
           spaceIds
-          valuesList(filter: { propertyId: { is: $namePropertyId } }) {
+          valuesList {
+            propertyId
             spaceId
+            text
           }
         }
         pageInfo {
@@ -85,35 +85,47 @@ type ClaimsAboutResponse = {
       id: string;
       name: string | null;
       spaceIds: string[] | null;
-      valuesList: Array<{ spaceId: string }> | null;
+      valuesList: Array<{ propertyId: string; spaceId: string; text: string | null }> | null;
     }>;
     pageInfo: { hasNextPage: boolean; endCursor: string | null };
   } | null;
 };
 
 /**
- * A claim's home space: where its name is written, preferring the filter's spaces. That is the
- * space its responses live in (all measured testnet votes were in such a space).
+ * The space a claim is read, linked and voted in: `resolveEntitySpaceId` against the topic page's
+ * space, the rule TopicClaimCard uses, so both surfaces count and take votes in the same space.
+ * Without a requested space, the helper's own fallback (`entityHomeSpaceId`).
  */
-export function claimHomeSpaceId(
-  claim: { spaceIds: readonly string[]; nameSpaceIds: readonly string[] },
-  allowedSpaceIds: readonly string[] | undefined
+export function claimSpaceId(
+  claim: { spaceIds: string[]; values: Array<{ propertyId: string; spaceId: string; text: string | null }> },
+  requestedSpaceId: string | null
 ): string | null {
-  const named = claim.nameSpaceIds.length > 0 ? claim.nameSpaceIds : claim.spaceIds;
-  return pickEntitySpaceId(named, allowedSpaceIds, null);
+  const entity = {
+    spaces: claim.spaceIds,
+    values: claim.values.map(value => ({
+      property: { id: value.propertyId },
+      spaceId: value.spaceId,
+      value: value.text,
+    })),
+  };
+  return requestedSpaceId ? resolveEntitySpaceId(entity, requestedSpaceId) : entityHomeSpaceId(entity);
 }
 
-export function decodeClaimsAbout(response: ClaimsAboutResponse, filter: GraphFilter): ClaimsAboutPage {
+export function decodeClaimsAbout(response: ClaimsAboutResponse, requestedSpaceId: string | null): ClaimsAboutPage {
   const connection = response.entitiesConnection;
   const claims = (connection?.nodes ?? []).flatMap(node => {
     const name = node.name?.trim();
     if (!name) return [];
-    const spaceId = claimHomeSpaceId(
+    const spaceId = claimSpaceId(
       {
         spaceIds: (node.spaceIds ?? []).map(normId),
-        nameSpaceIds: [...new Set((node.valuesList ?? []).map(value => normId(value.spaceId)))],
+        values: (node.valuesList ?? []).map(value => ({
+          propertyId: normId(value.propertyId),
+          spaceId: normId(value.spaceId),
+          text: value.text,
+        })),
       },
-      filter.spaceIds
+      requestedSpaceId ? normId(requestedSpaceId) : null
     );
     return spaceId ? [{ id: normId(node.id), name, spaceId }] : [];
   });
@@ -131,18 +143,23 @@ export function claimsAboutVariables(entityId: string, filter: GraphFilter, afte
     aboutPropertyIds: CLAIM_ABOUT_PROPERTY_IDS,
     spaceIds: filter.spaceIds ?? null,
     claimTypeId: CLAIM_TYPE_ID,
-    namePropertyId: normId(SystemIds.NAME_PROPERTY),
     ...(topicId ? { topicsPropertyId: TOPICS_PROPERTY_ID, topicId } : {}),
     first: CLAIMS_ABOUT_PAGE_SIZE,
     after,
   };
 }
 
-export function fetchClaimsAbout(entityId: string, filter: GraphFilter, after: string | null, signal?: AbortSignal) {
+export function fetchClaimsAbout(
+  entityId: string,
+  filter: GraphFilter,
+  requestedSpaceId: string | null,
+  after: string | null,
+  signal?: AbortSignal
+) {
   return Effect.runPromise(
     graphql({
       query: claimsTopicFor(entityId, filter) ? claimsAboutTopicDocument : claimsAboutDocument,
-      decoder: (response: ClaimsAboutResponse) => decodeClaimsAbout(response, filter),
+      decoder: (response: ClaimsAboutResponse) => decodeClaimsAbout(response, requestedSpaceId),
       variables: claimsAboutVariables(entityId, filter, after),
       signal,
     })

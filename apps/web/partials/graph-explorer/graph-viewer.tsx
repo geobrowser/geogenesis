@@ -49,7 +49,7 @@ export function GraphViewer({
 
   const centreId = history.centreId;
   const hop = useGraphHop(centreId, filter);
-  const claims = useClaimsAbout(centreId, filter);
+  const claims = useClaimsAbout(centreId, filter, topic?.spaceId ?? null);
   const prefetch = usePrefetchGraphHop(filter);
   const isMobile = useIsMobileLayout();
 
