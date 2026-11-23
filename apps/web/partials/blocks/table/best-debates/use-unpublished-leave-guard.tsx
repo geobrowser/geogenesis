@@ -54,7 +54,7 @@ export function useUnpublishedLeaveGuard({
   const pushSentinel = React.useCallback((url: string) => {
     const token = `${Date.now()}-${Math.random()}`;
     window.history.replaceState({ ...window.history.state, rankingLeaveGuardBase: token }, '');
-    window.history.pushState({ rankingLeaveGuard: true }, '', url);
+    window.history.pushState({ rankingLeaveGuard: token }, '', url);
     baseTokenRef.current = token;
     sentinelRef.current = true;
   }, []);
@@ -161,6 +161,14 @@ export function useUnpublishedLeaveGuard({
     if (baseTokenRef.current && window.history.state?.rankingLeaveGuardBase === baseTokenRef.current) return;
     hrefRef.current = window.location.href;
   });
+  // A screen that mounts on a spare entry (a reload, or a remount without one) takes it over rather
+  // than stacking another. Runs before the effect below.
+  React.useEffect(() => {
+    const token = window.history.state?.rankingLeaveGuard;
+    if (typeof token !== 'string') return;
+    baseTokenRef.current = token;
+    sentinelRef.current = true;
+  }, []);
   React.useEffect(() => {
     if (!active || sentinelRef.current) return;
     pushSentinel(window.location.href);

@@ -6,7 +6,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { LEAVE_SETTLE_MS, useUnpublishedLeaveGuard } from './use-unpublished-leave-guard';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  // A spare entry's state left behind would be taken over by the next test's mount.
+  window.history.replaceState(null, '', '/');
+});
 
 function Harness({
   active,
@@ -129,7 +133,7 @@ describe('useUnpublishedLeaveGuard', () => {
     expect(screen.getByText('Publish your ranking?')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Keep ranking' }));
     expect(window.location.pathname + window.location.search).toBe('/ranking?recorded=week');
-    expect(window.history.state).toMatchObject({ rankingLeaveGuard: true });
+    expect(window.history.state).toMatchObject({ rankingLeaveGuard: expect.any(String) });
   });
 
   it('Keep ranking keeps the filters when the router re-renders on Back before the guard hears it', () => {
@@ -260,6 +264,20 @@ describe('useUnpublishedLeaveGuard', () => {
     expect(follow).toHaveBeenCalledTimes(1);
     expect(leave).toHaveBeenCalledTimes(1);
     expect(back).not.toHaveBeenCalled();
+    back.mockRestore();
+  });
+
+  it('mounting on a spare entry (a reload) takes it over: no second spare, and one Back leaves', () => {
+    const back = vi.spyOn(window.history, 'back').mockImplementation(() => {});
+    const push = vi.spyOn(window.history, 'pushState');
+    window.history.replaceState({ rankingLeaveGuard: 'T' }, '', '/ranking');
+    const { rerender } = render(<Harness active={false} leave={vi.fn()} />);
+    rerender(<Harness active leave={vi.fn()} />);
+    expect(push).not.toHaveBeenCalled();
+    rerender(<Harness active={false} leave={vi.fn()} />);
+    act(() => window.dispatchEvent(new PopStateEvent('popstate', { state: { rankingLeaveGuardBase: 'T' } })));
+    expect(back).toHaveBeenCalledTimes(1);
+    push.mockRestore();
     back.mockRestore();
   });
 
