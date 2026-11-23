@@ -40,9 +40,8 @@ function orderClaims(claims: Candidate[]): Candidate[] {
 }
 
 /**
- * Up to `cap` neighbours, taking one of each kind in priority order per round so no kind floods
- * the graph. Within a kind: claims by band, others by type rank, then API order. `topicsLast` is for
- * hop 2, where nearly every item links back to topics.
+ * Up to `cap` neighbours, one of each kind per round in priority order. Within a kind: claims by band,
+ * others by type rank, then API order. `topicsLast` suits hop 2, where most items link to topics.
  */
 export function pickNeighbours(
   candidates: readonly Candidate[],

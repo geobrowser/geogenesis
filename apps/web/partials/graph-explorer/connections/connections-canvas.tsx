@@ -76,9 +76,8 @@ export type ConnectionsCanvasProps = {
 };
 
 /**
- * The design's Connections view: nodes are DOM buttons positioned in 3D by one animation loop,
- * lines and stars are drawn on a canvas behind them. Drag turns it (a drag is never a click),
- * wheel or pinch zooms, and it turns slowly on its own when idle unless motion is reduced.
+ * DOM node buttons placed in 3D by one animation loop over a canvas of lines and stars. A drag turns
+ * the map and is never a click; it turns on its own when idle unless motion is reduced.
  */
 export function ConnectionsCanvas({
   selection,

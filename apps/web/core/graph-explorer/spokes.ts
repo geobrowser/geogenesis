@@ -69,10 +69,9 @@ export function namedSpaceIds(
 }
 
 /**
- * One spoke per named neighbour the filter keeps, merging relations to the same neighbour.
- * Order: outgoing first, then curator `position`, then name.
+ * One spoke per named neighbour the filter keeps (`keepAll` skips the type allowlist), merging
+ * relations to the same neighbour. Order: outgoing first, then curator `position`, then name.
  */
-/** `keepAll` skips the type allowlist, for relations already chosen by kind (the 3D neighbourhood). */
 export function buildSpokes(hop: GraphHop, centreId: string, filter: GraphFilter, keepAll = false): Spoke[] {
   const centre = normId(centreId);
   const byId = new Map<string, Spoke & { order: string }>();

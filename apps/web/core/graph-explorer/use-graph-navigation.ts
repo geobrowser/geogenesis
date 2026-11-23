@@ -13,9 +13,8 @@ function pushedFrom(): string | null {
 }
 
 /**
- * Hops use the history API directly, which Next syncs into usePathname/useSearchParams without a
- * navigation, so the explorer stays mounted. Going back to the centre this entry was pushed from
- * is a browser Back; anything else (a deep link, a bookmark) replaces.
+ * Hops use the history API, which Next syncs into usePathname/useSearchParams without remounting.
+ * Back to the centre this entry was pushed from is a browser Back; anything else replaces.
  */
 export function useGraphNavigation(history: GraphHistory, params: URLSearchParams) {
   return React.useCallback(

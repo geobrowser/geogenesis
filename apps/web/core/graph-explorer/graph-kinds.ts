@@ -90,9 +90,8 @@ const KIND_BY_TYPE = new Map<string, GraphKind>();
 for (const kind of GRAPH_KINDS) for (const id of GRAPH_KIND_TYPE_IDS[kind]) KIND_BY_TYPE.set(id, kind);
 
 /**
- * The node's kind from its types. Topic is often a second type (Netanyahu is Person + Topic), so it
- * wins only alone, or beside Timeline (topic timelines are Timeline + Topic). A News event is typed
- * Claim too but reads as an event. Null for types no kind covers (blocks, tags, provenance records).
+ * The node's kind from its types. Topic wins only alone or beside Timeline, since it is often a second
+ * type; a News event (also typed Claim) is an event. Null for types no kind covers.
  */
 export function graphKindOf(typeIds: readonly string[]): GraphKind | null {
   let ids = typeIds.map(normId);
