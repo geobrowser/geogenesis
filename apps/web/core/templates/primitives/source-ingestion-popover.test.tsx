@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
@@ -14,6 +15,9 @@ import { RelatedListSection } from './related-list-section';
 
 const auth = vi.hoisted(() => ({ authenticated: false, promptSignIn: vi.fn() }));
 const resolveSeed = vi.hoisted(() => vi.fn());
+const membership = vi.hoisted(() => ({ ensureOutcome: vi.fn(), tx: vi.fn() }));
+const SPACE_ID = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+const PERSONAL_SPACE_ID = 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
 
 vi.mock('~/core/wallet/auth-hooks', () => ({
   usePrivy: () => ({ authenticated: auth.authenticated, ready: true }),
@@ -23,6 +27,19 @@ vi.mock('~/core/hooks/use-privy-sign-in', () => ({
 }));
 vi.mock('~/core/chat/resolve-url-ingestion-seed', () => ({
   resolveUrlIngestionSeed: resolveSeed,
+}));
+vi.mock('~/core/access/request-space-membership', () => ({
+  ensureSpaceMembershipOutcome: membership.ensureOutcome,
+}));
+vi.mock('~/core/hooks/use-personal-space-id', () => ({
+  usePersonalSpaceId: () => ({ personalSpaceId: PERSONAL_SPACE_ID, isRegistered: true }),
+}));
+vi.mock('~/core/hooks/use-smart-account-transaction', () => ({
+  useSmartAccountTransaction: () => membership.tx,
+}));
+vi.mock('next/navigation', () => ({
+  useParams: () => ({ id: SPACE_ID, entityId: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' }),
+  usePathname: () => `/space/${SPACE_ID}/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`,
 }));
 
 const link: IngestionLink = {
@@ -45,9 +62,11 @@ const sources: EntityListSectionModel = {
 function renderSection(section: EntityListSectionModel = sources) {
   const store = createStore();
   render(
-    <Provider store={store}>
-      <RelatedListSection section={section} />
-    </Provider>
+    <QueryClientProvider client={new QueryClient()}>
+      <Provider store={store}>
+        <RelatedListSection section={section} />
+      </Provider>
+    </QueryClientProvider>
   );
   return store;
 }
@@ -56,7 +75,17 @@ beforeEach(() => {
   auth.authenticated = false;
   auth.promptSignIn.mockReset();
   resolveSeed.mockReset();
+  membership.ensureOutcome.mockReset().mockResolvedValue('member');
 });
+
+async function submitLink(value = 'example.com/story') {
+  fireEvent.click(screen.getByRole('button', { name: 'Add source' }));
+  const input = screen.getByPlaceholderText(/Paste news, podcast, tweet, blog URLs/);
+  fireEvent.change(input, { target: { value } });
+  await act(async () => {
+    fireEvent.submit(input.closest('form') as HTMLFormElement);
+  });
+}
 afterEach(cleanup);
 
 describe('Sources section +', () => {
@@ -68,6 +97,78 @@ describe('Sources section +', () => {
     expect(auth.promptSignIn).toHaveBeenCalledTimes(1);
     expect(screen.queryByPlaceholderText(/Paste news, podcast, tweet, blog URLs/)).toBeNull();
     expect(resolveSeed).not.toHaveBeenCalled();
+    expect(membership.ensureOutcome).not.toHaveBeenCalled();
+  });
+
+  it('signed in, a non-member is joined to the space before the ingestion runs', async () => {
+    auth.authenticated = true;
+    const order: string[] = [];
+    membership.ensureOutcome.mockImplementation(async () => {
+      order.push('join');
+      return 'requested';
+    });
+    resolveSeed.mockImplementation(async () => {
+      order.push('ingest');
+      return { mode: 'ingestion', url: 'https://example.com/story', link };
+    });
+    const store = renderSection();
+
+    await submitLink();
+
+    await waitFor(() => expect(resolveSeed).toHaveBeenCalledTimes(1));
+    expect(membership.ensureOutcome).toHaveBeenCalledWith(
+      expect.objectContaining({ spaceId: SPACE_ID, personalSpaceId: PERSONAL_SPACE_ID, tx: membership.tx })
+    );
+    expect(order).toEqual(['join', 'ingest']);
+    expect(store.get(isChatOpenAtom)).toBe(true);
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('signed in, a member goes straight to the ingestion with no membership request', async () => {
+    auth.authenticated = true;
+    // `member` is the outcome `ensureSpaceMembership` resolves without sending anything.
+    membership.ensureOutcome.mockResolvedValue('member');
+    resolveSeed.mockResolvedValue({ mode: 'ingestion', url: 'https://example.com/story', link });
+    renderSection();
+
+    await submitLink();
+
+    await waitFor(() => expect(resolveSeed).toHaveBeenCalledTimes(1));
+    expect(membership.tx).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('a space with no membership flow still takes the link, as a vote there does', async () => {
+    auth.authenticated = true;
+    membership.ensureOutcome.mockResolvedValue('skipped');
+    resolveSeed.mockResolvedValue({ mode: 'ingestion', url: 'https://example.com/story', link });
+    renderSection();
+
+    await submitLink();
+
+    await waitFor(() => expect(resolveSeed).toHaveBeenCalledTimes(1));
+  });
+
+  it('a failed join stops the ingestion and says so, keeping the link to retry', async () => {
+    auth.authenticated = true;
+    membership.ensureOutcome.mockResolvedValue('failed');
+    const store = renderSection();
+
+    await submitLink();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent("Couldn't join this space, so the link wasn't added.");
+    expect(resolveSeed).not.toHaveBeenCalled();
+    expect(store.get(isChatOpenAtom)).toBe(false);
+    expect(screen.getByPlaceholderText(/Paste news, podcast, tweet, blog URLs/)).toHaveValue('example.com/story');
+
+    // Retrying after the request lands clears the message and runs the ingestion.
+    membership.ensureOutcome.mockResolvedValue('requested');
+    resolveSeed.mockResolvedValue({ mode: 'ingestion', url: 'https://example.com/story', link });
+    await act(async () => {
+      fireEvent.submit(screen.getByPlaceholderText(/Paste news, podcast, tweet, blog URLs/).closest('form')!);
+    });
+    await waitFor(() => expect(resolveSeed).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('signed in, submits the pasted link to the ingestion with the page to link back to', async () => {

@@ -14,9 +14,14 @@ type Options = {
   onComplete?: () => void;
   /** The page the link is added from; the new source is linked back to it (GEO-3819). */
   link?: IngestionLink;
+  /**
+   * Runs before the link goes to the ingestion; resolving false stops it there, with the URL kept so
+   * the viewer can try again. The Sources `+` joins a non-member to the space here (GEO-3819).
+   */
+  beforeIngest?: () => Promise<boolean>;
 };
 
-export function useUrlIngestionSubmit({ logTag, onComplete, link }: Options) {
+export function useUrlIngestionSubmit({ logTag, onComplete, link, beforeIngest }: Options) {
   const setSeed = useSetAtom(assistantSeedAtom);
   const setChatOpen = useSetAtom(isChatOpenAtom);
   const [url, setUrl] = React.useState('');
@@ -25,6 +30,8 @@ export function useUrlIngestionSubmit({ logTag, onComplete, link }: Options) {
   onCompleteRef.current = onComplete;
   const linkRef = React.useRef(link);
   linkRef.current = link;
+  const beforeIngestRef = React.useRef(beforeIngest);
+  beforeIngestRef.current = beforeIngest;
 
   const normalizedUrl = normalizeHttpUrl(url);
   const canSubmit = normalizedUrl !== null && !submitting;
@@ -36,6 +43,7 @@ export function useUrlIngestionSubmit({ logTag, onComplete, link }: Options) {
 
       setSubmitting(true);
       try {
+        if (beforeIngestRef.current && !(await beforeIngestRef.current())) return;
         const seed = await resolveUrlIngestionSeed(normalizedUrl, logTag, linkRef.current);
         setSeed(seed);
         setChatOpen(true);

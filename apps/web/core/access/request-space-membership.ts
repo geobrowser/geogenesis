@@ -122,20 +122,32 @@ export function readIsLockedOut(spaceId: string, personalSpaceId: string): Promi
  * made later — the caller's next attempt re-runs the checks against current state instead of being
  * suppressed for the rest of the session.
  */
-const autoRequestedMemberships = new Set<string>();
+const autoRequestedMemberships = new Map<string, 'requested' | 'skipped'>();
 
 /**
  * Checks in progress, keyed the same way. Concurrent callers — several vote
  * controls for the same space, or a compose screen and its embedded block —
  * share one run rather than racing to propose the same membership twice.
  */
-const inFlightMembershipChecks = new Map<string, Promise<boolean>>();
+const inFlightMembershipChecks = new Map<string, Promise<SpaceMembershipOutcome>>();
 
 /** Test seam — the module-level dedupe would otherwise leak between cases. */
 export function resetAutoRequestedMemberships() {
   autoRequestedMemberships.clear();
   inFlightMembershipChecks.clear();
 }
+
+/**
+ * What {@link ensureSpaceMembershipOutcome} found or did:
+ *
+ * - `member`: the user can already edit the space.
+ * - `requested`: a membership request is waiting on the space's editors — sent now, sent earlier
+ *   this session, or already under vote.
+ * - `skipped`: no request is possible: not a DAO space, the user is on the review path only, or
+ *   there is no personal space or target space to request with.
+ * - `failed`: the request was attempted and didn't land.
+ */
+export type SpaceMembershipOutcome = 'member' | 'requested' | 'skipped' | 'failed';
 
 type EnsureSpaceMembershipArgs = {
   spaceId: string | null;
@@ -154,14 +166,24 @@ type EnsureSpaceMembershipArgs = {
  * the user actually asked for, so a failed background request must not break it.
  */
 export function ensureSpaceMembership(args: EnsureSpaceMembershipArgs): Promise<boolean> {
+  return ensureSpaceMembershipOutcome(args).then(outcome => outcome === 'member');
+}
+
+/**
+ * {@link ensureSpaceMembership}, telling apart why the user isn't a member yet — for a caller whose
+ * action can't go ahead after a request that failed (the Sources `+`, GEO-3819). Same checks, same
+ * dedupe, and never throws either.
+ */
+export function ensureSpaceMembershipOutcome(args: EnsureSpaceMembershipArgs): Promise<SpaceMembershipOutcome> {
   const { spaceId, personalSpaceId } = args;
-  if (!spaceId || !personalSpaceId) return Promise.resolve(false);
+  if (!spaceId || !personalSpaceId) return Promise.resolve('skipped');
 
   const requestKey = `${normalizeSpaceId(spaceId)}:${normalizeSpaceId(personalSpaceId)}`;
 
   const inFlight = inFlightMembershipChecks.get(requestKey);
   if (inFlight) return inFlight;
-  if (autoRequestedMemberships.has(requestKey)) return Promise.resolve(false);
+  const recorded = autoRequestedMemberships.get(requestKey);
+  if (recorded) return Promise.resolve(recorded);
 
   const check = runMembershipCheck(args, requestKey)
     // Structural backstop for the "never throws" contract above. Every await inside
@@ -171,7 +193,7 @@ export function ensureSpaceMembership(args: EnsureSpaceMembershipArgs): Promise<
     // vote rather than a caught failure.
     .catch(error => {
       console.error('Automatic membership request failed', { spaceId, personalSpaceId }, error);
-      return false;
+      return 'failed' as const;
     })
     .finally(() => inFlightMembershipChecks.delete(requestKey));
   inFlightMembershipChecks.set(requestKey, check);
@@ -181,13 +203,13 @@ export function ensureSpaceMembership(args: EnsureSpaceMembershipArgs): Promise<
 async function runMembershipCheck(
   { spaceId, personalSpaceId, tx, queryClient }: EnsureSpaceMembershipArgs,
   requestKey: string
-): Promise<boolean> {
+): Promise<SpaceMembershipOutcome> {
   // Narrowed by the caller; repeated here so this function reads on its own.
-  if (!spaceId || !personalSpaceId) return false;
+  if (!spaceId || !personalSpaceId) return 'skipped';
 
   const access = await runEffectEither(getSpaceAccessById(spaceId, personalSpaceId));
   if (Either.isRight(access) && access.right.canEdit) {
-    return true;
+    return 'member';
   }
 
   // Shares the `['space', spaceId]` cache `useSpace` fills, so this is usually free.
@@ -201,12 +223,12 @@ async function runMembershipCheck(
 
   // Only DAO spaces have a membership proposal flow; a personal space you don't
   // own can't be joined at all.
-  if (space?.type !== 'DAO') return false;
+  if (space?.type !== 'DAO') return 'skipped';
 
   // Re-request when there's no live vote — a stuck (vote-ended) request must not
   // block a fresh one, otherwise the user is wedged out of the space for good.
   const activeRequest = await fetchActiveMemberRequest(spaceId, personalSpaceId).catch(() => null);
-  if (activeRequest != null && !activeRequest.isVotingEnded) return false;
+  if (activeRequest != null && !activeRequest.isVotingEnded) return 'requested';
 
   // The contract refuses a request from someone on the review path only. Skip quietly, as the user
   // asked to vote or rank, not to join (Join shows them how to ask an editor). Recorded like a landed
@@ -214,18 +236,18 @@ async function runMembershipCheck(
   // resumes auto-join after a reload. A failed read falls through to the request, as before.
   if (await readIsLockedOut(spaceId, personalSpaceId)) {
     devLog('Skipping automatic membership request: requester is restricted', { spaceId, personalSpaceId });
-    autoRequestedMemberships.add(requestKey);
-    return false;
+    autoRequestedMemberships.set(requestKey, 'skipped');
+    return 'skipped';
   }
 
   try {
     await requestSpaceMembership({ spaceId, personalSpaceId, tx, queryClient });
-    autoRequestedMemberships.add(requestKey);
+    autoRequestedMemberships.set(requestKey, 'requested');
+    return 'requested';
   } catch {
-    // Already logged by requestSpaceMembership. The user didn't ask for this
-    // request, so don't interrupt them with an error they can't act on — and
-    // leave the key unrecorded so a later attempt can retry.
+    // Already logged by requestSpaceMembership. The vote and ranking callers didn't
+    // ask for this request, so they don't interrupt the user with an error they can't
+    // act on — and the key stays unrecorded so a later attempt can retry.
+    return 'failed';
   }
-
-  return false;
 }

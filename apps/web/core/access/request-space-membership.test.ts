@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   type SendSpaceTransaction,
   ensureSpaceMembership,
+  ensureSpaceMembershipOutcome,
   resetAutoRequestedMemberships,
 } from './request-space-membership';
 
@@ -227,5 +228,54 @@ describe('ensureSpaceMembership', () => {
 
     expect(first).toBe(second);
     expect(mocks.proposeRequestMembership).toHaveBeenCalledOnce();
+  });
+});
+
+describe('ensureSpaceMembershipOutcome', () => {
+  function runOutcome(spaceId: string | null = DAO_SPACE_ID, personalSpaceId: string | null = PERSONAL_SPACE_ID) {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return ensureSpaceMembershipOutcome({ spaceId, personalSpaceId, tx, queryClient });
+  }
+
+  it('reads member, with no request, when the user can already edit the space', async () => {
+    mocks.canEdit = true;
+
+    await expect(runOutcome()).resolves.toBe('member');
+    expect(tx).not.toHaveBeenCalled();
+  });
+
+  it('reads requested once a request lands, and again for the rest of the session', async () => {
+    await expect(runOutcome()).resolves.toBe('requested');
+    await expect(runOutcome()).resolves.toBe('requested');
+    expect(tx).toHaveBeenCalledTimes(1);
+  });
+
+  it('reads requested while an earlier request is still under vote', async () => {
+    mocks.activeMemberRequest.mockResolvedValue({ proposalId: 'proposal-1', isVotingEnded: false });
+
+    await expect(runOutcome()).resolves.toBe('requested');
+    expect(tx).not.toHaveBeenCalled();
+  });
+
+  it('reads skipped where no request is possible', async () => {
+    mocks.spaceType = 'PERSONAL';
+    await expect(runOutcome()).resolves.toBe('skipped');
+
+    mocks.spaceType = 'DAO';
+    mocks.readFastPathRestricted.mockResolvedValue(true);
+    await expect(runOutcome(OTHER_DAO_SPACE_ID)).resolves.toBe('skipped');
+
+    await expect(runOutcome(DAO_SPACE_ID, null)).resolves.toBe('skipped');
+    expect(tx).not.toHaveBeenCalled();
+  });
+
+  it('reads failed when the request does not land', async () => {
+    tx.mockReturnValue(Effect.fail(new Error('user rejected')));
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    await expect(runOutcome()).resolves.toBe('failed');
+    // The boolean form keeps its contract.
+    await expect(run()).resolves.toBe(false);
+    consoleError.mockRestore();
   });
 });
