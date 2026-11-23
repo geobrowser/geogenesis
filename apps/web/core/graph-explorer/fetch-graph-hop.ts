@@ -112,7 +112,7 @@ const graphHopDocument = parse(/* GraphQL */ `
   }
 `) as TypedDocumentNode<GraphHopResponse, Record<string, unknown>>;
 
-type RawEntity = {
+export type RawEntity = {
   id: string;
   name: string | null;
   spaceIds: string[] | null;
@@ -144,7 +144,7 @@ export type GraphHopResponse = {
   incoming: RawConnection;
 };
 
-function imageOf(entity: RawEntity): string | null {
+export function imageOf(entity: RawEntity): string | null {
   const relations = entity.relationsList ?? [];
   for (const propertyId of [AVATAR_PROPERTY_ID, COVER_PROPERTY_ID]) {
     for (const relation of relations) {
@@ -156,7 +156,7 @@ function imageOf(entity: RawEntity): string | null {
   return null;
 }
 
-function decodeEntity(entity: RawEntity): GraphEntity {
+export function decodeEntity(entity: RawEntity): GraphEntity {
   return {
     id: normId(entity.id),
     name: entity.name?.trim() ? entity.name.trim() : null,
