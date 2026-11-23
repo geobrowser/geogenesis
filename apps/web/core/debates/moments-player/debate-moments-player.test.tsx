@@ -312,40 +312,24 @@ describe('DebateMomentsPlayer', () => {
     expect(onPlay).toHaveBeenCalledTimes(2);
   });
 
-  it("clears a failed clip's error when the viewer steps on, and leaves the play control up", () => {
-    render(<DebateMomentsPlayer debateId={DEBATE} label="Debate A" moments={MOMENTS} />);
-    const player = screen.getByRole('region', { name: 'Debate A' });
-
-    fireEvent.error(videoOf(player));
-    expect(screen.getByText('Couldn’t play this moment.')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Next moment' }));
-    expect(screen.queryByText('Couldn’t play this moment.')).not.toBeInTheDocument();
-    expect(screen.getByTestId('play-indicator')).toBeInTheDocument();
-
-    fireEvent.error(videoOf(player));
-    fireEvent.click(screen.getByRole('button', { name: 'Watch the full debate' }));
-    expect(screen.queryByText('Couldn’t play this debate.')).not.toBeInTheDocument();
-  });
-
-  it('reloads a failed clip when the picture is tapped, keeping Retry until it plays', () => {
+  it('retries a failed clip from a tap anywhere on the picture, keeping Retry while it still fails', () => {
     render(<DebateMomentsPlayer debateId={DEBATE} label="Debate A" moments={MOMENTS} />);
     const video = videoOf(screen.getByRole('region', { name: 'Debate A' }));
     fireEvent.error(video);
+    expect(screen.getByText('Couldn’t play this moment.')).toBeInTheDocument();
+    // No edges to step with: the whole picture is the one tap.
+    expect(screen.queryByRole('button', { name: 'Previous moment' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Next moment' })).not.toBeInTheDocument();
     // The broken media refuses to play, as a browser's does.
-    mocks.play.mockImplementationOnce(() => Promise.reject(new DOMException('', 'NotSupportedError')));
     mocks.play.mockImplementationOnce(() => Promise.reject(new DOMException('', 'NotSupportedError')));
 
     fireEvent.click(screen.getByRole('button', { name: 'Play' }));
     expect(mocks.load.mock.contexts).toContain(video);
+    fireEvent.error(video);
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
 
-    fireEvent.error(video);
-    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
-    mocks.load.mockClear();
-    fireEvent.click(screen.getByRole('button', { name: 'Previous moment' }));
-    expect(mocks.load.mock.contexts).toContain(video);
-    fireEvent.error(video);
-    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Watch the full debate' }));
+    expect(screen.queryByText('Couldn’t play this debate.')).not.toBeInTheDocument();
   });
 
   it('reloads a failed full debate from where it failed when the picture is tapped', () => {
