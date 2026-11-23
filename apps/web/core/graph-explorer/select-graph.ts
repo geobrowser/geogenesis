@@ -41,13 +41,15 @@ function orderClaims(claims: Candidate[]): Candidate[] {
 
 /**
  * Up to `cap` neighbours, taking one of each kind in priority order per round so no kind floods
- * the graph. Within a kind: claims by band, others by type rank, then API order.
+ * the graph. Within a kind: claims by band, others by type rank, then API order. `topicsLast` is for
+ * hop 2, where nearly every item links back to topics.
  */
 export function pickNeighbours(
   candidates: readonly Candidate[],
   cap: number,
   taken: ReadonlySet<string>,
-  kindFilter: GraphKindFilter
+  kindFilter: GraphKindFilter,
+  topicsLast = false
 ): Candidate[] {
   const seen = new Set<string>();
   const byKind = new Map<GraphKind, Candidate[]>();
@@ -68,7 +70,8 @@ export function pickNeighbours(
             .map(({ item }) => item)
     );
   }
-  const kinds = GRAPH_KINDS.filter(kind => byKind.has(kind));
+  const order = topicsLast ? [...GRAPH_KINDS.filter(kind => kind !== 'topic'), 'topic' as const] : GRAPH_KINDS;
+  const kinds = order.filter(kind => byKind.has(kind));
   const picked: Candidate[] = [];
   for (let round = 0; picked.length < cap && kinds.some(kind => byKind.get(kind)![round]); round++)
     for (const kind of kinds) {
@@ -122,7 +125,7 @@ export function selectGraph({
   let hop2Count = 0;
   for (const parent of nodes.filter(entry => entry.hop === 1)) {
     if (!hop2 || hop2Count >= caps.hop2Total || noExpand.has(parent.node.id)) continue;
-    for (const { node, edge } of pickNeighbours(hop2[parent.node.id] ?? [], caps.hop2Each, taken, kindFilter)) {
+    for (const { node, edge } of pickNeighbours(hop2[parent.node.id] ?? [], caps.hop2Each, taken, kindFilter, true)) {
       if (hop2Count >= caps.hop2Total) break;
       taken.add(node.id);
       hop2Count++;

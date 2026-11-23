@@ -8,7 +8,8 @@ export type LayoutLink = { a: string; b: string; hop: 1 | 2 | 3 };
 export type LayoutSettings = { restLength: Record<1 | 2, number>; repulsion: number; iterations: number };
 
 export const DESKTOP_LAYOUT: LayoutSettings = { restLength: { 1: 360, 2: 170 }, repulsion: 150_000, iterations: 320 };
-export const PHONE_LAYOUT: LayoutSettings = { restLength: { 1: 180, 2: 100 }, repulsion: 40_000, iterations: 320 };
+/** Longer than the design's 180/100: our phone cards carry more text. */
+export const PHONE_LAYOUT: LayoutSettings = { restLength: { 1: 250, 2: 130 }, repulsion: 80_000, iterations: 320 };
 
 /** FNV-1a to [0, 1): seeds positions so the same graph always lays out the same way. */
 export function hash01(text: string): number {

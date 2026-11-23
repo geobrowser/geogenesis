@@ -173,6 +173,22 @@ describe('selectGraph', () => {
     });
     expect(selection.nodes.map(n => n.node.id)).toEqual([centre.id, hub.id]);
   });
+  it('reaches for topics last in hop 2, but still shows one when nothing else is there', () => {
+    const story = node(60, 'story');
+    const person = node(61, 'ent');
+    const selection = selectGraph({
+      centre,
+      neighbours: around([story, person]),
+      hop2: {
+        [story.id]: around([node(62, 'topic'), node(63, 'topic'), node(64, 'src')], story.id),
+        [person.id]: around([node(65, 'topic')], person.id),
+      },
+      crossLinks: [],
+      caps: { ...DESKTOP_GRAPH_CAPS, hop2Each: 1 },
+      kindFilter: 'all',
+    });
+    expect(selection.nodes.filter(n => n.hop === 2).map(n => n.node.id)).toEqual([id(65), id(64)]);
+  });
 });
 
 describe('presentKinds', () => {
