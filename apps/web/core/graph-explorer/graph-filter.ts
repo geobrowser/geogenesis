@@ -7,12 +7,7 @@ import { DEFAULT_EXCLUDE_TYPE_IDS, DEFAULT_INCLUDE_TYPE_IDS, DEFAULT_SPOKE_RELAT
  */
 export type GraphScope = { kind: 'spaces'; spaceIds: readonly string[] } | { kind: 'global' };
 
-/**
- * What may appear on the graph. One object so the defaults live in one place and can later come
- * from a curator setting as well as the URL.
- *
- * `spaceIds` undefined means no space filter. The rest are always set once resolved.
- */
+/** What may appear on the graph. `spaceIds` undefined means no space filter. */
 export type GraphFilter = {
   spaceIds?: string[];
   includeTypeIds: string[];
@@ -26,12 +21,7 @@ export const DEFAULT_GRAPH_FILTER: Omit<GraphFilter, 'spaceIds'> = {
   relationTypeIds: DEFAULT_SPOKE_RELATION_TYPE_IDS,
 };
 
-/**
- * URL overrides, all comma-separated ids:
- * - `spaces` replaces the scope's spaces; `addSpaces` widens it.
- * - `types` replaces the neighbour type allowlist; `excludeTypes` replaces the denylist.
- * - `relations` replaces the relation type allowlist.
- */
+/** URL overrides (comma-separated ids). `spaces` replaces the scope's spaces, `addSpaces` widens them; the rest replace their list. */
 export type GraphFilterOverrides = {
   spaces?: string[];
   addSpaces?: string[];
@@ -62,13 +52,7 @@ export function parseGraphFilterOverrides(params: Pick<URLSearchParams, 'get'>):
   return overrides;
 }
 
-/**
- * Scope + defaults + overrides → the filter every query uses.
- *
- * A `spaces` scope still resolving (`spaceIds` undefined) means "don't filter yet", the same rule as
- * `useTopicSpaceScope`. An override that leaves no ids keeps the default rather than becoming a
- * filter that matches nothing.
- */
+/** Scope + defaults + overrides. An empty include override keeps the default, never a match-nothing filter. */
 export function resolveGraphFilter(scope: GraphScope | null, overrides: GraphFilterOverrides = {}): GraphFilter {
   const scoped = scope?.kind === 'spaces' ? scope.spaceIds : undefined;
   const base = overrides.spaces && overrides.spaces.length > 0 ? overrides.spaces : scoped;

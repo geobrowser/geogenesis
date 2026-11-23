@@ -17,11 +17,7 @@ import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
  */
 export type ClaimResponseBreakdownRow = { label: string; agreePercent: number; total: number };
 
-/**
- * A claim about the centre: its title, the overall agree/disagree, and the vote buttons.
- *
- * Read and voted in the claim's own space (`claim.spaceId`), which is often not the topic's.
- */
+/** Read and voted in the claim's own space (`claim.spaceId`), which is often not the topic's. */
 export function GraphClaimRow({
   claim,
   breakdown: _breakdown,

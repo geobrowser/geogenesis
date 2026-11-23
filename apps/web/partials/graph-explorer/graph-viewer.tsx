@@ -21,12 +21,7 @@ import { GraphCanvas } from './graph-canvas';
 
 export const NO_RELATIONSHIPS_MESSAGE = 'No relationships in the knowledge graph yet.';
 
-/**
- * Hub-and-spoke view of one entity's knowledge-graph relations. Click a node to centre on it.
- *
- * Scope-driven, not topic-driven: the topic view passes its spaces; a global view would pass
- * `{ kind: 'global' }`. `scope` null means it is still resolving and nothing is queried yet.
- */
+/** Hub-and-spoke view of an entity's relations. `scope` null means still resolving: nothing is queried. */
 export function GraphViewer({
   startEntityId,
   scope,

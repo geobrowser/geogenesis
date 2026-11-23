@@ -23,11 +23,8 @@ export type ClaimAbout = {
 export type ClaimsAboutPage = { claims: ClaimAbout[]; endCursor: string | null; hasNextPage: boolean };
 
 /**
- * Claims about an entity: a Claim with a `Topics`, `Related people`, `Related projects`,
- * `Related entities` or `Actors` relation to it. Those relations are written per space, so the
- * relation's space is filtered as well as the claim's.
- *
- * No totalCount: on large topics it took 2–3 s. Callers say "first N" and page.
+ * Claims with an about-relation (CLAIM_ABOUT_PROPERTY_IDS) to the entity. Relations are per space,
+ * so the relation's space is filtered too. No totalCount: it is too slow on large topics.
  */
 const claimsAboutDocument = parse(/* GraphQL */ `
   query GraphClaimsAbout(

@@ -12,12 +12,7 @@ import {
   UNNAMED_SUBTOPIC_PROPERTY_ID,
 } from '~/core/topics/ontology';
 
-/**
- * Ids the graph explorer reads, measured on testnet (GRAPH-EXPLORER-SPIKE.md).
- *
- * Several kinds have more than one Type entity with the same name (Person ×7, Organization ×6), so a
- * kind is a list of ids rather than one.
- */
+/** Several kinds have more than one Type entity of the same name (Person ×7), so a kind is a list of ids. */
 
 export const BROADER_TOPICS_PROPERTY_ID = 'b35bd6d39fb64f3a8aeaf5a9b91b5ef6';
 export const RELATED_PEOPLE_PROPERTY_ID = '5df8e4329cc54f038f854ac82e157ada';

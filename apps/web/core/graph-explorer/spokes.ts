@@ -46,13 +46,8 @@ export function pickEntitySpaceId(
 }
 
 /**
- * Relations → one spoke per neighbour. Only relations that exist in the graph: nothing is inferred.
- *
- * Drops the centre itself, unnamed entities, and any neighbour the type filter rejects (exclude
- * wins). Two relations to the same neighbour, such as the two Subtopics properties or one in each
- * direction, make one spoke with both labels.
- *
- * Order: neighbours the centre points at come first, by the curator's `position`, then by name.
+ * One spoke per named neighbour the filter keeps, merging relations to the same neighbour.
+ * Order: outgoing first, then curator `position`, then name.
  */
 export function buildSpokes(hop: GraphHop, centreId: string, filter: GraphFilter): Spoke[] {
   const centre = normId(centreId);
