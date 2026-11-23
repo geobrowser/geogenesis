@@ -7,7 +7,7 @@ import cx from 'classnames';
 import { CLAIM_BAND_LABELS, type ClaimBand } from '~/core/graph-explorer/claim-band';
 import type { GraphNode } from '~/core/graph-explorer/fetch-graph-neighbourhood';
 import { GRAPH_KINDS, GRAPH_KIND_LABELS, type GraphKind } from '~/core/graph-explorer/graph-kinds';
-import { summaryPercent } from '~/core/graph-explorer/topic-claims-summary';
+import { MAX_STANCE_ROWS, summaryPercent } from '~/core/graph-explorer/topic-claims-summary';
 import { useTopicClaimsSummary } from '~/core/graph-explorer/use-graph-explorer';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -64,7 +64,7 @@ export function TopicClaimsSummary({
   if (summary.isError || !summary.data) {
     return <p className="text-metadata text-grey-04">Couldn’t load how people responded to this topic’s claims.</p>;
   }
-  const { claims, bands } = summary.data;
+  const { claims, bands, truncated } = summary.data;
   const top = claims[0];
   return (
     <section aria-label="How people responded" className="flex flex-col gap-3 rounded-xl bg-grey-01 p-3">
@@ -74,9 +74,10 @@ export function TopicClaimsSummary({
       ) : (
         <>
           <p className="text-metadata text-grey-04">
-            {claims.length < 10 ? 'Only ' : ''}
+            {truncated ? 'At least ' : claims.length < 10 ? 'Only ' : ''}
             {claims.length} {claims.length === 1 ? 'claim' : 'claims'} about this topic{' '}
-            {claims.length === 1 ? 'has' : 'have'} responses in this space so far.
+            {claims.length === 1 ? 'has' : 'have'} responses in this space so far
+            {truncated ? `; these counts cover the first ${MAX_STANCE_ROWS.toLocaleString('en-US')} responses.` : '.'}
           </p>
           <ul className="flex flex-col gap-1">
             {(Object.keys(CLAIM_BAND_LABELS) as ClaimBand[]).map(band => (

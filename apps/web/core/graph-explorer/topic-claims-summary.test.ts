@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { summariseTopicClaims } from './topic-claims-summary';
+import { readStanceRows, summariseTopicClaims } from './topic-claims-summary';
 
 const row = (objectId: string, userId: string, voteType: number) => ({ objectId, userId, voteType, voteKind: 1 });
 
@@ -36,6 +36,28 @@ describe('summariseTopicClaims', () => {
     expect(summariseTopicClaims([], [{ id: 'a', name: 'A' }])).toEqual({
       claims: [],
       bands: { agreed: 0, contested: 0, rejected: 0 },
+      truncated: false,
     });
+  });
+});
+
+describe('readStanceRows', () => {
+  const pages = [
+    { items: [row('a', 'u1', 0), row('b', 'u1', 0)], endCursor: '1', hasNextPage: true },
+    { items: [row('b', 'u2', 1), row('c', 'u1', 0)], endCursor: '2', hasNextPage: true },
+    { items: [row('c', 'u2', 0)], endCursor: null, hasNextPage: false },
+  ];
+  const fetchPage = async (after: string | undefined) => pages[after ? Number(after) : 0];
+
+  it('reads every page when they fit', async () => {
+    const { rows, truncated } = await readStanceRows(fetchPage, 3);
+    expect(truncated).toBe(false);
+    expect(rows).toHaveLength(5);
+  });
+
+  it('stops at the cap and drops the last claim, whose rows may be cut short', async () => {
+    const { rows, truncated } = await readStanceRows(fetchPage, 2);
+    expect(truncated).toBe(true);
+    expect(rows.map(entry => entry.objectId)).toEqual(['a', 'b', 'b']);
   });
 });

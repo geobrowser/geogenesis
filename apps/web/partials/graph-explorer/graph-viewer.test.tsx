@@ -74,16 +74,15 @@ const hooks = vi.hoisted(() => ({
   useGraphNeighbourhood: vi.fn(),
 }));
 
+const EMPTY_SUMMARY = { claims: [], bands: { agreed: 0, contested: 0, rejected: 0 }, truncated: false };
+const topicSummary = vi.hoisted(() => ({ data: null as unknown }));
+
 vi.mock('~/core/graph-explorer/use-graph-explorer', () => ({
   useGraphHop: hooks.useGraphHop,
   useClaimsAbout: hooks.useClaimsAbout,
   usePrefetchGraphHop: () => hooks.prefetch,
   useGraphNeighbourhood: hooks.useGraphNeighbourhood,
-  useTopicClaimsSummary: () => ({
-    isLoading: false,
-    isError: false,
-    data: { claims: [], bands: { agreed: 0, contested: 0, rejected: 0 } },
-  }),
+  useTopicClaimsSummary: () => ({ isLoading: false, isError: false, data: topicSummary.data }),
 }));
 vi.mock('~/core/hooks/use-media-query', () => ({ useMediaQuery: () => false }));
 vi.mock('~/core/sync/use-store', () => ({ useQueryEntity: () => ({ entity: null, isLoading: false }) }));
@@ -153,6 +152,7 @@ function neighbourhood({ centreId, filter }: { centreId: string; filter: unknown
 }
 
 beforeEach(() => {
+  topicSummary.data = EMPTY_SUMMARY;
   hooks.useGraphNeighbourhood.mockImplementation(neighbourhood);
   hooks.useGraphHop.mockImplementation((id: string, filter: unknown) =>
     filter
@@ -340,6 +340,20 @@ describe('GraphViewer', () => {
     render(<Viewer start={TOPIC} scope={scope} />);
     fireEvent.click(screen.getByRole('tab', { name: 'Relationships (2)' }));
     expect(screen.getByText('A news story')).toBeTruthy();
+  });
+
+  it('says a cut-short topic summary is a lower bound', () => {
+    topicSummary.data = {
+      claims: [{ id: 'c', name: 'A claim', positive: 3, negative: 0, band: 'agreed' }],
+      bands: { agreed: 1, contested: 0, rejected: 0 },
+      truncated: true,
+    };
+    render(<Viewer start={TOPIC} scope={{ ...scope, topicId: TOPIC, topicSpaceId: SPACE }} />);
+    expect(
+      screen.getByText(
+        'At least 1 claim about this topic has responses in this space so far; these counts cover the first 5,000 responses.'
+      )
+    ).toBeTruthy();
   });
 
   it('has no Claims tab when the centre is itself a claim', () => {

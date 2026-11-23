@@ -10,7 +10,7 @@ import {
   groupClaimResponseSummaryRows,
 } from '~/core/responses/claim-response-summaries';
 import { responseKindToVoteKind } from '~/core/responses/entity-response';
-import { collectCursorPages } from '~/core/sync/collect-cursor-pages';
+import type { CursorPage } from '~/core/sync/collect-cursor-pages';
 import { normId } from '~/core/utils/norm-id';
 
 import { type ClaimBand, agreePercent, claimBand } from './claim-band';
@@ -22,12 +22,20 @@ export type TopicClaimsSummary = {
   /** Claims about the topic with at least one response in the space, most responses first. */
   claims: SummarisedClaim[];
   bands: Record<ClaimBand, number>;
+  /** The space has more responses than were read, so the counts are lower bounds. */
+  truncated: boolean;
 };
+
+/** About 1.2s of reading; World affairs held 1,600 stance rows in Nov 2026. */
+export const MAX_STANCE_PAGES = 5;
+export const MAX_STANCE_ROWS = MAX_STANCE_PAGES * CLAIM_RESPONSE_SUMMARY_PAGE_SIZE;
+const CLAIM_LOOKUP_SIZE = 1000;
 
 /** Bands and order for the topic's claims, from the space's stance rows (one per user, latest wins). */
 export function summariseTopicClaims(
   rows: readonly ClaimResponseSummaryRow[],
-  claims: ReadonlyArray<{ id: string; name: string }>
+  claims: ReadonlyArray<{ id: string; name: string }>,
+  truncated = false
 ): TopicClaimsSummary {
   const targets = claims.map(claim => ({ entityId: claim.id, responseKind: 'stance' as const }));
   const summaries = groupClaimResponseSummaryRows(targets, [...rows], null);
@@ -40,7 +48,27 @@ export function summariseTopicClaims(
   summarised.sort((a, b) => b.positive + b.negative - (a.positive + a.negative) || a.name.localeCompare(b.name));
   const bands = { agreed: 0, contested: 0, rejected: 0 };
   for (const claim of summarised) bands[claim.band]++;
-  return { claims: summarised, bands };
+  return { claims: summarised, bands, truncated };
+}
+
+/**
+ * Up to `maxPages` pages of stance rows, ordered by claim. When more remain, the last claim's rows
+ * may be cut short, so they are dropped rather than counted wrong.
+ */
+export async function readStanceRows(
+  fetchPage: (after: string | undefined) => Promise<CursorPage<ClaimResponseSummaryRow>>,
+  maxPages = MAX_STANCE_PAGES
+): Promise<{ rows: ClaimResponseSummaryRow[]; truncated: boolean }> {
+  const rows: ClaimResponseSummaryRow[] = [];
+  let after: string | undefined;
+  for (let page = 0; page < maxPages; page++) {
+    const result = await fetchPage(after);
+    rows.push(...result.items);
+    if (!result.hasNextPage || !result.endCursor || result.endCursor === after) return { rows, truncated: false };
+    after = result.endCursor;
+  }
+  const last = rows.at(-1)?.objectId;
+  return { rows: rows.filter(row => row.objectId !== last), truncated: true };
 }
 
 export function summaryPercent(claim: SummarisedClaim) {
@@ -64,7 +92,7 @@ const votedClaimsDocument: TypedDocumentNode<VotedClaimsResponse> = parse(`
   }
 `);
 
-/** Every stance response in `spaceId`, kept only for claims about the topic. Two small queries. */
+/** Stance responses in `spaceId`, up to MAX_STANCE_PAGES, kept only for claims about the topic. */
 export async function fetchTopicClaimsSummary(topicId: string, spaceId: string, signal?: AbortSignal) {
   const filter = {
     spaceId: { is: spaceId },
@@ -72,24 +100,31 @@ export async function fetchTopicClaimsSummary(topicId: string, spaceId: string, 
     voteKind: { is: responseKindToVoteKind('stance') },
     voteType: { in: [0, 1] },
   };
-  const rows = await collectCursorPages(after =>
+  const { rows, truncated } = await readStanceRows(after =>
     Effect.runPromise(getClaimResponseSummaryPage(filter, CLAIM_RESPONSE_SUMMARY_PAGE_SIZE, after, signal))
   );
   const ids = [...new Set(rows.map(row => normId(row.objectId)))];
-  if (ids.length === 0) return summariseTopicClaims([], []);
-  const claims = await Effect.runPromise(
-    graphql({
-      query: votedClaimsDocument,
-      decoder: (response: VotedClaimsResponse) =>
-        (response.entitiesConnection?.nodes ?? []).flatMap(node =>
-          node.name?.trim() ? [{ id: normId(node.id), name: node.name.trim() }] : []
-        ),
-      variables: { ids, topicId, aboutPropertyIds: CLAIM_ABOUT_PROPERTY_IDS, claimTypeId: CLAIM_TYPE_ID },
-      signal,
-    })
+  if (ids.length === 0) return summariseTopicClaims([], [], truncated);
+  const chunks: string[][] = [];
+  for (let i = 0; i < ids.length; i += CLAIM_LOOKUP_SIZE) chunks.push(ids.slice(i, i + CLAIM_LOOKUP_SIZE));
+  const claims = await Promise.all(
+    chunks.map(chunk =>
+      Effect.runPromise(
+        graphql({
+          query: votedClaimsDocument,
+          decoder: (response: VotedClaimsResponse) =>
+            (response.entitiesConnection?.nodes ?? []).flatMap(node =>
+              node.name?.trim() ? [{ id: normId(node.id), name: node.name.trim() }] : []
+            ),
+          variables: { ids: chunk, topicId, aboutPropertyIds: CLAIM_ABOUT_PROPERTY_IDS, claimTypeId: CLAIM_TYPE_ID },
+          signal,
+        })
+      )
+    )
   );
   return summariseTopicClaims(
     rows.map(row => ({ ...row, objectId: normId(row.objectId) })),
-    claims
+    claims.flat(),
+    truncated
   );
 }
