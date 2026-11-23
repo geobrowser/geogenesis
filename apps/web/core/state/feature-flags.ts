@@ -90,6 +90,13 @@ export const featureFlagDefinitions = [
     enabledByDefault: false,
   },
   {
+    id: 'graphExplorer',
+    label: 'Graph explorer',
+    description:
+      'An "Explore graph" link on topic pages, opening a full-screen view of the topic’s knowledge-graph relations and the claims about each entity.',
+    enabledByDefault: false,
+  },
+  {
     id: 'bountiesTab',
     label: 'Bounties',
     description: 'Bounty board, space bounty tabs, and bounty detail surfaces. On by default; testnet only.',
