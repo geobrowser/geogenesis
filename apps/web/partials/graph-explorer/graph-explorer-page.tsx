@@ -7,8 +7,10 @@ import * as React from 'react';
 import { useSearchParams } from 'next/navigation';
 
 import { parseGraphFilterOverrides } from '~/core/graph-explorer/graph-filter';
+import { historyFromUrl } from '~/core/graph-explorer/history';
 import { entitySpaceId, namedSpaceIds } from '~/core/graph-explorer/spokes';
 import { useTopicGraphScope } from '~/core/graph-explorer/use-graph-explorer';
+import { useGraphNavigation } from '~/core/graph-explorer/use-graph-navigation';
 import { useHydrated } from '~/core/hooks/use-hydrated';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { useTopicSpaceScope } from '~/core/topics/use-topic-space-scope';
@@ -38,7 +40,13 @@ export function GraphExplorerPage({ entityId }: { entityId: string }) {
   return (
     <div className="fixed inset-x-0 top-[44px] bottom-0 z-50 flex flex-col overflow-hidden bg-white lg:overflow-y-auto">
       {!hydrated ? null : topicId ? (
-        <TopicGraph entityId={entityId} topicId={topicId} routeSpaceId={routeSpaceId} overrides={overrides} />
+        <TopicGraph
+          entityId={entityId}
+          topicId={topicId}
+          routeSpaceId={routeSpaceId}
+          overrides={overrides}
+          searchKey={searchKey}
+        />
       ) : (
         <GlobalNotAvailable />
       )}
@@ -51,12 +59,17 @@ function TopicGraph({
   topicId,
   routeSpaceId,
   overrides,
+  searchKey,
 }: {
   entityId: string;
   topicId: string;
   routeSpaceId: string | null;
   overrides: ReturnType<typeof parseGraphFilterOverrides>;
+  searchKey: string;
 }) {
+  const params = React.useMemo(() => new URLSearchParams(searchKey), [searchKey]);
+  const history = React.useMemo(() => historyFromUrl(entityId, params), [entityId, params]);
+  const navigate = useGraphNavigation(history, params);
   const topicSpaces = useTopicSpaceScope(routeSpaceId);
   const { entity: topic } = useQueryEntity({ id: topicId, spaceId: routeSpaceId ?? undefined });
   const topicSpaceId =
@@ -89,7 +102,13 @@ function TopicGraph({
         <h1 className="text-metadataMedium text-text">Graph explorer</h1>
       </header>
       <div className="min-h-0 flex-1 px-6 py-6 lg:px-4 lg:py-4">
-        <GraphViewer startEntityId={entityId} scope={scope} overrides={overrides} topicName={topic?.name ?? null} />
+        <GraphViewer
+          history={history}
+          onNavigate={navigate}
+          scope={scope}
+          overrides={overrides}
+          topicName={topic?.name ?? null}
+        />
       </div>
     </>
   );

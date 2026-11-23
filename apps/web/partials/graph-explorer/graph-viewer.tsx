@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import { centreTextInSpace } from '~/core/graph-explorer/centre-text';
 import { type GraphFilterOverrides, type GraphScope, resolveGraphFilter } from '~/core/graph-explorer/graph-filter';
-import { type GraphHistory, goBack, recentre, startGraphHistory } from '~/core/graph-explorer/history';
+import { type GraphHistory, goBack, recentre } from '~/core/graph-explorer/history';
 import {
   SPOKE_CAP_DESKTOP,
   SPOKE_CAP_PHONE,
@@ -14,6 +14,7 @@ import {
 } from '~/core/graph-explorer/spokes';
 import { useClaimsAbout, useGraphHop, usePrefetchGraphHop } from '~/core/graph-explorer/use-graph-explorer';
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
+import { useQueryEntity } from '~/core/sync/use-store';
 import { normId } from '~/core/utils/norm-id';
 
 import { Skeleton } from '~/design-system/skeleton';
@@ -24,24 +25,24 @@ import { GraphCanvas } from './graph-canvas';
 
 /** Hub-and-spoke view of an entity's relations. `scope` null means still resolving: nothing is queried. */
 export function GraphViewer({
-  startEntityId,
+  history,
+  onNavigate,
   scope,
   overrides,
   topicName = null,
 }: {
-  startEntityId: string;
+  /** Where the view is and how it got there; the caller keeps it (the URL, on the page). */
+  history: GraphHistory;
+  onNavigate: (next: GraphHistory) => void;
   scope: GraphScope | null;
   overrides?: GraphFilterOverrides;
   /** For copy only; the topic's id and space are in `scope`. */
   topicName?: string | null;
 }) {
   const filter = React.useMemo(() => (scope ? resolveGraphFilter(scope, overrides) : null), [scope, overrides]);
-  const [history, setHistory] = React.useState<GraphHistory>(() => startGraphHistory(startEntityId));
   const [tab, setTab] = React.useState<EntityPanelTab>('details');
   // Names of entities already seen, for "Back to X" before the previous hop is refetched.
   const [names, setNames] = React.useState<Record<string, string>>({});
-
-  React.useEffect(() => setHistory(startGraphHistory(startEntityId)), [startEntityId]);
 
   const centreId = history.centreId;
   const hop = useGraphHop(centreId, filter);
@@ -63,19 +64,24 @@ export function GraphViewer({
     setNames(current => (current[centreId] === centreName ? current : { ...current, [centreId]: centreName }));
   }, [centreId, hopData]);
 
-  const select = React.useCallback((spoke: Spoke) => {
-    if (spoke.entity.name) setNames(current => ({ ...current, [spoke.entity.id]: spoke.entity.name! }));
-    setHistory(current => recentre(current, spoke.entity.id));
-  }, []);
+  const select = React.useCallback(
+    (spoke: Spoke) => {
+      if (spoke.entity.name) setNames(current => ({ ...current, [spoke.entity.id]: spoke.entity.name! }));
+      onNavigate(recentre(history, spoke.entity.id));
+    },
+    [history, onNavigate]
+  );
 
   const previousId = history.back.at(-1);
+  // After a reload or on a shared link the previous hop was never seen here; the store knows its name.
+  const { entity: previousEntity } = useQueryEntity({ id: previousId ?? '', enabled: Boolean(previousId) });
   const backButton = previousId ? (
     <button
       type="button"
       className="self-start text-metadataMedium text-text underline-offset-2 hover:underline"
-      onClick={() => setHistory(current => goBack(current))}
+      onClick={() => onNavigate(goBack(history))}
     >
-      <span aria-hidden>← </span>Back to {names[previousId] ?? 'previous'}
+      <span aria-hidden>← </span>Back to {names[previousId] ?? previousEntity?.name ?? 'previous'}
     </button>
   ) : null;
 

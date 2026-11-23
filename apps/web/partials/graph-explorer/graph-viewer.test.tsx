@@ -5,6 +5,7 @@ import * as React from 'react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { GraphHop } from '~/core/graph-explorer/fetch-graph-hop';
+import { startGraphHistory } from '~/core/graph-explorer/history';
 import { NEIGHBOUR_KIND_TYPE_IDS, RELATED_PEOPLE_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/graph-explorer/ontology';
 
 import { GraphViewer } from './graph-viewer';
@@ -72,6 +73,7 @@ vi.mock('~/core/graph-explorer/use-graph-explorer', () => ({
   useClaimsAbout: hooks.useClaimsAbout,
   usePrefetchGraphHop: () => hooks.prefetch,
 }));
+vi.mock('~/core/sync/use-store', () => ({ useQueryEntity: () => ({ entity: null, isLoading: false }) }));
 vi.mock('~/core/hooks/use-is-mobile-layout', () => ({ useIsMobileLayout: () => false }));
 vi.mock('~/design-system/prefetch-link', () => ({
   PrefetchLink: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
@@ -116,23 +118,32 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+/** The viewer is controlled; this keeps its history the way the page's URL would. */
+function Viewer({
+  start,
+  ...props
+}: Omit<React.ComponentProps<typeof GraphViewer>, 'history' | 'onNavigate'> & { start: string }) {
+  const [history, setHistory] = React.useState(() => startGraphHistory(start));
+  return <GraphViewer {...props} history={history} onNavigate={setHistory} />;
+}
+
 const scope = { spaceIds: [SPACE], topicId: null, topicSpaceId: null } as const;
 
 describe('GraphViewer', () => {
   it('waits for the scope before asking for anything', () => {
-    render(<GraphViewer startEntityId={TOPIC} scope={null} />);
+    render(<Viewer start={TOPIC} scope={null} />);
     expect(hooks.useGraphHop).toHaveBeenCalledWith(TOPIC, null);
     expect(screen.queryByText('Isaac Herzog')).toBeNull();
   });
 
   it('draws the centre’s relations with their labels', () => {
-    render(<GraphViewer startEntityId={TOPIC} scope={scope} />);
+    render(<Viewer start={TOPIC} scope={scope} />);
     expect(screen.getByRole('button', { name: /Isaac Herzog, Related person/ })).toBeTruthy();
     expect(screen.getAllByText('Related person').length).toBeGreaterThan(0);
   });
 
   it('re-centres on a clicked node, offers Back, and says plainly when a node has no relations', () => {
-    render(<GraphViewer startEntityId={TOPIC} scope={scope} />);
+    render(<Viewer start={TOPIC} scope={scope} />);
     fireEvent.click(screen.getByRole('button', { name: /Isaac Herzog, Related person/ }));
 
     expect(hooks.useGraphHop).toHaveBeenLastCalledWith(PERSON, expect.anything());
@@ -146,7 +157,7 @@ describe('GraphViewer', () => {
   });
 
   it('shows the description, and an honest empty Claims tab', () => {
-    render(<GraphViewer startEntityId={TOPIC} scope={scope} />);
+    render(<Viewer start={TOPIC} scope={scope} />);
     expect(screen.getByText('A topic.')).toBeTruthy();
     fireEvent.click(screen.getByRole('tab', { name: 'Claims (0)' }));
     expect(screen.getByText('No claims in this topic’s spaces are linked to this yet.')).toBeTruthy();
@@ -169,7 +180,7 @@ describe('GraphViewer', () => {
       isFetchingNextPage: false,
       fetchNextPage: vi.fn(),
     });
-    render(<GraphViewer startEntityId={TOPIC} scope={scope} />);
+    render(<Viewer start={TOPIC} scope={scope} />);
     fireEvent.click(screen.getByRole('tab', { name: 'Claims (1+)' }));
     expect(screen.getByText('Hamas must disarm')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Show more claims' })).toBeTruthy();
@@ -181,14 +192,14 @@ describe('GraphViewer', () => {
       isLoading: false,
       isError: false,
     });
-    render(<GraphViewer startEntityId={TOPIC} scope={scope} />);
+    render(<Viewer start={TOPIC} scope={scope} />);
     expect(screen.getByText('This entity isn’t in the knowledge graph.')).toBeTruthy();
   });
 
   it('names the topic when no claims about a re-centred entity carry it', () => {
     render(
-      <GraphViewer
-        startEntityId={TOPIC}
+      <Viewer
+        start={TOPIC}
         scope={{ spaceIds: [SPACE], topicId: TOPIC, topicSpaceId: null }}
         topicName="Israel-Gaza war"
       />
@@ -199,8 +210,8 @@ describe('GraphViewer', () => {
 
   it('keeps the topic lens when the topic has no space scope', () => {
     render(
-      <GraphViewer
-        startEntityId={TOPIC}
+      <Viewer
+        start={TOPIC}
         scope={{ spaceIds: null, topicId: TOPIC, topicSpaceId: null }}
         topicName="Israel-Gaza war"
       />
@@ -237,7 +248,7 @@ describe('GraphViewer', () => {
       };
     });
     // The topic is named only in SPACE, so only `topicSpaceId` can send it to OTHER_SPACE.
-    render(<GraphViewer startEntityId={TOPIC} scope={{ ...scope, topicId: TOPIC, topicSpaceId: OTHER_SPACE }} />);
+    render(<Viewer start={TOPIC} scope={{ ...scope, topicId: TOPIC, topicSpaceId: OTHER_SPACE }} />);
     expect(screen.getByText('As another space describes it.')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: /Isaac Herzog, Related person/ }));
