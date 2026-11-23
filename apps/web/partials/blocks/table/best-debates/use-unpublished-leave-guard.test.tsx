@@ -281,6 +281,22 @@ describe('useUnpublishedLeaveGuard', () => {
     back.mockRestore();
   });
 
+  it('Forward onto the spare entry after a publish: the next Back still leaves in one press', () => {
+    const back = vi.spyOn(window.history, 'back').mockImplementation(() => {});
+    window.history.replaceState(null, '', '/ranking');
+    const { rerender } = render(<Harness active leave={vi.fn()} />);
+    const spare = window.history.state;
+    rerender(<Harness active={false} leave={vi.fn()} />);
+    const base = { rankingLeaveGuardBase: spare.rankingLeaveGuard };
+    // Back to the base carries on; Forward from the page before comes back onto the spare.
+    act(() => window.dispatchEvent(new PopStateEvent('popstate', { state: base })));
+    expect(back).toHaveBeenCalledTimes(1);
+    act(() => window.dispatchEvent(new PopStateEvent('popstate', { state: spare })));
+    act(() => window.dispatchEvent(new PopStateEvent('popstate', { state: base })));
+    expect(back).toHaveBeenCalledTimes(2);
+    back.mockRestore();
+  });
+
   it('a new change after a publish still asks on Back', () => {
     const back = vi.spyOn(window.history, 'back').mockImplementation(() => {});
     const { rerender } = render(<Harness active leave={vi.fn()} />);

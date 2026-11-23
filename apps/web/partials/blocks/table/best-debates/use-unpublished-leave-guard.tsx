@@ -53,10 +53,20 @@ export function useUnpublishedLeaveGuard({
   const baseTokenRef = React.useRef('');
   const pushSentinel = React.useCallback((url: string) => {
     const token = `${Date.now()}-${Math.random()}`;
-    window.history.replaceState({ ...window.history.state, rankingLeaveGuardBase: token }, '');
+    // The entry under the spare is never itself taken for a spare.
+    const { rankingLeaveGuard: _spare, ...base } = window.history.state ?? {};
+    window.history.replaceState({ ...base, rankingLeaveGuardBase: token }, '');
     window.history.pushState({ rankingLeaveGuard: token }, '', url);
     baseTokenRef.current = token;
     sentinelRef.current = true;
+  }, []);
+  /** Takes over the spare entry the browser is on, if it is one (a reload, a remount, Forward). */
+  const adoptSpare = React.useCallback((state: unknown) => {
+    const token = (state as { rankingLeaveGuard?: unknown } | null)?.rankingLeaveGuard;
+    if (typeof token !== 'string') return false;
+    baseTokenRef.current = token;
+    sentinelRef.current = true;
+    return true;
   }, []);
   React.useEffect(() => {
     if (!active) leavingRef.current = false;
@@ -161,14 +171,10 @@ export function useUnpublishedLeaveGuard({
     if (baseTokenRef.current && window.history.state?.rankingLeaveGuardBase === baseTokenRef.current) return;
     hrefRef.current = window.location.href;
   });
-  // A screen that mounts on a spare entry (a reload, or a remount without one) takes it over rather
-  // than stacking another. Runs before the effect below.
+  // Mounting on a spare entry takes it over rather than stacking another. Runs before the effect below.
   React.useEffect(() => {
-    const token = window.history.state?.rankingLeaveGuard;
-    if (typeof token !== 'string') return;
-    baseTokenRef.current = token;
-    sentinelRef.current = true;
-  }, []);
+    adoptSpare(window.history.state);
+  }, [adoptSpare]);
   React.useEffect(() => {
     if (!active || sentinelRef.current) return;
     pushSentinel(window.location.href);
@@ -177,6 +183,8 @@ export function useUnpublishedLeaveGuard({
   React.useEffect(() => {
     const onPopState = (event: PopStateEvent) => {
       if (leavingRef.current) return;
+      // Forward onto the spare entry: it is there to spend again.
+      if (adoptSpare(event.state)) return;
       if (!activeRef.current) {
         if (!sentinelRef.current) return;
         sentinelRef.current = false;
@@ -189,7 +197,7 @@ export function useUnpublishedLeaveGuard({
     };
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
-  }, []);
+  }, [adoptSpare]);
 
   const close = (keepRanking: boolean) => {
     setPending(null);
