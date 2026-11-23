@@ -1,7 +1,7 @@
 'use client';
 
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -30,6 +30,7 @@ import {
   type BreadcrumbItem,
   type ClaimKind,
   type ClaimSummaryModel,
+  type ClaimVoteTarget,
   type EntityLinkKind,
   type EntityLinkRowModel,
   type EntityListSectionModel,
@@ -183,6 +184,8 @@ type ClaimMultiSpaceVotes = {
   totalPositive: number;
   totalNegative: number;
   viewerVote: VoteChoice;
+  /** The viewer's vote in each space (hex id), so a row voting in one space swaps only that vote. */
+  viewerVoteBySpace: Map<string, Exclude<VoteChoice, null>>;
   bySpace: SpaceVoteBucket[];
 };
 
@@ -323,8 +326,7 @@ export function useLiveTopicTemplate({
   const ancestors = useTopicAncestors(entityId, spaceId);
   const { countsByTopicId } = useTopicConnectionCounts([entityId]);
 
-  // Optimistic inline vote state per claim so Agree/Disagree on Topic rows responds immediately.
-  const [localVotes, setLocalVotes] = React.useState<Record<string, VoteChoice>>({});
+  const queryClient = useQueryClient();
 
   // 1. Top-voted AND Best-ranked Claims, Debates, and News stories from Geo's topic/space ranking feed
   const topClaimsQuery = useQuery({
@@ -619,7 +621,13 @@ export function useLiveTopicTemplate({
       for (const entry of activeByKey.values()) {
         let claimAgg = byClaim.get(entry.objectHex);
         if (!claimAgg) {
-          claimAgg = { totalPositive: 0, totalNegative: 0, viewerVote: null, bySpace: [] };
+          claimAgg = {
+            totalPositive: 0,
+            totalNegative: 0,
+            viewerVote: null,
+            viewerVoteBySpace: new Map(),
+            bySpace: [],
+          };
           byClaim.set(entry.objectHex, claimAgg);
         }
         if (entry.isPositive) claimAgg.totalPositive += 1;
@@ -627,6 +635,7 @@ export function useLiveTopicTemplate({
 
         if (personalSpaceId && ID.equals(entry.userId, personalSpaceId)) {
           claimAgg.viewerVote = entry.isPositive ? 'agree' : 'disagree';
+          claimAgg.viewerVoteBySpace.set(entry.spaceHex, claimAgg.viewerVote);
         }
 
         let spaceMap = byClaimSpace.get(entry.objectHex);
@@ -692,7 +701,8 @@ export function useLiveTopicTemplate({
         ]
       : [];
 
-    // Helper to build SplitRows from cross-space votes + optimistic local override
+    // Helper to build SplitRows from cross-space votes. A row's own vote is drawn by its pills
+    // (`TemplateClaimVote`), which swap the viewer's vote in the row's space for the live one.
     const buildSplitForClaim = (
       claimId: string,
       fallbackSpaceName?: string
@@ -708,18 +718,10 @@ export function useLiveTopicTemplate({
       const hex = ID.uuidToHex(claimId);
       const raw = votesQuery.data?.byClaim.get(hex);
       const spaceNames = votesQuery.data?.spaceNameByHex;
-      const hasLocalOverride = Object.prototype.hasOwnProperty.call(localVotes, hex);
-      const userVote: VoteChoice = hasLocalOverride ? localVotes[hex]! : (raw?.viewerVote ?? null);
+      const userVote: VoteChoice = raw?.viewerVote ?? null;
 
-      let pos = raw?.totalPositive ?? 0;
-      let neg = raw?.totalNegative ?? 0;
-
-      if (hasLocalOverride) {
-        if (raw?.viewerVote === 'agree') pos = Math.max(0, pos - 1);
-        if (raw?.viewerVote === 'disagree') neg = Math.max(0, neg - 1);
-        if (userVote === 'agree') pos += 1;
-        if (userVote === 'disagree') neg += 1;
-      }
+      const pos = raw?.totalPositive ?? 0;
+      const neg = raw?.totalNegative ?? 0;
 
       const total = pos + neg;
       const percent = total > 0 ? Math.round((pos / total) * 100) : undefined;
@@ -736,7 +738,6 @@ export function useLiveTopicTemplate({
             percent,
             voterCount: total,
             isEveryone: true,
-            userLabel: userVote ? `You: ${userVote === 'agree' ? 'Agree' : 'Disagree'}` : undefined,
           });
           spaceBuckets.slice(0, 3).forEach((bucket, idx) => {
             const bTotal = bucket.positive + bucket.negative;
@@ -764,13 +765,26 @@ export function useLiveTopicTemplate({
             percent,
             voterCount: total,
             isEveryone: true,
-            userLabel: userVote ? `You: ${userVote === 'agree' ? 'Agree' : 'Disagree'}` : undefined,
           });
         }
       }
 
       return { rows, total, agreeCount: pos, disagreeCount: neg, percent, userVote, isAccepted };
     };
+
+    // The row votes in `voteSpaceId` — the space its link opens, so the vote also shows on that
+    // claim's own page. Counts here are totals across spaces, so the row is told the viewer's vote
+    // in that space from the same query, and swaps only that one (GEO-3819).
+    const refreshVotes = () =>
+      void queryClient.invalidateQueries({ queryKey: ['live-topic-template', 'multi-space-votes'] });
+    const voteTargetFor = (claimId: string, voteSpaceId: string, title: string): ClaimVoteTarget => ({
+      claimId,
+      spaceId: voteSpaceId,
+      title,
+      baselineVote:
+        votesQuery.data?.byClaim.get(ID.uuidToHex(claimId))?.viewerVoteBySpace.get(ID.uuidToHex(voteSpaceId)) ?? null,
+      onSettled: refreshVotes,
+    });
 
     // Count debates per claim ID from the topic's debates so Claim rows show debate counts
     const debateCountByClaimHex = new Map<string, number>();
@@ -804,12 +818,7 @@ export function useLiveTopicTemplate({
         userVote,
         debateCount: debateCount && debateCount > 0 ? debateCount : undefined,
         debatesHref: debateCount && debateCount > 0 ? `${claimHref}/debates` : undefined,
-        onVote: choice => {
-          setLocalVotes(prev => ({ ...prev, [hex]: choice }));
-        },
-        onClearVote: () => {
-          setLocalVotes(prev => ({ ...prev, [hex]: null }));
-        },
+        voteTarget: voteTargetFor(seed.id, seed.spaceId, seed.title),
         split: {
           rows,
           isSplit: !isAccepted,
@@ -839,7 +848,6 @@ export function useLiveTopicTemplate({
     const recentDebates: TopicRecentDebateModel[] = (bestDebatesQuery.data ?? []).slice(0, 8).map(item => {
       const { claimTitle, speakers } = parseDebateTitle(item.title, item.debateClaim?.name);
       const claimId = item.debateClaim?.entityId ?? item.entityId;
-      const claimHex = ID.uuidToHex(claimId);
       const claimSplit = buildSplitForClaim(claimId, item.spaceName);
       const normDebateId = ID.uuidToHex(item.entityId).toLowerCase();
       const slot1Avatar = resolveDebateStillSrc(item.debatePosters?.slot1, normDebateId, 1);
@@ -861,8 +869,10 @@ export function useLiveTopicTemplate({
         agreeCount: claimSplit.agreeCount,
         disagreeCount: claimSplit.disagreeCount,
         userVote: claimSplit.userVote,
-        onVote: choice => setLocalVotes(prev => ({ ...prev, [claimHex]: choice })),
-        onClearVote: () => setLocalVotes(prev => ({ ...prev, [claimHex]: null })),
+        // Only a debate with a claim votes; without one `claimId` is the debate itself.
+        voteTarget: item.debateClaim?.entityId
+          ? voteTargetFor(item.debateClaim.entityId, item.spaceId || spaceId, item.debateClaim.name ?? claimTitle)
+          : undefined,
         participants: [
           {
             name: livePair?.slot1?.name ?? speakers[0],
@@ -1051,8 +1061,8 @@ export function useLiveTopicTemplate({
     entityId,
     hydratedClaimKindByHex,
     linkedEvents,
-    localVotes,
     orderedClaimSeeds,
+    queryClient,
     serverCoverUrl,
     spaceId,
     tweetAuthorsQuery.data,

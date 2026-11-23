@@ -10,6 +10,7 @@ import { formatCompactCount, formatPercentInt } from '../models';
 import { EntityInlineContext, EntityOverflowMenu } from './entity-overflow-menu';
 import { ArrowLeftIcon, ArrowRightIcon, ArrowUpRightIcon, PlayIcon, ThumbDownIcon, ThumbUpIcon } from './icons';
 import { ListRankingHeaderControl, ListRankingWorkspace, type RankableListItem, useListRanking } from './list-ranking';
+import { ClaimVoteBinding, TemplateVoteRows } from './template-claim-vote';
 import { TEMPLATE_CARD_SURFACE } from './template-shell';
 
 export interface RecentDebatesGalleryProps {
@@ -183,9 +184,12 @@ export function RecentDebatesGallery({
           ref={scrollerRef}
           className="-mx-2 flex snap-x snap-mandatory [scrollbar-width:none] items-stretch gap-4 overflow-x-auto px-2 py-2 [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
         >
-          {displayDebates.map(debate => (
-            <RecentDebateGalleryCard key={debate.id} debate={debate} />
-          ))}
+          {/* One geo-chat lookup for every card that votes, rather than one per card. */}
+          <TemplateVoteRows targets={displayDebates.map(debate => debate.voteTarget)}>
+            {displayDebates.map(debate => (
+              <RecentDebateGalleryCard key={debate.id} debate={debate} />
+            ))}
+          </TemplateVoteRows>
         </div>
       </div>
     </section>
@@ -194,15 +198,6 @@ export function RecentDebatesGallery({
 
 function RecentDebateGalleryCard({ debate }: { debate: TopicRecentDebateModel }) {
   const [slot1, slot2] = debate.participants;
-
-  const handleVoteClick = (choice: 'agree' | 'disagree') => {
-    if (!debate.onVote) return;
-    if (debate.userVote === choice && debate.onClearVote) {
-      debate.onClearVote();
-      return;
-    }
-    debate.onVote(choice);
-  };
 
   const mediaContent = (
     <div className="relative flex flex-col overflow-hidden bg-[#18191c]">
@@ -306,58 +301,84 @@ function RecentDebateGalleryCard({ debate }: { debate: TopicRecentDebateModel })
           titleContent
         )}
 
-        {debate.onVote && (
-          <div className="flex items-center gap-1.5 pt-0.5" role="group" aria-label={`Vote on ${debate.claimTitle}`}>
-            <button
-              type="button"
-              aria-pressed={debate.userVote === 'agree'}
-              onClick={() => handleVoteClick('agree')}
-              className={cx(
-                'inline-flex h-7 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-full border px-2.5 text-[13px] font-medium whitespace-nowrap transition-colors',
-                debate.userVote === 'agree'
-                  ? 'border-text bg-text text-white'
-                  : 'border-grey-02 bg-white text-text hover:border-text'
-              )}
-            >
-              <ThumbUpIcon className="size-3.5 shrink-0" />
-              <span>Agree</span>
-              {debate.agreeCount !== undefined && debate.agreeCount > 0 && (
-                <span
-                  className={cx(
-                    'text-[12px] tabular-nums',
-                    debate.userVote === 'agree' ? 'text-white/80' : 'text-grey-04'
-                  )}
+        <ClaimVoteBinding
+          voteTarget={debate.voteTarget}
+          userVote={debate.userVote}
+          agreeCount={debate.agreeCount}
+          disagreeCount={debate.disagreeCount}
+          onVote={debate.onVote}
+          onClearVote={debate.onClearVote}
+        >
+          {vote =>
+            vote && (
+              <>
+                <div
+                  className="flex items-center gap-1.5 pt-0.5"
+                  role="group"
+                  aria-label={`Vote on ${debate.claimTitle}`}
                 >
-                  {formatCompactCount(debate.agreeCount)}
-                </span>
-              )}
-            </button>
-            <button
-              type="button"
-              aria-pressed={debate.userVote === 'disagree'}
-              onClick={() => handleVoteClick('disagree')}
-              className={cx(
-                'inline-flex h-7 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-full border px-2.5 text-[13px] font-medium whitespace-nowrap transition-colors',
-                debate.userVote === 'disagree'
-                  ? 'border-text bg-text text-white'
-                  : 'border-grey-02 bg-white text-text hover:border-text'
-              )}
-            >
-              <ThumbDownIcon className="size-3.5 shrink-0" />
-              <span>Disagree</span>
-              {debate.disagreeCount !== undefined && debate.disagreeCount > 0 && (
-                <span
-                  className={cx(
-                    'text-[12px] tabular-nums',
-                    debate.userVote === 'disagree' ? 'text-white/80' : 'text-grey-04'
-                  )}
-                >
-                  {formatCompactCount(debate.disagreeCount)}
-                </span>
-              )}
-            </button>
-          </div>
-        )}
+                  <button
+                    type="button"
+                    disabled={vote.disabled}
+                    title={vote.titleFor('agree')}
+                    aria-pressed={vote.userVote === 'agree'}
+                    onClick={() => vote.press('agree')}
+                    className={cx(
+                      'inline-flex h-7 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-full border px-2.5 text-[13px] font-medium whitespace-nowrap transition-colors disabled:cursor-default disabled:opacity-60',
+                      vote.userVote === 'agree'
+                        ? 'border-text bg-text text-white'
+                        : 'border-grey-02 bg-white text-text hover:border-text'
+                    )}
+                  >
+                    <ThumbUpIcon className="size-3.5 shrink-0" />
+                    <span>Agree</span>
+                    {vote.agreeCount !== undefined && vote.agreeCount > 0 && (
+                      <span
+                        className={cx(
+                          'text-[12px] tabular-nums',
+                          vote.userVote === 'agree' ? 'text-white/80' : 'text-grey-04'
+                        )}
+                      >
+                        {formatCompactCount(vote.agreeCount)}
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={vote.disabled}
+                    title={vote.titleFor('disagree')}
+                    aria-pressed={vote.userVote === 'disagree'}
+                    onClick={() => vote.press('disagree')}
+                    className={cx(
+                      'inline-flex h-7 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-full border px-2.5 text-[13px] font-medium whitespace-nowrap transition-colors disabled:cursor-default disabled:opacity-60',
+                      vote.userVote === 'disagree'
+                        ? 'border-text bg-text text-white'
+                        : 'border-grey-02 bg-white text-text hover:border-text'
+                    )}
+                  >
+                    <ThumbDownIcon className="size-3.5 shrink-0" />
+                    <span>Disagree</span>
+                    {vote.disagreeCount !== undefined && vote.disagreeCount > 0 && (
+                      <span
+                        className={cx(
+                          'text-[12px] tabular-nums',
+                          vote.userVote === 'disagree' ? 'text-white/80' : 'text-grey-04'
+                        )}
+                      >
+                        {formatCompactCount(vote.disagreeCount)}
+                      </span>
+                    )}
+                  </button>
+                </div>
+                {vote.error && (
+                  <span role="alert" className="text-[12.5px] text-red-01">
+                    {vote.error}
+                  </span>
+                )}
+              </>
+            )
+          }
+        </ClaimVoteBinding>
 
         {debate.split && debate.split.rows.length > 0 && (
           <div className="mt-auto flex items-center justify-between gap-2 border-t border-divider pt-2.5 text-[12.5px] text-grey-04">

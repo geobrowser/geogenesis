@@ -13,9 +13,10 @@ import {
   InlinePagination,
   useEntityActionContext,
 } from './entity-overflow-menu';
-import { CheckCircleIcon, ThumbDownIcon, ThumbUpIcon } from './icons';
+import { CheckCircleIcon } from './icons';
 import { ListRankingHeaderControl, ListRankingWorkspace, type RankableListItem, useListRanking } from './list-ranking';
 import { SplitBars } from './split-bars';
+import { ClaimVoteBinding, ClaimVotePills, TemplateVoteRows } from './template-claim-vote';
 import { TEMPLATE_CARD_SURFACE, TemplateBadge, type TemplateBadgeTone } from './template-shell';
 
 const CLAIM_KIND_TONE: Record<ClaimKind, TemplateBadgeTone> = {
@@ -83,13 +84,12 @@ export function ClaimExplorer({ contestedClaims, agreedClaims, title = 'Claims',
     [activeList]
   );
 
-  if (!hasContested && !hasAgreed) return null;
-
   const displayList = ranking.orderedItems;
   const totalPages = Math.max(1, Math.ceil(displayList.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const startIndex = (safePage - 1) * PAGE_SIZE;
   const visible = displayList.slice(startIndex, startIndex + PAGE_SIZE);
+  if (!hasContested && !hasAgreed) return null;
 
   return (
     <section id="claims" aria-label={title} className={cx('flex flex-col gap-4', className)}>
@@ -185,16 +185,19 @@ export function ClaimExplorer({ contestedClaims, agreedClaims, title = 'Claims',
           </div>
         )}
 
-        <div className="divide-y divide-divider">
-          {visible.map((claim, index) => (
-            <RankedClaimRow
-              key={claim.id}
-              rank={startIndex + index + 1}
-              claim={claim}
-              isAgreed={activeTab === 'agreed'}
-            />
-          ))}
-        </div>
+        {/* One geo-chat lookup for the page of rows that vote, rather than one per row. */}
+        <TemplateVoteRows targets={visible.map(claim => claim.voteTarget)}>
+          <div className="divide-y divide-divider">
+            {visible.map((claim, index) => (
+              <RankedClaimRow
+                key={claim.id}
+                rank={startIndex + index + 1}
+                claim={claim}
+                isAgreed={activeTab === 'agreed'}
+              />
+            ))}
+          </div>
+        </TemplateVoteRows>
 
         {totalPages > 1 && (
           <div className="border-t border-divider px-5 py-2.5">
@@ -231,14 +234,7 @@ function RankedClaimRow({ rank, claim, isAgreed }: { rank: number; claim: ClaimS
     }
   }
 
-  const handleVoteClick = (choice: 'agree' | 'disagree') => {
-    if (!claim.onVote) return;
-    if (claim.userVote === choice && claim.onClearVote) {
-      claim.onClearVote();
-      return;
-    }
-    claim.onVote(choice);
-  };
+  const votes = Boolean(claim.voteTarget || claim.onVote);
 
   const titleNode = (
     <span className="block text-[16px] leading-[22px] font-medium text-pretty text-text transition-colors group-hover/claim:text-[#4c1fd4]">
@@ -271,7 +267,7 @@ function RankedClaimRow({ rank, claim, isAgreed }: { rank: number; claim: ClaimS
             titleNode
           )}
 
-          {(claim.kind || claim.onVote || debateLabel || metaParts.length > 0 || (claim.userVote && !claim.onVote)) && (
+          {(claim.kind || votes || debateLabel || metaParts.length > 0 || (claim.userVote && !votes)) && (
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
               {claim.kind && (
                 <TemplateBadge tone={CLAIM_KIND_TONE[claim.kind]} className="!h-6 !px-2 !text-[12px]">
@@ -279,61 +275,18 @@ function RankedClaimRow({ rank, claim, isAgreed }: { rank: number; claim: ClaimS
                 </TemplateBadge>
               )}
 
-              {claim.onVote && (
-                <div className="flex shrink-0 items-center gap-1.5" role="group" aria-label={`Vote on ${claim.title}`}>
-                  <button
-                    type="button"
-                    aria-pressed={claim.userVote === 'agree'}
-                    onClick={() => handleVoteClick('agree')}
-                    className={cx(
-                      'inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full border px-2.5 text-[13px] font-medium whitespace-nowrap transition-colors',
-                      claim.userVote === 'agree'
-                        ? 'border-text bg-text text-white'
-                        : 'border-grey-02 bg-white text-text hover:border-text'
-                    )}
-                  >
-                    <ThumbUpIcon className="size-3.5 shrink-0" />
-                    <span>Agree</span>
-                    {claim.agreeCount !== undefined && claim.agreeCount > 0 && (
-                      <span
-                        className={cx(
-                          'text-[12px] tabular-nums',
-                          claim.userVote === 'agree' ? 'text-white/80' : 'text-grey-04'
-                        )}
-                      >
-                        {formatCompactCount(claim.agreeCount)}
-                      </span>
-                    )}
-                  </button>
+              <ClaimVoteBinding
+                voteTarget={claim.voteTarget}
+                userVote={claim.userVote}
+                agreeCount={claim.agreeCount}
+                disagreeCount={claim.disagreeCount}
+                onVote={claim.onVote}
+                onClearVote={claim.onClearVote}
+              >
+                {vote => vote && <ClaimVotePills title={claim.title} vote={vote} />}
+              </ClaimVoteBinding>
 
-                  <button
-                    type="button"
-                    aria-pressed={claim.userVote === 'disagree'}
-                    onClick={() => handleVoteClick('disagree')}
-                    className={cx(
-                      'inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full border px-2.5 text-[13px] font-medium whitespace-nowrap transition-colors',
-                      claim.userVote === 'disagree'
-                        ? 'border-text bg-text text-white'
-                        : 'border-grey-02 bg-white text-text hover:border-text'
-                    )}
-                  >
-                    <ThumbDownIcon className="size-3.5 shrink-0" />
-                    <span>Disagree</span>
-                    {claim.disagreeCount !== undefined && claim.disagreeCount > 0 && (
-                      <span
-                        className={cx(
-                          'text-[12px] tabular-nums',
-                          claim.userVote === 'disagree' ? 'text-white/80' : 'text-grey-04'
-                        )}
-                      >
-                        {formatCompactCount(claim.disagreeCount)}
-                      </span>
-                    )}
-                  </button>
-                </div>
-              )}
-
-              {(debateLabel || metaParts.length > 0 || (claim.userVote && !claim.onVote)) && (
+              {(debateLabel || metaParts.length > 0 || (claim.userVote && !votes)) && (
                 <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[13.5px] text-grey-04">
                   {debateLabel &&
                     (claim.debatesHref ? (
@@ -360,7 +313,7 @@ function RankedClaimRow({ rank, claim, isAgreed }: { rank: number; claim: ClaimS
                       <span>{part}</span>
                     </React.Fragment>
                   ))}
-                  {claim.userVote && !claim.onVote && (
+                  {claim.userVote && !votes && (
                     <>
                       {(debateLabel || metaParts.length > 0) && <span aria-hidden>·</span>}
                       <span className="font-medium text-text">

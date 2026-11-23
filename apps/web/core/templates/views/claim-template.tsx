@@ -2,7 +2,6 @@
 
 import * as React from 'react';
 
-import cx from 'classnames';
 import Link from 'next/link';
 
 import {
@@ -17,6 +16,8 @@ import {
 import {
   AddClaimPopover,
   CheckCircleIcon,
+  ClaimVoteBinding,
+  ClaimVotePills,
   EntityContextAndDisputes,
   EntityContextTogglePill,
   EntityInlineContext,
@@ -33,8 +34,7 @@ import {
   TemplateBadge,
   type TemplateBadgeTone,
   TemplateShell,
-  ThumbDownIcon,
-  ThumbUpIcon,
+  TemplateVoteRows,
   TopicImagePills,
   VoteBox,
   useListRanking,
@@ -387,9 +387,12 @@ function SubClaimGroupSection({
       />
 
       <div className={`divide-y divide-divider overflow-hidden ${TEMPLATE_CARD_SURFACE}`}>
-        {visibleItems.map((subClaim, idx) => (
-          <SubClaimRow key={subClaim.id} rank={startIndex + idx + 1} subClaim={subClaim} />
-        ))}
+        {/* One geo-chat lookup for the page of sub-claims, rather than one per row. */}
+        <TemplateVoteRows targets={visibleItems.map(subClaim => subClaim.voteTarget)}>
+          {visibleItems.map((subClaim, idx) => (
+            <SubClaimRow key={subClaim.id} rank={startIndex + idx + 1} subClaim={subClaim} />
+          ))}
+        </TemplateVoteRows>
         {totalPages > 1 && (
           <div className="px-5 py-3">
             <InlinePagination
@@ -412,15 +415,6 @@ function SubClaimRow({ rank, subClaim }: { rank: number; subClaim: SubClaimModel
     totalVotes !== undefined && totalVotes > 0
       ? `${formatCompactCount(totalVotes)} ${totalVotes === 1 ? 'vote' : 'votes'}`
       : '0 votes';
-
-  const handleVoteClick = (choice: 'agree' | 'disagree') => {
-    if (!subClaim.onVote) return;
-    if (subClaim.userVote === choice && subClaim.onClearVote) {
-      subClaim.onClearVote();
-      return;
-    }
-    subClaim.onVote(choice);
-  };
 
   return (
     <article className="flex flex-col gap-3 px-5 py-4 transition-colors hover:bg-grey-01/40 @[760px]:flex-row @[760px]:items-center @[760px]:justify-between @[760px]:gap-6">
@@ -456,59 +450,16 @@ function SubClaimRow({ rank, subClaim }: { rank: number; subClaim: SubClaimModel
               </TemplateBadge>
             )}
 
-            {subClaim.onVote && (
-              <div className="inline-flex items-center gap-1.5" role="group" aria-label={`Vote on ${subClaim.title}`}>
-                <button
-                  type="button"
-                  aria-pressed={subClaim.userVote === 'agree'}
-                  onClick={() => handleVoteClick('agree')}
-                  className={cx(
-                    'inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full border px-2.5 text-[13px] font-medium whitespace-nowrap transition-colors',
-                    subClaim.userVote === 'agree'
-                      ? 'border-text bg-text text-white'
-                      : 'border-grey-02 bg-white text-text hover:border-text'
-                  )}
-                >
-                  <ThumbUpIcon className="size-3.5 shrink-0" />
-                  <span>Agree</span>
-                  {subClaim.agreeCount !== undefined && subClaim.agreeCount > 0 && (
-                    <span
-                      className={cx(
-                        'text-[12px] tabular-nums',
-                        subClaim.userVote === 'agree' ? 'text-white/80' : 'text-grey-04'
-                      )}
-                    >
-                      {formatCompactCount(subClaim.agreeCount)}
-                    </span>
-                  )}
-                </button>
-
-                <button
-                  type="button"
-                  aria-pressed={subClaim.userVote === 'disagree'}
-                  onClick={() => handleVoteClick('disagree')}
-                  className={cx(
-                    'inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full border px-2.5 text-[13px] font-medium whitespace-nowrap transition-colors',
-                    subClaim.userVote === 'disagree'
-                      ? 'border-text bg-text text-white'
-                      : 'border-grey-02 bg-white text-text hover:border-text'
-                  )}
-                >
-                  <ThumbDownIcon className="size-3.5 shrink-0" />
-                  <span>Disagree</span>
-                  {subClaim.disagreeCount !== undefined && subClaim.disagreeCount > 0 && (
-                    <span
-                      className={cx(
-                        'text-[12px] tabular-nums',
-                        subClaim.userVote === 'disagree' ? 'text-white/80' : 'text-grey-04'
-                      )}
-                    >
-                      {formatCompactCount(subClaim.disagreeCount)}
-                    </span>
-                  )}
-                </button>
-              </div>
-            )}
+            <ClaimVoteBinding
+              voteTarget={subClaim.voteTarget}
+              userVote={subClaim.userVote}
+              agreeCount={subClaim.agreeCount}
+              disagreeCount={subClaim.disagreeCount}
+              onVote={subClaim.onVote}
+              onClearVote={subClaim.onClearVote}
+            >
+              {vote => vote && <ClaimVotePills title={subClaim.title} vote={vote} />}
+            </ClaimVoteBinding>
 
             {subClaim.debateCount !== undefined && subClaim.debateCount > 0 && (
               <DebateCountLink count={subClaim.debateCount} href={subClaim.debatesHref} />

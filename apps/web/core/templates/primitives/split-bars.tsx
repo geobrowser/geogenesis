@@ -97,7 +97,9 @@ export function SplitBars({ rows, density = 'compact', className }: SplitBarsPro
               {isFull && row.voterCount !== undefined && (
                 <span className="text-[14px] text-grey-04">({formatCompactCount(row.voterCount)})</span>
               )}
-              {row.userLabel && (
+              {/* Full density only: the compact grid's last column is 36px, so the label spilled over the
+                  bar and the next column (GEO-3819). Compact rows sit beside pills that show the vote. */}
+              {isFull && row.userLabel && (
                 <span className="rounded-md bg-grey-01 px-2 py-0.5 text-[13px] font-medium text-text">
                   {row.userLabel}
                 </span>

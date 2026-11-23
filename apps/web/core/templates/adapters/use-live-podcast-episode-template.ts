@@ -21,7 +21,6 @@ import type {
   PodcastTopicChipModel,
   SourceQuoteModel,
   TemplateDataSource,
-  VoteChoice,
 } from '../models';
 import {
   TEMPLATE_ONTOLOGY,
@@ -79,7 +78,6 @@ export function useLivePodcastEpisodeTemplate({
 }): TemplateDataSource<PodcastEpisodeTemplateModel> {
   const { entity, isLoading } = useQueryEntity({ id: entityId, spaceId });
   const { space } = useSpace(spaceId);
-  const [localVotes, setLocalVotes] = React.useState<Record<string, VoteChoice>>({});
 
   const podcastRelations = React.useMemo(
     () => readEntityRelations(entity, TEMPLATE_ONTOLOGY.PODCAST_PROPERTY_ID),
@@ -279,11 +277,10 @@ export function useLivePodcastEpisodeTemplate({
         const summary = responseBatch.data?.get(
           claimResponseTargetKey({ entityId: rel.toEntity.id, responseKind: 'stance' })
         );
-        const localChoice = localVotes[claimHex] ?? null;
-        const basePos = summary?.counts.positive ?? 0;
-        const baseNeg = summary?.counts.negative ?? 0;
-        const pos = basePos + (localChoice === 'agree' ? 1 : 0);
-        const neg = baseNeg + (localChoice === 'disagree' ? 1 : 0);
+        const pos = summary?.counts.positive ?? 0;
+        const neg = summary?.counts.negative ?? 0;
+        // The space the row links to and votes in, so a vote shows on the claim's own page.
+        const claimSpaceId = claimEntity ? resolveEntitySpaceId(claimEntity, spaceId) : (rel.toSpaceId ?? spaceId);
         const total = pos + neg;
         const pct = total > 0 ? Math.round((pos / total) * 100) : 0;
         const isAccepted = total >= 2 && (pct >= 75 || pct <= 25);
@@ -295,9 +292,12 @@ export function useLivePodcastEpisodeTemplate({
           overallPercent: total > 0 ? pct : undefined,
           agreeCount: pos,
           disagreeCount: neg,
-          userVote: localChoice,
-          onVote: (choice: Exclude<VoteChoice, null>) => setLocalVotes(prev => ({ ...prev, [claimHex]: choice })),
-          onClearVote: () => setLocalVotes(prev => ({ ...prev, [claimHex]: null })),
+          voteTarget: {
+            claimId: rel.toEntity.id,
+            spaceId: claimSpaceId,
+            title: claimTitle,
+            entity: claimEntity ?? null,
+          },
           split: {
             rows:
               total > 0
@@ -315,10 +315,7 @@ export function useLivePodcastEpisodeTemplate({
             isSplit: !isAccepted,
             totalVotes: total > 0 ? total : undefined,
           },
-          href: NavUtils.toEntity(
-            claimEntity ? resolveEntitySpaceId(claimEntity, spaceId) : (rel.toSpaceId ?? spaceId),
-            rel.toEntity.id
-          ),
+          href: NavUtils.toEntity(claimSpaceId, rel.toEntity.id),
         };
       })
       .filter((item): item is NonNullable<typeof item> => item !== null)
@@ -423,7 +420,6 @@ export function useLivePodcastEpisodeTemplate({
     hostRelations,
     hydratedById,
     listenOnRelations,
-    localVotes,
     podcastRelations,
     quoteRelations,
     responseBatch.data,

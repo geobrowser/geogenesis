@@ -98,7 +98,6 @@ export function useLiveClaimTemplate({
 }): TemplateDataSource<ClaimTemplateModel> {
   const { entity, isLoading: isEntityLoading } = useQueryEntity({ id: entityId, spaceId });
   const { space } = useSpace(spaceId);
-  const [localSubClaimVotes, setLocalSubClaimVotes] = React.useState<Record<string, VoteChoice>>({});
 
   const rowQuery = useDebateClaims(spaceId, [entityId], true);
   const row: DebateClaim | null = rowQuery.data?.claims.find(claim => claim.claim_entity_id === entityId) ?? null;
@@ -217,9 +216,19 @@ export function useLiveClaimTemplate({
   // Collect all subclaim IDs (Supporting, Opposing, Related)
   const subClaimSeedList = React.useMemo(() => {
     if (!entity) return [];
-    const byId = new Map<string, { id: string; title: string; kind?: ClaimKind; stance?: ClaimStance; href: string }>();
+    const byId = new Map<
+      string,
+      { id: string; title: string; kind?: ClaimKind; stance?: ClaimStance; href: string; spaceId: string }
+    >();
 
-    const upsert = (entry: { id: string; title: string; kind?: ClaimKind; stance?: ClaimStance; href: string }) => {
+    const upsert = (entry: {
+      id: string;
+      title: string;
+      kind?: ClaimKind;
+      stance?: ClaimStance;
+      href: string;
+      spaceId: string;
+    }) => {
       if (ID.equals(entry.id, entity.id)) return;
       const key = ID.uuidToHex(entry.id);
       const existing = byId.get(key);
@@ -242,6 +251,7 @@ export function useLiveClaimTemplate({
         kind: readClaimKind(c.values),
         stance: 'supports',
         href: NavUtils.toEntity(resolveEntitySpaceId(c, spaceId), c.id),
+        spaceId: resolveEntitySpaceId(c, spaceId),
       });
     }
     for (const c of incomingOpposingClaims) {
@@ -252,6 +262,7 @@ export function useLiveClaimTemplate({
         kind: readClaimKind(c.values),
         stance: 'opposes',
         href: NavUtils.toEntity(resolveEntitySpaceId(c, spaceId), c.id),
+        spaceId: resolveEntitySpaceId(c, spaceId),
       });
     }
 
@@ -279,6 +290,7 @@ export function useLiveClaimTemplate({
         title: rel.toEntity.name,
         stance: 'supports',
         href: NavUtils.toEntity(rel.toSpaceId ?? spaceId, rel.toEntity.id),
+        spaceId: rel.toSpaceId ?? spaceId,
       });
     }
     for (const rel of outgoingOpposes) {
@@ -288,6 +300,7 @@ export function useLiveClaimTemplate({
         title: rel.toEntity.name,
         stance: 'opposes',
         href: NavUtils.toEntity(rel.toSpaceId ?? spaceId, rel.toEntity.id),
+        spaceId: rel.toSpaceId ?? spaceId,
       });
     }
     for (const rel of outgoingAddresses) {
@@ -297,6 +310,7 @@ export function useLiveClaimTemplate({
         title: rel.toEntity.name,
         stance: 'addresses',
         href: NavUtils.toEntity(rel.toSpaceId ?? spaceId, rel.toEntity.id),
+        spaceId: rel.toSpaceId ?? spaceId,
       });
     }
 
@@ -385,11 +399,8 @@ export function useLiveClaimTemplate({
         const batch = subClaimResponseBatch.data?.get(
           claimResponseTargetKey({ entityId: item.id, responseKind: 'stance' })
         );
-        const localChoice = localSubClaimVotes[hex] ?? null;
-        const basePos = batch?.counts.positive ?? 0;
-        const baseNeg = batch?.counts.negative ?? 0;
-        const pos = basePos + (localChoice === 'agree' ? 1 : 0);
-        const neg = baseNeg + (localChoice === 'disagree' ? 1 : 0);
+        const pos = batch?.counts.positive ?? 0;
+        const neg = batch?.counts.negative ?? 0;
         const total = pos + neg;
         const pct = total > 0 ? Math.round((pos / total) * 100) : undefined;
 
@@ -400,9 +411,8 @@ export function useLiveClaimTemplate({
           stance: item.stance,
           agreeCount: pos,
           disagreeCount: neg,
-          userVote: localChoice,
-          onVote: (choice: Exclude<VoteChoice, null>) => setLocalSubClaimVotes(prev => ({ ...prev, [hex]: choice })),
-          onClearVote: () => setLocalSubClaimVotes(prev => ({ ...prev, [hex]: null })),
+          // Votes in the space the row links to, so the vote shows on the sub-claim's own page.
+          voteTarget: { claimId: item.id, spaceId: item.spaceId, title: item.title },
           split: {
             rows:
               total > 0 && pct !== undefined
@@ -646,7 +656,6 @@ export function useLiveClaimTemplate({
     entityId,
     hydratedSubClaimKindByHex,
     incomingSupportingQuotes,
-    localSubClaimVotes,
     record.claimRows,
     record.claimsTotal,
     record.debateRows,
