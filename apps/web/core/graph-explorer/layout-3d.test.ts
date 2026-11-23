@@ -1,0 +1,90 @@
+import { describe, expect, it } from 'vitest';
+
+import {
+  DESKTOP_LAYOUT,
+  PHONE_LAYOUT,
+  type Vec3,
+  easeInOutCubic,
+  fitDistance,
+  hash01,
+  project,
+  simulateLayout,
+} from './layout-3d';
+
+const ids = Array.from({ length: 41 }, (_, i) => `n${i}`);
+const links = ids
+  .slice(1)
+  .map((id, i) => ({ a: i < 14 ? 'n0' : `n${1 + (i % 14)}`, b: id, hop: (i < 14 ? 1 : 2) as 1 | 2 }));
+
+describe('simulateLayout', () => {
+  it('is deterministic and pins the centre at the origin', () => {
+    const run = () => simulateLayout({ ids, links, centreId: 'n0', previous: new Map(), settings: DESKTOP_LAYOUT });
+    const first = run();
+    expect(first).toEqual(run());
+    expect(first.get('n0')).toEqual([0, 0, 0]);
+  });
+
+  it('puts hop-1 nodes near their rest length from the centre, nearer on phone', () => {
+    const median = (settings: typeof DESKTOP_LAYOUT) => {
+      const p = simulateLayout({ ids, links, centreId: 'n0', previous: new Map(), settings });
+      const d = ids
+        .slice(1, 15)
+        .map(id => Math.hypot(...p.get(id)!))
+        .sort((a, b) => a - b);
+      return d[7];
+    };
+    const desktop = median(DESKTOP_LAYOUT);
+    expect(desktop).toBeGreaterThan(200);
+    expect(desktop).toBeLessThan(900);
+    expect(median(PHONE_LAYOUT)).toBeLessThan(desktop);
+  });
+
+  it('starts a node already on screen where it is, recentred on the new centre', () => {
+    const previous = new Map<string, Vec3>([
+      ['n0', [100, 0, 0]],
+      ['n1', [500, 0, 0]],
+    ]);
+    const p = simulateLayout({
+      ids: ['n1', 'n0'],
+      links: [{ a: 'n1', b: 'n0', hop: 1 }],
+      centreId: 'n1',
+      previous,
+      settings: { ...DESKTOP_LAYOUT, iterations: 0 },
+    });
+    expect(p.get('n0')).toEqual([-400, 0, 0]);
+  });
+
+  it('lays out the design’s largest graph quickly', () => {
+    const start = performance.now();
+    simulateLayout({ ids, links, centreId: 'n0', previous: new Map(), settings: DESKTOP_LAYOUT });
+    expect(performance.now() - start).toBeLessThan(500);
+  });
+});
+
+describe('project', () => {
+  it('draws the origin at the middle and shrinks with distance', () => {
+    const view = { yaw: 0, pitch: 0, distance: 1000, width: 800, height: 600 };
+    expect(project([0, 0, 0], view)).toMatchObject({ x: 400, y: 300 });
+    expect(project([0, 0, 500], view).scale).toBeLessThan(project([0, 0, -500], view).scale);
+  });
+
+  it('stretches vertically on portrait screens', () => {
+    const portrait = { yaw: 0, pitch: 0, distance: 1000, width: 390, height: 800 };
+    expect(project([0, 100, 0], portrait).y - 400).toBeCloseTo(90 * 1.45);
+  });
+});
+
+describe('helpers', () => {
+  it('fits distance within the design’s bounds', () => {
+    expect(fitDistance([[0, 0, 0]], 1280, 860, false)).toBe(700);
+    expect(fitDistance([[5000, 5000, 0]], 390, 844, true)).toBe(2600);
+  });
+
+  it('hashes to [0, 1) and eases from 0 to 1', () => {
+    expect(hash01('a')).toBe(hash01('a'));
+    expect(hash01('a')).toBeGreaterThanOrEqual(0);
+    expect(hash01('a')).toBeLessThan(1);
+    expect(easeInOutCubic(0)).toBe(0);
+    expect(easeInOutCubic(1)).toBe(1);
+  });
+});
