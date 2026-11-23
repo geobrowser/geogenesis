@@ -65,12 +65,25 @@ export const SOCIAL_POST_TEMPLATE_TYPE_IDS: readonly string[] = [
  * Precedence-ordered registry of entity templates.
  *
  * Narrower, product-owned record types come first:
- *   claim > topic > event > news-story > source > post > person
+ *   event > claim > topic > news-story > podcast > episode > source > post > person
+ *
+ * Event sits above Claim because every News event in the graph is also typed Claim, and the Event
+ * template is the page those entities are written for (GEO-3819). Event is a v2 template, so with
+ * the flag off (and in every `includeV2: false` caller) a dual-typed entity still resolves to Claim.
  *
  * Every layer (server layout/route, client browse dispatch, space-read gate, analytics) reads
  * precedence from this list rather than duplicating `if` chains.
  */
 export const ENTITY_TEMPLATE_REGISTRY: readonly EntityTemplateDefinition[] = [
+  {
+    id: 'event',
+    label: 'Event',
+    typeIds: [TEMPLATE_ONTOLOGY.NEWS_EVENT_TYPE_ID],
+    keepInEditMode: false,
+    requiresSpaceCheck: false,
+    requiresV2Flag: true,
+    contentMaxWidth: 840,
+  },
   {
     id: 'claim',
     label: 'Claim',
@@ -88,15 +101,6 @@ export const ENTITY_TEMPLATE_REGISTRY: readonly EntityTemplateDefinition[] = [
     requiresSpaceCheck: false,
     requiresV2Flag: false,
     contentMaxWidth: 1180,
-  },
-  {
-    id: 'event',
-    label: 'Event',
-    typeIds: [TEMPLATE_ONTOLOGY.NEWS_EVENT_TYPE_ID],
-    keepInEditMode: false,
-    requiresSpaceCheck: false,
-    requiresV2Flag: true,
-    contentMaxWidth: 840,
   },
   {
     id: 'news-story',

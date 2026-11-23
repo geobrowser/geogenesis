@@ -67,6 +67,17 @@ describe('ENTITY_TEMPLATE_REGISTRY', () => {
     ).toBe('topic');
   });
 
+  // Every News event in the graph is also typed Claim (GEO-3819). They are written for the Event page,
+  // so Event wins once v2 is on; with v2 off they keep the Claim page they had.
+  it('gives Event precedence over Claim for an entity typed both', () => {
+    const dualTyped = [{ id: CLAIM_TYPE_ID }, { id: ContentIds.NEWS_EVENT_TYPE }];
+
+    expect(resolveEntityTemplateFromTypes(dualTyped, { includeV2: true })?.id).toBe('event');
+    expect(resolveEntityTemplateFromTypes([...dualTyped].reverse(), { includeV2: true })?.id).toBe('event');
+    expect(resolveEntityTemplateFromTypes(dualTyped)?.id).toBe('claim');
+    expect(resolveEntityTemplateFromTypes([{ id: CLAIM_TYPE_ID }], { includeV2: true })?.id).toBe('claim');
+  });
+
   it('matches dashed and undashed UUID forms', () => {
     const dashedNews = `${NEWS_STORY_TYPE_ID.slice(0, 8)}-${NEWS_STORY_TYPE_ID.slice(8, 12)}-${NEWS_STORY_TYPE_ID.slice(12, 16)}-${NEWS_STORY_TYPE_ID.slice(16, 20)}-${NEWS_STORY_TYPE_ID.slice(20)}`;
     expect(resolveEntityTemplateFromTypes([{ id: dashedNews }], { includeV2: true })?.id).toBe('news-story');
@@ -74,9 +85,9 @@ describe('ENTITY_TEMPLATE_REGISTRY', () => {
 
   it('exposes consistent metadata for every registered template', () => {
     expect(ENTITY_TEMPLATE_REGISTRY.map(entry => entry.id)).toEqual([
+      'event',
       'claim',
       'topic',
-      'event',
       'news-story',
       'podcast',
       'episode',

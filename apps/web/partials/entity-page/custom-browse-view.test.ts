@@ -1,4 +1,4 @@
-import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { describe, expect, it } from 'vitest';
 
@@ -136,6 +136,17 @@ describe('customBrowseView', () => {
 
     expect(view({ entity: { types: [{ id: NEWS_STORY_TYPE_ID }] }, enableV2Templates: true })).toBe('news-story');
     expect(view({ entity: { types: [{ id: OFFICIAL_DOCUMENT_TYPE_ID }] }, enableV2Templates: true })).toBe('source');
+  });
+
+  // GEO-3819: News events are all typed Claim too, and open as events once v2 is on.
+  it('opens an entity typed Claim and News event as an event with v2 on', () => {
+    const entity = { types: [CLAIM_TYPE, { id: ContentIds.NEWS_EVENT_TYPE }] };
+
+    expect(view({ entity, enableV2Templates: true })).toBe('event');
+    expect(view({ entity })).toBe('claim');
+    expect(
+      needsSpaceForView({ entity: { types: [...entity.types, PERSON] }, isEditing: false, enableV2Templates: true })
+    ).toBe(false);
   });
 
   it('falls back to generic while editing a v2 template', () => {
