@@ -4,7 +4,7 @@ import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
-import { useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 
 import { parseGraphFilterOverrides } from '~/core/graph-explorer/graph-filter';
 import { historyFromUrl } from '~/core/graph-explorer/history';
@@ -25,8 +25,11 @@ import { GraphViewer } from './graph-viewer';
  * Full-screen shell under the app navbar (which keeps search and Log in), over the sidebar and page
  * chrome. Desktop scrolls the panel only; narrower screens scroll the whole view.
  */
-export function GraphExplorerPage({ entityId }: { entityId: string }) {
+export function GraphExplorerPage({ entityId: routeEntityId }: { entityId: string }) {
   const searchParams = useSearchParams();
+  // Hops change the path with the history API, which leaves the route's own param on the first centre.
+  const pathCentre = usePathname()?.split('/').at(-1);
+  const entityId = pathCentre && IdUtils.isValid(pathCentre) ? normId(pathCentre) : routeEntityId;
   const topicParam = searchParams.get('topic');
   const topicId = topicParam && IdUtils.isValid(topicParam) ? normId(topicParam) : null;
   const spaceParam = searchParams.get('space');

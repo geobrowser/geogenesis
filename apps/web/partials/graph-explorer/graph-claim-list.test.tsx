@@ -9,6 +9,7 @@ import { GraphClaimList } from './graph-claim-list';
 const mocks = vi.hoisted(() => ({
   batches: [] as Array<{ spaceId: string; entityIds: string[] }>,
   settled: new Set<string>(),
+  failed: new Set<string>(),
 }));
 
 vi.mock('~/core/responses/use-claim-response-summaries', async () => {
@@ -26,7 +27,7 @@ vi.mock('~/core/responses/use-claim-response-summaries', async () => {
     }) => {
       mocks.batches.push({ spaceId, entityIds: targets.map(target => target.entityId) });
       const settled = mocks.settled.has(spaceId);
-      return { isSuccess: settled, isPlaceholderData: false, isError: false };
+      return { isSuccess: settled, isPlaceholderData: false, isError: mocks.failed.has(spaceId) };
     },
   };
 });
@@ -39,7 +40,7 @@ vi.mock('./graph-claim-row', async () => {
     GraphClaimRow: ({ claim }: { claim: { id: string; name: string } }) => {
       const batch = useClaimResponseBatchState();
       return (
-        <li data-testid="row" data-ready={String(batch.managed && batch.ready)}>
+        <li data-testid="row" data-managed={String(batch.managed)} data-ready={String(batch.managed && batch.ready)}>
           {claim.name}
         </li>
       );
@@ -55,6 +56,7 @@ afterEach(() => {
   cleanup();
   mocks.batches.length = 0;
   mocks.settled.clear();
+  mocks.failed.clear();
 });
 
 describe('GraphClaimList', () => {
@@ -78,5 +80,14 @@ describe('GraphClaimList', () => {
     const [inA, inB] = screen.getAllByTestId('row');
     expect(inA.dataset.ready).toBe('true');
     expect(inB.dataset.ready).toBe('false');
+  });
+
+  it('lets a row read its own responses after its space’s batch failed', () => {
+    mocks.failed.add(B);
+    render(<GraphClaimList pages={[[claim(1, A), claim(2, B)]]} />);
+
+    const [inA, inB] = screen.getAllByTestId('row');
+    expect(inA.dataset.managed).toBe('true');
+    expect(inB.dataset.managed).toBe('false');
   });
 });

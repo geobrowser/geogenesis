@@ -25,49 +25,66 @@ export function GraphClaimList({ pages }: { pages: ClaimAbout[][] }) {
 }
 
 function ClaimPage({ claims }: { claims: ClaimAbout[] }) {
-  const spaceIds = React.useMemo(() => [...new Set(claims.map(claim => claim.spaceId))], [claims]);
-  const [ready, setReady] = React.useState<Record<string, boolean>>({});
-  const onReady = React.useCallback(
-    (spaceId: string, value: boolean) =>
-      setReady(current => (current[spaceId] === value ? current : { ...current, [spaceId]: value })),
-    []
-  );
-
+  const { status, batches } = useClaimSpaceBatches(claims);
   return (
     <>
-      {spaceIds.map(spaceId => (
-        <SpaceBatch
-          key={spaceId}
-          spaceId={spaceId}
-          claimIds={claims.filter(claim => claim.spaceId === spaceId).map(claim => claim.id)}
-          onReady={onReady}
-        />
-      ))}
+      {batches}
       {claims.map(claim => (
-        <ClaimResponseBatchBoundary key={claim.id} ready={ready[claim.spaceId] ?? false}>
+        <ClaimBatchRow key={claim.id} status={status[claim.spaceId] ?? 'pending'}>
           <GraphClaimRow claim={claim} />
-        </ClaimResponseBatchBoundary>
+        </ClaimBatchRow>
       ))}
     </>
   );
 }
 
-/** A failed batch counts as settled, so its rows show "Responses unavailable". */
+export type ClaimBatchStatus = 'pending' | 'ready' | 'failed';
+
+/**
+ * Wraps a claim's controls in its space's batch. After a failed batch the boundary is dropped, so
+ * the row reads its own counts and held side instead of voting against an unknown one.
+ */
+export function ClaimBatchRow({ status, children }: { status: ClaimBatchStatus; children: React.ReactNode }) {
+  if (status === 'failed') return <>{children}</>;
+  return <ClaimResponseBatchBoundary ready={status === 'ready'}>{children}</ClaimResponseBatchBoundary>;
+}
+
+/** One response batch per claim space; `batches` must be rendered for them to run. */
+export function useClaimSpaceBatches(claims: ReadonlyArray<{ id: string; spaceId: string }>) {
+  const [status, setStatus] = React.useState<Record<string, ClaimBatchStatus>>({});
+  const onStatus = React.useCallback(
+    (spaceId: string, value: ClaimBatchStatus) =>
+      setStatus(current => (current[spaceId] === value ? current : { ...current, [spaceId]: value })),
+    []
+  );
+  const bySpace = new Map<string, string[]>();
+  for (const claim of claims) bySpace.set(claim.spaceId, [...(bySpace.get(claim.spaceId) ?? []), claim.id]);
+  const batches = [...bySpace].map(([spaceId, claimIds]) => (
+    <SpaceBatch key={spaceId} spaceId={spaceId} claimIds={claimIds} onStatus={onStatus} />
+  ));
+  return { status, batches };
+}
+
 function SpaceBatch({
   spaceId,
   claimIds,
-  onReady,
+  onStatus,
 }: {
   spaceId: string;
   claimIds: string[];
-  onReady: (spaceId: string, ready: boolean) => void;
+  onStatus: (spaceId: string, status: ClaimBatchStatus) => void;
 }) {
+  const key = claimIds.join(',');
   const targets = React.useMemo(
-    () => claimIds.map(entityId => ({ entityId, responseKind: 'stance' as const })),
-    [claimIds]
+    () => key.split(',').map(entityId => ({ entityId, responseKind: 'stance' as const })),
+    [key]
   );
   const batch = useClaimResponseSummaryBatch({ spaceId, targets, enabled: true });
-  const settled = (batch.isSuccess && !batch.isPlaceholderData) || batch.isError;
-  React.useEffect(() => onReady(spaceId, settled), [onReady, settled, spaceId]);
+  const status: ClaimBatchStatus = batch.isError
+    ? 'failed'
+    : batch.isSuccess && !batch.isPlaceholderData
+      ? 'ready'
+      : 'pending';
+  React.useEffect(() => onStatus(spaceId, status), [onStatus, status, spaceId]);
   return null;
 }
