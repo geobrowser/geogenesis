@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { claimHomeSpaceId, claimsAboutVariables, decodeClaimsAbout } from './claims-about';
+import { claimHomeSpaceId, claimsAboutVariables, claimsTopicFor, decodeClaimsAbout } from './claims-about';
 import { resolveGraphFilter } from './graph-filter';
-import { CLAIM_ABOUT_PROPERTY_IDS, CLAIM_TYPE_ID } from './ontology';
+import { CLAIM_ABOUT_PROPERTY_IDS, CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from './ontology';
 
 vi.mock('~/core/utils/space/space-ranking', () => ({
   getTopRankedSpaceId: (ids: string[]) => (ids.length ? [...ids].sort()[0] : null),
@@ -80,5 +80,28 @@ describe('claimsAboutVariables', () => {
 
   it('sends null spaces for the global scope, which the API reads as no filter', () => {
     expect(claimsAboutVariables(ENTITY, resolveGraphFilter({ kind: 'global' }), 'c').spaceIds).toBeNull();
+  });
+});
+
+describe('claims topic filter', () => {
+  const TOPIC = '44444444444444444444444444444444';
+  const topicFilter = resolveGraphFilter({ kind: 'spaces', spaceIds: [SPACE_A], topicId: TOPIC });
+
+  it('asks claims about another entity to carry the topic too', () => {
+    expect(claimsTopicFor(ENTITY, topicFilter)).toBe(TOPIC);
+    expect(claimsAboutVariables(ENTITY, topicFilter, null)).toMatchObject({
+      topicsPropertyId: TOPICS_PROPERTY_ID,
+      topicId: TOPIC,
+    });
+  });
+
+  it('adds nothing when the centre is the topic itself', () => {
+    expect(claimsTopicFor(TOPIC, topicFilter)).toBeNull();
+    expect(claimsAboutVariables(TOPIC, topicFilter, null)).not.toHaveProperty('topicId');
+  });
+
+  it('adds nothing when the filter is lifted', () => {
+    const all = resolveGraphFilter({ kind: 'spaces', spaceIds: [SPACE_A], topicId: TOPIC }, { claims: 'all' });
+    expect(claimsAboutVariables(ENTITY, all, null)).not.toHaveProperty('topicId');
   });
 });

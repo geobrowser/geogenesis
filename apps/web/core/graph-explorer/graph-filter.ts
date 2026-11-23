@@ -5,7 +5,7 @@ import { DEFAULT_EXCLUDE_TYPE_IDS, DEFAULT_INCLUDE_TYPE_IDS, DEFAULT_SPOKE_RELAT
 /**
  * Where the graph may draw from. `spaces` is the topic view; `global` is the later all-graph view.
  */
-export type GraphScope = { kind: 'spaces'; spaceIds: readonly string[] } | { kind: 'global' };
+export type GraphScope = { kind: 'spaces'; spaceIds: readonly string[]; topicId?: string } | { kind: 'global' };
 
 /** What may appear on the graph. `spaceIds` undefined means no space filter. */
 export type GraphFilter = {
@@ -13,6 +13,8 @@ export type GraphFilter = {
   includeTypeIds: string[];
   excludeTypeIds: string[];
   relationTypeIds: string[];
+  /** Claims tab keeps only claims that also carry this topic. Unset shows every claim about the centre. */
+  claimsTopicId?: string;
 };
 
 export const DEFAULT_GRAPH_FILTER: Omit<GraphFilter, 'spaceIds'> = {
@@ -28,6 +30,8 @@ export type GraphFilterOverrides = {
   types?: string[];
   excludeTypes?: string[];
   relations?: string[];
+  /** `?claims=all` lifts the topic filter on the Claims tab. */
+  claims?: 'all';
 };
 
 const OVERRIDE_PARAMS = ['spaces', 'addSpaces', 'types', 'excludeTypes', 'relations'] as const;
@@ -49,6 +53,7 @@ export function parseGraphFilterOverrides(params: Pick<URLSearchParams, 'get'>):
     const ids = parseIdList(params.get(key));
     if (ids) overrides[key] = ids;
   }
+  if (params.get('claims') === 'all') overrides.claims = 'all';
   return overrides;
 }
 
@@ -63,6 +68,8 @@ export function resolveGraphFilter(scope: GraphScope | null, overrides: GraphFil
     includeTypeIds: nonEmpty(overrides.types) ?? DEFAULT_GRAPH_FILTER.includeTypeIds,
     excludeTypeIds: overrides.excludeTypes ?? DEFAULT_GRAPH_FILTER.excludeTypeIds,
     relationTypeIds: nonEmpty(overrides.relations) ?? DEFAULT_GRAPH_FILTER.relationTypeIds,
+    claimsTopicId:
+      scope?.kind === 'spaces' && scope.topicId && overrides.claims !== 'all' ? normId(scope.topicId) : undefined,
   };
 }
 
@@ -89,5 +96,6 @@ export function graphFilterKey(filter: GraphFilter) {
     [...filter.includeTypeIds].sort().join(','),
     [...filter.excludeTypeIds].sort().join(','),
     [...filter.relationTypeIds].sort().join(','),
+    filter.claimsTopicId ?? '*',
   ];
 }

@@ -39,6 +39,24 @@ describe('resolveGraphFilter', () => {
   });
 });
 
+describe('claims topic', () => {
+  it('requires the topic on claims in a topic scope', () => {
+    expect(resolveGraphFilter({ kind: 'spaces', spaceIds: [A], topicId: B }).claimsTopicId).toBe(B);
+  });
+
+  it('is lifted by ?claims=all and absent in the global view', () => {
+    expect(resolveGraphFilter({ kind: 'spaces', spaceIds: [A], topicId: B }, { claims: 'all' }).claimsTopicId).toBe(
+      undefined
+    );
+    expect(resolveGraphFilter({ kind: 'global' }).claimsTopicId).toBeUndefined();
+  });
+
+  it('reads ?claims=all and ignores other values', () => {
+    expect(parseGraphFilterOverrides(new URLSearchParams('claims=all')).claims).toBe('all');
+    expect(parseGraphFilterOverrides(new URLSearchParams('claims=topic')).claims).toBeUndefined();
+  });
+});
+
 describe('parseGraphFilterOverrides', () => {
   it('reads comma-separated ids, normalising dashes and dropping junk', () => {
     const params = new URLSearchParams({

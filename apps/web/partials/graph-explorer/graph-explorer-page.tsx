@@ -56,8 +56,8 @@ function TopicGraph({
   routeSpaceId: string | null;
   overrides: ReturnType<typeof parseGraphFilterOverrides>;
 }) {
-  const scope = useTopicGraphScope(routeSpaceId);
-  const { entity: topic } = useQueryEntity({ id: topicId });
+  const scope = useTopicGraphScope(routeSpaceId, topicId);
+  const { entity: topic } = useQueryEntity({ id: topicId, spaceId: routeSpaceId ?? undefined });
   const topicSpaceId =
     routeSpaceId ??
     (topic ? pickEntitySpaceId(topic.spaces ?? [], scope?.kind === 'spaces' ? scope.spaceIds : undefined, null) : null);
@@ -81,7 +81,12 @@ function TopicGraph({
         <h1 className="text-metadataMedium text-text">Graph explorer</h1>
       </header>
       <div className="min-h-0 flex-1 px-6 py-6 lg:px-4 lg:py-4">
-        <GraphViewer startEntityId={entityId} scope={scope} overrides={overrides} />
+        <GraphViewer
+          startEntityId={entityId}
+          scope={scope}
+          overrides={overrides}
+          topic={{ id: topicId, name: topic?.name ?? null, spaceId: topicSpaceId }}
+        />
       </div>
     </>
   );

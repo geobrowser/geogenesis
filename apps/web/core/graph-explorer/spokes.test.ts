@@ -40,7 +40,11 @@ function relation(
 }
 
 function hop(relations: GraphRelation[]): GraphHop {
-  return { centre: { ...entity(CENTRE, 'Centre', [TOPIC_TYPE_ID]), description: null }, relations, truncated: false };
+  return {
+    centre: { ...entity(CENTRE, 'Centre', [TOPIC_TYPE_ID]), description: null, texts: [] },
+    relations,
+    truncated: false,
+  };
 }
 
 const filter = resolveGraphFilter({ kind: 'spaces', spaceIds: [SPACE_A, SPACE_B] });

@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { centreTextInSpace } from '~/core/graph-explorer/centre-text';
 import { type GraphFilterOverrides, type GraphScope, resolveGraphFilter } from '~/core/graph-explorer/graph-filter';
 import { type GraphHistory, goBack, recentre, startGraphHistory } from '~/core/graph-explorer/history';
 import {
@@ -13,9 +14,11 @@ import {
 } from '~/core/graph-explorer/spokes';
 import { useClaimsAbout, useGraphHop, usePrefetchGraphHop } from '~/core/graph-explorer/use-graph-explorer';
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
+import { normId } from '~/core/utils/norm-id';
 
 import { Skeleton } from '~/design-system/skeleton';
 
+import { claimsEmptyMessage } from './empty-states';
 import { EntityPanel, type EntityPanelTab } from './entity-panel';
 import { GraphCanvas } from './graph-canvas';
 
@@ -26,16 +29,21 @@ export function GraphViewer({
   startEntityId,
   scope,
   overrides,
+  topic,
 }: {
   startEntityId: string;
   scope: GraphScope | null;
   overrides?: GraphFilterOverrides;
+  /** The topic the view opened from. `spaceId` is the space its topic page reads it in. */
+  topic?: { id: string; name: string | null; spaceId: string | null };
 }) {
   const filter = React.useMemo(() => (scope ? resolveGraphFilter(scope, overrides) : null), [scope, overrides]);
   const [history, setHistory] = React.useState<GraphHistory>(() => startGraphHistory(startEntityId));
   const [tab, setTab] = React.useState<EntityPanelTab>('details');
   // Names of entities already seen, for "Back to X" before the previous hop is refetched.
   const [names, setNames] = React.useState<Record<string, string>>({});
+  // The space each re-centred entity was drawn from, so its page reads the same text there.
+  const [nodeSpaces, setNodeSpaces] = React.useState<Record<string, string>>({});
 
   React.useEffect(() => setHistory(startGraphHistory(startEntityId)), [startEntityId]);
 
@@ -61,6 +69,7 @@ export function GraphViewer({
 
   const select = React.useCallback((spoke: Spoke) => {
     if (spoke.entity.name) setNames(current => ({ ...current, [spoke.entity.id]: spoke.entity.name! }));
+    if (spoke.nodeSpaceId) setNodeSpaces(current => ({ ...current, [spoke.entity.id]: spoke.nodeSpaceId! }));
     setHistory(current => recentre(current, spoke.entity.id));
   }, []);
 
@@ -96,8 +105,8 @@ export function GraphViewer({
     );
   }
 
-  const centre = hopData.centre;
-  if (!centre) {
+  const rawCentre = hopData.centre;
+  if (!rawCentre) {
     return (
       <div className="flex flex-col items-start gap-2 p-4" role="status">
         {backButton}
@@ -106,7 +115,11 @@ export function GraphViewer({
     );
   }
 
-  const centreSpaceId = pickEntitySpaceId(centre.spaceIds, filter.spaceIds, null);
+  const centreSpaceId =
+    (topic?.spaceId && rawCentre.id === normId(topic.id) ? normId(topic.spaceId) : null) ??
+    nodeSpaces[rawCentre.id] ??
+    pickEntitySpaceId(rawCentre.spaceIds, filter.spaceIds, null);
+  const centre = { ...rawCentre, ...centreTextInSpace(rawCentre, centreSpaceId) };
   const claimList = claims.data?.pages.flatMap(page => page.claims) ?? [];
 
   return (
@@ -149,6 +162,7 @@ export function GraphViewer({
           onTabChange={setTab}
           onSelect={select}
           truncated={hopData.truncated}
+          claimsEmptyMessage={claimsEmptyMessage(filter, topic?.name ?? null)}
         />
       </div>
     </div>

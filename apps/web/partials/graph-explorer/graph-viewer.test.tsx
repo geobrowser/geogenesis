@@ -16,6 +16,7 @@ const SPACE = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const hops: Record<string, GraphHop> = {
   [TOPIC]: {
     centre: {
+      texts: [{ propertyId: '9b1f76ff9711404c861e59dc3fa7d037', spaceId: SPACE, text: 'A topic.' }],
       id: TOPIC,
       name: 'Israel-Gaza war',
       description: 'A topic.',
@@ -44,6 +45,7 @@ const hops: Record<string, GraphHop> = {
   },
   [PERSON]: {
     centre: {
+      texts: [],
       id: PERSON,
       name: 'Isaac Herzog',
       description: null,
@@ -176,5 +178,48 @@ describe('GraphViewer', () => {
     });
     render(<GraphViewer startEntityId={TOPIC} scope={scope} />);
     expect(screen.getByText('This entity isn’t in the knowledge graph.')).toBeTruthy();
+  });
+
+  it('names the topic when no claims about a re-centred entity carry it', () => {
+    render(
+      <GraphViewer
+        startEntityId={TOPIC}
+        scope={{ kind: 'spaces', spaceIds: [SPACE], topicId: TOPIC }}
+        topic={{ id: TOPIC, name: 'Israel-Gaza war', spaceId: SPACE }}
+      />
+    );
+    fireEvent.click(screen.getByRole('tab', { name: 'Claims (0)' }));
+    expect(screen.getByText('No claims about this in Israel-Gaza war yet.')).toBeTruthy();
+  });
+
+  it('reads the topic’s text in the space its topic page uses, and a node’s in the space it was drawn from', () => {
+    const OTHER_SPACE = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+    const NAME = 'a126ca530c8e48d5b88882c734c38935';
+    const DESCRIPTION = '9b1f76ff9711404c861e59dc3fa7d037';
+    hooks.useGraphHop.mockImplementation((id: string) => {
+      const hop = hops[id];
+      const texts =
+        id === TOPIC
+          ? [
+              { propertyId: DESCRIPTION, spaceId: SPACE, text: 'As World affairs describes it.' },
+              { propertyId: DESCRIPTION, spaceId: OTHER_SPACE, text: 'As another space describes it.' },
+            ]
+          : [
+              { propertyId: NAME, spaceId: SPACE, text: 'Isaac Herzog' },
+              { propertyId: DESCRIPTION, spaceId: SPACE, text: 'President of Israel.' },
+            ];
+      return {
+        data: { ...hop, centre: { ...hop.centre!, spaceIds: [OTHER_SPACE, SPACE], texts } },
+        isLoading: false,
+        isError: false,
+      };
+    });
+    render(
+      <GraphViewer startEntityId={TOPIC} scope={scope} topic={{ id: TOPIC, name: 'Israel-Gaza war', spaceId: SPACE }} />
+    );
+    expect(screen.getByText('As World affairs describes it.')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /Isaac Herzog, Related person/ }));
+    expect(screen.getByText('President of Israel.')).toBeTruthy();
   });
 });

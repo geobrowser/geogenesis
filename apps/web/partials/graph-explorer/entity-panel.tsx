@@ -29,6 +29,7 @@ export function EntityPanel({
   onTabChange,
   onSelect,
   truncated,
+  claimsEmptyMessage,
 }: {
   centre: GraphCentre;
   centreSpaceId: string | null;
@@ -45,6 +46,7 @@ export function EntityPanel({
   onTabChange: (tab: EntityPanelTab) => void;
   onSelect: (spoke: Spoke) => void;
   truncated: boolean;
+  claimsEmptyMessage: string;
 }) {
   const claimsCount = claimsState.isLoading ? '…' : `${claims.length}${claimsState.hasNextPage ? '+' : ''}`;
   const tabs: Array<{ id: EntityPanelTab; label: string }> = [
@@ -91,7 +93,7 @@ export function EntityPanel({
       <div role="tabpanel" id={`graph-tabpanel-${tab}`} aria-labelledby={`graph-tab-${tab}`} className="min-h-0">
         {tab === 'details' && <DetailsTab centre={centre} centreSpaceId={centreSpaceId} />}
         {tab === 'relationships' && <RelationshipsTab spokes={spokes} onSelect={onSelect} truncated={truncated} />}
-        {tab === 'claims' && <ClaimsTab claims={claims} state={claimsState} />}
+        {tab === 'claims' && <ClaimsTab claims={claims} state={claimsState} emptyMessage={claimsEmptyMessage} />}
       </div>
     </section>
   );
@@ -163,8 +165,10 @@ function RelationshipsTab({
 function ClaimsTab({
   claims,
   state,
+  emptyMessage,
 }: {
   claims: ClaimAbout[];
+  emptyMessage: string;
   state: {
     isLoading: boolean;
     isError: boolean;
@@ -175,7 +179,7 @@ function ClaimsTab({
 }) {
   if (state.isLoading) return <Skeleton className="h-[120px] w-full rounded-lg" />;
   if (state.isError && claims.length === 0) return <EmptyNote>Couldn’t load claims.</EmptyNote>;
-  if (claims.length === 0) return <EmptyNote>No claims in the knowledge graph are linked to this yet.</EmptyNote>;
+  if (claims.length === 0) return <EmptyNote>{emptyMessage}</EmptyNote>;
 
   return (
     <div className="flex flex-col gap-3">

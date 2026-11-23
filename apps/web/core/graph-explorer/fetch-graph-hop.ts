@@ -1,3 +1,4 @@
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 
 import { Effect } from 'effect';
@@ -21,7 +22,13 @@ export type GraphEntity = {
   image: string | null;
 };
 
-export type GraphCentre = GraphEntity & { description: string | null };
+export type GraphCentreText = { propertyId: string; spaceId: string; text: string };
+
+export type GraphCentre = GraphEntity & {
+  description: string | null;
+  /** Name and description values per space, so the view can read them in the centre's own space. */
+  texts: GraphCentreText[];
+};
 
 export type GraphRelation = {
   id: string;
@@ -65,10 +72,12 @@ const graphHopDocument = parse(/* GraphQL */ `
     $avatarPropertyId: UUID!
     $coverPropertyId: UUID!
     $imageUrlPropertyId: UUID!
+    $textPropertyIds: [UUID!]
   ) {
     entity(id: $id) {
       ${NEIGHBOUR_FIELDS}
       description
+      texts: valuesList(filter: { propertyId: { in: $textPropertyIds } }) { propertyId spaceId text }
     }
     outgoing: relationsConnection(
       first: $first
@@ -120,7 +129,12 @@ type RawRelation = {
 type RawConnection = { nodes: RawRelation[]; pageInfo: { hasNextPage: boolean } } | null;
 
 export type GraphHopResponse = {
-  entity: (RawEntity & { description: string | null }) | null;
+  entity:
+    | (RawEntity & {
+        description: string | null;
+        texts?: Array<{ propertyId: string; spaceId: string; text: string | null }> | null;
+      })
+    | null;
   outgoing: RawConnection;
   incoming: RawConnection;
 };
@@ -167,7 +181,13 @@ function decodeRelations(connection: RawConnection, direction: 'out' | 'in'): Gr
 
 export function decodeGraphHop(response: GraphHopResponse): GraphHop {
   const centre = response.entity
-    ? { ...decodeEntity(response.entity), description: response.entity.description?.trim() || null }
+    ? {
+        ...decodeEntity(response.entity),
+        description: response.entity.description?.trim() || null,
+        texts: (response.entity.texts ?? []).flatMap(value =>
+          value.text ? [{ propertyId: normId(value.propertyId), spaceId: normId(value.spaceId), text: value.text }] : []
+        ),
+      }
     : null;
   return {
     centre,
@@ -187,6 +207,7 @@ export function graphHopVariables(entityId: string, filter: GraphFilter) {
     avatarPropertyId: AVATAR_PROPERTY_ID,
     coverPropertyId: COVER_PROPERTY_ID,
     imageUrlPropertyId: IMAGE_URL_PROPERTY_ID,
+    textPropertyIds: [normId(SystemIds.NAME_PROPERTY), normId(SystemIds.DESCRIPTION_PROPERTY)],
   };
 }
 

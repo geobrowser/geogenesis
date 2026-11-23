@@ -20,7 +20,14 @@ const raw = (
 describe('decodeGraphHop', () => {
   it('decodes both directions and prefers the avatar over the cover', () => {
     const hop = decodeGraphHop({
-      entity: { ...raw('c'.repeat(32), 'Centre'), description: '  ' },
+      entity: {
+        ...raw('c'.repeat(32), 'Centre'),
+        description: '  ',
+        texts: [
+          { propertyId: 'A126CA53-0C8E-48D5-B888-82C734C38935', spaceId: 'a'.repeat(32), text: 'Centre in A' },
+          { propertyId: 'a126ca530c8e48d5b88882c734c38935', spaceId: 'b'.repeat(32), text: null },
+        ],
+      },
       outgoing: {
         nodes: [
           {
@@ -54,6 +61,9 @@ describe('decodeGraphHop', () => {
     });
 
     expect(hop.centre).toMatchObject({ id: 'c'.repeat(32), name: 'Centre', description: null });
+    expect(hop.centre?.texts).toEqual([
+      { propertyId: 'a126ca530c8e48d5b88882c734c38935', spaceId: 'a'.repeat(32), text: 'Centre in A' },
+    ]);
     expect(hop.relations.map(relation => [relation.direction, relation.entity.name])).toEqual([
       ['out', 'Out'],
       ['in', 'In'],

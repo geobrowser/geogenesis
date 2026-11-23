@@ -8,7 +8,7 @@ import { graphql } from '~/core/io/graphql-client';
 import { normId } from '~/core/utils/norm-id';
 
 import type { GraphFilter } from './graph-filter';
-import { CLAIM_ABOUT_PROPERTY_IDS, CLAIM_TYPE_ID } from './ontology';
+import { CLAIM_ABOUT_PROPERTY_IDS, CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from './ontology';
 import { pickEntitySpaceId } from './spokes';
 
 export const CLAIMS_ABOUT_PAGE_SIZE = 20;
@@ -24,43 +24,60 @@ export type ClaimsAboutPage = { claims: ClaimAbout[]; endCursor: string | null; 
 
 /**
  * Claims with an about-relation (CLAIM_ABOUT_PROPERTY_IDS) to the entity. Relations are per space,
- * so the relation's space is filtered too. No totalCount: it is too slow on large topics.
+ * so the relation's space is filtered too. With `filter.claimsTopicId`, the claim must also carry
+ * that topic through `Topics`. No totalCount: it is too slow on large topics.
  */
-const claimsAboutDocument = parse(/* GraphQL */ `
-  query GraphClaimsAbout(
-    $id: UUID!
-    $aboutPropertyIds: [UUID!]
-    $spaceIds: [UUID!]
-    $claimTypeId: UUID!
-    $namePropertyId: UUID!
-    $first: Int
-    $after: Cursor
-  ) {
-    entitiesConnection(
-      first: $first
-      after: $after
-      orderBy: [UPDATED_AT_DESC]
-      filter: {
-        typeIds: { anyEqualTo: $claimTypeId }
-        spaceIds: { overlaps: $spaceIds }
-        relations: { some: { typeId: { in: $aboutPropertyIds }, toEntityId: { is: $id }, spaceId: { in: $spaceIds } } }
-      }
+function claimsAboutQuery(withTopic: boolean) {
+  const about =
+    '{ relations: { some: { typeId: { in: $aboutPropertyIds }, toEntityId: { is: $id }, spaceId: { in: $spaceIds } } } }';
+  const topic =
+    '{ relations: { some: { typeId: { is: $topicsPropertyId }, toEntityId: { is: $topicId }, spaceId: { in: $spaceIds } } } }';
+  return parse(/* GraphQL */ `
+    query GraphClaimsAbout(
+      $id: UUID!
+      $aboutPropertyIds: [UUID!]
+      $spaceIds: [UUID!]
+      $claimTypeId: UUID!
+      $namePropertyId: UUID!
+      ${withTopic ? '$topicsPropertyId: UUID!\n      $topicId: UUID!' : ''}
+      $first: Int
+      $after: Cursor
     ) {
-      nodes {
-        id
-        name
-        spaceIds
-        valuesList(filter: { propertyId: { is: $namePropertyId } }) {
-          spaceId
+      entitiesConnection(
+        first: $first
+        after: $after
+        orderBy: [UPDATED_AT_DESC]
+        filter: {
+          typeIds: { anyEqualTo: $claimTypeId }
+          spaceIds: { overlaps: $spaceIds }
+          and: [${about}${withTopic ? `, ${topic}` : ''}]
+        }
+      ) {
+        nodes {
+          id
+          name
+          spaceIds
+          valuesList(filter: { propertyId: { is: $namePropertyId } }) {
+            spaceId
+          }
+        }
+        pageInfo {
+          hasNextPage
+          endCursor
         }
       }
-      pageInfo {
-        hasNextPage
-        endCursor
-      }
     }
-  }
-`) as TypedDocumentNode<ClaimsAboutResponse, Record<string, unknown>>;
+  `) as TypedDocumentNode<ClaimsAboutResponse, Record<string, unknown>>;
+}
+
+const claimsAboutDocument = claimsAboutQuery(false);
+const claimsAboutTopicDocument = claimsAboutQuery(true);
+
+/** The topic to require of claims about `entityId`, if any. The topic's own claims need no second check. */
+export function claimsTopicFor(entityId: string, filter: GraphFilter): string | null {
+  const topicId = filter.claimsTopicId;
+  return topicId && topicId !== normId(entityId) ? topicId : null;
+}
 
 type ClaimsAboutResponse = {
   entitiesConnection: {
@@ -108,12 +125,14 @@ export function decodeClaimsAbout(response: ClaimsAboutResponse, filter: GraphFi
 }
 
 export function claimsAboutVariables(entityId: string, filter: GraphFilter, after: string | null) {
+  const topicId = claimsTopicFor(entityId, filter);
   return {
     id: normId(entityId),
     aboutPropertyIds: CLAIM_ABOUT_PROPERTY_IDS,
     spaceIds: filter.spaceIds ?? null,
     claimTypeId: CLAIM_TYPE_ID,
     namePropertyId: normId(SystemIds.NAME_PROPERTY),
+    ...(topicId ? { topicsPropertyId: TOPICS_PROPERTY_ID, topicId } : {}),
     first: CLAIMS_ABOUT_PAGE_SIZE,
     after,
   };
@@ -122,7 +141,7 @@ export function claimsAboutVariables(entityId: string, filter: GraphFilter, afte
 export function fetchClaimsAbout(entityId: string, filter: GraphFilter, after: string | null, signal?: AbortSignal) {
   return Effect.runPromise(
     graphql({
-      query: claimsAboutDocument,
+      query: claimsTopicFor(entityId, filter) ? claimsAboutTopicDocument : claimsAboutDocument,
       decoder: (response: ClaimsAboutResponse) => decodeClaimsAbout(response, filter),
       variables: claimsAboutVariables(entityId, filter, after),
       signal,
