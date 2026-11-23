@@ -13,6 +13,7 @@ import {
   mentionQueryAt,
   messageSegments,
 } from '~/core/space-chat/mentions';
+import { type ChatViewer, isViewerId } from '~/core/space-chat/viewer';
 
 import { Avatar } from '~/design-system/avatar';
 import { AvatarGroup } from '~/design-system/avatar-group';
@@ -61,6 +62,7 @@ export const SPACE_CHAT_VIEW_COPY = {
   deleteFailed: 'Could not delete. Try again.',
   reactFailed: 'Could not react. Try again.',
   unknownPerson: 'someone',
+  slowMode: (seconds: number) => `Slow mode is on. You can send again in ${seconds}s.`,
 } as const;
 
 /** The reactions offered; others already on a message show and toggle too. */
@@ -81,7 +83,7 @@ type Props = {
   loadingOlder?: boolean;
   composer: ChatViewComposer;
   /** Dashless or dashed. */
-  viewerId: string | null;
+  viewer: ChatViewer | null;
   onEdit?: (id: string, body: string) => Promise<void>;
   /** Offered on the viewer's own with `canDeleteOwn`, and on everyone's with `canDeleteAny`. */
   onDelete?: (id: string) => Promise<void>;
@@ -113,7 +115,7 @@ export function SpaceChatView({
   onLoadOlder,
   loadingOlder = false,
   composer,
-  viewerId,
+  viewer,
   onEdit,
   onDelete,
   canDeleteOwn = true,
@@ -134,7 +136,7 @@ export function SpaceChatView({
   const [replyTo, setReplyTo] = React.useState<ChatViewMessage | null>(null);
   const firstId = messages[0]?.id ?? null;
   const lastId = messages.at(-1)?.id ?? null;
-  const lastIsOwn = viewerId !== null && messages.length > 0 && sameId(messages.at(-1)!.author.id, viewerId);
+  const lastIsOwn = messages.length > 0 && isViewerId(viewer, messages.at(-1)!.author.id);
   const previousEnds = React.useRef<{ first: string | null; last: string | null }>({ first: null, last: null });
   const posting = composer.kind === 'post';
   const breaks = React.useMemo(() => dayBreaks(messages), [messages]);
@@ -219,7 +221,7 @@ export function SpaceChatView({
               !message.replyTo &&
               sameId(previous.author.id, message.author.id) &&
               Date.parse(message.createdAt) - Date.parse(previous.createdAt) < GROUPING_WINDOW_MS;
-            const own = viewerId !== null && sameId(message.author.id, viewerId);
+            const own = isViewerId(viewer, message.author.id);
             const row = (
               <ChatRow
                 key={message.id}
@@ -275,15 +277,20 @@ function ChatHeader({ header }: { header: ChatViewHeader }) {
         <h2 className="text-metadataMedium text-text">{header.title}</h2>
         <p className="text-footnote text-grey-04">{header.subtitle}</p>
       </div>
-      {people.length > 0 ? (
-        <div className="shrink-0 mobile:hidden">
-          <AvatarGroup>
-            {people.map(person => (
-              <AvatarGroup.Item key={person.id} size={20}>
-                <Avatar avatarUrl={person.avatarUrl} value={person.avatarSeed} size={20} />
-              </AvatarGroup.Item>
-            ))}
-          </AvatarGroup>
+      {people.length > 0 || header.actions ? (
+        <div className="flex shrink-0 items-center gap-2">
+          {people.length > 0 ? (
+            <div className="mobile:hidden">
+              <AvatarGroup>
+                {people.map(person => (
+                  <AvatarGroup.Item key={person.id} size={20}>
+                    <Avatar avatarUrl={person.avatarUrl} value={person.avatarSeed} size={20} />
+                  </AvatarGroup.Item>
+                ))}
+              </AvatarGroup>
+            </div>
+          ) : null}
+          {header.actions}
         </div>
       ) : null}
     </div>
@@ -824,6 +831,7 @@ function ChatComposer({
   const replyRef = React.useRef(replyTo);
   replyRef.current = replyTo;
   const inputRef = mention.inputRef;
+  const cooldownLeft = useSecondsUntil(composer.kind === 'post' ? (composer.cooldownUntil ?? null) : null);
 
   React.useEffect(() => {
     if (replyTo) inputRef.current?.focus();
@@ -862,6 +870,10 @@ function ChatComposer({
   }
 
   const onSend = composer.onSend;
+  if (composer.repliesOnly && !replyTo) {
+    return <p className="border-t border-grey-02 px-3 py-2.5 text-footnote text-grey-04">{composer.repliesOnly}</p>;
+  }
+  const cooling = cooldownLeft > 0;
   // The box clears at once so the next message can be typed. A failed one comes back with its
   // reply target, unchanged, so its retry reuses the same nonce: into an empty box, or under the
   // error until restored.
@@ -873,7 +885,7 @@ function ChatComposer({
   };
   const send = () => {
     const draft = mention.draft.trim();
-    if (draft === '') return;
+    if (draft === '' || cooling) return;
     const sent: UnsentDraft = { draft, mentions: mention.mentions, replyTo };
     mention.reset();
     onCancelReply();
@@ -916,6 +928,11 @@ function ChatComposer({
           <SmallButton onClick={restoreUnsent}>{SPACE_CHAT_VIEW_COPY.restore}</SmallButton>
         </div>
       ) : null}
+      {cooling ? (
+        <p className="px-1 pb-1 text-footnote text-grey-04" role="status">
+          {SPACE_CHAT_VIEW_COPY.slowMode(cooldownLeft)}
+        </p>
+      ) : null}
       {replyTo ? (
         <div className="flex items-center gap-2 px-1 pb-1 text-footnote text-grey-04">
           <span className="min-w-0 flex-1 truncate">{SPACE_CHAT_VIEW_COPY.replyingTo(replyTo.author.name)}</span>
@@ -954,7 +971,7 @@ function ChatComposer({
         />
         <button
           type="submit"
-          disabled={mention.draft.trim() === ''}
+          disabled={mention.draft.trim() === '' || cooling}
           className="shrink-0 rounded-md bg-text px-3 py-1.5 text-metadataMedium text-white disabled:opacity-40"
         >
           {SPACE_CHAT_VIEW_COPY.send}
@@ -962,6 +979,24 @@ function ChatComposer({
       </form>
     </div>
   );
+}
+
+/** Whole seconds left until `until`, ticking each second; 0 once past or without one. */
+function useSecondsUntil(until: number | null) {
+  const left = () => (until === null ? 0 : Math.max(0, Math.ceil((until - Date.now()) / 1000)));
+  const [seconds, setSeconds] = React.useState(left);
+  React.useEffect(() => {
+    const remaining = () => (until === null ? 0 : Math.max(0, Math.ceil((until - Date.now()) / 1000)));
+    setSeconds(remaining());
+    if (remaining() === 0) return;
+    const timer = window.setInterval(() => {
+      const next = remaining();
+      setSeconds(next);
+      if (next === 0) window.clearInterval(timer);
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [until]);
+  return seconds;
 }
 
 /** Why the viewer can't post yet, with the control that changes it. */

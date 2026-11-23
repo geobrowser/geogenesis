@@ -7,6 +7,7 @@ import { useState } from 'react';
 
 import cx from 'classnames';
 
+import { ElevatedPopoverPortalContext } from './elevated-popover-portal-context';
 import { ChevronDownSmall } from './icons/chevron-down-small';
 import { trapWheelToElement } from './trap-wheel-scroll';
 import { useAdaptiveDropdownPlacement } from './use-adaptive-dropdown-placement';
@@ -35,6 +36,8 @@ export const Select = ({
   contentClassName = '',
 }: Props) => {
   const [open, setOpen] = useState(false);
+  // An enclosing dialog or sheet hosts the options inside itself, so they stack above it.
+  const portalContainer = React.useContext(ElevatedPopoverPortalContext);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   const viewportRef = React.useRef<HTMLDivElement>(null);
   const [contentElement, setContentElement] = React.useState<HTMLDivElement | null>(null);
@@ -79,7 +82,7 @@ export const Select = ({
           </div>
         </div>
       </SelectPrimitive.Trigger>
-      <SelectPrimitive.Portal>
+      <SelectPrimitive.Portal container={portalContainer ?? undefined}>
         <SelectPrimitive.Content
           ref={setContentElement}
           className={cx(

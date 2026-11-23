@@ -2,7 +2,8 @@ import type { QueryKey } from '@tanstack/react-query';
 
 import { dashlessId } from '~/core/debates/api';
 
-import type { SpaceChatMessage, SpaceChatPage, SpaceChatReaction } from './api';
+import type { SpaceChatMessage, SpaceChatPage, SpaceChatReaction, SpaceChatRoom } from './api';
+import { type ChatViewer, isViewerId } from './viewer';
 
 /** A send not yet confirmed by geo-chat; matched to the stored message by `client_nonce`. */
 export type PendingSpaceChatMessage = {
@@ -44,9 +45,128 @@ export const spaceChatQueryKeys = {
   ],
   /** Signed out: polled. */
   public: (roomId: string): QueryKey => ['space-chat-public', dashlessId(roomId)],
-  rooms: (spaceId: string, accountKey: string | null): QueryKey =>
+  /** `includeArchived` lists archived channels too (GEO-3818), under the same root. */
+  rooms: (spaceId: string, accountKey: string | null, includeArchived = false): QueryKey =>
+    includeArchived
+      ? [...spaceChatQueryKeys.roomsRoot(spaceId, accountKey), 'archived']
+      : spaceChatQueryKeys.roomsRoot(spaceId, accountKey),
+  /** Prefix of every room list of the space. */
+  roomsRoot: (spaceId: string, accountKey: string | null): QueryKey =>
     accountKey ? ['debates', 'account', accountKey, 'space-chat-rooms', spaceId] : ['space-chat-rooms', spaceId],
+  /** The people added to an invited channel; signed in only. */
+  members: (accountKey: string, roomId: string): QueryKey => [
+    'debates',
+    'account',
+    accountKey,
+    'space-chat-members',
+    dashlessId(roomId),
+  ],
 };
+
+/** A space's room list as cached. `supported: false` for a space with no chat. */
+export type SpaceChatRoomsData = {
+  supported: boolean;
+  rooms: SpaceChatRoom[];
+  /** geo-chat's channels switch (GEO-3818); false from a geo-chat without channels. */
+  channelsEnabled: boolean;
+  canManageChannels: boolean;
+};
+
+/** The settings fields `channel.updated` and editor writes carry; viewer fields stay as held. */
+const CHANNEL_FIELDS = [
+  'name',
+  'description',
+  'read_policy',
+  'post_policy',
+  'slow_mode',
+  'archived',
+  'position',
+  'version',
+] as const satisfies readonly (keyof SpaceChatRoom)[];
+
+/** `space.channel_activity`: a message landed in a channel the viewer reads (GEO-3818). */
+export type SpaceChannelActivity = { spaceId: string; roomId: string; messageId: string; authorId: string };
+
+/** Local unread counts stop here; the badge reads 99+ above 99. */
+export const UNREAD_COUNT_CAP = 100;
+
+export function parseSpaceChannelActivity(payload: unknown): SpaceChannelActivity | null {
+  if (!isRecord(payload)) return null;
+  const { space_id, room_id, message_id, author_id } = payload;
+  if (typeof space_id !== 'string' || typeof room_id !== 'string') return null;
+  if (typeof message_id !== 'string' || typeof author_id !== 'string') return null;
+  return { spaceId: space_id, roomId: room_id, messageId: message_id, authorId: author_id };
+}
+
+/** One more unread on the channel's row, skipping the viewer's own, the shown channel, and ids not past the cursor (v7 ids sort by time). */
+export function withChannelActivity(
+  current: SpaceChatRoomsData,
+  activity: SpaceChannelActivity,
+  viewer: ChatViewer | null,
+  shownRoomId: string | null
+): SpaceChatRoomsData {
+  if (isViewerId(viewer, activity.authorId)) return current;
+  if (shownRoomId && dashlessId(shownRoomId) === dashlessId(activity.roomId)) return current;
+  const index = current.rooms.findIndex(row => dashlessId(row.id) === dashlessId(activity.roomId));
+  if (index === -1) return current;
+  const row = current.rooms[index]!;
+  const messageId = dashlessId(activity.messageId);
+  const seen = [row.last_read_message_id, row.counted_message_id].filter((id): id is string => !!id).map(dashlessId);
+  if (seen.some(id => id >= messageId)) return current;
+  const rooms = [...current.rooms];
+  rooms[index] = {
+    ...row,
+    unread_count: Math.min((row.unread_count ?? 0) + 1, UNREAD_COUNT_CAP),
+    counted_message_id: activity.messageId,
+  };
+  return { ...current, rooms };
+}
+
+/** A channel's newer settings laid over its cached row; stale versions and unknown rooms change nothing. */
+export function withChannelUpdate(current: SpaceChatRoomsData, room: SpaceChatRoom): SpaceChatRoomsData {
+  const index = current.rooms.findIndex(held => sameMessageId(held.id, room.id));
+  if (index === -1) return current;
+  const held = current.rooms[index]!;
+  if ((room.version ?? 0) <= (held.version ?? -1)) return current;
+  const next: SpaceChatRoom = { ...held };
+  for (const field of CHANNEL_FIELDS) {
+    if (room[field] !== undefined) (next as Record<string, unknown>)[field] = room[field];
+  }
+  const rooms = [...current.rooms];
+  rooms[index] = next;
+  return { ...current, rooms };
+}
+
+/** A channel's room event (GEO-3818); `null` for message events and anything unreadable. */
+export type SpaceChannelRoomEvent =
+  | { type: 'updated'; room: SpaceChatRoom }
+  | { type: 'members_changed'; roomId: string; added: string[]; removed: string[] };
+
+export function parseSpaceChannelRoomEvent(payload: unknown): SpaceChannelRoomEvent | null {
+  if (!isRecord(payload) || typeof payload.event_type !== 'string' || !isRecord(payload.payload)) return null;
+  const body = payload.payload;
+  switch (payload.event_type) {
+    case 'channel.updated': {
+      const room = body.room;
+      if (!isRecord(room) || typeof room.id !== 'string' || typeof room.space_id !== 'string') return null;
+      if (typeof room.version !== 'number') return null;
+      return { type: 'updated', room: room as unknown as SpaceChatRoom };
+    }
+    case 'channel.members_changed': {
+      if (typeof body.room_id !== 'string') return null;
+      const ids = (value: unknown) =>
+        Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : [];
+      return {
+        type: 'members_changed',
+        roomId: body.room_id,
+        added: ids(body.added_user_ids),
+        removed: ids(body.removed_user_ids),
+      };
+    }
+    default:
+      return null;
+  }
+}
 
 export function sameMessageId(a: string, b: string) {
   return dashlessId(a) === dashlessId(b);
@@ -240,11 +360,11 @@ function withReactionChange(message: HeldSpaceChatMessage, change: ReactionChang
   };
 }
 
-/** `viewerId` decides `reacted` on the viewer's own reaction events; every other field is shared. */
+/** `viewer` decides `reacted` on the viewer's own reaction events; every other field is shared. */
 export function withRoomEvent(
   current: SpaceChatState,
   event: SpaceChatRoomEvent,
-  viewerId: string | null
+  viewer: ChatViewer | null
 ): SpaceChatState {
   switch (event.type) {
     case 'created':
@@ -258,7 +378,7 @@ export function withRoomEvent(
     case 'deleted':
       return patchMessage(current, event.messageId, message => redacted(message, event.deletedAt));
     case 'reaction': {
-      const own = viewerId !== null && dashlessId(viewerId) === dashlessId(event.userId);
+      const own = isViewerId(viewer, event.userId);
       return patchMessage(current, event.messageId, message => withReactionChange(message, event, own));
     }
   }

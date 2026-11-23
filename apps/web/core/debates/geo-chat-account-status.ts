@@ -33,6 +33,8 @@ export type GeoChatAccountStatus =
 
 export type GeoChatViewerProfile = {
   profileSpaceId: string;
+  /** The person entity id chat wire ids use (GEO-3818); null until the profile attaches. */
+  personId?: string | null;
   displayName: string | null;
   avatarCid: string | null;
 };
@@ -70,6 +72,7 @@ function sameStatus(a: GeoChatAccountStatus, b: GeoChatAccountStatus) {
       a.pendingSince === b.pendingSince &&
       a.retryAfterMs === b.retryAfterMs &&
       a.viewer?.profileSpaceId === b.viewer?.profileSpaceId &&
+      a.viewer?.personId === b.viewer?.personId &&
       a.viewer?.displayName === b.viewer?.displayName &&
       a.viewer?.avatarCid === b.viewer?.avatarCid
     );
@@ -105,6 +108,7 @@ export function acceptedStatus(profile: GeoChatSessionProfile | null | undefined
     retryAfterMs: profile.retry_after_ms,
     viewer: {
       profileSpaceId: profile.profile_space_id,
+      personId: profile.person_id,
       displayName: profile.display_name,
       avatarCid: profile.avatar_cid,
     },

@@ -4,20 +4,23 @@ import * as React from 'react';
 
 import Link from 'next/link';
 
+import type { GeoChatRequestError } from '~/core/debates/api';
 import { useGeoChatAuth } from '~/core/debates/hooks';
-import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useJoinSpace } from '~/core/hooks/use-join-space';
 import { useIsMembershipPending } from '~/core/hooks/use-pending-memberships';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { useSpace } from '~/core/hooks/use-space';
-import type { SpaceChatMessage } from '~/core/space-chat/api';
-import { spaceChatErrorMessage } from '~/core/space-chat/errors';
-import { useSpaceChatAuth, useSpaceChatRoom, useSpaceChatRooms } from '~/core/space-chat/hooks';
+import type { SpaceChatMessage, SpaceChatRoom } from '~/core/space-chat/api';
+import { useMarkChannelRead } from '~/core/space-chat/channel-hooks';
+import { channelName, postPolicy } from '~/core/space-chat/channels';
+import { isSlowModeError, retryAfterSeconds, spaceChatErrorMessage } from '~/core/space-chat/errors';
+import { useChatViewer, useSpaceChatAuth, useSpaceChatRoom, useSpaceChatRooms } from '~/core/space-chat/hooks';
 import { mentionedIds } from '~/core/space-chat/mentions';
 import { type ChatPerson, unknownPerson, useChatPeople, useSpaceChatParticipants } from '~/core/space-chat/people';
 import { spaceChatTabPath } from '~/core/space-chat/routes';
 import { type SpaceChatState, shownReactions } from '~/core/space-chat/state';
+import { type ChatViewer, isViewerId, viewerPersonId } from '~/core/space-chat/viewer';
 import { normId } from '~/core/utils/norm-id';
 
 import { SpaceChatView } from './space-chat-view';
@@ -38,6 +41,10 @@ export const SPACE_CHAT_COPY = {
   /** A member geo-chat hasn't caught up with yet. */
   joining: 'You’re a member now. Posting opens within a few minutes.',
   unavailable: 'Chat isn’t available for this space.',
+  emptyChannel: (name: string) => `No messages in #${name} yet. Say hello.`,
+  repliesOnly: (name: string) => `Editors post in # ${name}. Members can reply to a message.`,
+  archived: 'This channel is archived. You can read it, but no one can post.',
+  signedOutAnyone: 'Log in to chat.',
   /** Well under geo-chat's 16 KiB body limit; a chat line, not a document. */
   maxLength: 4000,
 } as const;
@@ -49,40 +56,77 @@ export const SPACE_CHAT_COPY = {
 export function SpaceChatPanel({
   spaceId,
   roomId: knownRoomId = null,
+  channel = null,
+  title = SPACE_CHAT_COPY.title,
   subtitle = SPACE_CHAT_COPY.access,
+  actions,
   onArrival,
   className,
 }: {
   spaceId: string;
   roomId?: string | null;
+  /** A channel from the room list (GEO-3818); #general when absent. */
+  channel?: SpaceChatRoom | null;
+  title?: React.ReactNode;
   /** The header's second line; the room's access by default. */
   subtitle?: React.ReactNode;
+  /** Header controls after the people. */
+  actions?: React.ReactNode;
   /** Called when someone else's message arrives after the first load. */
   onArrival?: () => void;
   className?: string;
 }) {
   const { ready: authReady, authenticated } = useGeoChatAuth();
   const { settingUp } = useSpaceChatAuth();
-  const viewerId = useCurrentGeoChatUserId();
+  const viewer = useChatViewer();
   const rooms = useSpaceChatRooms(spaceId, true);
-  const membership = useChatMembership(spaceId, rooms.memberRoom?.can_post === true, settingUp, rooms.refetch);
-  const listed = rooms.memberRoom;
+  const listed = channel ?? rooms.memberRoom;
+  // The room's own rules (replies-only, slow mode, archived), on the Chat tab and in calls alike. A
+  // geo-chat without channels sends none of them, and `can_reply` falls back to `can_post`.
+  const rules = listed;
+  const mayWrite = listed?.can_post === true || rules?.can_reply === true;
+  const membership = useChatMembership(spaceId, mayWrite, settingUp, rooms.refetch);
   const room = React.useMemo(
     () => listed ?? (knownRoomId ? { id: knownRoomId, space_id: spaceId, kind: 'member' as const } : null),
     [knownRoomId, listed, spaceId]
   );
-  const chat = useSpaceChatRoom(room, room !== null);
+  // Slow mode: an editor is exempt; anyone else waits after each send, or as long as a refusal says.
+  const [cooldownUntil, setCooldownUntil] = React.useState<number | null>(null);
+  const slowed = rules?.slow_mode === true && rules.can_moderate !== true;
+  const onSent = React.useCallback(() => {
+    if (slowed) setCooldownUntil(Date.now() + SLOW_MODE_MS);
+  }, [slowed]);
+  const chat = useSpaceChatRoom(room, room !== null, { onSent });
+  const send = React.useCallback(
+    async (body: string, replyTo: string | null) => {
+      try {
+        await chat.send(body, replyTo);
+      } catch (error) {
+        if (isSlowModeError(error)) {
+          setCooldownUntil(Date.now() + retryAfterSeconds(error as GeoChatRequestError) * 1000);
+        }
+        throw error;
+      }
+    },
+    [chat]
+  );
+  const newestId = chat.state?.messages[0]?.id ?? null;
+  useMarkChannelRead(channel, newestId, channel !== null);
   const participants = useSpaceChatParticipants(spaceId, true);
 
-  const ids = React.useMemo(() => personIds(chat.state, viewerId), [chat.state, viewerId]);
+  const selfId = viewerPersonId(viewer);
+  const ids = React.useMemo(() => personIds(chat.state, selfId), [chat.state, selfId]);
   const people = useChatPeople(ids, participants);
   const self = React.useMemo(
-    () => (viewerId ? (people.get(normId(viewerId)) ?? unknownPerson(viewerId)) : null),
-    [people, viewerId]
+    () => (selfId ? (people.get(normId(selfId)) ?? unknownPerson(selfId)) : null),
+    [people, selfId]
   );
-  const messages = React.useMemo(() => viewMessages(chat.state, people, self), [chat.state, people, self]);
+  const messages = React.useMemo(
+    () => viewMessages(chat.state, people, self, viewer),
+    [chat.state, people, self, viewer]
+  );
   const recentAuthors = React.useMemo(() => recentPeople(chat.state, people), [chat.state, people]);
-  useArrivals(chat.state, viewerId, onArrival);
+  useArrivals(chat.state, viewer, onArrival);
   const signIn = usePrivySignIn(undefined, {
     analytics: {
       component: 'space_chat',
@@ -100,16 +144,43 @@ export function SpaceChatPanel({
   }
 
   // An account geo-chat is still setting up reads the public way and writes nothing.
-  const writer = authenticated && !settingUp;
+  const archived = rules?.archived === true;
+  const writer = authenticated && !settingUp && !archived;
   const canPost = writer && listed?.can_post === true;
-  const composer: ChatViewComposer = canPost
-    ? { kind: 'post', onSend: chat.send, maxLength: SPACE_CHAT_COPY.maxLength, mentionCandidates: participants }
-    : !authReady
+  // Replying and reacting: `can_reply` from a geo-chat with channels, else the same as posting.
+  const canReply = writer && (rules?.can_reply ?? rules?.can_post) === true;
+  // Named copy (placeholder, empty line) is the Chat tab's; the in-call chat keeps its own.
+  const name = channel ? channelName(channel) : null;
+  const ruleName = rules ? channelName(rules) : null;
+  const postComposer = {
+    kind: 'post' as const,
+    onSend: send,
+    maxLength: SPACE_CHAT_COPY.maxLength,
+    mentionCandidates: participants,
+    cooldownUntil: slowed ? cooldownUntil : null,
+    ...(name ? { placeholder: `Message #${name}` } : {}),
+  };
+  const composer: ChatViewComposer = archived
+    ? { kind: 'closed', reason: SPACE_CHAT_COPY.archived }
+    : canPost
+      ? postComposer
+      : canReply && ruleName
+        ? { ...postComposer, repliesOnly: SPACE_CHAT_COPY.repliesOnly(ruleName) }
+        : composerWithoutPosting();
+  function composerWithoutPosting(): ChatViewComposer {
+    return !authReady
       ? { kind: 'none' }
       : settingUp
         ? { kind: 'closed', reason: SPACE_CHAT_COPY.settingUp }
         : !authenticated
-          ? { kind: 'sign_in', label: SPACE_CHAT_COPY.signedOut(membership.spaceName), onSignIn: () => void signIn() }
+          ? {
+              kind: 'sign_in',
+              label:
+                rules && postPolicy(rules) === 'everyone_signed_in'
+                  ? SPACE_CHAT_COPY.signedOutAnyone
+                  : SPACE_CHAT_COPY.signedOut(membership.spaceName),
+              onSignIn: () => void signIn(),
+            }
           : !listed || membership.access.isLoading
             ? { kind: 'none' }
             : membership.access.isMember || membership.access.isEditor
@@ -120,28 +191,30 @@ export function SpaceChatPanel({
                   state: membership.state,
                   onJoin: membership.join,
                 };
+  }
 
   return (
     <SpaceChatView
       className={className}
-      header={{ title: SPACE_CHAT_COPY.title, subtitle, people: recentAuthors }}
-      label={SPACE_CHAT_COPY.label}
-      emptyLabel={SPACE_CHAT_COPY.empty}
+      header={{ title, subtitle, people: recentAuthors, actions }}
+      label={name ? `# ${name}` : SPACE_CHAT_COPY.label}
+      emptyLabel={name ? SPACE_CHAT_COPY.emptyChannel(name) : SPACE_CHAT_COPY.empty}
       messages={messages}
       status={room === null ? (rooms.isError ? 'error' : 'loading') : chat.status}
       onRetry={room === null ? () => void rooms.refetch() : chat.refetch}
       onLoadOlder={chat.loadOlder}
       loadingOlder={chat.loadingOlder}
       composer={composer}
-      viewerId={viewerId}
+      viewer={viewer}
       // geo-chat requires write access for edits and deletes: own messages need posting rights,
       // other people's need moderation.
-      onEdit={canPost ? chat.edit : undefined}
+      // geo-chat gates edits, own deletes and reactions on the right to reply (GEO-3818).
+      onEdit={canReply ? chat.edit : undefined}
       onDelete={writer ? chat.remove : undefined}
-      canDeleteOwn={canPost}
+      canDeleteOwn={canReply}
       canDeleteAny={writer && listed?.can_moderate === true}
-      onReact={canPost ? chat.react : undefined}
-      canReply={canPost}
+      onReact={canReply ? chat.react : undefined}
+      canReply={canReply}
       mentionName={mentionName}
       errorMessage={spaceChatErrorMessage}
     />
@@ -164,7 +237,7 @@ export function SpaceChatAlsoPostsTo({ spaceId }: { spaceId: string }) {
  * Reports each change of newest stored message written by someone else. The first load, older
  * pages and the viewer's own sends are not arrivals.
  */
-function useArrivals(state: SpaceChatState | undefined, viewerId: string | null, onArrival?: () => void) {
+function useArrivals(state: SpaceChatState | undefined, viewer: ChatViewer | null, onArrival?: () => void) {
   const newest = state?.messages[0];
   const newestId = newest ? normId(newest.id) : null;
   const previous = React.useRef<string | null>(null);
@@ -174,9 +247,9 @@ function useArrivals(state: SpaceChatState | undefined, viewerId: string | null,
     const before = previous.current;
     previous.current = newestId;
     if (before === null || newestId === null || before === newestId || !newest) return;
-    if (viewerId && normId(newest.author_id) === normId(viewerId)) return;
+    if (isViewerId(viewer, newest.author_id)) return;
     callback.current?.();
-  }, [newest, newestId, viewerId]);
+  }, [newest, newestId, viewer]);
 }
 
 /** Distinct authors of the loaded messages, newest first. */
@@ -189,6 +262,9 @@ function recentPeople(state: SpaceChatState | undefined, people: Map<string, Cha
   }
   return [...seen.values()];
 }
+
+/** geo-chat's slow mode: one message every 10 seconds per person. */
+const SLOW_MODE_MS = 10_000;
 
 /** Backs off, then stops: 5m45s in all, past one of geo-chat's 5-minute member syncs. */
 export const MEMBER_RECHECK_MS = [15_000, 30_000, 60_000, 60_000, 60_000, 60_000, 60_000];
@@ -245,9 +321,9 @@ function useChatMembership(spaceId: string, canPost: boolean, settingUp: boolean
 }
 
 /** Everyone the loaded messages name: authors and mentions, and the viewer for pending sends. */
-function personIds(state: SpaceChatState | undefined, viewerId: string | null) {
+function personIds(state: SpaceChatState | undefined, selfId: string | null) {
   const ids = new Set<string>();
-  if (viewerId) ids.add(normId(viewerId));
+  if (selfId) ids.add(normId(selfId));
   for (const message of state?.messages ?? []) {
     ids.add(normId(message.author_id));
     for (const id of mentionedIds(message.body)) ids.add(id);
@@ -258,11 +334,14 @@ function personIds(state: SpaceChatState | undefined, viewerId: string | null) {
 function viewMessages(
   state: SpaceChatState | undefined,
   people: Map<string, ChatPerson>,
-  self: ChatPerson | null
+  self: ChatPerson | null,
+  viewer: ChatViewer | null
 ): ChatViewMessage[] {
   if (!state) return [];
   const byId = new Map(state.messages.map(message => [normId(message.id), message]));
-  const author = (id: string) => people.get(normId(id)) ?? unknownPerson(id);
+  // The viewer's own messages show their profile under either wire id.
+  const author = (id: string) =>
+    (self && isViewerId(viewer, id) ? self : null) ?? people.get(normId(id)) ?? unknownPerson(id);
   const replyTo = (id: string | null): ChatViewMessage['replyTo'] => {
     if (!id) return undefined;
     const original = byId.get(normId(id));

@@ -1,10 +1,17 @@
 import { describe, expect, it } from 'vitest';
 
-import type { SpaceChatMessage, SpaceChatPage } from './api';
+import type { SpaceChatMessage, SpaceChatPage, SpaceChatRoom } from './api';
 import {
+  type SpaceChatRoomsData,
   type SpaceChatState,
+  UNREAD_COUNT_CAP,
+  parseSpaceChannelActivity,
+  parseSpaceChannelRoomEvent,
   parseSpaceChatRoomEvent,
   shownReactions,
+  spaceChatQueryKeys,
+  withChannelActivity,
+  withChannelUpdate,
   withChatMessage,
   withChatPage,
   withOlderChatPage,
@@ -16,6 +23,7 @@ import {
 } from './state';
 
 const VIEWER = '0191aaaa000070008000000000000001';
+const ME = { userId: VIEWER, personId: null };
 const OTHER = '0191bbbb000070008000000000000002';
 
 function message(n: number, overrides: Partial<SpaceChatMessage> = {}): SpaceChatMessage {
@@ -136,14 +144,34 @@ describe('space chat state', () => {
         reactions: count ? [{ value: '👍', count }] : [],
       }) as const;
     let state = withChatPage(undefined, page([1]));
-    state = withRoomEvent(state, thumbs(1, OTHER, 1), VIEWER);
+    state = withRoomEvent(state, thumbs(1, OTHER, 1), ME);
     expect(state.messages[0]!.reactions).toEqual([{ value: '👍', count: 1, reacted: false }]);
-    state = withRoomEvent(state, thumbs(2, VIEWER.toUpperCase(), 2), VIEWER);
+    state = withRoomEvent(state, thumbs(2, VIEWER.toUpperCase(), 2), ME);
     expect(state.messages[0]!.reactions).toEqual([{ value: '👍', count: 2, reacted: true }]);
-    state = withRoomEvent(state, thumbs(3, OTHER, 1, false), VIEWER);
+    state = withRoomEvent(state, thumbs(3, OTHER, 1, false), ME);
     expect(state.messages[0]!.reactions).toEqual([{ value: '👍', count: 1, reacted: true }]);
-    state = withRoomEvent(state, thumbs(4, VIEWER, 0, false), VIEWER);
+    state = withRoomEvent(state, thumbs(4, VIEWER, 0, false), ME);
     expect(state.messages[0]!.reactions).toEqual([]);
+  });
+
+  it('marks the viewer’s reaction under their person id as theirs too (GEO-3818)', () => {
+    const PERSON = '0191aaaa000070008000000000000009';
+    const viewer = { userId: VIEWER, personId: PERSON };
+    const thumbs = (reactionVersion: number, userId: string, count: number) =>
+      ({
+        type: 'reaction',
+        messageId: message(1).id,
+        userId,
+        value: '👍',
+        added: true,
+        reactionVersion,
+        reactions: count ? [{ value: '👍', count }] : [],
+      }) as const;
+    let state = withChatPage(undefined, page([1]));
+    state = withRoomEvent(state, thumbs(1, PERSON, 1), viewer);
+    expect(state.messages[0]!.reactions).toEqual([{ value: '👍', count: 1, reacted: true }]);
+    state = withRoomEvent(withChatPage(undefined, page([1])), thumbs(1, VIEWER, 1), viewer);
+    expect(state.messages[0]!.reactions).toEqual([{ value: '👍', count: 1, reacted: true }]);
   });
 
   describe('reaction versions', () => {
@@ -164,9 +192,9 @@ describe('space chat state', () => {
           { value: '👍', count: 1 },
           { value: '❤️', count: 1 },
         ]),
-        VIEWER
+        ME
       );
-      state = withRoomEvent(state, event(4, '👍', [{ value: '👍', count: 1 }]), VIEWER);
+      state = withRoomEvent(state, event(4, '👍', [{ value: '👍', count: 1 }]), ME);
       expect(reactionsOf(state)).toEqual([
         { value: '👍', count: 1, reacted: false },
         { value: '❤️', count: 1, reacted: false },
@@ -182,20 +210,20 @@ describe('space chat state', () => {
           { value: '👍', count: 2 },
           { value: '🎉', count: 1 },
         ]),
-        VIEWER
+        ME
       );
       expect(reactionsOf(state)).toEqual([
         { value: '👍', count: 2, reacted: true },
         { value: '🎉', count: 1, reacted: false },
       ]);
-      state = withRoomEvent(state, event(3, '👍', [{ value: '🎉', count: 1 }], VIEWER, false), VIEWER);
+      state = withRoomEvent(state, event(3, '👍', [{ value: '🎉', count: 1 }], VIEWER, false), ME);
       expect(reactionsOf(state)).toEqual([{ value: '🎉', count: 1, reacted: false }]);
-      state = withRoomEvent(state, event(4, '🎉', []), VIEWER);
+      state = withRoomEvent(state, event(4, '🎉', []), ME);
       expect(reactionsOf(state)).toEqual([]);
     });
 
     it('drops an event older than the history read it follows', () => {
-      const state = withRoomEvent(seeded(), event(1, '👍', []), VIEWER);
+      const state = withRoomEvent(seeded(), event(1, '👍', []), ME);
       expect(reactionsOf(state)).toEqual([{ value: '👍', count: 1, reacted: false }]);
     });
 
@@ -209,8 +237,8 @@ describe('space chat state', () => {
         reactions: [{ value: '👍', count: 2, reacted: true }],
       };
       const viewersEvent = event(2, '👍', [{ value: '👍', count: 2 }], VIEWER);
-      const viaResponse = withRoomEvent(withOwnReactionResult(tapped, pending, response), viewersEvent, VIEWER);
-      const viaEvent = withOwnReactionResult(withRoomEvent(tapped, viewersEvent, VIEWER), pending, response);
+      const viaResponse = withRoomEvent(withOwnReactionResult(tapped, pending, response), viewersEvent, ME);
+      const viaEvent = withOwnReactionResult(withRoomEvent(tapped, viewersEvent, ME), pending, response);
       for (const state of [viaResponse, viaEvent]) {
         expect(reactionsOf(state)).toEqual([{ value: '👍', count: 2, reacted: true }]);
         expect(state.pendingReactions).toEqual([]);
@@ -224,7 +252,7 @@ describe('space chat state', () => {
         { value: '👍', count: 1, reacted: true },
       ]);
       // Someone else's ❤️ committed first, without the viewer's 👍.
-      state = withRoomEvent(state, event(2, '❤️', [{ value: '❤️', count: 1 }]), VIEWER);
+      state = withRoomEvent(state, event(2, '❤️', [{ value: '❤️', count: 1 }]), ME);
       expect(shownReactions(state.messages[0]!, state.pendingReactions)).toEqual([
         { value: '❤️', count: 1, reacted: false },
         { value: '👍', count: 1, reacted: true },
@@ -254,7 +282,7 @@ describe('space chat state', () => {
           { value: '👍', count: 2 },
           { value: '🎉', count: 1 },
         ]),
-        VIEWER
+        ME
       );
       state = withOwnReactionResult(state, pending, {
         value: '👍',
@@ -320,7 +348,7 @@ describe('space chat state', () => {
     });
 
     it('keeps the higher-version reactions when a page copy is older', () => {
-      let state = withRoomEvent(seeded(), event(4, '👍', [{ value: '👍', count: 4 }]), VIEWER);
+      let state = withRoomEvent(seeded(), event(4, '👍', [{ value: '👍', count: 4 }]), ME);
       state = withChatPage(state, {
         messages: [message(1, { reactions: [{ value: '👍', count: 1, reacted: false }], reaction_version: 1 })],
         next_before: null,
@@ -381,5 +409,133 @@ describe('space chat state', () => {
     }
     expect(parseSpaceChatRoomEvent({ event_type: 'message.pinned', payload: {} })).toBeNull();
     expect(parseSpaceChatRoomEvent({ event_type: 'message.deleted', payload: { message_id: 'm' } })).toBeNull();
+  });
+});
+
+describe('channels (GEO-3818)', () => {
+  const room = (overrides: Partial<SpaceChatRoom>): SpaceChatRoom => ({
+    id: '0192aaaa000070008000000000000001',
+    public_dao_space_id: 'p',
+    space_id: 's',
+    kind: 'channel',
+    key: 'k',
+    name: 'markets',
+    version: 2,
+    can_post: true,
+    unread_count: 4,
+    ...overrides,
+  });
+  const data = (rooms: SpaceChatRoom[]): SpaceChatRoomsData => ({
+    supported: true,
+    rooms,
+    channelsEnabled: true,
+    canManageChannels: false,
+  });
+
+  it('lays a newer channel.updated over the row and keeps the viewer fields', () => {
+    const next = withChannelUpdate(data([room({})]), {
+      ...room({ name: 'prices', version: 3, archived: true }),
+      can_post: undefined,
+      unread_count: undefined,
+    });
+    expect(next.rooms[0]).toMatchObject({
+      name: 'prices',
+      version: 3,
+      archived: true,
+      can_post: true,
+      unread_count: 4,
+    });
+  });
+
+  it('drops a stale or unknown channel.updated', () => {
+    const current = data([room({})]);
+    expect(withChannelUpdate(current, room({ name: 'old', version: 2 }))).toBe(current);
+    expect(withChannelUpdate(current, room({ id: 'other', version: 9 }))).toBe(current);
+  });
+
+  it('parses channel room events and leaves message events alone', () => {
+    expect(
+      parseSpaceChannelRoomEvent({ event_type: 'channel.updated', payload: { room: room({ version: 5 }) } })
+    ).toMatchObject({ type: 'updated', room: { version: 5 } });
+    expect(
+      parseSpaceChannelRoomEvent({
+        event_type: 'channel.members_changed',
+        payload: { room_id: 'r', room_kind: 'channel', added_user_ids: ['a'], removed_user_ids: [] },
+      })
+    ).toEqual({ type: 'members_changed', roomId: 'r', added: ['a'], removed: [] });
+    expect(parseSpaceChannelRoomEvent({ event_type: 'message.created', payload: {} })).toBeNull();
+    expect(parseSpaceChannelRoomEvent({ event_type: 'channel.updated', payload: { room: { id: 'x' } } })).toBeNull();
+  });
+
+  it('keys archived lists under the same root as the plain list', () => {
+    const root = spaceChatQueryKeys.roomsRoot('s', 'acct');
+    expect(spaceChatQueryKeys.rooms('s', 'acct').slice(0, root.length)).toEqual(root);
+    expect(spaceChatQueryKeys.rooms('s', 'acct', true).slice(0, root.length)).toEqual(root);
+    expect(spaceChatQueryKeys.rooms('s', 'acct', true)).not.toEqual(spaceChatQueryKeys.rooms('s', 'acct'));
+  });
+});
+
+describe('channel activity (GEO-3818)', () => {
+  const ROOM = '0192aaaa000070008000000000000003';
+  const row = (extra: Partial<SpaceChatRoom> = {}): SpaceChatRoom => ({
+    id: ROOM,
+    public_dao_space_id: 'p',
+    space_id: 'space-1',
+    kind: 'channel',
+    key: 'k',
+    unread_count: 2,
+    last_read_message_id: '0195000000007000800000000000000a',
+    ...extra,
+  });
+  const list = (rooms: SpaceChatRoom[]) => ({
+    supported: true,
+    rooms,
+    channelsEnabled: true,
+    canManageChannels: false,
+  });
+  const activity = (messageId: string, authorId = 'other') =>
+    parseSpaceChannelActivity({ space_id: 'space-1', room_id: ROOM, message_id: messageId, author_id: authorId })!;
+  const viewer = { userId: 'user', personId: 'person' };
+  const unread = (data: ReturnType<typeof list>) => data.rooms[0]!.unread_count;
+
+  it('reads the event, and nothing else', () => {
+    expect(activity('0195000000007000800000000000000b')).toEqual({
+      spaceId: 'space-1',
+      roomId: ROOM,
+      messageId: '0195000000007000800000000000000b',
+      authorId: 'other',
+    });
+    expect(parseSpaceChannelActivity({ space_id: 'space-1', room_id: ROOM })).toBeNull();
+  });
+
+  it('counts a new message once, past the read cursor', () => {
+    let data = withChannelActivity(list([row()]), activity('0195000000007000800000000000000b'), viewer, null);
+    expect(unread(data)).toBe(3);
+    data = withChannelActivity(data, activity('0195000000007000800000000000000b'), viewer, null);
+    expect(unread(data)).toBe(3);
+    data = withChannelActivity(data, activity('0195000000007000800000000000000a'), viewer, null);
+    expect(unread(data)).toBe(3);
+    data = withChannelActivity(data, activity('0195000000007000800000000000000c'), viewer, null);
+    expect(unread(data)).toBe(4);
+  });
+
+  it('skips the viewer’s own message under either id, the channel showing, and unknown rooms', () => {
+    const fresh = '0195000000007000800000000000000b';
+    const start = list([row()]);
+    expect(withChannelActivity(start, activity(fresh, 'person'), viewer, null)).toBe(start);
+    expect(withChannelActivity(start, activity(fresh, 'user'), viewer, null)).toBe(start);
+    expect(withChannelActivity(start, activity(fresh), viewer, '0192aaaa-0000-7000-8000-000000000003')).toBe(start);
+    const other = list([row({ id: '0192aaaa000070008000000000000004' })]);
+    expect(withChannelActivity(other, activity(fresh), viewer, null)).toBe(other);
+  });
+
+  it('stops at the cap', () => {
+    const data = withChannelActivity(
+      list([row({ unread_count: UNREAD_COUNT_CAP })]),
+      activity('0195000000007000800000000000000b'),
+      viewer,
+      null
+    );
+    expect(unread(data)).toBe(UNREAD_COUNT_CAP);
   });
 });

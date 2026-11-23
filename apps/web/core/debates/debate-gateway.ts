@@ -21,12 +21,20 @@ import {
   spaceCallsRefetch,
   withSpaceCallPatch,
 } from '~/core/space-calls/space-calls-patch';
+import { getShownChatRoom } from '~/core/space-chat/shown-room';
 import {
+  type SpaceChannelRoomEvent,
+  type SpaceChatRoomsData,
   type SpaceChatState,
+  parseSpaceChannelActivity,
+  parseSpaceChannelRoomEvent,
   parseSpaceChatRoomEvent,
   spaceChatQueryKeys,
+  withChannelActivity,
+  withChannelUpdate,
   withRoomEvent,
 } from '~/core/space-chat/state';
+import { currentChatViewer } from '~/core/space-chat/viewer';
 
 import {
   type DebateLobbiesResponse,
@@ -37,7 +45,6 @@ import {
   type GeoChatSession,
   type GetPrivyIdentityToken,
   dashlessId,
-  getCurrentGeoChatUserId,
   getGeoChatApiBaseUrl,
   getGeoChatSession,
   getStoredGeoChatAccessToken,
@@ -64,7 +71,10 @@ export type DebateGatewayScope =
    * A space chat room (GEO-3422). Sent in geo-chat's original room shape, without `scope`, and
    * echoed that way in READY and ERROR.
    */
-  | { scope: 'chat-room'; space_id: string; room_id: string; room_kind: 'member' | 'editor' };
+  | { scope: 'chat-room'; space_id: string; room_id: string; room_kind: SpaceChatRoomKind };
+
+/** `channel` is one an editor made (GEO-3818); `member` is #general, `editor` #editors. */
+export type SpaceChatRoomKind = 'member' | 'editor' | 'channel';
 
 export type MatchmakingSection = 'people' | 'claims' | 'matches';
 
@@ -137,6 +147,8 @@ const DEBATE_EVENT_AUDIENCE = {
   'debate.lobby_claim_lists_changed': 'participants',
   'debate.lobby_guests_changed': 'participants',
   'debate.space_calls_changed': 'broadcast',
+  'space.channels_changed': 'broadcast',
+  'space.channel_activity': 'participants',
 } as const satisfies Record<string, 'broadcast' | 'participants'>;
 
 type DebateEventType = keyof typeof DEBATE_EVENT_AUDIENCE;
@@ -200,6 +212,8 @@ const INVALIDATION_COALESCE_MS = 50;
  * reconciles), so their reads don't land together.
  */
 export const BROADCAST_INVALIDATION_SPREAD_MS = 500;
+/** `space.channels_changed` re-reads the room list within this (GEO-3818). */
+export const CHANNEL_LIST_SPREAD_MS = 2_000;
 const INVALIDATION_RETRY_BASE_MS = 250;
 /**
  * How long an unrecognised `ERROR` frame suppresses another reconnect. One recycle repairs a
@@ -224,6 +238,8 @@ export class DebateGatewayClient {
   private readonly confirmedScopes = new Set<string>();
   /** Retained scopes the server refused; not re-sent on this socket. Retried once per connection. */
   private readonly refusedScopes = new Set<string>();
+  /** Dashless ids of retained chat rooms whose subscription geo-chat revoked (GEO-3818). */
+  private readonly revokedRooms = new Set<string>();
   /** Backoff for scopes whose subscription check failed transiently; reset once READY confirms them. */
   private readonly subscriptionRetries = new Map<
     string,
@@ -301,6 +317,23 @@ export class DebateGatewayClient {
   /** Events reach `scope`: the socket is ready and READY confirmed it. Listeners hear each change. */
   isScopeLive(scope: DebateGatewayScope) {
     return this.snapshot.status === 'ready' && this.readyForDebates && this.confirmedScopes.has(scopeKey(scope));
+  }
+
+  /** The viewer lost access to this retained room; cleared once nothing retains it. */
+  isRoomRevoked(roomId: string) {
+    return this.revokedRooms.has(dashlessId(roomId));
+  }
+
+  /** A revoked room the re-read list still has: the revoke was transient, so subscribe again. */
+  readmitRoom(roomId: string) {
+    const id = dashlessId(roomId);
+    if (!this.revokedRooms.delete(id)) return;
+    for (const [key, { scope }] of this.scopes) {
+      if (scope.scope !== 'chat-room' || dashlessId(scope.room_id) !== id) continue;
+      this.refusedScopes.delete(key);
+      this.sendSubscription(scope, 'SUBSCRIBE');
+    }
+    this.scopesChanged();
   }
 
   subscribe = (listener: () => void) => {
@@ -401,7 +434,8 @@ export class DebateGatewayClient {
   }
 
   retainScope(scope: DebateGatewayScope) {
-    if (this.anonymous && (scope.scope !== 'chat-room' || scope.room_kind !== 'member')) return () => undefined;
+    // Signed out, only rooms everyone reads: #general, and channels geo-chat lets in or refuses.
+    if (this.anonymous && (scope.scope !== 'chat-room' || scope.room_kind === 'editor')) return () => undefined;
     const key = scopeKey(scope);
     const retained = this.scopes.get(key);
     if (retained) {
@@ -425,6 +459,7 @@ export class DebateGatewayClient {
       this.sentScopes.delete(key);
       this.confirmedScopes.delete(key);
       this.clearSubscriptionRetry(key);
+      if (scope.scope === 'chat-room') this.revokedRooms.delete(dashlessId(scope.room_id));
       if (this.anonymous && this.scopes.size === 0) {
         this.stop();
         return;
@@ -573,6 +608,8 @@ export class DebateGatewayClient {
           // Only if it is still this socket's: another tab may already have stored a newer one.
           if (getStoredGeoChatAccessToken() === this.socketAccessToken) resetGeoChatSession();
           this.forceReconnect(socket, this.authExpiredReconnectDelayMs(), 'session');
+        } else if (this.revokeRoom(envelope.payload)) {
+          // That channel alone is gone; the socket and every other subscription stay up.
         } else if (this.refuseForbiddenScope(envelope.payload)) {
           // Only that scope is refused; the socket and every other subscription stay up.
         } else if (this.retryFailedSubscriptionCheck(envelope.payload)) {
@@ -660,29 +697,82 @@ export class DebateGatewayClient {
     this.scopesChanged();
   }
 
+  /**
+   * `subscription_revoked` (GEO-3818): removed from a channel, or its read policy tightened past
+   * the viewer. Not re-sent; the room list is re-read so the channel drops out of it.
+   */
+  private revokeRoom(payload: unknown) {
+    if (!isRecord(payload) || payload.code !== 'subscription_revoked') return false;
+    const scope = parseScope(payload.subscription);
+    if (!scope || scope.scope !== 'chat-room') return false;
+    const key = scopeKey(scope);
+    this.sentScopes.delete(key);
+    this.confirmedScopes.delete(key);
+    this.clearSubscriptionRetry(key);
+    if (this.scopes.has(key)) {
+      this.refusedScopes.add(key);
+      this.revokedRooms.add(dashlessId(scope.room_id));
+    }
+    this.queueChannelList(scope.space_id);
+    this.scopesChanged();
+    return true;
+  }
+
+  /** Every cached room list of the space, with or without archived channels. */
+  private queueChannelList(spaceId: string) {
+    this.queueQuery(spaceChatQueryKeys.roomsRoot(spaceId, this.anonymous ? null : this.accountKey));
+  }
+
   /** A space chat room's message event (GEO-3422): applied to the cached room, never refetched. */
   private handleRoomEvent(roomId: string, payload: unknown) {
+    const channelEvent = parseSpaceChannelRoomEvent(payload);
+    if (channelEvent) {
+      this.applyChannelRoomEvent(channelEvent);
+      return;
+    }
     const event = parseSpaceChatRoomEvent(payload);
     const key = this.chatRoomQueryKey(roomId);
     if (!event || !key) return;
-    const viewerId = this.anonymous ? null : getCurrentGeoChatUserId();
+    const viewer = this.anonymous ? null : currentChatViewer();
     this.queryClient.setQueryData<SpaceChatState>(key, current =>
-      current ? withRoomEvent(current, event, viewerId) : current
+      current ? withRoomEvent(current, event, viewer) : current
     );
+  }
+
+  /**
+   * GEO-3818. `channel.updated` patches the cached rows when newer, then the list is re-read for
+   * the viewer's rights; `channel.members_changed` re-reads the channel's people.
+   */
+  private applyChannelRoomEvent(event: SpaceChannelRoomEvent) {
+    if (event.type === 'members_changed') {
+      const key = this.accountQueryKey('space-chat-members', dashlessId(event.roomId));
+      if (key) this.queueQuery(key);
+      return;
+    }
+    const { room } = event;
+    const root = spaceChatQueryKeys.roomsRoot(room.space_id, this.anonymous ? null : this.accountKey);
+    this.queryClient.setQueriesData<SpaceChatRoomsData>({ queryKey: root }, current =>
+      current ? withChannelUpdate(current, room) : current
+    );
+    // Signed out the patch is all there is; signed in, the viewer's rights may have changed.
+    if (!this.anonymous) this.queueQuery(root);
   }
 
   private handleEvent(payload: unknown) {
     if (!isDebateEvent(payload) || this.recentEventIds.has(payload.event_id)) return;
     this.rememberEvent(payload.event_id);
     const spread = DEBATE_EVENT_AUDIENCE[payload.event_type] === 'broadcast';
-    this.withInvalidationSpread(spread, () => this.applyEvent(payload));
+    // The channel list re-read is heavier and every space viewer makes it, so it spreads wider.
+    const spreadMs =
+      payload.event_type === 'space.channels_changed' ? CHANNEL_LIST_SPREAD_MS : BROADCAST_INVALIDATION_SPREAD_MS;
+    this.withInvalidationSpread(spread, () => this.applyEvent(payload), spreadMs);
   }
 
   /** Spread: one draw for every key `queue` adds, so several keys don't take the earliest of many. */
-  private withInvalidationSpread(spread: boolean, queue: () => void) {
+  private withInvalidationSpread(spread: boolean, queue: () => void, spreadMs = BROADCAST_INVALIDATION_SPREAD_MS) {
     const previous = this.invalidationSpreadDelayMs;
     if (!spread) this.invalidationSpreadDelayMs = 0;
-    else if (previous === 0) this.invalidationSpreadDelayMs = this.random() * BROADCAST_INVALIDATION_SPREAD_MS;
+    else if (previous === 0) this.invalidationSpreadDelayMs = this.random() * spreadMs;
     try {
       queue();
     } finally {
@@ -825,6 +915,21 @@ export class DebateGatewayClient {
       }
       // GEO-3419. A live row is patched in place when newer; anything else refetches, narrowed by a
       // rowless event's `change` (GEO-3420).
+      case 'space.channels_changed':
+        if (identifiers.space_id) this.queueChannelList(identifiers.space_id);
+        break;
+      // GEO-3818. A hint, counted into the cached list; the list itself is re-read on focus and lag.
+      case 'space.channel_activity': {
+        const activity = parseSpaceChannelActivity(identifiers);
+        if (!activity || this.anonymous) break;
+        const viewer = currentChatViewer();
+        const shown = getShownChatRoom();
+        this.queryClient.setQueriesData<SpaceChatRoomsData>(
+          { queryKey: spaceChatQueryKeys.roomsRoot(activity.spaceId, this.accountKey) },
+          current => (current ? withChannelActivity(current, activity, viewer, shown) : current)
+        );
+        break;
+      }
       case 'debate.space_calls_changed': {
         if (!identifiers.space_id) break;
         const listKey = spaceCallKeys.list(identifiers.space_id);
@@ -1673,7 +1778,7 @@ export function useDebateGatewayScope(scope: DebateGatewayScope, enabled: boolea
  * signed in, on `publicChatGateway` signed out. Returns whether the room's events are arriving.
  */
 export function useSpaceChatRoomScope(
-  room: { space_id: string; id: string; kind: 'member' | 'editor' } | null,
+  room: { space_id: string; id: string; kind: SpaceChatRoomKind } | null,
   enabled: boolean,
   signedIn: boolean
 ) {
@@ -1699,6 +1804,19 @@ export function useSpaceChatRoomScope(
     [enabled, gateway, roomId, roomKind, spaceId]
   );
   return React.useSyncExternalStore(gateway.subscribe, live, live);
+}
+
+/**
+ * Whether geo-chat revoked the viewer's subscription to this retained room (GEO-3818), and
+ * `readmit` for when the re-read room list still has it.
+ */
+export function useSpaceChatRoomRevoked(roomId: string | null, signedIn: boolean) {
+  const gateway = signedIn ? debateGateway : publicChatGateway;
+  const revoked = React.useCallback(() => (roomId ? gateway.isRoomRevoked(roomId) : false), [gateway, roomId]);
+  const readmit = React.useCallback(() => {
+    if (roomId) gateway.readmitRoom(roomId);
+  }, [gateway, roomId]);
+  return { revoked: React.useSyncExternalStore(gateway.subscribe, revoked, () => false), readmit };
 }
 
 /**
@@ -1811,7 +1929,7 @@ function parseScope(value: unknown): DebateGatewayScope | null {
     value.scope === undefined &&
     typeof value.room_id === 'string' &&
     typeof value.space_id === 'string' &&
-    (value.room_kind === 'member' || value.room_kind === 'editor')
+    (value.room_kind === 'member' || value.room_kind === 'editor' || value.room_kind === 'channel')
   ) {
     return { scope: 'chat-room', space_id: value.space_id, room_id: value.room_id, room_kind: value.room_kind };
   }
