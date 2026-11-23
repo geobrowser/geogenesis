@@ -464,8 +464,6 @@ export interface TopicViralPostPreviewModel {
   id: string;
   authorName: string;
   authorHandle?: string;
-  /** The author's avatar image, already resolved to a URL. */
-  authorAvatarUrl?: string | null;
   platform: string;
   viewsLabel?: string;
   when?: string;

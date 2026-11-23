@@ -189,4 +189,44 @@ describe('useLivePostTemplate author card', () => {
     expect(model.title).toBe('The UN secretary-general race is steeped in intrigue. Should we care?');
     expect(model.body).toBe('Ben Cohen analyzes the contest to succeed Guterres.');
   });
+
+  it('never uses a tweet\'s own text as its author when it has none', () => {
+    state.entity = { ...tweet(), relations: [] };
+
+    const { result } = renderHook(() => useLivePostTemplate({ entityId: state.entity!.id, spaceId: SPACE }));
+    const model = result.current.data!;
+
+    expect(model.authorName).toBe('Unknown author');
+    expect(model.title).toBe('Post on X');
+    expect(model.body).toBe(
+      'Striking to see the degree to which Israel has become a major dividing line within both parties.'
+    );
+  });
+
+  it('names an author-less tweet by its handle when the post URL has one', () => {
+    state.entity = { ...tweet(), relations: [] };
+    state.authorMeta = { handle: '@shashj', avatarUrl: null };
+
+    const { result } = renderHook(() => useLivePostTemplate({ entityId: state.entity!.id, spaceId: SPACE }));
+    const model = result.current.data!;
+
+    expect(model.authorName).toBe('@shashj');
+    expect(model.authorHandle).toBeUndefined();
+    expect(model.title).toBe('@shashj on X');
+  });
+
+  it('keeps an author-less headline Post titled by its headline', () => {
+    state.entity = entity({
+      name: 'The UN secretary-general race is steeped in intrigue. Should we care?',
+      description: 'Ben Cohen analyzes the contest to succeed Guterres.',
+      types: [{ id: TEMPLATE_ONTOLOGY.POST_TYPE_ID, name: 'Post' }],
+    });
+
+    const { result } = renderHook(() => useLivePostTemplate({ entityId: state.entity!.id, spaceId: SPACE }));
+    const model = result.current.data!;
+
+    expect(model.authorName).toBe('Unknown author');
+    expect(model.title).toBe('The UN secretary-general race is steeped in intrigue. Should we care?');
+    expect(model.body).toBe('Ben Cohen analyzes the contest to succeed Guterres.');
+  });
 });

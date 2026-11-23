@@ -96,7 +96,11 @@ export function useLivePostTemplate({
     const platforms = readEntityRelations(entity, TEMPLATE_ONTOLOGY.PLATFORM_PROPERTY_ID);
     const platform = platforms[0]?.toEntity.name ?? (isTweet ? 'X' : 'Geo');
     const authors = readEntityRelations(entity, TEMPLATE_ONTOLOGY.AUTHORS_PROPERTY_ID);
-    const authorName = authorMeta?.name ?? authors[0]?.toEntity.name ?? entity.name ?? 'Post';
+    // Never the post's own name: a tweet's name is its text and a Post's is its headline, so an
+    // author-less post would otherwise be titled "<its own text> on X" with that text as its author.
+    const knownAuthor = authorMeta?.name || authors[0]?.toEntity.name?.trim() || authorMeta?.handle || undefined;
+    const authorName = knownAuthor ?? 'Unknown author';
+    const authorHandle = authorMeta?.handle && authorMeta.handle !== authorName ? authorMeta.handle : undefined;
     const when = formatOntologyDate(readEntityTextValue(entity, TEMPLATE_ONTOLOGY.PUBLISH_DATE_PROPERTY_ID));
     const externalUrl = readEntityTextValue(entity, TEMPLATE_ONTOLOGY.WEB_URL_PROPERTY_ID) ?? undefined;
     const topics = readEntityRelations(entity, TEMPLATE_ONTOLOGY.TOPICS_PROPERTY_ID);
@@ -106,12 +110,14 @@ export function useLivePostTemplate({
     const rawTitle = entity.name?.trim();
     // A tweet's name is its own text, which the author card shows, so the page is titled by its
     // author instead of repeating the text. A Post's name is a headline (an article or statement).
-    const hasDistinctHeadline = Boolean(rawTitle) && rawTitle !== authorName && !isTweet;
+    const hasDistinctHeadline = Boolean(rawTitle) && rawTitle !== knownAuthor && !isTweet;
     const displayTitle = hasDistinctHeadline
       ? rawTitle
-      : authorName.toLowerCase() === platform.toLowerCase()
-        ? authorName
-        : `${authorName} on ${platform}`;
+      : !knownAuthor
+        ? `Post on ${platform}`
+        : knownAuthor.toLowerCase() === platform.toLowerCase()
+          ? knownAuthor
+          : `${knownAuthor} on ${platform}`;
 
     const firstTopic = topics[0];
     const breadcrumbs: BreadcrumbItem[] | undefined = firstTopic
@@ -238,7 +244,7 @@ export function useLivePostTemplate({
       id: entity.id,
       title: displayTitle,
       authorName,
-      authorHandle: authorMeta?.handle,
+      authorHandle,
       authorAvatarUrl: authorMeta?.avatarUrl ?? null,
       platform,
       when,
