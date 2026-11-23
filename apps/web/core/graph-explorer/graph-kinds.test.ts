@@ -13,6 +13,12 @@ describe('graphKindOf', () => {
     expect(graphKindOf([TOPIC_TYPE_ID])).toBe('topic');
   });
 
+  it('reads a topic timeline as a topic, and a bare timeline as an event', () => {
+    const TIMELINE = '3b22262d7919441db1a839eee9c2b3e9';
+    expect(graphKindOf([TIMELINE, TOPIC_TYPE_ID])).toBe('topic');
+    expect(graphKindOf([TIMELINE])).toBe('event');
+  });
+
   it('reads a News event as an event even though it is typed Claim', () => {
     expect(graphKindOf([CLAIM_TYPE_ID, NEWS_EVENT_TYPE_ID])).toBe('event');
     expect(graphKindOf([CLAIM_TYPE_ID])).toBe('claim');

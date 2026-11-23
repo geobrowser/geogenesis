@@ -32,6 +32,7 @@ export const GRAPH_KIND_LABELS: Record<GraphKind, string> = {
 };
 
 export const NEWS_EVENT_TYPE_ID = 'bb9a85bd6dc64efd8232e2782cb4b5f8';
+const TIMELINE_TYPE_ID = '3b22262d7919441db1a839eee9c2b3e9';
 
 /**
  * Every testnet Type entity behind each kind, most important first within a kind. Court orders and
@@ -59,7 +60,7 @@ export const GRAPH_KIND_TYPE_IDS: Record<GraphKind, readonly string[]> = {
     '7d34e68d505c4a7eaa8493094a01846d',
     'd4a41ddcb655436aa72c153135ae4cfe',
     '64ef895337014523b47c8b1144a4b220', // Case event
-    '3b22262d7919441db1a839eee9c2b3e9', // Timeline
+    TIMELINE_TYPE_ID,
   ],
   src: [
     ARTICLE_TYPE_ID,
@@ -90,12 +91,13 @@ for (const kind of GRAPH_KINDS) for (const id of GRAPH_KIND_TYPE_IDS[kind]) KIND
 
 /**
  * The node's kind from its types. Topic is often a second type (Netanyahu is Person + Topic), so it
- * wins only alone; a News event is typed Claim too but reads as an event. Null for types no kind
- * covers (blocks, tags, provenance records).
+ * wins only alone, or beside Timeline (topic timelines are Timeline + Topic). A News event is typed
+ * Claim too but reads as an event. Null for types no kind covers (blocks, tags, provenance records).
  */
 export function graphKindOf(typeIds: readonly string[]): GraphKind | null {
-  const ids = typeIds.map(normId);
+  let ids = typeIds.map(normId);
   if (ids.includes(NEWS_EVENT_TYPE_ID)) return 'event';
+  if (ids.some(id => KIND_BY_TYPE.get(id) === 'topic')) ids = ids.filter(id => id !== TIMELINE_TYPE_ID);
   let best: GraphKind | null = null;
   for (const id of ids) {
     const kind = KIND_BY_TYPE.get(id);
