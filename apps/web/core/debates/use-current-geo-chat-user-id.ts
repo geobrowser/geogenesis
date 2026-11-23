@@ -30,7 +30,9 @@ export function useCurrentGeoChatUserId(): string | null {
     // until the new session lands, instead of reading as nobody: voice, for one, unmounts on null.
     if (stored) {
       setResolved(current =>
-        current?.accountKey === accountKey && current.id === stored ? current : { accountKey, id: stored }
+        current !== null && current.accountKey === accountKey && current.id === stored
+          ? current
+          : { accountKey, id: stored }
       );
       return;
     }

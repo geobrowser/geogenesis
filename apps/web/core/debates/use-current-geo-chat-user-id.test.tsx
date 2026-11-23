@@ -97,6 +97,13 @@ describe('useCurrentGeoChatUserId', () => {
     await waitFor(() => expect(readId()).toBe('unknown'));
   });
 
+  it('reads a stored id when the auth hook gives no account key', () => {
+    mocks.stored = 'user-a';
+    mocks.accountKey = undefined as unknown as string;
+    render(<Probe />);
+    expect(readId()).toBe('user-a');
+  });
+
   it('keeps the last id through a session reset for the same account', async () => {
     mocks.stored = 'user-a';
     mocks.resolve.mockReturnValue(new Promise(() => {}));
