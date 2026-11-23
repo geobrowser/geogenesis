@@ -6,6 +6,7 @@ import { getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
 
 import type { GraphEntity, GraphHop, GraphRelation } from './fetch-graph-hop';
 import { type GraphFilter, keepNeighbour } from './graph-filter';
+import { CONTENT_RELATION_LABELS } from './graph-kinds';
 import { RELATION_LABELS } from './ontology';
 
 /** Graph nodes drawn around the centre; the rest are in the Relationships tab. */
@@ -24,7 +25,8 @@ export type Spoke = {
 };
 
 export function relationLabel(relation: Pick<GraphRelation, 'propertyId' | 'propertyName' | 'direction'>): string {
-  const known = RELATION_LABELS[normId(relation.propertyId)];
+  const id = normId(relation.propertyId);
+  const known = RELATION_LABELS[id] ?? CONTENT_RELATION_LABELS[id];
   if (known) return known[relation.direction];
   const name = relation.propertyName?.trim() || 'Relation';
   return relation.direction === 'out' ? name : `${name} (incoming)`;

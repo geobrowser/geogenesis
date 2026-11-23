@@ -1,5 +1,6 @@
 import { normId } from '~/core/utils/norm-id';
 
+import { GRAPH_KINDS, type GraphKind, parseGraphKinds } from './graph-kinds';
 import { DEFAULT_EXCLUDE_TYPE_IDS, DEFAULT_INCLUDE_TYPE_IDS, DEFAULT_SPOKE_RELATION_TYPE_IDS } from './ontology';
 
 /** What the view is about. Independent: an empty space scope keeps the topic lens. */
@@ -22,6 +23,8 @@ export type GraphFilter = {
   includeTypeIds: string[];
   excludeTypeIds: string[];
   relationTypeIds: string[];
+  /** Node kinds the 3D view may show, in priority order. */
+  kinds: readonly GraphKind[];
   /** Claims tab keeps only claims that also carry this topic. Unset shows every claim about the centre. */
   claimsTopicId?: string;
 };
@@ -39,6 +42,8 @@ export type GraphFilterOverrides = {
   types?: string[];
   excludeTypes?: string[];
   relations?: string[];
+  /** `?kinds=ent,claim` narrows the node kinds. */
+  kinds?: GraphKind[];
   /** `?claims=all` lifts the topic filter on the Claims tab. */
   claims?: 'all';
 };
@@ -63,6 +68,8 @@ export function parseGraphFilterOverrides(params: Pick<URLSearchParams, 'get'>):
     if (ids) overrides[key] = ids;
   }
   if (params.get('claims') === 'all') overrides.claims = 'all';
+  const kinds = parseGraphKinds(params.get('kinds'));
+  if (kinds) overrides.kinds = kinds;
   return overrides;
 }
 
@@ -80,6 +87,7 @@ export function resolveGraphFilter(scope: GraphScope | null, overrides: GraphFil
     includeTypeIds: nonEmpty(overrides.types) ?? DEFAULT_GRAPH_FILTER.includeTypeIds,
     excludeTypeIds: overrides.excludeTypes ?? DEFAULT_GRAPH_FILTER.excludeTypeIds,
     relationTypeIds: nonEmpty(overrides.relations) ?? DEFAULT_GRAPH_FILTER.relationTypeIds,
+    kinds: overrides.kinds ?? GRAPH_KINDS,
     claimsTopicId: scope?.topicId && overrides.claims !== 'all' ? normId(scope.topicId) : undefined,
   };
 }
@@ -108,6 +116,7 @@ export function graphFilterKey(filter: GraphFilter) {
     [...filter.includeTypeIds].sort().join(','),
     [...filter.excludeTypeIds].sort().join(','),
     [...filter.relationTypeIds].sort().join(','),
+    filter.kinds.join(','),
     filter.claimsTopicId ?? '*',
   ];
 }
