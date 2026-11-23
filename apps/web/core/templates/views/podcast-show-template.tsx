@@ -11,7 +11,6 @@ import {
   EntityContextTogglePill,
   EntityInlineContext,
   EntityOverflowMenu,
-  InlinePagination,
   ListRankingHeaderControl,
   ListRankingWorkspace,
   type RankableListItem,
@@ -38,8 +37,6 @@ export interface PodcastShowTemplateProps {
   className?: string;
 }
 
-const EPISODES_PAGE_SIZE = 10;
-
 /**
  * Pure, data-driven Podcast Show entity template.
  *
@@ -56,7 +53,6 @@ export function PodcastShowTemplate({
   className,
 }: PodcastShowTemplateProps) {
   const [episodeFilter, setEpisodeFilter] = React.useState('');
-  const [page, setPage] = React.useState(1);
 
   const ranking = useListRanking({
     listKey: `podcast-episodes:${model.id}`,
@@ -84,13 +80,9 @@ export function PodcastShowTemplate({
     });
   }, [normalizedQuery, ranking.orderedItems]);
 
-  React.useEffect(() => {
-    setPage(1);
-  }, [normalizedQuery, model.id]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredEpisodes.length / EPISODES_PAGE_SIZE));
-  const safePage = Math.min(page, totalPages);
-  const visibleEpisodes = filteredEpisodes.slice((safePage - 1) * EPISODES_PAGE_SIZE, safePage * EPISODES_PAGE_SIZE);
+  // Every loaded episode is shown; "Load more episodes" fetches the next batch from the server. Page
+  // numbers on top of that only paged what was already loaded, so the list had two pagers (GEO-3819).
+  const visibleEpisodes = filteredEpisodes;
 
   const metaParts = [
     model.episodeCount > 0
@@ -179,10 +171,7 @@ export function PodcastShowTemplate({
               title="Episodes"
               hasMyRanking={ranking.hasMyRanking}
               viewMode={ranking.viewMode}
-              onViewModeChange={mode => {
-                ranking.setViewMode(mode);
-                setPage(1);
-              }}
+              onViewModeChange={ranking.setViewMode}
               onOpen={ranking.open}
               disabled={model.episodes.length < 2}
             />
@@ -195,10 +184,7 @@ export function PodcastShowTemplate({
           items={rankableEpisodes}
           initialOrder={ranking.myOrder}
           onClose={ranking.close}
-          onPublish={nextOrder => {
-            ranking.publish(nextOrder);
-            setPage(1);
-          }}
+          onPublish={ranking.publish}
         />
 
         {visibleEpisodes.length === 0 ? (
@@ -218,23 +204,16 @@ export function PodcastShowTemplate({
           </div>
         )}
 
-        {(totalPages > 1 || model.hasMoreEpisodes) && (
-          <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-            {totalPages > 1 ? (
-              <InlinePagination page={safePage} totalPages={totalPages} onPageChange={setPage} />
-            ) : (
-              <span />
-            )}
-            {model.hasMoreEpisodes && model.onLoadMoreEpisodes && (
-              <button
-                type="button"
-                disabled={model.isLoadingMoreEpisodes}
-                onClick={model.onLoadMoreEpisodes}
-                className="inline-flex h-8 cursor-pointer items-center rounded-full border border-grey-02 bg-white px-4 text-[13.5px] font-medium text-text transition-colors hover:border-text disabled:cursor-default disabled:opacity-50"
-              >
-                {model.isLoadingMoreEpisodes ? 'Loading episodes…' : 'Load more episodes'}
-              </button>
-            )}
+        {model.hasMoreEpisodes && model.onLoadMoreEpisodes && (
+          <div className="flex flex-wrap items-center justify-end gap-3 pt-1">
+            <button
+              type="button"
+              disabled={model.isLoadingMoreEpisodes}
+              onClick={model.onLoadMoreEpisodes}
+              className="inline-flex h-8 cursor-pointer items-center rounded-full border border-grey-02 bg-white px-4 text-[13.5px] font-medium text-text transition-colors hover:border-text disabled:cursor-default disabled:opacity-50"
+            >
+              {model.isLoadingMoreEpisodes ? 'Loading episodes…' : 'Load more episodes'}
+            </button>
           </div>
         )}
       </section>

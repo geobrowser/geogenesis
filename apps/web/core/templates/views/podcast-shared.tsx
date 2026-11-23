@@ -5,6 +5,8 @@ import * as React from 'react';
 import cx from 'classnames';
 import Link from 'next/link';
 
+import { normalizeWeb2Url, tokenizeWeb2Urls } from '~/core/utils/url-detection';
+
 import type { PodcastPersonModel, PodcastPlatformLinkModel, PodcastTopicChipModel } from '../models';
 import { resolveTemplateImageUrl } from '../ontology';
 import { ArrowUpRightIcon, EntityOverflowMenu } from '../primitives';
@@ -200,6 +202,16 @@ export function PodcastTopicChips({
   );
 }
 
+/** Collapsed height: five 25px lines. */
+const DESCRIPTION_COLLAPSED_HEIGHT_PX = 125;
+
+/**
+ * An episode or show description, collapsed to five lines with "Show more".
+ *
+ * Collapsed by height rather than `line-clamp`: the text is several paragraphs in a flex column, and
+ * `line-clamp` only clamps a single block, so it never clamped and long sponsor notes ran in full.
+ * URLs in the text become links, since show notes are mostly links to sponsors and sources.
+ */
 export function PodcastExpandableDescription({ description }: { description?: string }) {
   const [expanded, setExpanded] = React.useState(false);
   const [isTruncated, setIsTruncated] = React.useState(false);
@@ -230,25 +242,38 @@ export function PodcastExpandableDescription({ description }: { description?: st
 
   if (paragraphs.length === 0) return null;
 
+  const collapsed = !expanded;
+
   return (
     <section aria-label="Description" className="flex flex-col gap-2.5">
       <h2 className="m-0 text-mediumTitle font-semibold text-text">Description</h2>
-      <div
-        ref={containerRef}
-        className={cx(
-          'flex flex-col gap-3 text-[15.5px] leading-[25px] [overflow-wrap:anywhere] text-text/90',
-          !expanded && 'line-clamp-5'
+      <div className="relative">
+        <div
+          ref={containerRef}
+          data-testid="podcast-description-body"
+          className={cx(
+            'flex flex-col gap-3 text-[15.5px] leading-[25px] [overflow-wrap:anywhere] text-text/90',
+            collapsed && 'overflow-hidden'
+          )}
+          style={collapsed ? { maxHeight: DESCRIPTION_COLLAPSED_HEIGHT_PX } : undefined}
+        >
+          {paragraphs.map((paragraph, index) => (
+            <p key={index} className="m-0">
+              {linkifyDescription(paragraph)}
+            </p>
+          ))}
+        </div>
+        {collapsed && isTruncated && (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-linear-to-b from-transparent to-white"
+          />
         )}
-      >
-        {paragraphs.map((paragraph, index) => (
-          <p key={index} className="m-0">
-            {paragraph}
-          </p>
-        ))}
       </div>
       {(isTruncated || expanded) && (
         <button
           type="button"
+          aria-expanded={expanded}
           onClick={() => setExpanded(prev => !prev)}
           className="cursor-pointer self-start border-0 bg-transparent p-0 text-[13.5px] font-medium text-grey-04 transition-colors hover:text-text"
         >
@@ -257,6 +282,35 @@ export function PodcastExpandableDescription({ description }: { description?: st
       )}
     </section>
   );
+}
+
+/** Sentence punctuation that ends a URL in prose rather than belonging to it. */
+const URL_TRAILING_PUNCTUATION = /[.,;:!?'"]+$/;
+
+/** Plain text with every http(s)/www URL turned into a link that opens in a new tab. */
+export function linkifyDescription(text: string): React.ReactNode[] {
+  const nodes: React.ReactNode[] = [];
+  tokenizeWeb2Urls(text).forEach((segment, index) => {
+    if (segment.type === 'text') {
+      nodes.push(segment.value);
+      return;
+    }
+    const trailing = segment.value.match(URL_TRAILING_PUNCTUATION)?.[0] ?? '';
+    const url = trailing ? segment.value.slice(0, -trailing.length) : segment.value;
+    nodes.push(
+      <a
+        key={index}
+        href={normalizeWeb2Url(url)}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="break-all text-ctaPrimary no-underline hover:text-ctaHover hover:underline"
+      >
+        {url}
+      </a>
+    );
+    if (trailing) nodes.push(trailing);
+  });
+  return nodes;
 }
 
 function initialsFrom(name: string): string {

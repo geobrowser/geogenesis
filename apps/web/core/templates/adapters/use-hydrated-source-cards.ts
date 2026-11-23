@@ -12,6 +12,7 @@ import { NEWS_STORY_TYPE_ID } from '~/core/constants';
 import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
 import { ID } from '~/core/id';
 import { graphql } from '~/core/io/graphql-client';
+import { X_PROPERTY } from '~/core/profile/profile-links';
 import { useQueryEntities } from '~/core/sync/use-store';
 import type { Entity } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
@@ -47,6 +48,7 @@ const SOURCE_TWEET_AUTHORS_QUERY = parse(/* GraphQL */ `
     $avatarPropertyId: UUID!
     $webUrlPropertyId: UUID!
     $imageUrlPropertyId: UUID!
+    $xPropertyId: UUID!
   ) {
     entities(first: 24, filter: { id: { in: $ids } }) {
       id
@@ -59,6 +61,10 @@ const SOURCE_TWEET_AUTHORS_QUERY = parse(/* GraphQL */ `
         toEntity {
           id
           name
+          valuesList(first: 2, filter: { propertyId: { is: $xPropertyId } }) {
+            propertyId
+            text
+          }
           relationsList(first: 2, filter: { typeId: { is: $avatarPropertyId } }) {
             toEntity {
               valuesList(first: 4, filter: { propertyId: { is: $imageUrlPropertyId } }) {
@@ -82,6 +88,7 @@ const SOURCE_TWEET_AUTHORS_QUERY = parse(/* GraphQL */ `
             toEntity?: {
               id: string;
               name?: string | null;
+              valuesList?: { propertyId: string; text?: string | null }[] | null;
               relationsList?:
                 | {
                     toEntity?: {
@@ -100,8 +107,74 @@ const SOURCE_TWEET_AUTHORS_QUERY = parse(/* GraphQL */ `
     avatarPropertyId: string;
     webUrlPropertyId: string;
     imageUrlPropertyId: string;
+    xPropertyId: string;
   }
 >;
+
+/**
+ * Author name, handle and avatar for social posts, keyed by the post's hex id.
+ *
+ * The handle comes from the post's own X URL first and the author's X property second, so a post
+ * whose link points elsewhere (a blog post by an organization) still shows the author's handle.
+ */
+export async function fetchPostAuthorMetadata(postIds: readonly string[]): Promise<Map<string, TweetAuthorMetadata>> {
+  const entities = await Effect.runPromise(
+    graphql({
+      query: SOURCE_TWEET_AUTHORS_QUERY,
+      variables: {
+        ids: [...postIds],
+        authorsPropertyId: TEMPLATE_ONTOLOGY.AUTHORS_PROPERTY_ID,
+        avatarPropertyId: TEMPLATE_ONTOLOGY.AVATAR_PROPERTY_ID,
+        webUrlPropertyId: TEMPLATE_ONTOLOGY.WEB_URL_PROPERTY_ID,
+        imageUrlPropertyId: TEMPLATE_ONTOLOGY.IMAGE_URL_PROPERTY_ID,
+        xPropertyId: X_PROPERTY,
+      },
+      decoder: data => data.entities ?? [],
+    })
+  );
+
+  const map = new Map<string, TweetAuthorMetadata>();
+  for (const item of entities) {
+    const hex = ID.uuidToHex(item.id);
+    const urlVal = item.valuesList?.find(v => ID.equals(v.propertyId, TEMPLATE_ONTOLOGY.WEB_URL_PROPERTY_ID))?.text;
+    const author = item.relationsList?.[0]?.toEntity;
+    const authorX = author?.valuesList?.find(v => ID.equals(v.propertyId, X_PROPERTY))?.text;
+    const handle = extractHandleFromSocialUrl(urlVal) ?? handleFromXValue(authorX);
+    const authorName = author?.name?.trim() || undefined;
+    const rawAvatar = author?.relationsList
+      ?.flatMap(rel => rel.toEntity?.valuesList ?? [])
+      .find(v => ID.equals(v.propertyId, TEMPLATE_ONTOLOGY.IMAGE_URL_PROPERTY_ID) && Boolean(v.text?.trim()))?.text;
+    map.set(hex, {
+      name: authorName,
+      handle,
+      avatarUrl: resolveTemplateImageUrl(rawAvatar),
+    });
+  }
+  return map;
+}
+
+/** The author card for a Post or Tweet page: name, handle and avatar from the Authors relation. */
+export function usePostAuthorMetadata(postId: string | undefined): TweetAuthorMetadata | undefined {
+  const hex = postId ? ID.uuidToHex(postId) : '';
+  const query = useQuery({
+    queryKey: ['hydrated-source-cards', 'tweet-authors', hex],
+    enabled: Boolean(hex),
+    staleTime: 120_000,
+    queryFn: () => fetchPostAuthorMetadata([hex]),
+  });
+  return hex ? query.data?.get(hex) : undefined;
+}
+
+/** An X property holds a handle (`shashj`), an `@handle`, or a whole profile URL. */
+function handleFromXValue(raw: string | null | undefined): string | undefined {
+  const trimmed = raw?.trim();
+  if (!trimmed) return undefined;
+  if (/^https?:\/\//i.test(trimmed) || /^(www\.)?(x|twitter)\.com\//i.test(trimmed)) {
+    return extractHandleFromSocialUrl(/^https?:/i.test(trimmed) ? trimmed : `https://${trimmed}`);
+  }
+  if (/^@?[A-Za-z0-9_]{1,15}$/.test(trimmed)) return trimmed.startsWith('@') ? trimmed : `@${trimmed}`;
+  return undefined;
+}
 
 function extractHandleFromSocialUrl(rawUrl: string | null | undefined): string | undefined {
   if (!rawUrl) return undefined;
@@ -229,39 +302,7 @@ export function useHydratedSourceCards({
     queryKey: ['hydrated-source-cards', 'tweet-authors', tweetSourceIds.join(',')],
     enabled: enabled && tweetSourceIds.length > 0,
     staleTime: 120_000,
-    queryFn: async () => {
-      const entities = await Effect.runPromise(
-        graphql({
-          query: SOURCE_TWEET_AUTHORS_QUERY,
-          variables: {
-            ids: tweetSourceIds,
-            authorsPropertyId: TEMPLATE_ONTOLOGY.AUTHORS_PROPERTY_ID,
-            avatarPropertyId: TEMPLATE_ONTOLOGY.AVATAR_PROPERTY_ID,
-            webUrlPropertyId: TEMPLATE_ONTOLOGY.WEB_URL_PROPERTY_ID,
-            imageUrlPropertyId: TEMPLATE_ONTOLOGY.IMAGE_URL_PROPERTY_ID,
-          },
-          decoder: data => data.entities ?? [],
-        })
-      );
-
-      const map = new Map<string, TweetAuthorMetadata>();
-      for (const item of entities) {
-        const hex = ID.uuidToHex(item.id);
-        const urlVal = item.valuesList?.find(v => ID.equals(v.propertyId, TEMPLATE_ONTOLOGY.WEB_URL_PROPERTY_ID))?.text;
-        const handle = extractHandleFromSocialUrl(urlVal);
-        const author = item.relationsList?.[0]?.toEntity;
-        const authorName = author?.name?.trim() || undefined;
-        const rawAvatar = author?.relationsList?.[0]?.toEntity?.valuesList?.find(v =>
-          ID.equals(v.propertyId, TEMPLATE_ONTOLOGY.IMAGE_URL_PROPERTY_ID)
-        )?.text;
-        map.set(hex, {
-          name: authorName,
-          handle,
-          avatarUrl: resolveTemplateImageUrl(rawAvatar),
-        });
-      }
-      return map;
-    },
+    queryFn: () => fetchPostAuthorMetadata(tweetSourceIds),
   });
 
   const items = React.useMemo<EntityLinkRowModel[]>(() => {

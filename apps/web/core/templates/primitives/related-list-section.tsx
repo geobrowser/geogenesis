@@ -324,6 +324,16 @@ function estimateCardWeight(item: EntityLinkRowModel): number {
  *   masonry columns inside a horizontal snap-scroll strip so tall media cards never leave awkward
  *   vertical whitespace AND users can smoothly swipe or click `←` `→` horizontally through all cards.
  */
+/**
+ * Column widths that fit a whole number of columns in the rail (`100cqw` is the rail's width).
+ *
+ * Fixed pixel widths cut the last visible card at whatever point the page width happened to put
+ * it, often mid-word (GEO-3819). Here two or three columns fill the row exactly, so the next card
+ * starts out of view and the arrows bring it in; on a phone one column takes 84% and the next one
+ * peeks on purpose. `scroll-px-2` on the scroller makes each snap point line up with that grid.
+ */
+const RAIL_COLUMN_WIDTH_CLASS = 'w-[84cqw] @[540px]:w-[calc((100cqw-1rem)/2)] @[1000px]:w-[calc((100cqw-2rem)/3)]';
+
 function HorizontalMasonryRail({
   items,
   scrollerRef,
@@ -357,22 +367,17 @@ function HorizontalMasonryRail({
     return cols.filter(col => col.length > 0);
   }, [items]);
 
-  const singleRow = items.length <= 3;
-
   return (
     <div className="@container relative">
       <div
         ref={scrollerRef}
-        className="-mx-2 flex snap-x snap-mandatory [scrollbar-width:none] items-start gap-4 overflow-x-auto px-2 py-2 [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+        className="-mx-2 flex snap-x snap-mandatory scroll-px-2 [scrollbar-width:none] items-start gap-4 overflow-x-auto px-2 py-2 [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
       >
         {columns.map((colItems, colIdx) => (
           <div
             key={colItems[0]?.id ?? colIdx}
             data-masonry-col
-            className={cx(
-              'flex shrink-0 snap-start flex-col gap-4',
-              singleRow ? 'w-[min(360px,84cqw)]' : 'w-[min(390px,84cqw)]'
-            )}
+            className={cx('flex shrink-0 snap-start flex-col gap-4', RAIL_COLUMN_WIDTH_CLASS)}
           >
             {colItems.map(item => (
               <RichMediaCard key={item.id} item={item} />

@@ -118,9 +118,12 @@ export function PostTemplate({
         {/* Left: post card */}
         <article className={cx('flex flex-col gap-4 p-5 @[780px]:sticky @[780px]:top-20', TEMPLATE_CARD_SURFACE)}>
           <div className="flex items-center justify-between gap-2">
-            <div className="flex flex-col gap-0.5">
-              <span className="text-[17px] font-semibold text-text">{model.authorName}</span>
-              {model.authorHandle && <span className="text-[14px] text-grey-04">{model.authorHandle}</span>}
+            <div className="flex min-w-0 items-center gap-3">
+              <PostAuthorAvatar avatarUrl={model.authorAvatarUrl} />
+              <div className="flex min-w-0 flex-col gap-0.5">
+                <span className="truncate text-[17px] font-semibold text-text">{model.authorName}</span>
+                {model.authorHandle && <span className="truncate text-[14px] text-grey-04">{model.authorHandle}</span>}
+              </div>
             </div>
             <TemplateBadge tone="neutral">{model.platform}</TemplateBadge>
           </div>
@@ -472,5 +475,23 @@ function ContextNoteCard({ note }: { note: PostContextNoteModel }) {
         </div>
       )}
     </article>
+  );
+}
+
+/** The author's face on the post card; nothing at all when the graph has no avatar or it fails to load. */
+function PostAuthorAvatar({ avatarUrl }: { avatarUrl?: string | null }) {
+  const resolved = resolveTemplateImageUrl(avatarUrl);
+  const [failedUrl, setFailedUrl] = React.useState<string | null>(null);
+
+  if (!resolved || failedUrl === resolved) return null;
+
+  return (
+    <img
+      src={resolved}
+      alt=""
+      loading="lazy"
+      onError={() => setFailedUrl(resolved)}
+      className="size-11 shrink-0 rounded-full border border-black/[0.06] bg-grey-01 object-cover"
+    />
   );
 }

@@ -26,7 +26,7 @@ import {
   readEntityRelations,
   readEntityTextValue,
 } from '../ontology';
-import { useHydratedSourceCards } from './use-hydrated-source-cards';
+import { useHydratedSourceCards, usePostAuthorMetadata } from './use-hydrated-source-cards';
 import { useLiveEntityActions } from './use-live-entity-actions';
 
 /**
@@ -48,6 +48,7 @@ export function useLivePostTemplate({
   const { entity, isLoading } = useQueryEntity({ id: entityId, spaceId });
   const { space } = useSpace(spaceId);
   const [localNotes, setLocalNotes] = React.useState<PostContextNoteModel[]>([]);
+  const authorMeta = usePostAuthorMetadata(entity ? entityId : undefined);
 
   const claimRelations = React.useMemo(
     () => readEntityRelations(entity, TEMPLATE_ONTOLOGY.RELATED_CLAIMS_PROPERTY_ID),
@@ -95,7 +96,7 @@ export function useLivePostTemplate({
     const platforms = readEntityRelations(entity, TEMPLATE_ONTOLOGY.PLATFORM_PROPERTY_ID);
     const platform = platforms[0]?.toEntity.name ?? (isTweet ? 'X' : 'Geo');
     const authors = readEntityRelations(entity, TEMPLATE_ONTOLOGY.AUTHORS_PROPERTY_ID);
-    const authorName = authors[0]?.toEntity.name ?? entity.name ?? 'Post';
+    const authorName = authorMeta?.name ?? authors[0]?.toEntity.name ?? entity.name ?? 'Post';
     const when = formatOntologyDate(readEntityTextValue(entity, TEMPLATE_ONTOLOGY.PUBLISH_DATE_PROPERTY_ID));
     const externalUrl = readEntityTextValue(entity, TEMPLATE_ONTOLOGY.WEB_URL_PROPERTY_ID) ?? undefined;
     const topics = readEntityRelations(entity, TEMPLATE_ONTOLOGY.TOPICS_PROPERTY_ID);
@@ -103,8 +104,9 @@ export function useLivePostTemplate({
     const quotedPosts = readEntityRelations(entity, TEMPLATE_ONTOLOGY.QUOTED_POSTS_PROPERTY_ID);
 
     const rawTitle = entity.name?.trim();
-    const hasDistinctHeadline =
-      Boolean(rawTitle) && rawTitle !== authorName && (!isTweet || (rawTitle?.length ?? 0) <= 100);
+    // A tweet's name is its own text, which the author card shows, so the page is titled by its
+    // author instead of repeating the text. A Post's name is a headline (an article or statement).
+    const hasDistinctHeadline = Boolean(rawTitle) && rawTitle !== authorName && !isTweet;
     const displayTitle = hasDistinctHeadline
       ? rawTitle
       : authorName.toLowerCase() === platform.toLowerCase()
@@ -223,17 +225,21 @@ export function useLivePostTemplate({
     ]);
     const flags = extractEntityFlags(entity, spaceId);
 
-    const bodyText =
-      hasDistinctHeadline && entity.description
-        ? entity.description
-        : entity.description && entity.name && entity.description !== entity.name
-          ? `${entity.name}\n\n${entity.description}`
-          : (entity.description ?? entity.name ?? '');
+    // The card shows what the author wrote. A tweet's own text is stored as its name (the graph has
+    // no separate text property; `description` is a generated summary of it). A Post with a headline
+    // has no stored text of its own, so its card falls back to the description.
+    const bodyText = isTweet
+      ? (rawTitle ?? entity.description ?? '')
+      : hasDistinctHeadline
+        ? (entity.description ?? '')
+        : (rawTitle ?? entity.description ?? '');
 
     return {
       id: entity.id,
       title: displayTitle,
       authorName,
+      authorHandle: authorMeta?.handle,
+      authorAvatarUrl: authorMeta?.avatarUrl ?? null,
       platform,
       when,
       body: bodyText,
@@ -268,6 +274,7 @@ export function useLivePostTemplate({
     };
   }, [
     actionCallbacks,
+    authorMeta,
     claimRelations,
     entity,
     hydratedSourceCards,
