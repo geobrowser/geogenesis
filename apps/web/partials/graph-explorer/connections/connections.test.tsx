@@ -8,7 +8,7 @@ import type { GraphNode } from '~/core/graph-explorer/fetch-graph-neighbourhood'
 import type { GraphKind } from '~/core/graph-explorer/graph-kinds';
 import type { GraphSelection } from '~/core/graph-explorer/select-graph';
 
-import { ConnectionsCanvas } from './connections-canvas';
+import { ConnectionsCanvas, clearance, overlapShare } from './connections-canvas';
 import { searchNodes } from './graph-search';
 import { GraphTopBar } from './graph-top-bar';
 
@@ -190,5 +190,28 @@ describe('searchNodes', () => {
     const nodes = [node(3, 'ent', 'Benjamin Netanyahu'), node(4, 'story', 'Netanyahu visits'), node(5, 'src', 'Other')];
     expect(searchNodes(nodes, 'netan').map(n => n.name)).toEqual(['Netanyahu visits', 'Benjamin Netanyahu']);
     expect(searchNodes(nodes, '  ')).toEqual([]);
+  });
+});
+
+describe('clearance', () => {
+  const centre = { left: 100, right: 200, top: 100, bottom: 160 };
+
+  it('leaves a card that clears the centre alone', () => {
+    expect(clearance(centre, { left: 220, right: 300, top: 100, bottom: 140 })).toEqual([0, 0]);
+  });
+
+  it('moves an overlapping card the shortest way off the centre, past a margin', () => {
+    expect(clearance(centre, { left: 180, right: 260, top: 110, bottom: 150 })).toEqual([30, 0]);
+    expect(clearance(centre, { left: 120, right: 180, top: 150, bottom: 190 })).toEqual([0, 20]);
+    expect(clearance(centre, { left: 120, right: 180, top: 80, bottom: 105 })).toEqual([0, -15]);
+  });
+});
+
+describe('overlapShare', () => {
+  it('is the share of the smaller card the two cover', () => {
+    const big = { left: 0, right: 100, top: 0, bottom: 100 };
+    expect(overlapShare(big, { left: 50, right: 70, top: 50, bottom: 70 })).toBe(1);
+    expect(overlapShare(big, { left: 90, right: 110, top: 0, bottom: 20 })).toBe(0.5);
+    expect(overlapShare(big, { left: 100, right: 120, top: 0, bottom: 20 })).toBe(0);
   });
 });

@@ -37,6 +37,10 @@ type NodeView = {
   hop: 0 | 1 | 2;
   born: number;
   alive: boolean;
+  /** Screen offset keeping it clear of the centre on phone, eased frame to frame. */
+  push: [number, number];
+  /** Opacity factor while a nearer card covers it on phone, eased frame to frame. */
+  dim: number;
 };
 
 type DrawnLink = { a: string; b: string; hop: 1 | 2 | 3; edge: GraphEdge };
@@ -97,7 +101,7 @@ export function ConnectionsCanvas({
   /** What was on screen before the current selection, so leaving nodes can fade out. */
   const rendered = React.useRef<SelectedNode[]>([]);
   /** Anchor offsets per node, measured once per selection; reading layout every frame would thrash. */
-  const anchors = React.useRef(new Map<string, number>());
+  const anchors = React.useRef(new Map<string, Box>());
   const engine = React.useRef<Engine>({
     views: new Map(),
     links: [],
@@ -164,7 +168,7 @@ export function ConnectionsCanvas({
       } else {
         const parent = entry.parentId ? state.views.get(entry.parentId) : null;
         const p: Vec3 = parent?.alive ? [...parent.p] : [0, 0, 0];
-        state.views.set(id, { id, p, from: p, to, hop: entry.hop, born: now, alive: true });
+        state.views.set(id, { id, p, from: p, to, hop: entry.hop, born: now, alive: true, push: [0, 0], dim: 1 });
       }
     }
     state.links = selection.links.map(link => ({
@@ -264,6 +268,31 @@ export function ConnectionsCanvas({
           if (link.b === hover) neighbours.add(link.a);
         }
 
+      const measure = (id: string, element: HTMLElement) => {
+        let box = anchors.current.get(id);
+        if (!box) {
+          box = { anchor: anchorY(element), width: element.offsetWidth, height: element.offsetHeight };
+          anchors.current.set(id, box);
+        }
+        return box;
+      };
+      const centreElement = elements.current.get(state.centreId);
+      const centrePoint = projected.get(state.centreId);
+      // The centre draws at scale 1 on phone.
+      const centreRect =
+        phone && centreElement && centrePoint
+          ? rectAt(centrePoint.x, centrePoint.y, measure(state.centreId, centreElement), 1)
+          : null;
+
+      const drawn: Array<{
+        node: NodeView;
+        element: HTMLElement;
+        point: ReturnType<typeof project>;
+        box: Box;
+        scale: number;
+        opacity: number;
+        isCentre: boolean;
+      }> = [];
       for (const node of state.views.values()) {
         const element = elements.current.get(node.id);
         const point = projected.get(node.id);
@@ -280,14 +309,44 @@ export function ConnectionsCanvas({
         if (hover && node.id !== hover && !neighbours.has(node.id)) opacity *= 0.22;
         if (node.id === hover && node.alive) opacity = 1;
         if (node.alive && !reduceMotion && now - node.born < FADE_IN_MS) opacity *= (now - node.born) / FADE_IN_MS;
-        let anchor = anchors.current.get(node.id);
-        if (anchor === undefined) {
-          anchor = anchorY(element);
-          anchors.current.set(node.id, anchor);
+        const box = measure(node.id, element);
+        if (phone && centreRect && !isCentre && node.alive) {
+          const target = clearance(centreRect, rectAt(point.x, point.y, box, scale));
+          const ease = reduceMotion ? 1 : 0.2;
+          node.push = [
+            node.push[0] + (target[0] - node.push[0]) * ease,
+            node.push[1] + (target[1] - node.push[1]) * ease,
+          ];
+        } else if (!phone || isCentre) node.push = [0, 0];
+        point.x += node.push[0];
+        point.y += node.push[1];
+        drawn.push({ node, element, point, box, scale, opacity, isCentre });
+      }
+
+      // On phone a card covered by a nearer one fades, so the front one reads.
+      for (const entry of drawn) {
+        let covered = false;
+        if (phone && !entry.isCentre && entry.node.alive && entry.node.id !== hover && !neighbours.has(entry.node.id)) {
+          const rect = rectAt(entry.point.x, entry.point.y, entry.box, entry.scale);
+          covered = drawn.some(
+            other =>
+              other !== entry &&
+              !other.isCentre &&
+              other.node.alive &&
+              other.opacity > 0.3 &&
+              other.point.depth < entry.point.depth &&
+              overlapShare(rect, rectAt(other.point.x, other.point.y, other.box, other.scale)) > 0.25
+          );
         }
+        const target = covered ? 0.2 : 1;
+        entry.node.dim += (target - entry.node.dim) * (reduceMotion ? 1 : 0.2);
+      }
+
+      for (const { node, element, point, box, scale, opacity, isCentre } of drawn) {
+        const anchor = box.anchor;
         element.style.transformOrigin = `50% ${anchor}px`;
         element.style.transform = `translate3d(${point.x.toFixed(1)}px,${point.y.toFixed(1)}px,0) translate(-50%,-${anchor}px) scale(${scale.toFixed(3)})`;
-        element.style.opacity = opacity.toFixed(3);
+        element.style.opacity = (opacity * node.dim).toFixed(3);
         element.style.zIndex = String(
           node.id === hover
             ? 9500
@@ -581,6 +640,42 @@ function useCanHover() {
     () => window.matchMedia?.('(hover: hover)').matches ?? true,
     () => true
   );
+}
+
+type Box = { anchor: number; width: number; height: number };
+type Rect = { left: number; right: number; top: number; bottom: number };
+
+/** A card's screen rectangle: centred on x, anchored at y, scaled about its anchor. */
+function rectAt(x: number, y: number, box: Box, scale: number): Rect {
+  return {
+    left: x - (box.width / 2) * scale,
+    right: x + (box.width / 2) * scale,
+    top: y - box.anchor * scale,
+    bottom: y + (box.height - box.anchor) * scale,
+  };
+}
+
+const CENTRE_MARGIN = 10;
+
+/** The shortest move that takes `rect` off `centre` (plus a margin); none when they don't touch. */
+export function clearance(centre: Rect, rect: Rect): [number, number] {
+  const right = centre.right + CENTRE_MARGIN - rect.left;
+  const left = rect.right - (centre.left - CENTRE_MARGIN);
+  const down = centre.bottom + CENTRE_MARGIN - rect.top;
+  const up = rect.bottom - (centre.top - CENTRE_MARGIN);
+  if (right <= 0 || left <= 0 || down <= 0 || up <= 0) return [0, 0];
+  const dx = right < left ? right : -left;
+  const dy = down < up ? down : -up;
+  return Math.abs(dx) < Math.abs(dy) ? [dx, 0] : [0, dy];
+}
+
+/** How much of the smaller rectangle the two share, 0 to 1. */
+export function overlapShare(a: Rect, b: Rect): number {
+  const width = Math.min(a.right, b.right) - Math.max(a.left, b.left);
+  const height = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+  if (width <= 0 || height <= 0) return 0;
+  const area = (rect: Rect) => (rect.right - rect.left) * (rect.bottom - rect.top);
+  return (width * height) / Math.max(1, Math.min(area(a), area(b)));
 }
 
 function clampDistance(distance: number) {
