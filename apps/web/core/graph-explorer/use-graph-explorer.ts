@@ -12,6 +12,7 @@ import { fetchGraphHop } from './fetch-graph-hop';
 import { fetchCrossLinks, fetchHop1, fetchHop2 } from './fetch-graph-neighbourhood';
 import { type GraphFilter, type GraphScope, graphFilterKey } from './graph-filter';
 import { type GraphCaps, type GraphKindFilter, presentKinds, selectGraph, selectHop1 } from './select-graph';
+import { fetchTopicClaimsSummary } from './topic-claims-summary';
 
 const STALE_MS = 60_000;
 
@@ -195,4 +196,14 @@ export function useGraphNeighbourhood({
   const kinds = React.useMemo(() => (hop1Data ? presentKinds(hop1Data.neighbours) : []), [hop1Data]);
 
   return { hop1, centre: hop1Data?.centre ?? null, selection, kinds, isSwitching: hop1.isPlaceholderData };
+}
+
+/** Responses to the topic's claims in its space, for the topic panel. */
+export function useTopicClaimsSummary(topicId: string | null, spaceId: string | null) {
+  return useQuery({
+    queryKey: ['graph-explorer', 'topic-claims-summary', topicId, spaceId],
+    queryFn: ({ signal }) => fetchTopicClaimsSummary(topicId!, spaceId!, signal),
+    enabled: Boolean(topicId && spaceId),
+    staleTime: STALE_MS,
+  });
 }
