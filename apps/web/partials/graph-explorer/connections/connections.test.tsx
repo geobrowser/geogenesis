@@ -15,6 +15,8 @@ import { GraphTopBar } from './graph-top-bar';
 const motion = vi.hoisted(() => ({ reduce: false }));
 /** IntersectionObserver callbacks, so a test can scroll the stage off-screen. */
 const sight = vi.hoisted(() => ({ callbacks: [] as IntersectionObserverCallback[] }));
+/** ResizeObserver callbacks, so a test can grow a card. */
+const resized = vi.hoisted(() => ({ callbacks: [] as ResizeObserverCallback[] }));
 vi.mock('framer-motion', () => ({ useReducedMotion: () => motion.reduce }));
 vi.mock('~/design-system/prefetch-link', () => ({
   PrefetchLink: ({ children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => <a {...props}>{children}</a>,
@@ -70,6 +72,9 @@ beforeAll(() => {
     disconnect() {}
   } as unknown as typeof IntersectionObserver;
   globalThis.ResizeObserver = class {
+    constructor(callback: ResizeObserverCallback) {
+      resized.callbacks.push(callback);
+    }
     observe() {}
     unobserve() {}
     disconnect() {}
@@ -81,6 +86,7 @@ beforeAll(() => {
 
 beforeEach(() => {
   sight.callbacks = [];
+  resized.callbacks = [];
   frames = [];
   now = 0;
   motion.reduce = false;
@@ -163,6 +169,28 @@ describe('ConnectionsCanvas', () => {
     expect(frames).toHaveLength(0);
     fireEvent.keyDown(screen.getByTestId('connections-stage'), { key: 'ArrowLeft' });
     expect(frames).toHaveLength(1);
+  });
+
+  it('wakes when a card resizes after the loop slept', () => {
+    motion.reduce = true;
+    render(<Canvas />);
+    runFrames(1200);
+    expect(frames).toHaveLength(0);
+    const card = screen.getByRole('button', { name: 'Isaac Herzog' });
+    // The card observer is created first, as node refs attach before the stage's effect runs.
+    act(() => resized.callbacks[0]([{ target: card } as never], {} as never));
+    expect(frames).toHaveLength(1);
+  });
+
+  it('starts the idle spin for a selection made long after page load', () => {
+    now = 100_000;
+    render(<Canvas />);
+    const target = screen.getByRole('button', { name: 'Isaac Herzog' });
+    runFrames(103_000);
+    const before = target.style.transform;
+    runFrames(106_000);
+    expect(before).not.toBe('');
+    expect(target.style.transform).not.toBe(before);
   });
 
   it('sleeps after the idle spin has run its course', () => {

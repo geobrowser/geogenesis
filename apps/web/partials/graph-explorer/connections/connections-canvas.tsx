@@ -112,6 +112,7 @@ export function ConnectionsCanvas({
   const watchSize = (element: HTMLElement) => {
     resizes.current ??= new ResizeObserver(entries => {
       for (const entry of entries) anchors.current.delete((entry.target as HTMLElement).dataset.nodeId ?? '');
+      wake.current();
     });
     resizes.current.observe(element);
   };
@@ -214,6 +215,8 @@ export function ConnectionsCanvas({
     state.fit = fitDistance(near, state.width || 1280, state.height || 860, phone);
     state.distanceFrom = state.distance;
     state.anim = { t0: now, duration: reduceMotion ? 0 : MOVE_MS };
+    // Each selection, the first included, restarts the idle clock so the spin follows it.
+    state.lastActive = now;
     wake.current();
 
     const sweep = () => {
