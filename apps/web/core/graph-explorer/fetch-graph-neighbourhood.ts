@@ -7,6 +7,7 @@ import { parse } from 'graphql';
 import { HIDDEN_PROPERTIES } from '~/core/constants';
 import { graphql } from '~/core/io/graphql-client';
 import { AVATAR_PROPERTY_ID, COVER_PROPERTY_ID, IMAGE_URL_PROPERTY_ID } from '~/core/io/subgraph/space-image';
+import { HIDDEN_PROPERTY_ID, isHiddenMarker } from '~/core/moderation/hidden';
 import { normId } from '~/core/utils/norm-id';
 
 import { TOPIC_LENS_FILTER, TOPIC_LENS_VARIABLES, topicLensVariables } from './claims-about';
@@ -80,6 +81,7 @@ const NODE_FIELDS = /* GraphQL */ `
   names: valuesList(filter: { propertyId: { is: $namePropertyId } }) { spaceId text }
   dates: valuesList(filter: { propertyId: { in: $datePropertyIds } }) { datetime date }
   types { id name }
+  hidden: valuesList(filter: { propertyId: { is: $hiddenPropertyId }, spaceId: { in: $spaceIds } }) { text boolean }
   relationsList(filter: { typeId: { in: [$avatarPropertyId, $coverPropertyId] } }) {
     typeId
     toEntity { valuesList(filter: { propertyId: { is: $imageUrlPropertyId } }) { text } }
@@ -91,6 +93,7 @@ const PLACED_FIELD = 'placed: valuesList(filter: { propertyId: { notIn: $unplaci
 const UNPLACING_PROPERTY_IDS = [normId(SystemIds.NAME_PROPERTY), ...[...HIDDEN_PROPERTIES].map(normId)];
 
 const NODE_VARIABLES = `
+  $hiddenPropertyId: UUID!
   $namePropertyId: UUID!
   $datePropertyIds: [UUID!]
   $avatarPropertyId: UUID!
@@ -165,6 +168,7 @@ export function lensTopicFor(filter: GraphFilter): string | null {
 
 function nodeVariables() {
   return {
+    hiddenPropertyId: HIDDEN_PROPERTY_ID,
     namePropertyId: normId(SystemIds.NAME_PROPERTY),
     datePropertyIds: DATE_PROPERTY_IDS,
     avatarPropertyId: AVATAR_PROPERTY_ID,
@@ -197,6 +201,8 @@ type RawNode = RawEntity & {
   disagrees?: string | number | null;
   placed?: Array<{ spaceId: string }> | null;
   dates?: Array<{ datetime: string | null; date: string | null }> | null;
+  /** Hidden values in the explorer's spaces. */
+  hidden?: Array<{ text: string | null; boolean: boolean | null }> | null;
 };
 
 type RawRelation = {
@@ -218,8 +224,12 @@ type RawCentre = RawNode & {
 /** `entity` plus one `<kind>_<direction>` connection per kind. */
 type Hop1Response = { entity: RawCentre | null; [alias: string]: RawConnection | RawCentre | null };
 
-/** Null for an unnamed or plumbing neighbour; a centre is always a node. */
+/**
+ * Null for a hidden entity (Hidden = true in one of the explorer's spaces), or an unnamed or plumbing
+ * neighbour; any other centre is a node.
+ */
 export function decodeNode(raw: RawNode, isCentre = false): GraphNode | null {
+  if ((raw.hidden ?? []).some(isHiddenMarker)) return null;
   const entity = decodeEntity(raw);
   const typeIds = entity.types.map(type => type.id);
   const kind = graphKindOf(typeIds) ?? (isCentre ? 'other' : null);
@@ -269,6 +279,8 @@ export function decodeHop1(response: Hop1Response, centreId: string, kinds: read
           ),
         }
       : null;
+  // A hidden centre shows as not in the graph, with nothing around it.
+  if (rawCentre && !centreNode) return { centre: null, neighbours: [], moreKinds: [] };
   const connection = (alias: string) => (response[alias] ?? null) as RawConnection;
   const neighbours = kinds.flatMap(kind => [
     ...decodeConnection(connection(`${kind}_out`), id, 'out'),

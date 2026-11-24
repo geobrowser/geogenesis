@@ -3,6 +3,8 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { type OperationDefinitionNode, print } from 'graphql';
 import { describe, expect, it } from 'vitest';
 
+import { HIDDEN_PROPERTY_ID } from '~/core/moderation/hidden';
+
 import {
   decodeCrossLinks,
   decodeHop1,
@@ -69,6 +71,79 @@ describe('decodeNode', () => {
   it('always makes a centre a node, whatever its type', () => {
     expect(decodeNode(raw('1'.repeat(32), 'A page', [SystemIds.PAGE_TYPE]), true)?.kind).toBe('other');
     expect(decodeNode(raw('1'.repeat(32), null, ['f'.repeat(32)]), true)?.kind).toBe('other');
+  });
+});
+
+describe('hidden entities', () => {
+  const HIDDEN = [{ text: 'true', boolean: null }];
+  const relation = (id: string, toEntity: ReturnType<typeof raw>) => ({
+    id: `r${id}`,
+    spaceId: 'a'.repeat(32),
+    typeId: 'p'.repeat(32),
+    type: null,
+    toEntity,
+  });
+
+  it('asks for the Hidden marker in the explorer’s spaces on every node, at hop 1 and hop 2', () => {
+    const filter = resolveGraphFilter({ spaceIds: ['a'.repeat(32)], topicId: null, topicSpaceId: null });
+    for (const document of [hop1Document(filter.kinds, false), hop2Document(['1'.repeat(32)], false, false)]) {
+      const printed = print(document).replace(/\s+/g, ' ');
+      expect(printed).toContain(
+        'hidden: valuesList( filter: {propertyId: {is: $hiddenPropertyId}, spaceId: {in: $spaceIds}} )'
+      );
+      expect(declared(document)).toContain('hiddenPropertyId');
+    }
+    expect(hop1Variables(CENTRE, filter).hiddenPropertyId).toBe(HIDDEN_PROPERTY_ID);
+    expect(hop2Variables(filter).hiddenPropertyId).toBe(HIDDEN_PROPERTY_ID);
+  });
+
+  it('leaves a hidden neighbour off hop 1 and hop 2', () => {
+    const hop = decodeHop1(
+      {
+        entity: { ...raw(CENTRE, 'Gaza', [TOPIC_TYPE_ID]), description: null, texts: [] },
+        ent_out: {
+          nodes: [
+            relation('1', raw('1'.repeat(32), 'Shown', [PERSON])),
+            relation('2', raw('2'.repeat(32), 'Withheld', [PERSON], { hidden: HIDDEN })),
+            relation('3', raw('3'.repeat(32), 'Unhidden', [PERSON], { hidden: [{ text: 'false', boolean: false }] })),
+          ],
+          pageInfo: { hasNextPage: false },
+        },
+        ent_in: null,
+      },
+      CENTRE,
+      ['ent']
+    );
+    expect(hop.neighbours.map(entry => entry.node.name)).toEqual(['Shown', 'Unhidden']);
+
+    const hop2 = decodeHop2(
+      {
+        n0_out: {
+          nodes: [
+            relation('4', raw('4'.repeat(32), 'Withheld', [PERSON], { hidden: [{ text: null, boolean: true }] })),
+          ],
+        },
+        n0_in: null,
+      },
+      ['1'.repeat(32)]
+    );
+    expect(hop2['1'.repeat(32)]).toEqual([]);
+  });
+
+  it('shows a hidden centre as not in the graph, with nothing around it', () => {
+    const hop = decodeHop1(
+      {
+        entity: { ...raw(CENTRE, 'Withheld', [TOPIC_TYPE_ID], { hidden: HIDDEN }), description: 'secret', texts: [] },
+        ent_out: {
+          nodes: [relation('1', raw('1'.repeat(32), 'Neighbour', [PERSON]))],
+          pageInfo: { hasNextPage: true },
+        },
+        ent_in: null,
+      },
+      CENTRE,
+      ['ent']
+    );
+    expect(hop).toEqual({ centre: null, neighbours: [], moreKinds: [] });
   });
 });
 

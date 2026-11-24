@@ -6,6 +6,7 @@ import { parse } from 'graphql';
 
 import { HIDDEN_PROPERTIES } from '~/core/constants';
 import { graphql } from '~/core/io/graphql-client';
+import { HIDDEN_PROPERTY_ID, isHiddenMarker } from '~/core/moderation/hidden';
 import { normId } from '~/core/utils/norm-id';
 import { entityHomeSpaceId, resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
 
@@ -48,6 +49,7 @@ function claimsAboutQuery(withTopic: boolean) {
       $claimTypeId: UUID!
       $namePropertyId: UUID!
       $unplacingPropertyIds: [UUID!]
+      $hiddenPropertyId: UUID!
       ${withTopic ? TOPIC_LENS_VARIABLES : ''}
       $first: Int
       $after: Cursor
@@ -72,6 +74,11 @@ function claimsAboutQuery(withTopic: boolean) {
           }
           placed: valuesList(filter: { propertyId: { notIn: $unplacingPropertyIds } }) {
             spaceId
+          }
+          hidden: valuesList(filter: { propertyId: { is: $hiddenPropertyId } }) {
+            spaceId
+            text
+            boolean
           }
         }
         pageInfo {
@@ -100,6 +107,7 @@ type ClaimsAboutResponse = {
       spaceIds: string[] | null;
       names: Array<{ spaceId: string; text: string | null }> | null;
       placed: Array<{ spaceId: string }> | null;
+      hidden?: Array<{ spaceId: string; text: string | null; boolean: boolean | null }> | null;
     }>;
     pageInfo: { hasNextPage: boolean; endCursor: string | null };
   } | null;
@@ -140,7 +148,10 @@ export function decodeClaimsAbout(response: ClaimsAboutResponse, requestedSpaceI
       },
       requestedSpaceId ? normId(requestedSpaceId) : null
     );
-    return spaceId ? [{ id: normId(node.id), name, spaceId }] : [];
+    if (!spaceId) return [];
+    // Hidden in the space it is read and voted in, as its own page decides.
+    const hidden = (node.hidden ?? []).some(value => normId(value.spaceId) === spaceId && isHiddenMarker(value));
+    return hidden ? [] : [{ id: normId(node.id), name, spaceId }];
   });
   return {
     claims,
@@ -163,6 +174,7 @@ export function claimsAboutVariables(
     claimTypeId: CLAIM_TYPE_ID,
     namePropertyId: NAME_PROPERTY_ID,
     unplacingPropertyIds: [NAME_PROPERTY_ID, ...[...HIDDEN_PROPERTIES].map(normId)],
+    hiddenPropertyId: HIDDEN_PROPERTY_ID,
     ...(topicId ? topicLensVariables(topicId) : {}),
     first,
     after,

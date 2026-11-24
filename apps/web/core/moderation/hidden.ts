@@ -1,4 +1,5 @@
 import type { Entity } from '~/core/types';
+import { normId } from '~/core/utils/norm-id';
 
 /**
  * Hidden (PROPERTY, BOOLEAN) — set on an entity to withhold its page from the product.
@@ -32,9 +33,25 @@ export const HIDDEN_PROPERTY_ID = '6ed78f16da324392b1c5376cd06ee0ca';
  */
 export function isHiddenEntity(entity: Pick<Entity, 'values'> | null | undefined): boolean {
   if (!entity?.values) return false;
-  return entity.values.some(value => {
-    if (value.property?.id !== HIDDEN_PROPERTY_ID) return false;
-    const raw = String(value.value).trim().toLowerCase();
-    return raw === 'true' || raw === '1';
-  });
+  return entity.values.some(value => value.property?.id === HIDDEN_PROPERTY_ID && isHiddenMarker(value.value));
+}
+
+/** `isHiddenEntity` over the values written in `spaceId`; with no space, over every space. */
+export function isHiddenInSpace(entity: Pick<Entity, 'values'> | null | undefined, spaceId: string | null): boolean {
+  if (!entity?.values) return false;
+  const space = spaceId ? normId(spaceId) : null;
+  return isHiddenEntity({ values: entity.values.filter(value => !space || normId(value.spaceId) === space) });
+}
+
+/** One Hidden value read straight from the API, as `text`, `boolean` or a store value. */
+export function isHiddenMarker(value: unknown): boolean {
+  if (value === true) return true;
+  if (value && typeof value === 'object') {
+    const raw = value as { text?: unknown; boolean?: unknown };
+    return raw.boolean === true || isHiddenMarker(raw.text ?? null);
+  }
+  const text = String(value ?? '')
+    .trim()
+    .toLowerCase();
+  return text === 'true' || text === '1';
 }

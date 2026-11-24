@@ -2,6 +2,7 @@ import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 
 import type { Metadata } from 'next';
 
+import { isHiddenMarker } from '~/core/moderation/hidden';
 import { firstLine } from '~/core/opengraph';
 import { normId } from '~/core/utils/norm-id';
 
@@ -26,17 +27,9 @@ export type GraphCardMeta = {
 export const GRAPH_TITLE_SUFFIX = ' · Connections on Geo';
 const CLAIM_TITLE_MAX = 90;
 
-/** Hidden = true withholds the entity (GEO-2809). Both spellings occur, as in `isHiddenEntity`. */
+/** Hidden = true withholds the entity (GEO-2809). */
 function isHidden(entity: NonNullable<RawCardEntity>) {
-  return (entity.hidden ?? []).some(
-    value =>
-      value.boolean === true ||
-      ['true', '1'].includes(
-        String(value.text ?? '')
-          .trim()
-          .toLowerCase()
-      )
-  );
+  return (entity.hidden ?? []).some(isHiddenMarker);
 }
 
 /** Null for an unknown, unnamed, hidden or plumbing centre: no card and nothing named. */

@@ -40,6 +40,34 @@ describe('decodeClaimsAbout', () => {
     });
   });
 
+  it('drops a claim hidden in the space it is read in, not one hidden elsewhere', () => {
+    const claim = (id: string, hidden: Array<{ spaceId: string; text: string | null; boolean: boolean | null }>) => ({
+      id,
+      name: id,
+      spaceIds: [SPACE_B],
+      names: [{ spaceId: SPACE_B, text: id }],
+      placed: [],
+      hidden,
+    });
+    const page = decodeClaimsAbout(
+      {
+        entitiesConnection: {
+          nodes: [
+            claim('44444444444444444444444444444444', [{ spaceId: SPACE_B, text: null, boolean: true }]),
+            claim('55555555555555555555555555555555', [{ spaceId: SPACE_A, text: 'true', boolean: null }]),
+            claim('66666666666666666666666666666666', []),
+          ],
+          pageInfo: { hasNextPage: false, endCursor: null },
+        },
+      },
+      SPACE_B
+    );
+    expect(page.claims.map(entry => entry.id)).toEqual([
+      '55555555555555555555555555555555',
+      '66666666666666666666666666666666',
+    ]);
+  });
+
   it('reads an empty answer as no claims', () => {
     expect(decodeClaimsAbout({ entitiesConnection: null }, SPACE_A)).toEqual({
       claims: [],

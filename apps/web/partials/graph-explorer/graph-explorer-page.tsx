@@ -15,6 +15,7 @@ import { useTopicGraphScope } from '~/core/graph-explorer/use-graph-explorer';
 import { useGraphExplorerUnavailable } from '~/core/graph-explorer/use-graph-explorer-active';
 import { useGraphNavigation } from '~/core/graph-explorer/use-graph-navigation';
 import { useHydrated } from '~/core/hooks/use-hydrated';
+import { isHiddenInSpace } from '~/core/moderation/hidden';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { useTopicSpaceScope } from '~/core/topics/use-topic-space-scope';
 import { normId } from '~/core/utils/norm-id';
@@ -88,6 +89,8 @@ function TopicGraph({
           null
         )
       : null);
+  // A topic hidden in its space keeps its name off the page; the map shows it as not in the graph.
+  const topicName = topic && !isHiddenInSpace(topic, topicSpaceId) ? topic.name : null;
   const scope = useTopicGraphScope(routeSpaceId, topicId, topicSpaceId);
   const session = useGraphExplorerSession({
     entityId,
@@ -98,19 +101,19 @@ function TopicGraph({
 
   return (
     <GraphAnalyticsProvider value={session}>
-      <h1 className="sr-only">Graph explorer{topic?.name ? `: ${topic.name}` : ''}</h1>
+      <h1 className="sr-only">Graph explorer{topicName ? `: ${topicName}` : ''}</h1>
       <GraphViewer
         history={history}
         onNavigate={navigate}
         scope={scope}
         overrides={overrides}
-        topicName={topic?.name ?? null}
+        topicName={topicName ?? null}
         // With the navbar gone, close is the way out: the topic page when its space is known, else Explore.
         close={
           topicSpaceId
             ? {
                 href: NavUtils.toEntity(topicSpaceId, topicId),
-                label: `Close the map and go to ${topic?.name ?? 'the topic'}`,
+                label: `Close the map and go to ${topicName ?? 'the topic'}`,
               }
             : { href: NavUtils.toExplore(), label: 'Close the map and go to Explore' }
         }

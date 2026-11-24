@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { GraphHop1, GraphNode } from '../fetch-graph-neighbourhood';
+import { decodeClaimsAbout } from '../claims-about';
+import { type GraphHop1, type GraphNode, decodeHop1 } from '../fetch-graph-neighbourhood';
 import type { GraphCardMeta } from '../graph-card-metadata';
 import type { GraphKind } from '../graph-kinds';
+import { NEIGHBOUR_KIND_TYPE_IDS, TOPIC_TYPE_ID } from '../ontology';
 import { FEATURED_BUDGET_MS, loadGraphCardData } from './graph-card-data';
 
 vi.mock('./graph-card-meta', () => ({ loadGraphCardMeta: vi.fn() }));
@@ -150,6 +152,82 @@ describe('loadGraphCardData', () => {
     expect(data?.isTopicCentre).toBe(false);
     expect(d.fetchAllClaimsAbout).not.toHaveBeenCalled();
     expect(d.inlineImage).not.toHaveBeenCalled();
+  });
+
+  it('leaves hidden neighbours and claims out of the picks, the kind counts and the summary', async () => {
+    const person = (id: string, name: string, hidden = false) => ({
+      id: `r${id}`,
+      spaceId: SPACE,
+      typeId: 'p'.repeat(32),
+      type: null,
+      toEntity: {
+        id,
+        name,
+        spaceIds: [SPACE],
+        types: [{ id: NEIGHBOUR_KIND_TYPE_IDS.person[0], name: 'Person' }],
+        relationsList: [],
+        hidden: hidden ? [{ text: 'true', boolean: null }] : [],
+      },
+    });
+    const claim = (id: string, hidden: boolean) => ({
+      id,
+      name: `Claim ${id}`,
+      spaceIds: [SPACE],
+      names: [{ spaceId: SPACE, text: `Claim ${id}` }],
+      placed: [],
+      hidden: hidden ? [{ spaceId: SPACE, text: null, boolean: true }] : [],
+    });
+    const shown = '1'.repeat(32);
+    const withheld = '2'.repeat(32);
+    const data = await loadGraphCardData(
+      ids,
+      deps({
+        fetchHop1: vi.fn(async () =>
+          decodeHop1(
+            {
+              entity: {
+                id: TOPIC,
+                name: 'Israel-Gaza war',
+                spaceIds: [SPACE],
+                types: [{ id: TOPIC_TYPE_ID, name: 'Topic' }],
+                relationsList: [],
+                description: null,
+                texts: [],
+              },
+              ent_out: {
+                nodes: [person(shown, 'Shown'), person(withheld, 'Withheld', true)],
+                pageInfo: { hasNextPage: false },
+              },
+              ent_in: null,
+            },
+            TOPIC,
+            ['ent']
+          )
+        ),
+        fetchAllClaimsAbout: vi.fn(async () => ({
+          claims: decodeClaimsAbout(
+            {
+              entitiesConnection: {
+                nodes: [claim(shown, false), claim(withheld, true)],
+                pageInfo: { hasNextPage: false, endCursor: null },
+              },
+            },
+            SPACE
+          ).claims,
+          truncated: false,
+        })),
+        fetchSummaries: vi.fn(
+          async () =>
+            new Map([
+              [`${shown}:stance`, { counts: { positive: 3, negative: 0 }, viewerResponse: null, responders: [] }],
+              [`${withheld}:stance`, { counts: { positive: 9, negative: 0 }, viewerResponse: null, responders: [] }],
+            ])
+        ),
+      })
+    );
+    expect(data?.neighbours.map(node => node.name)).toEqual(['Shown']);
+    expect(data?.kindCounts).toEqual([{ kind: 'ent', n: 1, more: false }]);
+    expect(data?.summary?.claims.map(entry => entry.id)).toEqual([shown]);
   });
 
   it('summarises a topic with no voted claims as empty', async () => {
