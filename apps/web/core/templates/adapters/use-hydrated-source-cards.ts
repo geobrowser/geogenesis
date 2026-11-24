@@ -27,6 +27,7 @@ import {
   publicationFromUrl,
   readEntityRelations,
   readEntityTextValue,
+  resolvePostAuthor,
   resolveTemplateImageUrl,
 } from '../ontology';
 
@@ -302,11 +303,18 @@ export function useHydratedSourceCards({
       const { kind, label, mediaType } = classifySourceEntity(hydrated, webUrl);
       const tweetMeta = mediaType === 'tweet' ? tweetAuthorsByHex?.get(hex) : undefined;
       const publisherRel = readEntityRelations(hydrated, TEMPLATE_ONTOLOGY.PUBLISHER_PROPERTY_ID)[0];
-      const authorRel = readEntityRelations(hydrated, TEMPLATE_ONTOLOGY.AUTHORS_PROPERTY_ID)[0];
-      const publisher =
+      // The same order as the Post page (see resolvePostAuthor).
+      const tweetAuthor =
         mediaType === 'tweet'
-          ? (tweetMeta?.name ?? authorRel?.toEntity.name?.trim() ?? tweetMeta?.handle ?? label)
-          : (publisherRel?.toEntity.name?.trim() ?? publicationFromUrl(webUrl) ?? label);
+          ? resolvePostAuthor({
+              relationName: readEntityRelations(hydrated, TEMPLATE_ONTOLOGY.AUTHORS_PROPERTY_ID)[0]?.toEntity.name,
+              webUrl,
+              lookup: tweetMeta,
+            })
+          : undefined;
+      const publisher = tweetAuthor
+        ? (tweetAuthor.name ?? label)
+        : (publisherRel?.toEntity.name?.trim() ?? publicationFromUrl(webUrl) ?? label);
       const date = formatOntologyDate(
         readEntityTextValue(hydrated, TEMPLATE_ONTOLOGY.PUBLISH_DATE_PROPERTY_ID) ??
           readEntityTextValue(hydrated, TEMPLATE_ONTOLOGY.AIR_DATE_PROPERTY_ID)
@@ -324,7 +332,7 @@ export function useHydratedSourceCards({
         mediaType,
         title: hydrated?.name?.trim() || src.name?.trim() || src.id,
         publisher,
-        authorHandle: mediaType === 'tweet' ? (tweetMeta?.handle ?? handleFromSocialUrl(webUrl)) : undefined,
+        authorHandle: tweetAuthor?.handle,
         authorAvatarUrl:
           mediaType === 'tweet'
             ? (tweetMeta?.avatarUrl ?? resolveTemplateImageUrl(hydrated ? Entities.avatar(hydrated.relations) : null))

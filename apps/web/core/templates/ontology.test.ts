@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { handleFromSocialUrl } from './ontology';
+import { handleFromSocialUrl, resolvePostAuthor } from './ontology';
 
 describe('handleFromSocialUrl', () => {
   it.each([
@@ -43,5 +43,50 @@ describe('handleFromSocialUrl', () => {
     undefined,
   ])('returns undefined for %s', url => {
     expect(handleFromSocialUrl(url)).toBeUndefined();
+  });
+});
+
+describe('resolvePostAuthor', () => {
+  const URL_WITH_HANDLE = 'https://x.com/jack/status/20';
+  const URL_WITHOUT_HANDLE = 'https://x.com/i/status/20';
+
+  // [case, inputs, expected name, expected handle]
+  it.each<[string, Parameters<typeof resolvePostAuthor>[0], string | undefined, string | undefined]>([
+    ['nothing names the author', {}, undefined, undefined],
+    ['the post URL alone: handle doubles as the name', { webUrl: URL_WITH_HANDLE }, '@jack', '@jack'],
+    [
+      'the Authors relation beats the looked-up name (an unpublished edit shows)',
+      { relationName: 'Jack Dorsey (edited)', webUrl: URL_WITH_HANDLE, lookup: { name: 'Jack', handle: '@jack' } },
+      'Jack Dorsey (edited)',
+      '@jack',
+    ],
+    [
+      'a blank Authors name falls through to the lookup',
+      { relationName: '  ', lookup: { name: 'Jack', handle: '@jack' } },
+      'Jack',
+      '@jack',
+    ],
+    [
+      'the URL handle is there before the lookup lands, and the lookup does not change it',
+      { relationName: 'Jack', webUrl: URL_WITH_HANDLE, lookup: { name: 'Jack', handle: '@jack' } },
+      'Jack',
+      '@jack',
+    ],
+    [
+      'the URL handle beats the looked-up one',
+      { webUrl: URL_WITH_HANDLE, lookup: { handle: '@someone_else' } },
+      '@jack',
+      '@jack',
+    ],
+    [
+      'a URL with no handle uses the looked-up one (the author X property)',
+      { webUrl: URL_WITHOUT_HANDLE, lookup: { handle: '@jack' } },
+      '@jack',
+      '@jack',
+    ],
+    ['an app-route URL names nobody', { webUrl: 'https://x.com/status/20' }, undefined, undefined],
+    ['a non-X URL names nobody', { webUrl: 'https://example.com/jack' }, undefined, undefined],
+  ])('%s', (_case, inputs, name, handle) => {
+    expect(resolvePostAuthor(inputs)).toEqual({ name, handle });
   });
 });

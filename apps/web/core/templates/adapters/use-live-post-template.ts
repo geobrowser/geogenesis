@@ -23,9 +23,9 @@ import {
   extractEntityFlags,
   extractGraphConnections,
   formatOntologyDate,
-  handleFromSocialUrl,
   readEntityRelations,
   readEntityTextValue,
+  resolvePostAuthor,
 } from '../ontology';
 import { useHydratedSourceCards, usePostAuthorMetadata } from './use-hydrated-source-cards';
 import { useLiveEntityActions } from './use-live-entity-actions';
@@ -98,13 +98,13 @@ export function useLivePostTemplate({
     const platform = platforms[0]?.toEntity.name ?? (isTweet ? 'X' : 'Geo');
     const authors = readEntityRelations(entity, TEMPLATE_ONTOLOGY.AUTHORS_PROPERTY_ID);
     const externalUrl = readEntityTextValue(entity, TEMPLATE_ONTOLOGY.WEB_URL_PROPERTY_ID) ?? undefined;
-    // The post's own X URL gives the handle without waiting for the author query, so an author-less
-    // tweet doesn't read "Unknown author" until that query lands (same order as the source-card rail).
-    const handle = authorMeta?.handle ?? handleFromSocialUrl(externalUrl);
-    // Never the post's own name: a tweet's name is its text and a Post's is its headline, so an
-    // author-less post would otherwise be titled "<its own text> on X" with that text as its author.
-    // The local Authors relation comes first so an unpublished edit to it shows straight away.
-    const knownAuthor = authors[0]?.toEntity.name?.trim() || authorMeta?.name || handle || undefined;
+    // The same order as the source-card rail (see resolvePostAuthor). Never the post's own name: a
+    // tweet's name is its text, so an author-less tweet would be titled "<its own text> on X".
+    const { name: knownAuthor, handle } = resolvePostAuthor({
+      relationName: authors[0]?.toEntity.name,
+      webUrl: externalUrl,
+      lookup: authorMeta,
+    });
     const authorName = knownAuthor ?? 'Unknown author';
     const authorHandle = handle && handle !== authorName ? handle : undefined;
     const when = formatOntologyDate(readEntityTextValue(entity, TEMPLATE_ONTOLOGY.PUBLISH_DATE_PROPERTY_ID));
