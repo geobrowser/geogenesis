@@ -84,6 +84,7 @@ vi.mock('~/core/debates/moments-player/moments-card-player', () => ({
     tapToPlay: boolean;
     topSlot: number;
     onShowFullDebate: (seconds: number | null) => void;
+    compact?: boolean;
   }) => (
     <div
       data-testid="reel"
@@ -93,6 +94,7 @@ vi.mock('~/core/debates/moments-player/moments-card-player', () => ({
       data-up-next={String(props.upNext)}
       data-tap-to-play={String(props.tapToPlay)}
       data-top-slot={props.topSlot}
+      data-compact={String(Boolean(props.compact))}
     >
       {/* The real reel draws the button; this stands in for its "Full debate" half. */}
       <button type="button" onClick={() => props.onShowFullDebate(22)}>
@@ -222,9 +224,9 @@ function intersect(ratio: number, top = 0, filter: (record: Record) => boolean =
   });
 }
 
-function renderCard(feed = true) {
+function renderCard(feed = true, props: { compactChrome?: boolean } = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  const card = <DebateExploreFeedCard item={item} fallback={<div data-testid="fallback" />} />;
+  const card = <DebateExploreFeedCard item={item} fallback={<div data-testid="fallback" />} {...props} />;
   const tree = (
     <QueryClientProvider client={client}>
       <Provider>{feed ? <DebateFeedAutoplay>{card}</DebateFeedAutoplay> : card}</Provider>
@@ -285,6 +287,28 @@ describe('DebateExploreFeedCard moments reel gate', () => {
     fireEvent.click(moments);
     expect(screen.queryByTestId('player')).toBeNull();
     expect(screen.getByTestId('reel')).toBeInTheDocument();
+  });
+
+  // GEO-3833: the profile's Activity gallery card has the button too, smaller, on both players.
+  it('gives a ~300px gallery card the compact button, on the reel and the full debate', () => {
+    mocks.moments = READY;
+    renderCard(false, { compactChrome: true });
+    intersect(0.7);
+    expect(screen.getByTestId('reel')).toHaveAttribute('data-compact', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Full debate' }));
+    const group = screen.getByRole('group', { name: 'Video' });
+    expect(group).toHaveClass('h-7', 'p-0.5');
+    expect(screen.getByRole('button', { name: 'Moments' })).toHaveClass('h-6', 'px-2', 'text-[11px]');
+  });
+
+  it('keeps the full-size button on every other card', () => {
+    mocks.moments = READY;
+    renderCard();
+    intersect(0.7);
+    expect(screen.getByTestId('reel')).toHaveAttribute('data-compact', 'false');
+    fireEvent.click(screen.getByRole('button', { name: 'Full debate' }));
+    expect(screen.getByRole('group', { name: 'Video' })).toHaveClass('h-9', 'p-1');
+    expect(screen.getByRole('button', { name: 'Moments' })).toHaveClass('h-7', 'px-3', 'text-[13px]');
   });
 
   it('starts on the moments again each time the card comes back', () => {

@@ -81,6 +81,8 @@ export type MomentsCardPlayerProps = {
   framed?: boolean;
   /** Where the card is, for its measurement: Explore (and the other card hosts), or the full-screen feed. */
   surface?: 'explore' | 'debate_feed';
+  /** A ~300px gallery card's: the Moments / Full debate button at its compact size. */
+  compact?: boolean;
 };
 
 type SlotIndex = 0 | 1;
@@ -124,6 +126,7 @@ function MomentsCardReel({
   barOverClip = false,
   framed = false,
   surface = 'explore',
+  compact = false,
 }: MomentsCardPlayerProps) {
   const queryClient = useQueryClient();
   const [story, dispatch] = React.useReducer(storyReducer, moments.length, initialStoryState);
@@ -839,6 +842,7 @@ function MomentsCardReel({
         <DebateMediaModeToggle
           mode="moments"
           onChange={showFullDebate}
+          compact={compact}
           className={cx('absolute right-3', barOverClip ? 'top-6' : 'top-3 md:top-6')}
         />
       </div>

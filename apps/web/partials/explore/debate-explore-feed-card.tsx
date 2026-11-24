@@ -84,7 +84,12 @@ type DebateExploreFeedCardProps = {
   hideJoinButton?: boolean;
   /** Whether the claim title opens the side panel rather than navigating (same semantics as ExploreFeedCard). */
   titleOpensSidePanel?: boolean;
-  /** Compact gallery chrome; comments and sharing are reached through the full-screen link. */
+  /**
+   * A ~300px gallery tile (a profile's Activity). The same card as everywhere else (GEO-3833), fitted
+   * to the tile: tighter padding and no shadow (the rail clips it), the media at the tile's width
+   * rather than the viewport's height, the compact meta row and Moments / Full debate button, and
+   * the player's reduced overlays. At this width the vote pills drop their labels, as the app's do.
+   */
   compactChrome?: boolean;
   /**
    * Raise the card's ceiling from 480px to the container's own width. For a surface whose column is
@@ -408,7 +413,7 @@ export function DebateExploreFeedCard({
    *    no debate, share does — so the row is present from the first paint and doesn't shift the
    *    card under the reader when the geo-chat lookups land.
    */
-  const actions = compactChrome ? null : (
+  const actions = (
     <DebateInteractionBar
       commentCount={commentCount}
       commentsPanelOpen={commentsTarget?.entityId === item.entityId}
@@ -421,16 +426,17 @@ export function DebateExploreFeedCard({
 
   return (
     <ActionSurfaceArticle ref={setContainer} className={cx('flex flex-col', !compactChrome && 'py-2')}>
-      {/* The debates app's card surface, or — in a gallery, which draws the tile's frame itself —
-          today's compact frame. See {@link DEBATE_CARD_MEDIA_WIDTH} for how the media is sized. */}
+      {/* The debates app's card surface, on every host — fitted to a gallery's tile there. See
+          {@link DEBATE_CARD_MEDIA_WIDTH} for how the media is sized. */}
       <div
         data-debate-card-surface={compactChrome ? 'compact' : 'app'}
         className={cx(
-          'flex w-full min-w-0 flex-col bg-white',
+          'flex w-full min-w-0 flex-col rounded-[26px] border border-[#e5e5e5] bg-white',
           compactChrome
-            ? 'max-w-full overflow-hidden rounded-lg border border-grey-02'
+            ? // The toggle's compact width, so the player's top-left controls stop short of it.
+              'max-w-full p-3 [--debate-top-right-width:9.25rem]'
             : cx(
-                'rounded-[26px] border border-[#e5e5e5] p-4 shadow-[0_8px_14px_rgba(0,0,0,0.075)]',
+                'p-4 shadow-[0_8px_14px_rgba(0,0,0,0.075)]',
                 '[--debate-card-chrome:240px] md:[--debate-card-chrome:212px]',
                 fullWidth ? 'max-w-full' : 'max-w-[480px]'
               )
@@ -443,16 +449,12 @@ export function DebateExploreFeedCard({
         <div
           data-debate-card-media=""
           data-debate-card-reel={showReel || undefined}
-          className={
-            showReel
-              ? // The reel draws its own moments row above its frame, so the frame is its own too.
-                compactChrome
-                ? undefined
-                : 'mx-auto w-[var(--debate-card-media-width)] max-w-full'
-              : compactChrome
-                ? undefined
-                : 'mx-auto w-[var(--debate-card-media-width)] max-w-full overflow-hidden rounded-[20px] bg-[#151515]'
-          }
+          className={cx(
+            // A gallery tile is a rail's, not the viewport's: its media takes the tile's width.
+            compactChrome ? 'w-full' : 'mx-auto w-[var(--debate-card-media-width)] max-w-full',
+            // The reel draws its own moments row above its frame, so the frame is its own too.
+            !showReel && 'overflow-hidden rounded-[20px] bg-[#151515]'
+          )}
           onClickCapture={mediaMounted && !tapToPlay ? requestPlayback : undefined}
         >
           {showReel ? (
@@ -471,6 +473,7 @@ export function DebateExploreFeedCard({
               onPlaybackRequest={tapToPlay ? tapToPlayNow : undefined}
               onShowFullDebate={showFullDebate}
               turns={mediaQuery.data?.turn_segments}
+              compact={compactChrome}
             />
           ) : mediaMounted && !reelPending ? (
             // The recordings resolve while the card is still approaching. Crossing back out of
@@ -540,7 +543,6 @@ export function DebateExploreFeedCard({
             />
           }
           actions={actions}
-          look={compactChrome ? 'default' : 'app'}
         />
       </div>
 
@@ -550,7 +552,7 @@ export function DebateExploreFeedCard({
           gating them on the window meant scrolling past the card they came from tore the panel
           away mid-read — and, because the open flags live on the card now rather than in a subtree
           that unmounted with them, left them set, so scrolling back reopened it unasked. */}
-      {readyDebate && !compactChrome ? (
+      {readyDebate ? (
         <DebateShareDialog
           open={share.open}
           onOpenChange={share.onOpenChange}
@@ -614,7 +616,12 @@ const DebateCardVideos = React.memo(function DebateCardVideos({
       onPlaybackRequest={onPlaybackRequest}
       topRight={
         onShowMoments ? (
-          <DebateMediaModeToggle mode="full" onChange={mode => mode === 'moments' && onShowMoments()} />
+          <DebateMediaModeToggle
+            mode="full"
+            onChange={mode => mode === 'moments' && onShowMoments()}
+            // Reduced overlays are the gallery tile's, whose button is the compact one.
+            compact={reducedOverlays}
+          />
         ) : undefined
       }
     />

@@ -816,7 +816,6 @@ function DebateFeedItem({
               />
             }
             wideActions={hasMenu}
-            look="app"
             className="px-4 pb-4"
           />
         </div>

@@ -1402,7 +1402,7 @@ function PairedDebateFeedPlayer({
   // audible inside the tap.
   const topControls =
     ready && !playbackEnded && !held && !editorMode ? (
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {/* Desktop: a persistent play/pause beside the mute control. Mobile keeps the
                   centred paused glyph and tap-to-toggle instead. */}
         {!refusedPrompt && (
@@ -2390,8 +2390,20 @@ function DebaterVideo({
         )}
       />
 
+      {/* With a button at the top right (Moments / Full debate), the top-left controls stop short of
+          it and wrap onto a second row instead of running under it: on a ~300px gallery card, Play,
+          Mute, Start over and the button do not fit one row (GEO-3833). The host sets the button's
+          width in `--debate-top-right-width` when it draws a smaller one. */}
       {topLeft && (
-        <div className={cx('absolute top-3 left-3 flex items-center gap-2', stamped ? 'z-30' : 'z-10')}>{topLeft}</div>
+        <div
+          className={cx(
+            'absolute top-3 left-3 flex items-center gap-2',
+            topRight && 'max-w-[calc(100%-var(--debate-top-right-width,12rem)-1.75rem)]',
+            stamped ? 'z-30' : 'z-10'
+          )}
+        >
+          {topLeft}
+        </div>
       )}
 
       {topRight && <div className="absolute top-3 right-3 z-[12]">{topRight}</div>}

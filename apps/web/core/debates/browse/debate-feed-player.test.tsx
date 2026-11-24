@@ -4684,3 +4684,36 @@ describe('Agree speaker on top', () => {
     expect(within(top).queryByRole('slider', { name: 'Debate timeline' })).toBeNull();
   });
 });
+
+// GEO-3833: on a ~300px gallery card, Play, Mute and Start over do not fit one row beside the
+// Moments / Full debate button. They stop short of it and wrap instead of running under it.
+describe('DebateFeedPlayer top-left controls beside a top-right button', () => {
+  const controlsRow = () => screen.getByRole('button', { name: 'Unmute' }).parentElement!;
+
+  it('stop short of the button and wrap', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
+    render(
+      <DebateFeedPlayer
+        debate={debate}
+        active
+        topRight={
+          <button type="button" data-testid="mode">
+            Full debate
+          </button>
+        }
+      />
+    );
+
+    expect(controlsRow()).toHaveClass('flex-wrap');
+    expect(controlsRow().parentElement!.className).toContain(
+      'max-w-[calc(100%-var(--debate-top-right-width,12rem)-1.75rem)]'
+    );
+  });
+
+  it('keep the whole row without one', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
+    render(<DebateFeedPlayer debate={debate} active />);
+
+    expect(controlsRow().parentElement!.className).not.toContain('max-w-');
+  });
+});

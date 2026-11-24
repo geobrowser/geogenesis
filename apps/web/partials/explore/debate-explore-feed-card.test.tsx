@@ -453,7 +453,9 @@ describe('DebateExploreFeedCard', () => {
     expect(container.querySelector('img[data-debate-poster]')).toBeNull();
   });
 
-  it('keeps compact Activity chrome to one metadata row and two title lines', async () => {
+  // GEO-3833: a profile's Activity gallery shows the same card as every other surface, fitted to
+  // its ~300px tile.
+  it('gives the compact Activity card the app card, fitted to the tile, with one meta row and two title lines', async () => {
     mocks.debateQuery = { data: watchableDebate(), isError: false };
     mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
     const { container } = renderCard({ compactChrome: true });
@@ -472,17 +474,24 @@ describe('DebateExploreFeedCard', () => {
 
     expect(screen.getByText('Fashion').closest('div')).toHaveClass('flex-nowrap', 'overflow-hidden');
     expect(screen.getByTestId('player')).toHaveAttribute('data-reduced-overlays', 'true');
-    // Gallery cards own one frame, flush with the row, and follow the gallery's width.
+    // The app's card surface, flush with the row and at the gallery's width: tighter padding, no
+    // shadow for the rail to clip, and the media at the tile's width, not the viewport's height.
     expect(container.querySelector('article')).not.toHaveClass('py-2');
     expect(container.querySelector('article')).not.toHaveClass('border-b');
     const frame = screen.getByTestId('claim-footer').parentElement;
-    expect(frame).toHaveClass('border', 'rounded-lg', 'max-w-full');
-    expect(frame?.style.getPropertyValue('--debate-card-media-width')).toBe('');
     expect(frame).toHaveAttribute('data-debate-card-surface', 'compact');
-    expect(frame).not.toHaveClass('rounded-[26px]', 'p-4');
-    // Gallery cards leave comments and sharing to the full-screen debate.
-    expect(screen.queryByRole('button', { name: /^Open comments/ })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Share claim' })).toBeNull();
+    expect(frame).toHaveClass('rounded-[26px]', 'border', 'border-[#e5e5e5]', 'p-3', 'max-w-full');
+    expect(frame).not.toHaveClass('p-4');
+    expect(frame?.className).not.toContain('shadow-');
+    expect(frame?.style.getPropertyValue('--debate-card-media-width')).toBe('');
+    // The player's top-left controls leave room for the compact Moments / Full debate button.
+    expect(frame?.className).toContain('[--debate-top-right-width:9.25rem]');
+    const media = screen.getByTestId('player').closest('[data-debate-card-media]');
+    expect(media).toHaveClass('w-full', 'rounded-[20px]', 'overflow-hidden');
+    expect(media?.className).not.toContain('--debate-card-media-width');
+    // The app's comment and share circles, as on every other card.
+    expect(screen.getByRole('button', { name: /^Open comments/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Share claim' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Watch this debate full screen' })).toHaveAttribute(
       'href',
       '/space/space-1/fd51f9352063461780397b672b23364c'
