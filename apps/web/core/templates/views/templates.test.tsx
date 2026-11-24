@@ -259,7 +259,7 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     const claims = screen.getByRole('region', { name: 'Claims' });
     const recentDebates = screen.getByRole('region', { name: 'Recent debates' });
     const timeline = screen.getByRole('region', { name: 'Timeline' });
-    const sources = screen.getByRole('region', { name: 'Sources & evidence' });
+    const sources = screen.getByRole('region', { name: 'Evidence' });
 
     expect(within(claims).getAllByRole('group', { name: /^Vote on /i })).toHaveLength(10);
     expect(within(claims).getByRole('button', { name: 'Add claim' })).toBeInTheDocument();
@@ -634,7 +634,7 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
           sections: [
             {
               id: 'sources',
-              title: 'Sources & evidence',
+              title: 'Evidence',
               items: [],
               emptyText: 'No sources',
             },
@@ -668,8 +668,8 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     expect(topicLink).toHaveAttribute('href', '/space/s/top-1');
     expect(topicLink.querySelector('img')).toHaveAttribute('src', '/topic-ai-safety.png');
 
-    // Sources & evidence empty state copy
-    const sourcesSection = screen.getByRole('region', { name: 'Sources & evidence' });
+    // Evidence empty state copy
+    const sourcesSection = screen.getByRole('region', { name: 'Evidence' });
     expect(within(sourcesSection).getByText('No sources')).toBeInTheDocument();
 
     // Disputes empty state copy
@@ -1013,5 +1013,135 @@ describe('News story Add claim with claim groups (GEO-3836)', () => {
   it('draws no Other claims section without flat claims or a way to add one', () => {
     render(<NewsStoryTemplate model={{ ...base, reportedClaims: [] }} />);
     expect(screen.queryByRole('region', { name: 'Other claims' })).toBeNull();
+
+describe('GEO-3837 phone tidy-ups', () => {
+  const split = (totalVotes: number) => ({
+    rows: [
+      { id: 'wa', label: 'World affairs', color: '#202020', percent: 60, voterCount: totalVotes, isEveryone: true },
+    ],
+    isSplit: true,
+    totalVotes,
+  });
+
+  it('puts the subtopics behind "Show subtopics" on phones, and shows them on desktop', () => {
+    render(
+      <TopicTemplate
+        model={{
+          id: 'topic-gaza',
+          title: 'Gaza',
+          lede: 'The war in Gaza',
+          subtopics: [{ id: 'sub-1', label: 'Ceasefire', href: '/space/s/sub-1' }],
+        }}
+      />
+    );
+
+    const nav = screen.getByRole('navigation', { name: 'Subtopics', hidden: true });
+    const toggle = screen.getByRole('button', { name: 'Show subtopics' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(toggle).toHaveAttribute('aria-controls', nav.id);
+    expect(toggle).toHaveClass('@[760px]:hidden');
+    // jsdom applies no Tailwind: collapsed, the nav is hidden only below the desktop breakpoint.
+    expect(nav).toHaveClass('hidden', '@[760px]:flex');
+
+    fireEvent.click(toggle);
+    expect(screen.getByRole('button', { name: 'Hide subtopics' })).toHaveAttribute('aria-expanded', 'true');
+    expect(nav).toHaveClass('flex');
+    expect(nav).not.toHaveClass('hidden');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hide subtopics' }));
+    expect(screen.getByRole('button', { name: 'Show subtopics' })).toBeInTheDocument();
+  });
+
+  it('draws no subtopics button when there are no subtopics', () => {
+    render(<TopicTemplate model={{ id: 'topic-quiet', title: 'Quiet', lede: 'Nothing under it' }} />);
+
+    expect(screen.queryByRole('button', { name: 'Show subtopics' })).toBeNull();
+  });
+
+  it('keeps the timeline arrow to desktop and the date close to the name on phones', () => {
+    render(
+      <TopicTemplate
+        model={{
+          id: 'topic-gaza',
+          title: 'Gaza',
+          lede: '',
+          timelineHighlights: [{ id: 'ev-1', when: 'Oct 2023', title: 'Attack on Israel', href: '/space/s/ev-1' }],
+        }}
+      />
+    );
+
+    const link = screen.getByRole('link', { name: /Attack on Israel/ });
+    expect(link.querySelector('svg')).toHaveClass('hidden', '@[680px]:block');
+    const row = link.closest('li')!;
+    expect(row).toHaveClass('gap-1', '@[680px]:gap-4');
+  });
+
+  it('draws the Claim page sub-claims with the Topic list rows', () => {
+    render(
+      <ClaimTemplate
+        model={{
+          id: 'claim-1',
+          title: 'There is no genocide in Gaza',
+          kind: 'judgment',
+          split: split(5),
+          voteBox: { userVote: null, countSummary: '5 votes', onVote: vi.fn() },
+          subClaims: [
+            { id: 's-1', title: 'Aid kept entering', kind: 'fact', stance: 'supports', split: split(4), sources: [] },
+          ],
+          sections: [],
+        }}
+      />
+    );
+
+    const supporting = screen.getByRole('region', { name: 'Supporting claims' });
+    // The shared row draws the split twice: compact beside the row on desktop, full under it on phones.
+    expect(within(supporting).getAllByRole('meter')).toHaveLength(2);
+    // And keeps the Factual chip to desktop.
+    expect(within(supporting).getByText('Factual').closest('.hidden')).not.toBeNull();
+  });
+
+  it('drops the vote box "You:" label and "Change" line on phones, and the buttons take a vote back', () => {
+    const onVote = vi.fn();
+    const onClear = vi.fn();
+    render(
+      <ClaimTemplate
+        model={{
+          id: 'claim-1',
+          title: 'There is no genocide in Gaza',
+          kind: 'judgment',
+          split: { ...split(5), rows: [{ ...split(5).rows[0], userLabel: 'You: Disagree' }] },
+          voteBox: { userVote: 'disagree', countSummary: '5 votes', onVote, onClear },
+          sections: [],
+        }}
+      />
+    );
+
+    const box = screen.getByRole('region', { name: 'Vote on this claim' });
+    expect(within(box).getByText('You: Disagree')).toHaveClass('hidden', '@[680px]:inline');
+    expect(within(box).getByText('You disagreed.').parentElement).toHaveClass('hidden', '@[680px]:flex');
+
+    fireEvent.click(within(box).getByRole('button', { name: 'Disagree' }));
+    expect(onClear).toHaveBeenCalledTimes(1);
+    expect(onVote).not.toHaveBeenCalled();
+
+    fireEvent.click(within(box).getByRole('button', { name: 'Agree' }));
+    expect(onVote).toHaveBeenCalledWith('agree');
+  });
+
+  it('names the sources section "Evidence" and keeps its "+" adding a source', () => {
+    render(
+      <TopicTemplate
+        model={{
+          id: 'topic-gaza',
+          title: 'Gaza',
+          lede: '',
+          sections: [{ id: 'sources', title: 'Evidence', items: [] }],
+        }}
+      />
+    );
+
+    const evidence = screen.getByRole('region', { name: 'Evidence' });
+    expect(within(evidence).getByRole('button', { name: 'Add source' })).toBeInTheDocument();
+    expect(screen.queryByText(/Sources (&|and) evidence/)).toBeNull();
   });
 });
