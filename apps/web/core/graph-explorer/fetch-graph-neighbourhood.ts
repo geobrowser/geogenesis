@@ -79,6 +79,9 @@ export type GraphHop1 = {
 /** Neighbours of each hop-1 node, keyed by that node's id. */
 export type GraphHop2 = Record<string, Array<{ node: GraphNode; edge: GraphEdge }>>;
 
+/** Hop 2 by parent, and how many sides failed or ran out of time and are missing from it. */
+export type GraphHop2Result = { hop2: GraphHop2; failedSides: number };
+
 const NODE_FIELDS = /* GraphQL */ `
   id
   name
@@ -568,8 +571,12 @@ function fetchHop2Links(
  * Each side of each hop-1 node, a few at a time, then their nodes. A failed side drops out alone;
  * every side or the nodes failing, or a cancel, fails the hop.
  */
-export async function fetchHop2(ids: readonly string[], filter: GraphFilter, signal?: AbortSignal) {
-  if (ids.length === 0) return {} as GraphHop2;
+export async function fetchHop2(
+  ids: readonly string[],
+  filter: GraphFilter,
+  signal?: AbortSignal
+): Promise<GraphHop2Result> {
+  if (ids.length === 0) return { hop2: {}, failedSides: 0 };
   const deadline = Date.now() + GRAPH_REQUEST_TIMEOUT_MS;
   const variables = hop2Variables(filter);
   const sides = ids.flatMap(id => (['out', 'in'] as const).map(direction => ({ id: normId(id), direction })));
@@ -595,7 +602,7 @@ export async function fetchHop2(ids: readonly string[], filter: GraphFilter, sig
   );
   const hop2: GraphHop2 = Object.fromEntries(ids.map(id => [normId(id), []]));
   sides.forEach(({ id, direction }, index) => hop2[id].push(...decodeLinks(links[index], id, direction, nodes)));
-  return hop2;
+  return { hop2, failedSides: results.filter(result => result.status === 'rejected').length };
 }
 
 const crossLinksDocument = parse(/* GraphQL */ `

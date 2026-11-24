@@ -17,7 +17,13 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useTopicSpaceScope } from '~/core/topics/use-topic-space-scope';
 
 import { type ClaimsAboutPage, fetchClaimsAbout } from './claims-about';
-import { type GraphHop1, fetchCrossLinks, fetchHop1, fetchHop2 } from './fetch-graph-neighbourhood';
+import {
+  type GraphHop1,
+  type GraphHop2Result,
+  fetchCrossLinks,
+  fetchHop1,
+  fetchHop2,
+} from './fetch-graph-neighbourhood';
 import { type GraphFilter, type GraphScope, graphFilterKey } from './graph-filter';
 import { type GraphCaps, type GraphKindFilter, presentKinds, selectGraph, selectHop1 } from './select-graph';
 import { claimCountsKey, fetchTopicClaims, summariseTopicClaims } from './topic-claims-summary';
@@ -26,6 +32,8 @@ const STALE_MS = 60_000;
 
 /** A hop missing a failed kind is stale at once, so the next mount or focus asks again. */
 const hop1StaleTime = (query: Query<GraphHop1>) => (query.state.data?.failedKinds?.length ? 0 : STALE_MS);
+/** Likewise for a ring missing a failed side. */
+const hop2StaleTime = (query: Query<GraphHop2Result>) => (query.state.data?.failedSides ? 0 : STALE_MS);
 
 /**
  * The topic view's scope: the same spaces the topic page draws from. Null while the allowlist is
@@ -153,8 +161,9 @@ export function useGraphNeighbourhood({
       ? [...neighbourhoodKey('hop2', filter), expandIds.join(',')]
       : ['graph-explorer', 'hop2', 'pending'],
     queryFn: ({ signal }) => fetchHop2(expandIds, filter!, signal),
+    select: result => result.hop2,
     enabled: filter !== null && expandIds.length > 0,
-    staleTime: STALE_MS,
+    staleTime: hop2StaleTime,
     retry: false,
     // Keyed by parent, so a previous ring only fills nodes the new hop 1 shares, until its own lands.
     placeholderData: (previous, previousQuery) =>

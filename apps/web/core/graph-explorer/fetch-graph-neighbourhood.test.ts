@@ -527,7 +527,8 @@ describe('fetchHop2', () => {
     respond(async (id, direction) => ({
       hop: { nodes: id === A && direction === 'out' ? [relation('r1', A, '1'.repeat(32))] : [] },
     }));
-    const hop2 = await fetchHop2([A, B], filter);
+    const { hop2, failedSides } = await fetchHop2([A, B], filter);
+    expect(failedSides).toBe(0);
     const sides = hop2Calls();
     expect(sides).toHaveLength(4);
     expect(sides.every(call => call.timeoutMs === HOP2_FIRST_TRY_MS)).toBe(true);
@@ -554,7 +555,7 @@ describe('fetchHop2', () => {
       });
       const pending = fetchHop2([A, B], filter);
       await vi.advanceTimersByTimeAsync(HOP2_FIRST_TRY_MS);
-      const hop2 = await pending;
+      const { hop2 } = await pending;
       const retried = hop2Calls().filter(call => print(call.query).includes('entitiesConnection'));
       expect(retried).toHaveLength(1);
       expect(retried[0].timeoutMs).toBe(GRAPH_REQUEST_TIMEOUT_MS - HOP2_FIRST_TRY_MS);
@@ -594,8 +595,9 @@ describe('fetchHop2', () => {
       if (id === A && direction === 'out') throw new Error('503');
       return { hop: { nodes: id === B && direction === 'out' ? [relation('r3', B, '3'.repeat(32))] : [] } };
     });
-    const hop2 = await fetchHop2([A, B], filter);
+    const { hop2, failedSides } = await fetchHop2([A, B], filter);
     expect(hop2Calls().some(call => print(call.query).includes('entitiesConnection'))).toBe(false);
+    expect(failedSides).toBe(1);
     expect(hop2[A]).toEqual([]);
     expect(hop2[B].map(({ node }) => node.id)).toEqual(['3'.repeat(32)]);
   });

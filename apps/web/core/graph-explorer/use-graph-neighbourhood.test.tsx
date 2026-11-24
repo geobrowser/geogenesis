@@ -57,11 +57,12 @@ describe('useGraphNeighbourhood across a hop', () => {
     api.fetchHop1.mockImplementation((centreId: string) =>
       centreId === id('a') ? Promise.resolve(hop1('a', 'p', 'b')) : new Promise(resolve => (landB = resolve))
     );
-    api.fetchHop2.mockImplementation(async (ids: string[]) =>
-      Object.fromEntries(
+    api.fetchHop2.mockImplementation(async (ids: string[]) => ({
+      hop2: Object.fromEntries(
         ids.map(parent => [parent, [{ node: node(`${parent[0]}x`), edge: edge(parent[0], `${parent[0]}x`) }]])
-      )
-    );
+      ),
+      failedSides: 0,
+    }));
     api.fetchCrossLinks.mockResolvedValue([]);
 
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -95,11 +96,12 @@ describe('useGraphNeighbourhood across a hop', () => {
     api.fetchHop1.mockImplementation((_: string, asked: typeof filter) =>
       asked === filter ? Promise.resolve(hop1('a', 'p')) : new Promise(resolve => (landOther = resolve))
     );
-    api.fetchHop2.mockImplementation(async (ids: string[]) =>
-      Object.fromEntries(
+    api.fetchHop2.mockImplementation(async (ids: string[]) => ({
+      hop2: Object.fromEntries(
         ids.map(parent => [parent, [{ node: node(`${parent[0]}x`), edge: edge(parent[0], `${parent[0]}x`) }]])
-      )
-    );
+      ),
+      failedSides: 0,
+    }));
     api.fetchCrossLinks.mockResolvedValue([]);
 
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -151,7 +153,7 @@ describe('useGraphNeighbourhood failures', () => {
 describe('useGraphNeighbourhood partial hop 1', () => {
   it('treats a hop missing a failed kind as stale at once', async () => {
     api.fetchHop1.mockResolvedValue({ ...hop1('a', 'p'), failedKinds: ['story'] });
-    api.fetchHop2.mockResolvedValue({});
+    api.fetchHop2.mockResolvedValue({ hop2: {}, failedSides: 0 });
     api.fetchCrossLinks.mockResolvedValue([]);
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const wrapper = ({ children }: { children: React.ReactNode }) => (
@@ -169,5 +171,33 @@ describe('useGraphNeighbourhood partial hop 1', () => {
     await result.current.hop1.refetch();
     await waitFor(() => expect(result.current.hop1.data?.failedKinds).toBeUndefined());
     expect(result.current.hop1.isStale).toBe(false);
+  });
+});
+
+describe('useGraphNeighbourhood partial hop 2', () => {
+  it('treats a ring missing a failed side as stale at once', async () => {
+    api.fetchHop1.mockResolvedValue(hop1('a', 'p'));
+    api.fetchHop2.mockResolvedValue({ hop2: {}, failedSides: 1 });
+    api.fetchCrossLinks.mockResolvedValue([]);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    renderHook(
+      () =>
+        useGraphNeighbourhood({ centreId: id('a'), filter, caps: DESKTOP_GRAPH_CAPS, kindFilter: 'all', hubId: null }),
+      { wrapper }
+    );
+    const hop2 = () =>
+      client
+        .getQueryCache()
+        .findAll({ queryKey: ['graph-explorer', 'neighbourhood', 'hop2'] })
+        .find(query => query.state.data !== undefined)!;
+    await waitFor(() => expect(hop2()?.state.status).toBe('success'));
+    expect(hop2().isStale()).toBe(true);
+
+    api.fetchHop2.mockResolvedValue({ hop2: {}, failedSides: 0 });
+    await client.refetchQueries({ queryKey: ['graph-explorer', 'neighbourhood', 'hop2'] });
+    expect(hop2().isStale()).toBe(false);
   });
 });
