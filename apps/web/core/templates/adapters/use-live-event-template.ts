@@ -177,7 +177,7 @@ export function useLiveEventTemplate({
         title: 'Sources',
         layout: 'cards',
         items: hydratedSourceCards,
-        ingestionLink: sourcesIngestionLink(entity.id, entity.name),
+        ingestionLink: sourcesIngestionLink(entity.id, entity.name, spaceId),
       });
     }
 

@@ -173,6 +173,38 @@ describe('Sources section +', () => {
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
+  it("in the side panel over another space, picks the page's own space, not the route's", async () => {
+    auth.authenticated = true;
+    const panelSpace = 'ffffffffffffffffffffffffffffffff';
+    // Not a member of the panel page's space: the import goes personal and the request goes there.
+    canEditPageSpace(false);
+    resolveSeed.mockResolvedValue({ mode: 'ingestion', url: 'https://example.com/story', link });
+    renderSection({ ...sources, ingestionLink: { ...link, targetSpaceId: panelSpace } });
+
+    await submitLink();
+
+    await waitFor(() => expect(resolveSeed).toHaveBeenCalledTimes(1));
+    expect(membership.access).toHaveBeenCalledWith(panelSpace, PERSONAL_SPACE_ID);
+    expect(membership.ensure).toHaveBeenCalledWith(expect.objectContaining({ spaceId: panelSpace }));
+    expect(membership.ensure).not.toHaveBeenCalledWith(expect.objectContaining({ spaceId: SPACE_ID }));
+    expect(resolveSeed.mock.calls[0]?.[3]).toEqual(PERSONAL_WRITE);
+  });
+
+  it("in the side panel, a member of the page's space imports into it whatever space the route is", async () => {
+    auth.authenticated = true;
+    const panelSpace = 'ffffffffffffffffffffffffffffffff';
+    membership.access.mockImplementation((spaceId: string) =>
+      Effect.succeed({ canEdit: spaceId === panelSpace, isEditor: false, isMember: spaceId === panelSpace })
+    );
+    resolveSeed.mockResolvedValue({ mode: 'ingestion', url: 'https://example.com/story', link });
+    renderSection({ ...sources, ingestionLink: { ...link, targetSpaceId: panelSpace } });
+
+    await submitLink();
+
+    await waitFor(() => expect(resolveSeed).toHaveBeenCalledTimes(1));
+    expect(resolveSeed.mock.calls[0]?.[3]).toEqual({ spaceId: panelSpace, personal: false });
+  });
+
   it("signed in, a member imports into the page's space and sends no membership request", async () => {
     auth.authenticated = true;
     canEditPageSpace(true);
@@ -290,6 +322,41 @@ describe('Sources section +', () => {
     // The flag travels with the seed, so the assistant doesn't re-derive it from wherever the viewer is now.
     expect(resolveSeed.mock.calls[0]?.[3]).toEqual({ spaceId: SPACE_ID, personal: false });
     expect(membership.ensure).not.toHaveBeenCalled();
+  });
+
+  it('a queued import whose press is cleared (a sign-out) while the link is classified hands over no seed', async () => {
+    auth.authenticated = true;
+    canEditPageSpace(false);
+    Object.assign(account, { personalSpaceId: null, isRegistered: false, isLoading: true, address: null });
+    let classify: (seed: unknown) => void = () => {};
+    resolveSeed.mockReturnValue(new Promise(resolve => (classify = resolve)));
+    const store = renderSection();
+
+    await submitLink();
+    const queued = store.get(pendingActionsAtom);
+    expect(queued).toHaveLength(1);
+
+    account.address = ADDRESS;
+    store.queryClient.setQueryData(['personal-space-id', ADDRESS.toLowerCase()], {
+      isRegistered: true,
+      personalSpaceId: PERSONAL_SPACE_ID,
+      personalEntityId: null,
+    });
+    let replay: Promise<void> | void = undefined;
+    await act(async () => {
+      replay = queued[0]!.run();
+    });
+    await waitFor(() => expect(resolveSeed).toHaveBeenCalledTimes(1));
+
+    // Signing out clears the queue (PendingActionsRunner) while classify-url is still out.
+    act(() => store.set(pendingActionsAtom, []));
+    await act(async () => {
+      classify({ mode: 'ingestion', url: 'https://example.com/story', link });
+      await replay;
+    });
+
+    expect(store.get(assistantSeedAtom)).toBeNull();
+    expect(store.get(isChatOpenAtom)).toBe(false);
   });
 
   it('with no personal space and none on its way, asks them to finish setting up, as a vote does', async () => {

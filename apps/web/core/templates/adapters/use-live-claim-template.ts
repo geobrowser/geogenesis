@@ -560,7 +560,7 @@ export function useLiveClaimTemplate({
       layout: 'cards',
       items: hydratedSourceCards,
       emptyText: 'No sources',
-      ingestionLink: sourcesIngestionLink(entity.id, title),
+      ingestionLink: sourcesIngestionLink(entity.id, title, spaceId),
     });
 
     // Filter out claims already displayed in Supporting / Opposing / Related subclaims.

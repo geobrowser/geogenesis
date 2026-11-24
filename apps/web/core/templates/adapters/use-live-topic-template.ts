@@ -1027,7 +1027,7 @@ export function useLiveTopicTemplate({
         layout: 'cards',
         items: coverageItems,
         emptyText: 'No sources',
-        ingestionLink: topicCoverageIngestionLink(entity.id, entity.name),
+        ingestionLink: topicCoverageIngestionLink(entity.id, entity.name, spaceId),
       },
     ];
 

@@ -25,6 +25,11 @@ export type IngestionLink = {
   propertyName: string;
   direction: 'target-to-source' | 'source-to-target';
   /**
+   * The space of the page the `+` is on. Not always the route's: the same templates render in the
+   * entity side panel, which opens over any route. The import's write space is picked from it.
+   */
+  targetSpaceId?: string;
+  /**
    * The entities the section already lists when the `+` was pressed. A Topic's rows come from a
    * query that never reaches the sync store, so the store alone can't tell that an enrich is of a
    * story the Topic already shows.

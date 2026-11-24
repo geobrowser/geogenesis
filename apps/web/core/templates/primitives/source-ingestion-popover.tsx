@@ -28,12 +28,14 @@ import { useTemplatePopoverContainer } from './entity-overflow-menu';
 import { CloseIcon, PlusIcon } from './icons';
 
 /**
- * The space the assistant writes an ingestion into: the route's space, as the chat widget reads it
- * (`/root` proxies to the root space).
+ * The space of the page the `+` is on: the link's, which the section's adapter set. Not the route's
+ * when the page is in the entity side panel, which opens over any route. Without one, the route's
+ * space, as the chat widget reads it (`/root` proxies to the root space).
  */
-function useIngestionSpaceId(): string | null {
+function usePageSpaceId(link: IngestionLink | undefined): string | null {
   const params = useParams();
   const pathname = usePathname() ?? '';
+  if (link?.targetSpaceId) return link.targetSpaceId;
   const id = params?.['id'];
   if (typeof id === 'string') return id;
   return pathname === '/root' ? ROOT_SPACE : null;
@@ -87,7 +89,7 @@ function useIngestionSpace({
         queryClient,
       });
       if (!isCurrent()) return;
-      await startIngestion({ url, logTag: LOG_TAG, link, writeSpace });
+      await startIngestion({ url, logTag: LOG_TAG, link, writeSpace, isCurrent });
     },
   });
 
@@ -213,7 +215,7 @@ export function SourceIngestionPopover({
 function SourceIngestionForm({ label, link, onClose }: { label: string; link?: IngestionLink; onClose: () => void }) {
   const [needsAccount, setNeedsAccount] = React.useState(false);
   const resolveSpace = useIngestionSpace({
-    pageSpaceId: useIngestionSpaceId(),
+    pageSpaceId: usePageSpaceId(link),
     link,
     onNeedsAccount: React.useCallback(() => setNeedsAccount(true), []),
   });

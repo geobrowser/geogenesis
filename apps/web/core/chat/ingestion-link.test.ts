@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { sourcesIngestionLink, topicCoverageIngestionLink } from '~/core/templates/adapters/source-ingestion-links';
 import type { Relation } from '~/core/types';
 
 import {
@@ -267,5 +268,13 @@ describe('stageIngestionLink', () => {
       stageIngestionLink({ link: storyLink, primaryEntityId: null, primaryEntityName: null, spaceId: SPACE, ops: [] })
     ).toBeNull();
     expect(sync.setRelation).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('section link builders', () => {
+  it("carry the page's space, so a side-panel + picks from it rather than the route's", () => {
+    expect(sourcesIngestionLink(STORY, 'Story', SPACE).targetSpaceId).toBe(SPACE);
+    expect(topicCoverageIngestionLink(TOPIC, 'Topic', SPACE).targetSpaceId).toBe(SPACE);
+    expect(sourcesIngestionLink(STORY, 'Story', undefined)).not.toHaveProperty('targetSpaceId');
   });
 });

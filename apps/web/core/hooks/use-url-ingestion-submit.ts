@@ -32,7 +32,11 @@ type Options = {
 export type IngestionSpaceDecision =
   { kind: 'ingest'; writeSpace?: IngestionWriteSpace } | { kind: 'queued' } | { kind: 'blocked' };
 
-/** Starts an ingestion: classifies the URL and hands the assistant its seed. */
+/**
+ * Starts an ingestion: classifies the URL and hands the assistant its seed. `isCurrent`, from a
+ * queued replay, is re-checked once the classify (and inject) calls are back: a sign-out or newer
+ * press meanwhile means the seed is not handed over (see `PendingAction.run`).
+ */
 export function useStartUrlIngestion() {
   const setSeed = useSetAtom(assistantSeedAtom);
   const setChatOpen = useSetAtom(isChatOpenAtom);
@@ -42,13 +46,16 @@ export function useStartUrlIngestion() {
       logTag,
       link,
       writeSpace,
+      isCurrent,
     }: {
       url: string;
       logTag: string;
       link?: IngestionLink;
       writeSpace?: IngestionWriteSpace;
+      isCurrent?: () => boolean;
     }) => {
       const seed = await resolveUrlIngestionSeed(url, logTag, link, writeSpace);
+      if (isCurrent && !isCurrent()) return;
       setSeed(seed);
       setChatOpen(true);
     },
