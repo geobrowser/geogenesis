@@ -36,15 +36,15 @@ describe('panelClaims', () => {
     const nodes = [claimNode(1, 'a'), claimNode(2, 'b')];
     const claims = panelClaims([[about]], linked(nodes, 'Supporting argument'), new Map(nodes.map(n => [n.id, n])));
     expect(claims).toEqual([
-      { ...about, relation: 'Supporting argument' },
-      { id: id(2), name: 'Claim 2', spaceId: 'b', relation: 'Supporting argument' },
+      { ...about, relations: ['Supporting argument'] },
+      { id: id(2), name: 'Claim 2', spaceId: 'b', relations: ['Supporting argument'] },
     ]);
   });
 
   it('gives a claim centre its related claims without asking about it', () => {
     const nodes = [claimNode(3, 'c')];
     expect(panelClaims([], linked(nodes, 'Opposing argument'), new Map(nodes.map(n => [n.id, n])))).toEqual([
-      { id: id(3), name: 'Claim 3', spaceId: 'c', relation: 'Opposing argument' },
+      { id: id(3), name: 'Claim 3', spaceId: 'c', relations: ['Opposing argument'] },
     ]);
   });
 });

@@ -3,7 +3,7 @@ import { normId } from '~/core/utils/norm-id';
 
 import { type ClaimBand, MIN_RESPONSES_FOR_BAND, agreePercent, claimBand } from './claim-band';
 import type { GraphNode } from './fetch-graph-neighbourhood';
-import type { GraphKind } from './graph-kinds';
+import { GRAPH_KIND_REDUNDANT_LABELS, type GraphKind } from './graph-kinds';
 import type { GraphSelection } from './select-graph';
 import type { Spoke } from './spokes';
 import type { SummarisedClaim } from './topic-claims-summary';
@@ -114,6 +114,36 @@ export function groupByKind(spokes: readonly Spoke[], nodes: ReadonlyMap<string,
     const list = groups.get(kind);
     return list ? [{ kind, spokes: list }] : [];
   });
+}
+
+function labelKey(label: string) {
+  return label.trim().toLowerCase().replace(/s$/, '');
+}
+
+/**
+ * A row's line above (its relations) and below (its type and date), without the labels its group's
+ * heading already says, and without a relation that only repeats the row's own type.
+ */
+export function rowLabels({
+  kind,
+  relations,
+  typeLabel = null,
+  date = null,
+}: {
+  kind: GraphKind;
+  relations: readonly string[];
+  typeLabel?: string | null;
+  date?: string | null;
+}): { relation: string | null; sub: string | null } {
+  const redundant = new Set(GRAPH_KIND_REDUNDANT_LABELS[kind].map(labelKey));
+  const type = typeLabel && !redundant.has(labelKey(typeLabel)) ? typeLabel : null;
+  const shown = relations.filter(
+    label => !redundant.has(labelKey(label)) && !(typeLabel && labelKey(label) === labelKey(typeLabel))
+  );
+  return {
+    relation: shown.join(' · ') || null,
+    sub: [type, date].filter(Boolean).join(' · ') || null,
+  };
 }
 
 /** Banded claims per band, for the Claims group's bar: only claims past the threshold count. */

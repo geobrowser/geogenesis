@@ -34,6 +34,21 @@ export const GRAPH_KIND_LABELS: Record<GraphKind, string> = {
   other: 'Other',
 };
 
+/**
+ * Relation and type labels that only repeat a group's heading, so its rows leave them out. Matched
+ * ignoring case and a plural "s". People and groups and Other hold mixed types, so they list none.
+ */
+export const GRAPH_KIND_REDUNDANT_LABELS: Record<GraphKind, readonly string[]> = {
+  topic: ['Topic'],
+  ent: [],
+  claim: ['Claim'],
+  story: ['News story', 'Story', 'Story in'],
+  event: ['Event'],
+  src: ['Source'],
+  case: ['Court case', 'Legal case'],
+  other: [],
+};
+
 export const NEWS_EVENT_TYPE_ID = 'bb9a85bd6dc64efd8232e2782cb4b5f8';
 const TIMELINE_TYPE_ID = '3b22262d7919441db1a839eee9c2b3e9';
 

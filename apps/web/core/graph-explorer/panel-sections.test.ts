@@ -12,6 +12,7 @@ import {
   groupByKind,
   latestNews,
   mostLinked,
+  rowLabels,
   shownAgreement,
   topClaimsInBand,
 } from './panel-sections';
@@ -152,5 +153,59 @@ describe('one vote, every view', () => {
     expect(claimCountsKey(claim)).toEqual(
       entityResponseCountsQueryKey(claim.id, claim.spaceId, CLAIM_RESPONSE_OBJECT_TYPE, 'stance')
     );
+  });
+});
+
+describe('row labels that repeat the group', () => {
+  it.each<[string, Parameters<typeof rowLabels>[0], ReturnType<typeof rowLabels>]>([
+    [
+      'Topics drops Topic above and below',
+      { kind: 'topic', relations: ['Topic'], typeLabel: 'Topic' },
+      { relation: null, sub: null },
+    ],
+    ['Topics drops a plural Topics', { kind: 'topic', relations: ['topics'] }, { relation: null, sub: null }],
+    [
+      'Topics keeps an incoming relation',
+      { kind: 'topic', relations: ['Topics (incoming)'], typeLabel: 'Topic' },
+      { relation: 'Topics (incoming)', sub: null },
+    ],
+    ['Claims drops Claims', { kind: 'claim', relations: ['Claims'] }, { relation: null, sub: null }],
+    [
+      'Claims keeps Opposed by beside a dropped label',
+      { kind: 'claim', relations: ['Claims', 'Opposed by'] },
+      { relation: 'Opposed by', sub: null },
+    ],
+    [
+      'News drops Story, Story in and News story, and keeps the date',
+      { kind: 'story', relations: ['Story', 'Story in'], typeLabel: 'News story', date: 'Nov 3, 2026' },
+      { relation: null, sub: 'Nov 3, 2026' },
+    ],
+    [
+      'Sources keeps Cited by and a type that differs',
+      { kind: 'src', relations: ['Source', 'Cited by'], typeLabel: 'Article', date: 'Oct 1, 2026' },
+      { relation: 'Cited by', sub: 'Article · Oct 1, 2026' },
+    ],
+    [
+      'Court cases drops Legal case',
+      { kind: 'case', relations: ['Defendant'], typeLabel: 'Legal case' },
+      { relation: 'Defendant', sub: null },
+    ],
+    [
+      'People and groups keeps Person',
+      { kind: 'ent', relations: ['Actor'], typeLabel: 'Person' },
+      { relation: 'Actor', sub: 'Person' },
+    ],
+    [
+      'Other keeps every type, even Topic',
+      { kind: 'other', relations: ['Mentions'], typeLabel: 'Topic' },
+      { relation: 'Mentions', sub: 'Topic' },
+    ],
+    [
+      'a relation that only repeats the row type goes, the type stays',
+      { kind: 'ent', relations: ['Publisher'], typeLabel: 'Publisher' },
+      { relation: null, sub: 'Publisher' },
+    ],
+  ])('%s', (_, input, expected) => {
+    expect(rowLabels(input)).toEqual(expected);
   });
 });

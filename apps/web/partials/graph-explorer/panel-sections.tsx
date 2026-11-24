@@ -23,6 +23,7 @@ import {
   bandTally,
   latestNews,
   mostLinked,
+  rowLabels,
   shownAgreement,
   topClaimsInBand,
 } from '~/core/graph-explorer/panel-sections';
@@ -40,7 +41,7 @@ import { typeNames } from './entity-panel';
 import { ClaimBatchRow, type ClaimBatchStatus, useClaimSpaceBatches } from './graph-claim-list';
 
 /** A claim the panel lists: read and counted in its own space. */
-export type PanelClaim = { id: string; name: string; spaceId: string; relation?: string };
+export type PanelClaim = { id: string; name: string; spaceId: string; relations?: string[] };
 
 type Open = (id: string, name: string | null) => void;
 
@@ -200,10 +201,14 @@ function ShowAll({ total, onClick }: { total: number; onClick: () => void }) {
   );
 }
 
-/** The neighbour's type for its kind, and its date where it has one. */
-function rowSub(entity: { types: Array<{ name: string | null }> }, node: GraphNode | undefined) {
-  if (!node) return typeNames(entity)[0] ?? null;
-  return [nodeTypeLabel(node) ?? typeNames(entity)[0], nodeDateLabel(node)].filter(Boolean).join(' · ') || null;
+/** The row's relations above, and its type for its kind and its date below, minus what the group says. */
+function neighbourLabels(
+  kind: GraphKind,
+  spoke: NeighbourGroup['spokes'][number]['spoke'],
+  node: GraphNode | undefined
+) {
+  const typeLabel = (node && nodeTypeLabel(node)) ?? typeNames(spoke.entity)[0] ?? null;
+  return rowLabels({ kind, relations: spoke.labels, typeLabel, date: node ? nodeDateLabel(node) : null });
 }
 
 function heading(kind: GraphKind, count: number, more: boolean) {
@@ -218,17 +223,20 @@ function KindGroup({ group, more, onOpen }: { group: NeighbourGroup; more: boole
   return (
     <Section title={heading(group.kind, group.spokes.length, more)}>
       <ul ref={focus.listRef} className="flex flex-col">
-        {group.spokes.map(({ spoke, node }, index) => (
-          <Row
-            key={spoke.entity.id}
-            rowId={spoke.entity.id}
-            hidden={!all && index >= GROUP_ROWS}
-            relation={spoke.labels.join(' · ')}
-            title={spoke.entity.name ?? spoke.entity.id}
-            sub={rowSub(spoke.entity, node)}
-            onClick={() => onOpen(spoke.entity.id, spoke.entity.name)}
-          />
-        ))}
+        {group.spokes.map(({ spoke, node }, index) => {
+          const { relation, sub } = neighbourLabels(group.kind, spoke, node);
+          return (
+            <Row
+              key={spoke.entity.id}
+              rowId={spoke.entity.id}
+              hidden={!all && index >= GROUP_ROWS}
+              relation={relation}
+              title={spoke.entity.name ?? spoke.entity.id}
+              sub={sub}
+              onClick={() => onOpen(spoke.entity.id, spoke.entity.name)}
+            />
+          );
+        })}
       </ul>
       {!all && group.spokes.length > GROUP_ROWS && (
         <ShowAll
@@ -350,6 +358,7 @@ function ClaimRowContent({ claim, onOpen }: { claim: PanelClaim; onOpen: Open })
   const summary = useClaimResponseSummary(claim.id, claim.spaceId, 'stance');
   const counts = summary.hasCounts ? { positive: summary.positive, negative: summary.negative } : undefined;
   const band = shownAgreement(counts).band;
+  const { relation } = rowLabels({ kind: 'claim', relations: claim.relations ?? [] });
   return (
     <div className="flex flex-col gap-1 rounded-md px-1 py-1.5 transition-colors hover:bg-grey-01">
       <button
@@ -365,7 +374,7 @@ function ClaimRowContent({ claim, onOpen }: { claim: PanelClaim; onOpen: Open })
           )}
         />
         <span className="flex min-w-0 flex-col">
-          {claim.relation && <span className="truncate text-footnote text-grey-04">{claim.relation}</span>}
+          {relation && <span className="truncate text-footnote text-grey-04">{relation}</span>}
           <span className="text-metadataMedium wrap-break-word text-text">{claim.name}</span>
         </span>
       </button>

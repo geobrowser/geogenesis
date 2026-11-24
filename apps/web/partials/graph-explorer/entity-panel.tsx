@@ -139,13 +139,13 @@ export function panelClaims(
     const id = normId(spoke.entity.id);
     const existing = byId.get(id);
     if (existing) {
-      existing.relation = spoke.labels.join(' · ');
+      existing.relations = [...spoke.labels];
       continue;
     }
     const node = nodes.get(id);
     const spaceId = node ? nodeClaimSpaceId(node, topicSpaceId) : spoke.nodeSpaceId;
     if (spaceId && spoke.entity.name)
-      byId.set(id, { id: spoke.entity.id, name: spoke.entity.name, spaceId, relation: spoke.labels.join(' · ') });
+      byId.set(id, { id: spoke.entity.id, name: spoke.entity.name, spaceId, relations: [...spoke.labels] });
   }
   return [...byId.values()];
 }
