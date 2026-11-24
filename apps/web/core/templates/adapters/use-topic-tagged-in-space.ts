@@ -109,9 +109,8 @@ export async function fetchTopicTaggedInSpace({
 }
 
 /**
- * Of the feed's entities, those the viewed space itself tagged with the topic. The topic feed only
- * checks that an entity lives in the space, so this keeps the lists on the same rule as the header
- * counts. Null while it loads; on failure, null too, and callers show the feed unfiltered.
+ * The feed entities whose Topics relation the space itself published, matching the header counts.
+ * Null while loading or after a failure.
  */
 export function useTopicTaggedInSpace({
   topicId,
