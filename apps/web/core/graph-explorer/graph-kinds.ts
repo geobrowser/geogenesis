@@ -36,7 +36,7 @@ export const GRAPH_KIND_LABELS: Record<GraphKind, string> = {
 
 /**
  * Relation and type labels that only repeat a group's heading, so its rows leave them out. Matched
- * ignoring case and a plural "s". People and groups and Other hold mixed types, so they list none.
+ * ignoring case and a plural "s" or "ies". People and groups and Other hold mixed types, so they list none.
  */
 export const GRAPH_KIND_REDUNDANT_LABELS: Record<GraphKind, readonly string[]> = {
   topic: ['Topic'],
@@ -51,10 +51,21 @@ export const GRAPH_KIND_REDUNDANT_LABELS: Record<GraphKind, readonly string[]> =
 
 /**
  * Relation labels that only say a row is related, not how, so no row shows them: "On this topic",
- * "Topic", the fallback "Relation", and every "Related …" label ("Related person", "Related to",
- * "Related claim", a fallback "Related topics (incoming)"…). Matched ignoring case.
+ * "Topic", the fallback "Relation", every "Related …" label ("Related person", "Related to",
+ * "Related claim", a fallback "Related topics (incoming)"…), and a fallback that is only a kind's
+ * name seen from its target ("Claims (incoming)" on a debate that lists the claim). Matched ignoring case.
  */
-const GENERIC_RELATION_LABELS = new Set(['on this topic', 'topic', 'topics', 'relation', 'relation (incoming)']);
+const GENERIC_RELATION_LABELS = new Set([
+  'on this topic',
+  'topic',
+  'topics',
+  'topic (incoming)',
+  'topics (incoming)',
+  'claim (incoming)',
+  'claims (incoming)',
+  'relation',
+  'relation (incoming)',
+]);
 
 export function isGenericRelationLabel(label: string) {
   const key = label.trim().toLowerCase();
@@ -209,6 +220,8 @@ export const CONTENT_RELATION_LABELS: Record<string, { out: string; in: string }
   '4e6ec5d14292498a84e5f607ca1a08ce': { out: 'Opposing argument', in: 'Opposes' }, // Opposing arguments
   '09987fc8b20ddf11875d4e8e41336826': { out: 'Supports', in: 'Supported by' }, // Supports
   '71d1bcd5f1cf487fb9a3c7b1d53803eb': { out: 'Opposes', in: 'Opposed by' }, // Opposes
+  '81faa4adafad4009b1061374c1219f04': { out: 'Supports', in: 'Supported by' }, // Supports (debate publisher's, GEO-3142)
+  '818f2f7b85c687853d884ff96401dbaa': { out: 'Opposes', in: 'Opposed by' }, // Opposes (duplicate property)
   '249010038c9e4663a7922a63ffe23f39': { out: 'Story', in: 'Story in' }, // Stories
   ff5c1866e5ea41ebbbd93b30536ec020: { out: 'Related story', in: 'Related story' }, // Related stories
   d58d55c4d5434d4c94538092f2629d83: { out: 'Event', in: 'Part of' }, // Events

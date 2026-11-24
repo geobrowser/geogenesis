@@ -171,9 +171,29 @@ describe('row labels that repeat the group', () => {
       { relation: 'Subtopic · Broader topic', sub: null },
     ],
     [
-      'Topics keeps an incoming fallback label',
+      'Topics drops a bare Topics (incoming) fallback',
       { kind: 'topic', relations: ['Topics (incoming)'], typeLabel: 'Topic' },
-      { relation: 'Topics (incoming)', sub: null },
+      { relation: null, sub: null },
+    ],
+    [
+      'Other drops Claims (incoming) on a debate and keeps Debate below',
+      { kind: 'other', relations: ['Claims (incoming)'], typeLabel: 'Debate' },
+      { relation: null, sub: 'Debate' },
+    ],
+    [
+      'an incoming fallback that says how stays',
+      { kind: 'claim', relations: ['Claims (incoming)', 'Addresses (incoming)'] },
+      { relation: 'Addresses (incoming)', sub: null },
+    ],
+    [
+      'a -ies plural relation that repeats the row type goes',
+      { kind: 'ent', relations: ['Countries'], typeLabel: 'Country' },
+      { relation: null, sub: 'Country' },
+    ],
+    [
+      'News drops a fallback Stories',
+      { kind: 'story', relations: ['Stories'], typeLabel: 'News story' },
+      { relation: null, sub: null },
     ],
     ['Claims drops Claims', { kind: 'claim', relations: ['Claims'] }, { relation: null, sub: null }],
     [

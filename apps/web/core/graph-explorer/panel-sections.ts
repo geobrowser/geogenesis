@@ -130,7 +130,7 @@ export function groupByKind(spokes: readonly Spoke[], nodes: ReadonlyMap<string,
 }
 
 function labelKey(label: string) {
-  return label.trim().toLowerCase().replace(/s$/, '');
+  return label.trim().toLowerCase().replace(/ies$/, 'y').replace(/s$/, '');
 }
 
 /**
