@@ -202,7 +202,7 @@ function RelationshipsTab({
   );
 }
 
-function ClaimsTab({
+export function ClaimsTab({
   pages,
   state,
   emptyMessage,
@@ -219,12 +219,19 @@ function ClaimsTab({
 }) {
   if (state.isLoading) return <Skeleton className="h-[120px] w-full rounded-lg" />;
   const empty = pages.every(page => page.length === 0);
-  if (state.isError && empty) return <EmptyNote>Couldn’t load claims.</EmptyNote>;
-  if (empty) return <EmptyNote>{emptyMessage}</EmptyNote>;
+  // Pages can decode to nothing (unnamed claims are dropped) while later pages still hold some.
+  if (empty && !state.hasNextPage)
+    return <EmptyNote>{state.isError ? 'Couldn’t load claims.' : emptyMessage}</EmptyNote>;
 
   return (
     <div className="flex flex-col gap-3">
-      <GraphClaimList pages={pages} />
+      {empty ? (
+        <EmptyNote>
+          {state.isError ? 'Couldn’t load claims.' : 'None of the claims loaded so far can be shown here.'}
+        </EmptyNote>
+      ) : (
+        <GraphClaimList pages={pages} />
+      )}
       {state.hasNextPage && (
         <button
           type="button"
