@@ -53,9 +53,9 @@ const DEACTIVATE_RATIO = 0.4;
  * where the chrome is everything in the card that is not the media:
  *   34 (16px padding top and bottom and the 1px outline) + 28 (the moments row the moments card
  *   draws above the clip on desktop, held now so that card does not move this one; 0 on phones,
- *   where its bar sits over the clip) + 44 (the claim's 24px above and 20px below) + 54 (two
- *   27px claim lines, the clamp) + 44 (the vote row) + 36 (the 24px meta line and the 12px above
- *   it) = **240px on desktop, 212px on phones**.
+ *   where its bar sits over the clip) + 40 (the 24px meta line under the media and the 16px above
+ *   it) + 40 (the claim's 20px above and 20px below) + 54 (two 27px claim lines, the clamp) + 44
+ *   (the vote row) = **240px on desktop, 212px on phones**.
  *
  * At 1366×768 that is (768 − 76 − 240) × 0.8304 = 375px of media; at 1440×900 it is 485px, capped
  * by the card to 448px (480 − 32). Never under 280px, where a face is too small to read, so a very

@@ -48,9 +48,10 @@ export function DebateClaimFooter({
   /** `actions` carries a third control beside comments and share; see `PositionRow`'s `endSlotWraps`. */
   wideActions?: boolean;
   /**
-   * `'app'` is the debates app's card (GEO-3833): the claim at the app's size, then the vote row, then
-   * the results once the viewer has voted, the "Not counted yet" note, and the meta row last — the
-   * app has no meta row, so Geo's goes where it interrupts least. The host gives the padding.
+   * `'app'` is the debates app's card (GEO-3833): Geo's meta row (space, Join, full screen) under the
+   * video, then the claim at the app's size, the vote row, the results once the viewer has voted and
+   * the "Not counted yet" note. The app has no meta row; Preston placed it above the claim. The host
+   * gives the padding.
    */
   look?: 'default' | 'app';
   /** On the footer's root. */
@@ -59,6 +60,7 @@ export function DebateClaimFooter({
   if (look === 'app') {
     return (
       <div className={className}>
+        <div className="mt-4">{meta}</div>
         <div className={APP_TITLE_CLASS_NAME}>{title}</div>
         {claim ? (
           <ClaimPositions
@@ -81,7 +83,6 @@ export function DebateClaimFooter({
             look="app"
           />
         )}
-        <div className="mt-3">{meta}</div>
       </div>
     );
   }
@@ -130,7 +131,7 @@ const IGNORE_RESPONSE = () => {};
  * hosts' classes carry `!`, and these out-rank them by specificity.
  */
 const APP_TITLE_CLASS_NAME =
-  'mt-6 mb-5 [&_h2]:text-[23px]! [&_h2]:leading-[27px]! [&_h2]:font-medium! [&_h2]:tracking-[-0.65px]! [&_h2]:text-[#151515]!';
+  'mt-5 mb-5 [&_h2]:text-[23px]! [&_h2]:leading-[27px]! [&_h2]:font-medium! [&_h2]:tracking-[-0.65px]! [&_h2]:text-[#151515]!';
 
 function ClaimPositions({
   claim,
