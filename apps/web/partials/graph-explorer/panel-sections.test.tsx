@@ -97,7 +97,7 @@ const node = (n: number, kind: GraphNode['kind'], extra: Partial<GraphNode> = {}
   disagrees: 0,
   ...extra,
 });
-const filter = {} as GraphFilter;
+const filter = { kinds: [], spaceSource: 'topic' } as unknown as GraphFilter;
 const idle = {
   isLoading: false,
   isError: false,
@@ -248,6 +248,42 @@ describe('NeighbourGroups', () => {
     expect(region.textContent).toContain('Person');
     fireEvent.click(within(region).getByRole('button', { name: 'Show all 8' }));
     expect(within(region).getAllByRole('button')).toHaveLength(8);
+    // The button is gone, so focus lands on the first row it revealed.
+    expect(document.activeElement).toBe(within(region).getByRole('button', { name: /Node 16/ }));
+  });
+
+  it('moves focus to the first revealed claim after Show all and Show more claims', async () => {
+    const claims: PanelClaim[] = Array.from({ length: 7 }, (_, i) => ({
+      id: id(i + 1),
+      name: `C${i + 1}`,
+      spaceId: 'a',
+    }));
+    claims.forEach((_, i) => seed(i + 1, 'a', 10 - i, 0));
+    const fetchNextPage = vi.fn();
+    const view = (list: PanelClaim[]) => (
+      <QueryClientProvider client={client}>
+        <NeighbourGroups
+          groups={[]}
+          claims={list}
+          claimsState={{ ...idle, hasNextPage: true, fetchNextPage }}
+          moreKinds={[]}
+          emptyMessage="No relationships."
+          claimsEmptyMessage="No claims."
+          onOpen={vi.fn()}
+        />
+      </QueryClientProvider>
+    );
+    const { rerender } = render(view(claims));
+    const region = () => screen.getByRole('region', { name: /^Claims/ });
+    await waitFor(() => expect(rows(region())[0]).toContain('C1'));
+    fireEvent.click(within(region()).getByRole('button', { name: 'Show all 7' }));
+    expect(document.activeElement).toBe(within(region()).getByRole('button', { name: 'C7' }));
+
+    fireEvent.click(within(region()).getByRole('button', { name: 'Show more claims' }));
+    expect(fetchNextPage).toHaveBeenCalled();
+    seed(8, 'a', 50, 0);
+    rerender(view([...claims, { id: id(8), name: 'C8', spaceId: 'a' }]));
+    await waitFor(() => expect(document.activeElement).toBe(within(region()).getByRole('button', { name: 'C8' })));
   });
 
   it('sorts claims by votes in their own spaces, with a band bar, one batch per space and votes in place', async () => {

@@ -12,7 +12,7 @@ import { CLAIM_RESPONSE_OBJECT_TYPE, useClaimResponseSummary } from '~/core/clai
 import type { ClaimBand } from '~/core/graph-explorer/claim-band';
 import { CLAIM_BAND_LABELS } from '~/core/graph-explorer/claim-band';
 import type { GraphNode } from '~/core/graph-explorer/fetch-graph-neighbourhood';
-import type { GraphFilter } from '~/core/graph-explorer/graph-filter';
+import { type GraphFilter, graphFilterKey } from '~/core/graph-explorer/graph-filter';
 import { GRAPH_KIND_LABELS, type GraphKind } from '~/core/graph-explorer/graph-kinds';
 import {
   type Counts,
@@ -62,16 +62,18 @@ function Row({
   relation,
   hidden = false,
   onClick,
+  rowId,
 }: {
   title: string;
   sub?: string | null;
   relation?: string | null;
   hidden?: boolean;
   onClick: () => void;
+  rowId?: string;
 }) {
   if (hidden) return null;
   return (
-    <li>
+    <li data-row-id={rowId}>
       <button
         type="button"
         onClick={onClick}
@@ -105,15 +107,20 @@ export function TopicOverview({
   onOpen: Open;
 }) {
   const summary = useTopicClaimsSummary(topicId, filter, topicSpaceId);
-  const claims = summary.data?.claims ?? [];
-  const fights = topClaimsInBand(claims, 'contested');
-  const agreed = topClaimsInBand(claims, 'agreed');
+  const claims = summary.data?.claims;
+  const live = React.useMemo(
+    () => ({ fights: topClaimsInBand(claims ?? [], 'contested'), agreed: topClaimsInBand(claims ?? [], 'agreed') }),
+    [claims]
+  );
+  // Picked once per topic and filter: a vote moving a claim's band updates its row, not the lists.
+  const heldKey = [topicId, topicSpaceId ?? '*', ...graphFilterKey(filter)].join('|');
+  const { fights, agreed } = useHeld(heldKey, live, Boolean(summary.data));
   const people = mostLinked(selection, topicId);
   const news = latestNews(nodes);
 
   return (
     <>
-      {summary.data && claims.length > 0 && fights.length === 0 && agreed.length === 0 && (
+      {claims && claims.length > 0 && fights.length === 0 && agreed.length === 0 && (
         <p className="text-metadata text-grey-04">
           No claim here has {MIN_RESPONSES_FOR_BAND} or more votes yet, so none is listed as a fight or as widely
           agreed.
@@ -206,12 +213,15 @@ function heading(kind: GraphKind, count: number, more: boolean) {
 /** One group of neighbours: six rows, then the rest behind "Show all". */
 function KindGroup({ group, more, onOpen }: { group: NeighbourGroup; more: boolean; onOpen: Open }) {
   const [all, setAll] = React.useState(false);
+  const shown = (all ? group.spokes : group.spokes.slice(0, GROUP_ROWS)).map(({ spoke }) => spoke.entity.id);
+  const focus = useFocusRevealed(shown);
   return (
     <Section title={heading(group.kind, group.spokes.length, more)}>
-      <ul className="flex flex-col">
+      <ul ref={focus.listRef} className="flex flex-col">
         {group.spokes.map(({ spoke, node }, index) => (
           <Row
             key={spoke.entity.id}
+            rowId={spoke.entity.id}
             hidden={!all && index >= GROUP_ROWS}
             relation={spoke.labels.join(' · ')}
             title={spoke.entity.name ?? spoke.entity.id}
@@ -220,7 +230,15 @@ function KindGroup({ group, more, onOpen }: { group: NeighbourGroup; more: boole
           />
         ))}
       </ul>
-      {!all && group.spokes.length > GROUP_ROWS && <ShowAll total={group.spokes.length} onClick={() => setAll(true)} />}
+      {!all && group.spokes.length > GROUP_ROWS && (
+        <ShowAll
+          total={group.spokes.length}
+          onClick={() => {
+            focus.mark();
+            setAll(true);
+          }}
+        />
+      )}
     </Section>
   );
 }
@@ -244,23 +262,51 @@ function useClaimCounts(claims: readonly PanelClaim[]) {
 }
 
 /**
- * Most votes first, ordered once the counts are in and again only when the claims change, so a
- * row never moves under the viewer's vote.
+ * `value` as it was when first `ready` for `key`, held until `key` changes, so rows never move or
+ * change list under the viewer's vote. Before that it is the live value.
  */
+function useHeld<T>(key: string, value: T, ready: boolean): T {
+  const [held, setHeld] = React.useState<{ key: string; value: T } | null>(null);
+  React.useEffect(() => {
+    if (ready && held?.key !== key) setHeld({ key, value });
+  }, [held?.key, key, ready, value]);
+  return held?.key === key ? held.value : value;
+}
+
+/** Most votes first, ordered once the counts are in and again only when the claims change. */
 function useVoteOrder(claims: readonly PanelClaim[], counts: ReadonlyArray<Counts | undefined>, settled: boolean) {
-  const [order, setOrder] = React.useState<{ key: string; ids: string[] } | null>(null);
   const key = claims.map(claim => claim.id).join(',');
   const total = (index: number) => (counts[index] ? counts[index].positive + counts[index].negative : 0);
-  const ranked = settled
-    ? claims.map((claim, index) => ({ id: claim.id, total: total(index) })).sort((a, b) => b.total - a.total)
-    : null;
-  const rankedIds = ranked?.map(entry => entry.id).join(',');
-  React.useEffect(() => {
-    if (rankedIds && order?.key !== key) setOrder({ key, ids: rankedIds.split(',') });
-  }, [key, order?.key, rankedIds]);
-  if (order?.key !== key) return claims;
+  const rankedIds = claims
+    .map((claim, index) => ({ id: claim.id, total: total(index) }))
+    .sort((a, b) => b.total - a.total)
+    .map(entry => entry.id)
+    .join(',');
+  const ids = useHeld(key, rankedIds, settled);
+  if (ids === rankedIds && !settled) return claims;
   const byId = new Map(claims.map(claim => [claim.id, claim]));
-  return order.ids.flatMap(id => byId.get(id) ?? []);
+  return ids.split(',').flatMap(id => byId.get(id) ?? []);
+}
+
+/**
+ * Focus for "Show all" and "Show more": the button goes away, so `mark` before revealing and focus
+ * moves to the first row not shown before.
+ */
+function useFocusRevealed(shownIds: readonly string[]) {
+  const listRef = React.useRef<HTMLUListElement>(null);
+  const before = React.useRef<Set<string> | null>(null);
+  React.useEffect(() => {
+    const seen = before.current;
+    const first = seen && shownIds.find(id => !seen.has(id));
+    if (!first) return;
+    before.current = null;
+    const items = listRef.current?.querySelectorAll<HTMLElement>('li[data-row-id]') ?? [];
+    [...items]
+      .find(item => item.dataset.rowId === first)
+      ?.querySelector<HTMLElement>('button')
+      ?.focus();
+  });
+  return { listRef, mark: () => (before.current = new Set(shownIds)) };
 }
 
 /**
@@ -286,7 +332,7 @@ function ClaimRow({
       <ClaimRowContent claim={claim} onOpen={onOpen} />
     </ActionContextProvider>
   );
-  return <li>{batch ? <ClaimBatchRow status={batch}>{content}</ClaimBatchRow> : content}</li>;
+  return <li data-row-id={claim.id}>{batch ? <ClaimBatchRow status={batch}>{content}</ClaimBatchRow> : content}</li>;
 }
 
 /** "62% agree · 140 votes" from the live counts, with the percent only from 3 votes. */
@@ -351,6 +397,8 @@ function ClaimsGroup({
   const { counts, settled, status, batches } = useClaimCounts(claims);
   const rows = useVoteOrder(claims, counts, settled);
   const tally = bandTally(counts);
+  const shown = (all ? rows : rows.slice(0, GROUP_ROWS)).map(claim => claim.id);
+  const focus = useFocusRevealed(shown);
 
   return (
     <Section title={heading('claim', claims.length, more)}>
@@ -360,7 +408,7 @@ function ClaimsGroup({
       ) : (
         <>
           {tally.banded > 1 && <BandBar bands={tally.bands} banded={tally.banded} />}
-          <ul className="flex flex-col">
+          <ul ref={focus.listRef} className="flex flex-col">
             {rows.map((claim, index) =>
               !all && index >= GROUP_ROWS ? null : (
                 <ClaimRow
@@ -374,12 +422,23 @@ function ClaimsGroup({
               )
             )}
           </ul>
-          {!all && claims.length > GROUP_ROWS && <ShowAll total={claims.length} onClick={() => setAll(true)} />}
+          {!all && claims.length > GROUP_ROWS && (
+            <ShowAll
+              total={claims.length}
+              onClick={() => {
+                focus.mark();
+                setAll(true);
+              }}
+            />
+          )}
           {(all || claims.length <= GROUP_ROWS) && onLoadMore && (
             <button
               type="button"
               disabled={loadingMore}
-              onClick={onLoadMore}
+              onClick={() => {
+                focus.mark();
+                onLoadMore();
+              }}
               className="self-start px-1 text-metadataMedium text-text underline-offset-2 hover:underline disabled:text-grey-04"
             >
               {loadingMore ? 'Loading…' : 'Show more claims'}
