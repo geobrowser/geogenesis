@@ -5,6 +5,8 @@ import * as React from 'react';
 import cx from 'classnames';
 import Link from 'next/link';
 
+import { ActionContextProvider } from '~/core/action-context-provider';
+
 import { type ClaimKind, type ClaimSummaryModel, formatClaimKindLabel, formatCompactCount } from '../models';
 import {
   AddClaimPopover,
@@ -13,9 +15,10 @@ import {
   InlinePagination,
   useEntityActionContext,
 } from './entity-overflow-menu';
-import { CheckCircleIcon, ThumbDownIcon, ThumbUpIcon } from './icons';
+import { CheckCircleIcon } from './icons';
 import { ListRankingHeaderControl, ListRankingWorkspace, type RankableListItem, useListRanking } from './list-ranking';
 import { SplitBars } from './split-bars';
+import { ClaimVoteBinding, ClaimVotePills, TemplateVoteRows } from './template-claim-vote';
 import { TEMPLATE_CARD_SURFACE, TemplateBadge, type TemplateBadgeTone } from './template-shell';
 
 const CLAIM_KIND_TONE: Record<ClaimKind, TemplateBadgeTone> = {
@@ -28,6 +31,8 @@ export interface ClaimExplorerProps {
   contestedClaims: readonly ClaimSummaryModel[];
   agreedClaims: readonly ClaimSummaryModel[];
   title?: string;
+  /** Topic lists drop the Factual / Judgment chip below 760px to keep each row short (GEO-3819). */
+  hideKindOnPhone?: boolean;
   className?: string;
 }
 
@@ -38,7 +43,13 @@ const PAGE_SIZE = 10;
  * plain tabular rank numbers, clean 2-tab switch (`Disputed` | `Accepted`), right-aligned split bars,
  * anchored `+` claim proposal popover, and automatic pagination when more claims exist than fit on one page.
  */
-export function ClaimExplorer({ contestedClaims, agreedClaims, title = 'Claims', className }: ClaimExplorerProps) {
+export function ClaimExplorer({
+  contestedClaims,
+  agreedClaims,
+  title = 'Claims',
+  hideKindOnPhone = false,
+  className,
+}: ClaimExplorerProps) {
   const ctx = useEntityActionContext();
   const [addedByTab, setAddedByTab] = React.useState<{ split: ClaimSummaryModel[]; agreed: ClaimSummaryModel[] }>({
     split: [],
@@ -83,13 +94,12 @@ export function ClaimExplorer({ contestedClaims, agreedClaims, title = 'Claims',
     [activeList]
   );
 
-  if (!hasContested && !hasAgreed) return null;
-
   const displayList = ranking.orderedItems;
   const totalPages = Math.max(1, Math.ceil(displayList.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const startIndex = (safePage - 1) * PAGE_SIZE;
   const visible = displayList.slice(startIndex, startIndex + PAGE_SIZE);
+  if (!hasContested && !hasAgreed) return null;
 
   return (
     <section id="claims" aria-label={title} className={cx('flex flex-col gap-4', className)}>
@@ -185,16 +195,30 @@ export function ClaimExplorer({ contestedClaims, agreedClaims, title = 'Claims',
           </div>
         )}
 
-        <div className="divide-y divide-divider">
-          {visible.map((claim, index) => (
-            <RankedClaimRow
-              key={claim.id}
-              rank={startIndex + index + 1}
-              claim={claim}
-              isAgreed={activeTab === 'agreed'}
-            />
-          ))}
-        </div>
+        {/* One geo-chat lookup for the page of rows that vote, rather than one per row. */}
+        <TemplateVoteRows targets={visible.map(claim => claim.voteTarget)}>
+          <div className="divide-y divide-divider">
+            {visible.map((claim, index) => (
+              // Names the list, the tab (positions restart on each) and the row on every action taken
+              // in it, a vote included.
+              <ActionContextProvider
+                key={claim.id}
+                value={{
+                  list_id: 'template_claims',
+                  list_section_id: activeTab,
+                  item_position: startIndex + index + 1,
+                }}
+              >
+                <RankedClaimRow
+                  rank={startIndex + index + 1}
+                  claim={claim}
+                  isAgreed={activeTab === 'agreed'}
+                  hideKindOnPhone={hideKindOnPhone}
+                />
+              </ActionContextProvider>
+            ))}
+          </div>
+        </TemplateVoteRows>
 
         {totalPages > 1 && (
           <div className="border-t border-divider px-5 py-2.5">
@@ -206,7 +230,17 @@ export function ClaimExplorer({ contestedClaims, agreedClaims, title = 'Claims',
   );
 }
 
-function RankedClaimRow({ rank, claim, isAgreed }: { rank: number; claim: ClaimSummaryModel; isAgreed: boolean }) {
+function RankedClaimRow({
+  rank,
+  claim,
+  isAgreed,
+  hideKindOnPhone,
+}: {
+  rank: number;
+  claim: ClaimSummaryModel;
+  isAgreed: boolean;
+  hideKindOnPhone: boolean;
+}) {
   const voteMetaIndex = claim.meta?.findIndex(part => /\bvotes?\b/i.test(part)) ?? -1;
   const debateMetaIndex = claim.meta?.findIndex(part => /\bdebates?\b/i.test(part)) ?? -1;
 
@@ -231,141 +265,144 @@ function RankedClaimRow({ rank, claim, isAgreed }: { rank: number; claim: ClaimS
     }
   }
 
-  const handleVoteClick = (choice: 'agree' | 'disagree') => {
-    if (!claim.onVote) return;
-    if (claim.userVote === choice && claim.onClearVote) {
-      claim.onClearVote();
-      return;
-    }
-    claim.onVote(choice);
-  };
+  const votes = Boolean(claim.voteTarget || claim.onVote);
+  const youVotedLabel = claim.userVote && !votes ? (claim.userVote === 'agree' ? 'You agreed' : 'You disagreed') : null;
+
+  const debateNode =
+    debateLabel &&
+    (claim.debatesHref ? (
+      <Link
+        href={claim.debatesHref}
+        className="font-medium text-grey-04 underline decoration-grey-02 underline-offset-2 transition-colors hover:text-[#4c1fd4] hover:decoration-[#4c1fd4]"
+      >
+        {debateLabel}
+      </Link>
+    ) : claim.onOpenDebates ? (
+      <button
+        type="button"
+        onClick={claim.onOpenDebates}
+        className="cursor-pointer border-0 bg-transparent p-0 font-medium text-grey-04 underline decoration-grey-02 underline-offset-2 transition-colors hover:text-[#4c1fd4] hover:decoration-[#4c1fd4]"
+      >
+        {debateLabel}
+      </button>
+    ) : (
+      <span>{debateLabel}</span>
+    ));
+
+  const kindBadge = claim.kind && (
+    <TemplateBadge tone={CLAIM_KIND_TONE[claim.kind]} className="!h-6 !px-2 !text-[12px]">
+      {formatClaimKindLabel(claim.kind)}
+    </TemplateBadge>
+  );
+
+  // Phones: the split sits under the pills as the Claim page's vote box draws it (dot, space, bar,
+  // "80% (5)"), so the count lives in the parentheses. No votes, no split line, as in that box.
+  const phoneSplitRows =
+    claim.split.rows.length > 0 && claim.split.totalVotes !== 0
+      ? claim.split.rows.map(row => ({
+          ...row,
+          // The vote pills already show the viewer's side.
+          userLabel: undefined,
+          voterCount: row.voterCount ?? (claim.split.rows.length === 1 ? claim.split.totalVotes : undefined),
+        }))
+      : [];
+  const phoneKindBadge = hideKindOnPhone ? null : kindBadge;
+
+  const phoneMeta: React.ReactNode[] = [];
+  if (debateNode) phoneMeta.push(<React.Fragment key="debates">{debateNode}</React.Fragment>);
+  for (const part of metaParts) phoneMeta.push(<span key={`meta-${part}`}>{part}</span>);
+  if (youVotedLabel) {
+    phoneMeta.push(
+      <span key="you" className="font-medium text-text">
+        {youVotedLabel}
+      </span>
+    );
+  }
 
   const titleNode = (
     <span className="block text-[16px] leading-[22px] font-medium text-pretty text-text transition-colors group-hover/claim:text-[#4c1fd4]">
+      {/* Phones: the rank leads the title instead of holding a column, so the row keeps its width. */}
+      <span aria-hidden className="mr-2 text-[15px] font-semibold text-grey-04 tabular-nums @[760px]:hidden">
+        {rank}
+      </span>
       {claim.title}
       {isAgreed && <CheckCircleIcon className="ml-1.5 inline-block size-3.5 align-[-0.15em] text-ctaPrimary" />}
     </span>
   );
 
+  // Below 760px the row is one column: the title with "…" beside it, a meta line (kind, debates), the
+  // vote pills, then the split. ("…" moved up because at 320px it collided with "Disagree 2".) The desktop wrappers turn into `contents` there so the pills
+  // and "…" (one instance each) can share a line; at 760px and wider the markup lays out exactly as
+  // before (GEO-3819).
   return (
-    <div className="flex flex-col gap-3 px-5 py-4 transition-colors hover:bg-bg @[760px]:flex-row @[760px]:items-center @[760px]:gap-6">
-      <div className="flex min-w-0 flex-1 items-start gap-4">
-        <span className="w-6 shrink-0 pt-0.5 text-center text-[15px] font-semibold text-grey-04 tabular-nums">
+    <div className="flex flex-wrap items-center gap-x-3 px-5 py-4 transition-colors hover:bg-bg @[760px]:flex-nowrap @[760px]:gap-6">
+      <div className="contents min-w-0 flex-1 items-start gap-4 @[760px]:flex">
+        <span className="hidden w-6 shrink-0 pt-0.5 text-center text-[15px] font-semibold text-grey-04 tabular-nums @[760px]:block">
           {rank}
         </span>
 
-        <div className="flex min-w-0 flex-1 flex-col gap-2">
-          {claim.href ? (
-            <Link href={claim.href} className="group/claim self-start text-left text-text no-underline">
-              {titleNode}
-            </Link>
-          ) : claim.onSelect ? (
-            <button
-              type="button"
-              onClick={claim.onSelect}
-              className="group/claim cursor-pointer self-start border-0 bg-transparent p-0 text-left text-text"
-            >
-              {titleNode}
-            </button>
-          ) : (
-            titleNode
+        <div className="contents min-w-0 flex-1 flex-col gap-2 @[760px]:flex">
+          <div className="-order-1 min-w-0 flex-1 @[760px]:contents">
+            {claim.href ? (
+              <Link href={claim.href} className="group/claim self-start text-left text-text no-underline">
+                {titleNode}
+              </Link>
+            ) : claim.onSelect ? (
+              <button
+                type="button"
+                onClick={claim.onSelect}
+                className="group/claim cursor-pointer self-start border-0 bg-transparent p-0 text-left text-text"
+              >
+                {titleNode}
+              </button>
+            ) : (
+              titleNode
+            )}
+          </div>
+
+          {(phoneKindBadge || phoneMeta.length > 0) && (
+            <div className="mt-1.5 flex basis-full flex-wrap items-center gap-x-1.5 gap-y-1 text-[13px] text-grey-04 @[760px]:hidden">
+              {phoneKindBadge && <span className="mr-0.5 inline-flex">{phoneKindBadge}</span>}
+              {phoneMeta.map((node, i) => (
+                <React.Fragment key={i}>
+                  {i > 0 && <span aria-hidden>·</span>}
+                  {node}
+                </React.Fragment>
+              ))}
+            </div>
           )}
 
-          {(claim.kind || claim.onVote || debateLabel || metaParts.length > 0 || (claim.userVote && !claim.onVote)) && (
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-              {claim.kind && (
-                <TemplateBadge tone={CLAIM_KIND_TONE[claim.kind]} className="!h-6 !px-2 !text-[12px]">
-                  {formatClaimKindLabel(claim.kind)}
-                </TemplateBadge>
-              )}
+          {(claim.kind || votes || debateLabel || metaParts.length > 0 || youVotedLabel) && (
+            <div className="contents flex-wrap items-center gap-x-3 gap-y-1.5 @[760px]:flex">
+              {kindBadge && <span className="hidden @[760px]:contents">{kindBadge}</span>}
 
-              {claim.onVote && (
-                <div className="flex shrink-0 items-center gap-1.5" role="group" aria-label={`Vote on ${claim.title}`}>
-                  <button
-                    type="button"
-                    aria-pressed={claim.userVote === 'agree'}
-                    onClick={() => handleVoteClick('agree')}
-                    className={cx(
-                      'inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full border px-2.5 text-[13px] font-medium whitespace-nowrap transition-colors',
-                      claim.userVote === 'agree'
-                        ? 'border-text bg-text text-white'
-                        : 'border-grey-02 bg-white text-text hover:border-text'
-                    )}
-                  >
-                    <ThumbUpIcon className="size-3.5 shrink-0" />
-                    <span>Agree</span>
-                    {claim.agreeCount !== undefined && claim.agreeCount > 0 && (
-                      <span
-                        className={cx(
-                          'text-[12px] tabular-nums',
-                          claim.userVote === 'agree' ? 'text-white/80' : 'text-grey-04'
-                        )}
-                      >
-                        {formatCompactCount(claim.agreeCount)}
-                      </span>
-                    )}
-                  </button>
+              {/* 32px tap targets on phones; the desktop pills keep their 28px. */}
+              <div className="mt-2.5 basis-full @[760px]:contents [&_button]:h-8 @[760px]:[&_button]:h-7">
+                <ClaimVoteBinding
+                  voteTarget={claim.voteTarget}
+                  userVote={claim.userVote}
+                  agreeCount={claim.agreeCount}
+                  disagreeCount={claim.disagreeCount}
+                  onVote={claim.onVote}
+                  onClearVote={claim.onClearVote}
+                >
+                  {vote => vote && <ClaimVotePills title={claim.title} vote={vote} />}
+                </ClaimVoteBinding>
+              </div>
 
-                  <button
-                    type="button"
-                    aria-pressed={claim.userVote === 'disagree'}
-                    onClick={() => handleVoteClick('disagree')}
-                    className={cx(
-                      'inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full border px-2.5 text-[13px] font-medium whitespace-nowrap transition-colors',
-                      claim.userVote === 'disagree'
-                        ? 'border-text bg-text text-white'
-                        : 'border-grey-02 bg-white text-text hover:border-text'
-                    )}
-                  >
-                    <ThumbDownIcon className="size-3.5 shrink-0" />
-                    <span>Disagree</span>
-                    {claim.disagreeCount !== undefined && claim.disagreeCount > 0 && (
-                      <span
-                        className={cx(
-                          'text-[12px] tabular-nums',
-                          claim.userVote === 'disagree' ? 'text-white/80' : 'text-grey-04'
-                        )}
-                      >
-                        {formatCompactCount(claim.disagreeCount)}
-                      </span>
-                    )}
-                  </button>
-                </div>
-              )}
-
-              {(debateLabel || metaParts.length > 0 || (claim.userVote && !claim.onVote)) && (
-                <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[13.5px] text-grey-04">
-                  {debateLabel &&
-                    (claim.debatesHref ? (
-                      <Link
-                        href={claim.debatesHref}
-                        className="font-medium text-grey-04 underline decoration-grey-02 underline-offset-2 transition-colors hover:text-[#4c1fd4] hover:decoration-[#4c1fd4]"
-                      >
-                        {debateLabel}
-                      </Link>
-                    ) : claim.onOpenDebates ? (
-                      <button
-                        type="button"
-                        onClick={claim.onOpenDebates}
-                        className="cursor-pointer border-0 bg-transparent p-0 font-medium text-grey-04 underline decoration-grey-02 underline-offset-2 transition-colors hover:text-[#4c1fd4] hover:decoration-[#4c1fd4]"
-                      >
-                        {debateLabel}
-                      </button>
-                    ) : (
-                      <span>{debateLabel}</span>
-                    ))}
+              {(debateLabel || metaParts.length > 0 || youVotedLabel) && (
+                <span className="hidden flex-wrap items-center gap-x-2 gap-y-0.5 text-[13.5px] text-grey-04 @[760px]:flex">
+                  {debateNode}
                   {metaParts.map((part, i) => (
                     <React.Fragment key={part}>
                       {(debateLabel || i > 0) && <span aria-hidden>·</span>}
                       <span>{part}</span>
                     </React.Fragment>
                   ))}
-                  {claim.userVote && !claim.onVote && (
+                  {youVotedLabel && (
                     <>
                       {(debateLabel || metaParts.length > 0) && <span aria-hidden>·</span>}
-                      <span className="font-medium text-text">
-                        {claim.userVote === 'agree' ? 'You agreed' : 'You disagreed'}
-                      </span>
+                      <span className="font-medium text-text">{youVotedLabel}</span>
                     </>
                   )}
                 </span>
@@ -373,13 +410,20 @@ function RankedClaimRow({ rank, claim, isAgreed }: { rank: number; claim: ClaimS
             </div>
           )}
 
-          <EntityInlineContext targetId={claim.id} targetTitle={claim.title} targetKind="Claim" className="mt-0.5" />
+          <EntityInlineContext
+            targetId={claim.id}
+            targetTitle={claim.title}
+            targetKind="Claim"
+            className="order-last mt-3 basis-full @[760px]:order-none @[760px]:mt-0.5"
+          />
         </div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-3 pl-10 @[760px]:pl-0">
+      <div className="contents min-w-0 items-center gap-x-3 @[760px]:flex @[760px]:shrink-0">
         {claim.split.rows.length > 0 ? (
-          <SplitBars rows={claim.split.rows} density="compact" className="w-[264px] shrink-0" />
+          <span className="hidden @[760px]:contents">
+            <SplitBars rows={claim.split.rows} density="compact" className="w-[264px] shrink-0" />
+          </span>
         ) : (
           <div className="hidden w-[264px] shrink-0 items-center gap-2 @[760px]:flex">
             <div className="h-[5px] flex-1 overflow-hidden rounded-full bg-grey-01" />
@@ -387,14 +431,18 @@ function RankedClaimRow({ rank, claim, isAgreed }: { rank: number; claim: ClaimS
           </div>
         )}
 
-        <span className="w-[76px] shrink-0 text-right text-[13px] whitespace-nowrap text-grey-04 tabular-nums">
+        <span className="hidden w-[76px] shrink-0 text-right text-[13px] whitespace-nowrap text-grey-04 tabular-nums @[760px]:block">
           {voteCountLabel ?? '0 votes'}
         </span>
 
         <EntityOverflowMenu
           target={{ id: claim.id, kind: 'Claim', title: claim.title }}
-          className="@[760px]:w-[120px] @[760px]:justify-end"
+          className="-order-1 -my-[5px] self-start @[760px]:order-none @[760px]:my-0 @[760px]:w-[120px] @[760px]:justify-end @[760px]:self-auto [&>button[aria-haspopup]]:size-8 @[760px]:[&>button[aria-haspopup]]:size-7"
         />
+
+        {phoneSplitRows.length > 0 && (
+          <SplitBars rows={phoneSplitRows} density="full" className="mt-3 basis-full @[760px]:hidden" />
+        )}
       </div>
     </div>
   );

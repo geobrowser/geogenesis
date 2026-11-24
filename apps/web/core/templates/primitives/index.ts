@@ -72,3 +72,10 @@ export {
 export { TopicImagePills } from './topic-image-pills';
 export { TopicTrendsChart, type TopicTrendsChartProps } from './topic-trends-chart';
 export { VoteBox, type VoteBoxProps } from './vote-box';
+export {
+  ClaimVoteBinding,
+  ClaimVotePills,
+  TemplateClaimVote,
+  type TemplateVoteBinding,
+  TemplateVoteRows,
+} from './template-claim-vote';

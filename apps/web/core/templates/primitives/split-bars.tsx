@@ -35,8 +35,13 @@ export function SplitBars({ rows, density = 'compact', className }: SplitBarsPro
             className={cx(
               'grid items-center',
               isFull
-                ? 'grid-cols-[minmax(122px,156px)_minmax(0,1fr)_auto] gap-3 text-[15px] leading-[20px]'
-                : 'grid-cols-[minmax(108px,128px)_minmax(0,1fr)_36px] gap-2.5 text-[13.5px] leading-[18px]',
+                ? // As in compact: the label gives way before the bar, which keeps 40px. With a 122px label
+                  // minimum and a 0 bar minimum, a 320px phone drew no bar (GEO-3819). Wide rows still
+                  // give the label its 156px before the bar takes the rest.
+                  'grid-cols-[minmax(72px,156px)_minmax(40px,1fr)_auto] gap-3 text-[15px] leading-[20px]'
+                : // The label gives way on a narrow row, but the bar keeps 40px: the label grows to 128px
+                  // before the bar gets any space, so with a 0 minimum a phone row drew no bar at all.
+                  'grid-cols-[minmax(64px,128px)_minmax(40px,1fr)_36px] gap-2.5 text-[13.5px] leading-[18px]',
               row.isEveryone ? 'text-text' : 'text-grey-04'
             )}
           >
@@ -97,7 +102,9 @@ export function SplitBars({ rows, density = 'compact', className }: SplitBarsPro
               {isFull && row.voterCount !== undefined && (
                 <span className="text-[14px] text-grey-04">({formatCompactCount(row.voterCount)})</span>
               )}
-              {row.userLabel && (
+              {/* Full density only: the compact grid's last column is 36px, so the label spilled over the
+                  bar and the next column (GEO-3819). Compact rows sit beside pills that show the vote. */}
+              {isFull && row.userLabel && (
                 <span className="rounded-md bg-grey-01 px-2 py-0.5 text-[13px] font-medium text-text">
                   {row.userLabel}
                 </span>
