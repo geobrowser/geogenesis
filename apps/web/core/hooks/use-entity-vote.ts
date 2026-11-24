@@ -258,7 +258,12 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
   );
   const queryClient = useQueryClient();
   const responseIndexingRegistry = getResponseIndexingRegistry(queryClient);
-  const { personalSpaceId, isRegistered } = usePersonalSpaceId();
+  const {
+    personalSpaceId,
+    isRegistered,
+    hasAnswer: hasPersonalSpaceAnswer,
+    isLoading: isPersonalSpaceLoading,
+  } = usePersonalSpaceId();
 
   // While mounted the reactive value is correct; a queued vote replayed after the button remounted
   const readRegisteredSpace = useCallback((): { personalSpaceId: string | null; isRegistered: boolean } => {
@@ -801,6 +806,8 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
       responseMutation.isPending || indexingState.status === 'reconciling' || indexingState.status === 'delayed',
     isResponseIndexingDelayed: indexingState.status === 'delayed',
     isConnected: !!personalSpaceId && isRegistered,
+    /** The index has answered that this account has no personal space; a failed or pending read is not that. */
+    hasNoPersonalSpace: hasPersonalSpaceAnswer && !isPersonalSpaceLoading && !isRegistered,
     personalSpaceId,
   };
 }

@@ -37,6 +37,8 @@ export type TabGroupTab = {
    * the rail's content appears precisely when the rail stops being there.
    */
   onlyWhenNarrow?: boolean;
+  /** Also active on the routes below `href`; see `isEntityTabActive`. */
+  activeOnSubpaths?: boolean;
 };
 
 interface TabGroupProps {
@@ -212,6 +214,7 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
                     disabled={t.disabled}
                     hidden={t.hidden}
                     sidePanelKey={t.sidePanelKey}
+                    activeOnSubpaths={t.activeOnSubpaths}
                     activeRef={registerActiveTab}
                     activeTabId={activeTabId}
                     fullPath={fullPath}
@@ -227,6 +230,7 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
                   disabled={t.disabled}
                   hidden={t.hidden}
                   sidePanelKey={t.sidePanelKey}
+                  activeOnSubpaths={t.activeOnSubpaths}
                   activeRef={registerActiveTab}
                   activeTabId={activeTabId}
                   fullPath={fullPath}
@@ -257,6 +261,7 @@ interface TabProps {
   disabled?: boolean;
   hidden?: boolean;
   sidePanelKey?: string;
+  activeOnSubpaths?: boolean;
   activeRef: (element: HTMLElement | null) => void;
   activeTabId: string | null;
   fullPath: string;
@@ -332,6 +337,7 @@ function Tab({
   disabled,
   hidden,
   sidePanelKey,
+  activeOnSubpaths,
   activeRef,
   activeTabId,
   fullPath,
@@ -348,6 +354,7 @@ function Tab({
     sidePanel: Boolean(sidePanelTab),
     sidePanelKey,
     activeSystemTab: sidePanelTab?.activeSystemTab,
+    activeOnSubpaths,
   });
 
   const selected = pendingHref ? pendingHref === href : active;

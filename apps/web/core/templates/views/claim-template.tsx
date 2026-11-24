@@ -53,7 +53,7 @@ export interface ClaimTemplateProps {
   model: ClaimTemplateModel;
   /** Optional header actions slot (e.g. share, overflow menu, history on live Geo pages). */
   headerActions?: React.ReactNode;
-  /** Optional footer slot (e.g. edit-mode property sheet & backlinks). */
+  /** Optional slot rendered after the template's sections. */
   footer?: React.ReactNode;
   /** Live GRC-20 persistence & search callbacks. */
   actionCallbacks?: EntityActionCallbacks;

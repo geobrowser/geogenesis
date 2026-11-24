@@ -27,6 +27,12 @@ type EntityTabsProps = {
   reservedSystemLabels?: string[];
   /** Visually separates the first authored tab from the product-owned record tabs. */
   divideBeforeAuthored?: boolean;
+  /**
+   * For the generic editor standing in for a templated entity's view. The selection it does not
+   * draw (a record route like `/debates`, or a record tab in the side panel) shows as Overview,
+   * the content being edited, and is kept so leaving edit mode returns to it.
+   */
+  keepRecordTabSelection?: boolean;
 };
 
 export function EntityTabs({
@@ -37,6 +43,7 @@ export function EntityTabs({
   systemTabsBefore,
   reservedSystemLabels = [],
   divideBeforeAuthored = false,
+  keepRecordTabSelection = false,
 }: EntityTabsProps) {
   // `useUserIsEditing` preserves edit intent while access is loading to avoid whole-page hydration
   // flicker. Tab mutation controls must be stricter: do not expose them until this space's access
@@ -82,7 +89,9 @@ export function EntityTabs({
   }, [liveNameValues]);
 
   const overviewHref = NavUtils.toEntity(spaceId, entityId);
-  const leadingSystemTabs = systemTabsBefore ?? [{ label: 'Overview', href: overviewHref }];
+  const leadingSystemTabs = systemTabsBefore ?? [
+    { label: 'Overview', href: overviewHref, activeOnSubpaths: keepRecordTabSelection },
+  ];
   const systemTabKey = leadingSystemTabs.flatMap(tab => (tab.sidePanelKey ? [tab.sidePanelKey] : [])).join('\u0000');
   const activeSystemTab = sidePanelTab?.activeSystemTab ?? null;
   const setActiveSystemTab = sidePanelTab?.setActiveSystemTab;
@@ -92,13 +101,14 @@ export function EntityTabs({
   // reconcile the shared panel state instead of leaving an unreachable empty panel selected.
   // This belongs at the shared entity-tabs boundary so browse and edit bars follow one rule.
   React.useEffect(() => {
+    if (keepRecordTabSelection) return;
     const systemTabKeys = systemTabKey === '' ? [] : systemTabKey.split('\u0000');
     if (!activeSystemTab || systemTabKeys.includes(activeSystemTab)) return;
 
     const fallback = systemTabKeys.includes('overview') ? 'overview' : systemTabKeys[0];
     if (fallback && setActiveSystemTab) setActiveSystemTab(fallback);
     else clearToOverview?.(null);
-  }, [activeSystemTab, clearToOverview, setActiveSystemTab, systemTabKey]);
+  }, [activeSystemTab, clearToOverview, keepRecordTabSelection, setActiveSystemTab, systemTabKey]);
 
   if (entityHasOnlyPostType(entity)) {
     return null;

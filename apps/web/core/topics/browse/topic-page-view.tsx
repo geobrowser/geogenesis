@@ -1,7 +1,5 @@
 'use client';
 
-import { SystemIds } from '@geoprotocol/geo-sdk/lite';
-
 import * as React from 'react';
 
 import { CURATED_TOPIC_TAG_ID, TAG_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/constants';
@@ -9,7 +7,6 @@ import { readTypes } from '~/core/database/entities';
 import { TopicFollowControl } from '~/core/follows/follow-control';
 import { markGraphExplorerEntry } from '~/core/graph-explorer/graph-share';
 import { graphExplorerHref } from '~/core/graph-explorer/href';
-import { useCanUserEdit } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useActiveTabIdForEditor, useEditorInstance } from '~/core/state/editor/editor-provider';
 import { useBlocks } from '~/core/state/editor/use-blocks';
@@ -26,14 +23,9 @@ import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
 import { Editor } from '~/partials/editor/lazy-editor';
-import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
-import { RelationsGroup as EditableRelationsGroup } from '~/partials/entity-page/editable-entity-page';
 import { EntityPageActions } from '~/partials/entity-page/entity-page-actions';
 import { ENTITY_PAGE_CONTENT_ANCHOR, entityPageTitleAnchor } from '~/partials/entity-page/entity-page-anchors';
-import {
-  ENTITY_DESCRIPTION_MAX_LINES,
-  EntityPageInlineDescription,
-} from '~/partials/entity-page/entity-page-inline-description';
+import { ENTITY_DESCRIPTION_MAX_LINES } from '~/partials/entity-page/entity-page-inline-description';
 import { ENTITY_PAGE_CONTENT_MAX_WIDTH } from '~/partials/entity-page/entity-page-layout';
 import { EntityTabs } from '~/partials/entity-page/entity-tabs';
 import { META_CHIP_CLASS } from '~/partials/entity-page/relation-chip-section';
@@ -120,15 +112,11 @@ export function TopicPageView({
   spaceId,
   initialTabRelations = [],
   tabEntities = [],
-  footer,
-  isEditing = false,
 }: {
   entityId: string;
   spaceId: string;
   initialTabRelations?: Relation[];
   tabEntities?: TabEntity[];
-  footer?: React.ReactNode;
-  isEditing?: boolean;
 }) {
   const { entity, isLoading } = useQueryEntity({ id: entityId, spaceId });
   const graphExplorerEnabled = useFeatureFlag('graphExplorer');
@@ -154,13 +142,12 @@ export function TopicPageView({
   /*
    * Topic is drawn from the literal rather than from this list, so the word the page is named for
    * is there even before the type entity's name resolves. Everything else the entity is typed as
-   * follows it — a topic that is also, say, a Project used to read as a plain Topic, and edit mode
-   * showed types browse mode had no room for.
+   * follows it, so a topic that is also, say, a Project does not read as a plain Topic.
    *
    * Read off `relations`, not `entity.types`. `getEntity` derives `types` from every space's
    * relations and only afterwards narrows `relations` to the space being read, so `types` would
-   * advertise a type some other space contributed — one the edit control, scoped like every other
-   * types control in the app, can neither show nor take off. Same array and the same deleted guard
+   * advertise a type some other space contributed, one the space-scoped types editor can neither
+   * show nor take off. Same array and the same deleted guard
    * as `isCurated` above, through the same `readTypes` the store itself uses, so a chip means what
    * a chip means everywhere else.
    */
@@ -204,22 +191,12 @@ export function TopicPageView({
   const hasBlocks = useBlocks(entityId, spaceId, serverBlockRelations).length > 0;
 
   /*
-   * An editor gets the tab whether or not it has content yet — it is the only way to start a body —
-   * and a reader only when there is a body to read.
-   *
-   * `isEditing` is edit *intent*, held through the access check to avoid hydration flicker, so it
-   * is paired with `canEdit` here: until access resolves `EntityTabs` draws the *browse* bar, and
-   * intent alone would put an Overview tab for an empty topic into it.
-   *
-   * And the tab stays for whoever is already on it. Both conditions above can go false underneath
-   * a reader — an editor opens an empty Overview and leaves edit mode, or a link selects this
-   * tab on a topic that never had a body — and hiding it there left `TopicTabPanel` still drawing
-   * the editor under a row with nothing selected. Redirecting them to Explore instead would be
-   * worse: `hasBlocks` reads false for a frame before the entity hydrates, so it would fire on a
-   * legitimate visit and bounce the reader off the URL they asked for.
+   * Shown when there is a body to read, and kept for whoever is already on it: a link can select
+   * this tab on a topic with no body, and hiding it there left `TopicTabPanel` drawing the editor
+   * under a row with nothing selected. Redirecting to Explore instead would bounce a legitimate
+   * visit, because `hasBlocks` reads false for a frame before the entity hydrates.
    */
-  const canEdit = useCanUserEdit(spaceId);
-  const showBlocksTab = hasBlocks || (isEditing && canEdit) || activeTab === 'blocks';
+  const showBlocksTab = hasBlocks || activeTab === 'blocks';
 
   const systemTabs = [
     { label: 'Explore', href: overviewHref, sidePanelKey: 'overview' },
@@ -287,19 +264,15 @@ export function TopicPageView({
               Deliberately not container-scaled: the regular entity header isn't either, so scaling
               this one down in the side panel would reintroduce a mismatch. `text-pretty` stays — it
               governs where the line breaks, not how big it is. */}
-          {isEditing ? (
-            <EditableHeading entityId={entityId} spaceId={spaceId} fallbackName={entity.name ?? entity.id} />
-          ) : (
-            <Text
-              as="h1"
-              variant="entityTitle"
-              color="text"
-              className="block text-pretty wrap-break-word"
-              {...entityPageTitleAnchor(entityId)}
-            >
-              {entity.name ?? entity.id}
-            </Text>
-          )}
+          <Text
+            as="h1"
+            variant="entityTitle"
+            color="text"
+            className="block text-pretty wrap-break-word"
+            {...entityPageTitleAnchor(entityId)}
+          >
+            {entity.name ?? entity.id}
+          </Text>
 
           {/* Clamped, like entity pages, the side panel and the claim page (GEO-2776). What is
               shared is the line budget, not the cut: wrapping decides where the break lands and
@@ -312,52 +285,27 @@ export function TopicPageView({
               is genuinely hidden. The naive-overflow bug GEO-2756 fixed lived in the debates
               feed's own title, which clamps a heading inside a link and so has its own
               implementation. */}
-          {isEditing ? (
-            <EntityPageInlineDescription
-              entityId={entityId}
-              spaceId={spaceId}
-              fallbackDescription={entity.description}
+          {entity.description && (
+            <ClampedText
+              text={entity.description}
+              maxLines={ENTITY_DESCRIPTION_MAX_LINES}
+              variant="body"
+              textClassName="wrap-break-word text-grey-04"
             />
-          ) : (
-            entity.description && (
-              <ClampedText
-                text={entity.description}
-                maxLines={ENTITY_DESCRIPTION_MAX_LINES}
-                variant="body"
-                textClassName="wrap-break-word text-grey-04"
-              />
-            )
           )}
 
-          {/* The row an ordinary entity page draws under its description: what it is on the left,
-              what you can do to it on the right. The topic view replaces that page, and had
-              neither half — the left was a literal `Topic` span and the right was missing
-              entirely, so a topic had no votes, no history and no overflow menu.
-
-              Browse keeps the one word that says what this page is, now followed by whatever else
-              the entity is typed as. Edit swaps it for the entity's real Types relations, with the
-              same chips, the same X and the same `Find or create type...` picker every other
-              entity gets — the only place a topic's types can be edited at all, since the
-              edit-mode property sheet drops `Types` as a system property "editable elsewhere" and
-              elsewhere is the generic metadata header this view replaces. Dropping Topic is
-              allowed: the page re-routes to the generic editor on the next render, which is what
-              an entity that is no longer a topic should look like. */}
+          {/* What the topic is on the left (Topic, then any other types it has), what you can do to
+              it on the right. */}
           <div className="flex items-center gap-4 text-text">
             <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-              {isEditing ? (
-                <EditableRelationsGroup id={entityId} spaceId={spaceId} propertyId={SystemIds.TYPES_PROPERTY} />
-              ) : (
-                <>
-                  <span className={TOPIC_META_CHIP_CLASS}>Topic</span>
-                  {additionalTypes.map(type => (
-                    <span key={type.id} className={TOPIC_META_CHIP_CLASS}>
-                      {type.name ?? type.id}
-                    </span>
-                  ))}
-                </>
-              )}
+              <span className={TOPIC_META_CHIP_CLASS}>Topic</span>
+              {additionalTypes.map(type => (
+                <span key={type.id} className={TOPIC_META_CHIP_CLASS}>
+                  {type.name ?? type.id}
+                </span>
+              ))}
               {isCurated && <span className={TOPIC_META_CHIP_CLASS}>Curated</span>}
-              {graphExplorerEnabled && !isEditing && (
+              {graphExplorerEnabled && (
                 <Link
                   href={graphExplorerHref({ entityId, topicId: entityId, spaceId })}
                   onClick={() => markGraphExplorerEntry('topic_page')}
@@ -393,7 +341,6 @@ export function TopicPageView({
         </div>
 
         <TopicTabPanel activeTab={activeTab} entityId={entityId} spaceId={spaceId} topicSpaceIds={topicSpaceIds} />
-        {footer}
       </div>
     </div>
   );

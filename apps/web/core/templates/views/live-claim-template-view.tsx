@@ -14,7 +14,6 @@ export interface LiveClaimTemplateViewProps {
   spaceId: string;
   serverCoverUrl?: string | null;
   compact?: boolean;
-  footer?: React.ReactNode;
 }
 
 /**
@@ -26,7 +25,6 @@ export function LiveClaimTemplateView({
   spaceId,
   serverCoverUrl,
   compact = false,
-  footer,
 }: LiveClaimTemplateViewProps) {
   const { data, isLoading, isSectionsLoading, actionCallbacks } = useLiveClaimTemplate({
     entityId,
@@ -52,7 +50,6 @@ export function LiveClaimTemplateView({
       compact={compact}
       isLoadingSections={isSectionsLoading}
       headerActions={<EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable={false} compact={compact} />}
-      footer={footer}
     />
   );
 }

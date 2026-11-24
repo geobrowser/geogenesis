@@ -27,6 +27,7 @@ export function isEntityTabActive({
   sidePanel,
   sidePanelKey,
   activeSystemTab,
+  activeOnSubpaths = false,
 }: {
   href: string;
   activeTabId: string | null;
@@ -34,8 +35,14 @@ export function isEntityTabActive({
   sidePanel: boolean;
   sidePanelKey?: string;
   activeSystemTab?: string | null;
+  /** Also active on the routes below `href` (e.g. `/debates` under an entity's Overview). */
+  activeOnSubpaths?: boolean;
 }): boolean {
-  if (!sidePanel) return href === fullPath || isNestedTabPath(href, fullPath);
+  if (!sidePanel) {
+    return (
+      href === fullPath || isNestedTabPath(href, fullPath) || (activeOnSubpaths && fullPath.startsWith(`${href}/`))
+    );
+  }
   if (sidePanelKey) {
     // A null system tab means Overview only when no authored tab owns the selection. Treating every
     // null as Overview made both markers active while an authored side-panel tab was selected.

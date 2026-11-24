@@ -257,6 +257,15 @@ describe('TemplateClaimVote', () => {
   });
 });
 
+describe('ClaimVotePills layout', () => {
+  it('lets the pair wrap inside a narrow row instead of running past it (GEO-3825)', () => {
+    renderVote();
+    const group = screen.getByRole('group', { name: `Vote on ${TARGET.title}` });
+    expect(group).toHaveClass('flex-wrap');
+    expect(group.parentElement).toHaveClass('max-w-full');
+  });
+});
+
 describe('TemplateVoteRows', () => {
   it('looks rows up once for the list instead of once per row', () => {
     const row = { id: 'row-1', space_id: 'space-1', claim_entity_id: 'claim-1' };

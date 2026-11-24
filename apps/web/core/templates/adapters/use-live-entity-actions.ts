@@ -185,10 +185,10 @@ export function useLiveEntityActions({
   );
 
   const onAddFlag = React.useCallback(
-    (targetId: string, draft: { reason: string; body: string; sourceUrl?: string }) => {
+    (targetId: string, draft: { reason: string; body: string; sourceUrl?: string }): string | undefined => {
       const noteId = ID.createEntityId();
       const title = draft.body.trim();
-      if (!title) return;
+      if (!title) return undefined;
 
       storage.entities.name.set(noteId, spaceId, title);
       if (draft.reason.trim()) {
@@ -237,6 +237,7 @@ export function useLiveEntityActions({
           toName: title,
         })
       );
+      return noteId;
     },
     [entityId, entityName, spaceId, storage.entities.name, storage.relations, storage.values]
   );

@@ -49,7 +49,7 @@ import {
 
 export type SystemTab = Pick<
   TabGroupTab,
-  'label' | 'href' | 'badge' | 'sidePanelKey' | 'onlyWhenNarrow' | 'dividerBefore'
+  'label' | 'href' | 'badge' | 'sidePanelKey' | 'onlyWhenNarrow' | 'dividerBefore' | 'activeOnSubpaths'
 >;
 
 export type EditableTab = {
@@ -315,6 +315,7 @@ export function EditableTabGroup({
           fullPath,
           sidePanelKey: tab.sidePanelKey,
           activeSystemTab: sidePanelTab?.activeSystemTab,
+          activeOnSubpaths: tab.activeOnSubpaths,
         })}
         onSelect={
           sidePanelTab

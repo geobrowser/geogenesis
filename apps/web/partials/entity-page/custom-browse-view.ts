@@ -39,7 +39,6 @@ export function customBrowseView({
   const template = resolveEntityTemplateFromTypes(entity.types, { includeV2: enableV2Templates });
   if (!template) return 'generic';
 
-  if (template.keepInEditMode) return template.id;
   if (isEditing) return 'generic';
 
   /*

@@ -45,6 +45,16 @@ describe('entity tab navigation', () => {
     expect(at('/space/s/chat', '/space/s/chatter')).toBe(false);
   });
 
+  it('keeps Overview selected on a record route when asked to (GEO-3820)', () => {
+    const overview = (fullPath: string, activeOnSubpaths: boolean) =>
+      isEntityTabActive({ href: '/space/s/claim', activeTabId: null, fullPath, sidePanel: false, activeOnSubpaths });
+    expect(overview('/space/s/claim/debates', true)).toBe(true);
+    expect(overview('/space/s/claim', true)).toBe(true);
+    expect(overview('/space/s/claim/debates', false)).toBe(false);
+    // A sibling entity whose id starts the same is not below this one.
+    expect(overview('/space/s/claim2', true)).toBe(false);
+  });
+
   it('keeps system and authored side-panel tabs mutually exclusive', () => {
     expect(
       isEntityTabActive({

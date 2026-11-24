@@ -1,11 +1,15 @@
 import { ContentIds } from '@geoprotocol/geo-sdk/lite';
-import { renderHook } from '@testing-library/react';
+import '@testing-library/jest-dom/vitest';
+import { act, cleanup, fireEvent, render, renderHook, screen, within } from '@testing-library/react';
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Entity, Relation, Value } from '~/core/types';
 
+import type { EntityActionCallbacks } from '../models';
 import { TEMPLATE_ONTOLOGY } from '../ontology';
+import { TEMPLATE_ACTIONS } from '../template-actions';
+import { PostTemplate } from '../views/post-template';
 import { useLiveEventTemplate } from './use-live-event-template';
 import { useLivePostTemplate } from './use-live-post-template';
 
@@ -13,6 +17,7 @@ const state = vi.hoisted(() => ({
   entity: null as Entity | null,
   authorMeta: undefined as { name?: string; handle?: string; avatarUrl?: string | null } | undefined,
   sourceCards: [] as { id: string; title: string; kind: string }[],
+  actions: {} as EntityActionCallbacks,
 }));
 
 vi.mock('~/core/sync/use-store', () => ({
@@ -23,7 +28,7 @@ vi.mock('~/core/hooks/use-space', () => ({ useSpace: () => ({ space: null }) }))
 vi.mock('~/core/responses/use-claim-response-summaries', () => ({
   useClaimResponseSummaryBatch: () => ({ data: undefined }),
 }));
-vi.mock('./use-live-entity-actions', () => ({ useLiveEntityActions: () => ({}) }));
+vi.mock('./use-live-entity-actions', () => ({ useLiveEntityActions: () => state.actions }));
 // Viewer personal-space sources (GEO-3819 #3172) read the wallet; these tests have no viewer.
 vi.mock('./use-viewer-sources', () => ({
   useEntityWithViewerSources: ({ entity }: { entity: Entity | null }) => entity,
@@ -74,6 +79,7 @@ beforeEach(() => {
   state.entity = null;
   state.authorMeta = undefined;
   state.sourceCards = [];
+  state.actions = {};
 });
 
 /**
@@ -311,5 +317,68 @@ describe('useLivePostTemplate Sources section', () => {
       items: [],
       ingestionLink: expect.objectContaining({ targetSpaceId: SPACE }),
     });
+  });
+});
+
+describe('useLivePostTemplate community notes', () => {
+  const SHIPPED_ADD_CONTEXT = TEMPLATE_ACTIONS.addContext;
+  beforeEach(() => {
+    TEMPLATE_ACTIONS.addContext = true;
+  });
+  afterEach(() => {
+    TEMPLATE_ACTIONS.addContext = SHIPPED_ADD_CONTEXT;
+    cleanup();
+  });
+
+  function PostHarness() {
+    const { data } = useLivePostTemplate({ entityId: state.entity!.id, spaceId: SPACE });
+    return data ? <PostTemplate model={data} /> : null;
+  }
+
+  it('draws a note added on the page once, with what the draft said', () => {
+    state.entity = entity({
+      name: 'A post',
+      types: [{ id: TEMPLATE_ONTOLOGY.TWEET_TYPE_ID, name: 'Tweet' }],
+    });
+    // Like the real callback: the note lands in the store as a staged Community notes relation.
+    state.actions = {
+      onAddFlag: (_targetId, draft) => {
+        const noteId = 'f1e2d3c4b5a697887766554433221100';
+        state.entity = {
+          ...state.entity!,
+          relations: [
+            ...state.entity!.relations,
+            relation(TEMPLATE_ONTOLOGY.COMMUNITY_NOTES_PROPERTY_ID, noteId, draft.body),
+          ],
+        };
+        return noteId;
+      },
+    };
+
+    render(<PostHarness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add context note' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Missing context' }));
+    fireEvent.change(screen.getByLabelText(/What do the sources show/i), {
+      target: { value: 'Reverse image search places this footage in a different year.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Submit note' }));
+
+    const notes = within(screen.getByRole('region', { name: 'Context notes' }));
+    expect(notes.getAllByText('Reverse image search places this footage in a different year.')).toHaveLength(1);
+    expect(notes.getByText('Missing context')).toBeInTheDocument();
+  });
+
+  it('drops the local copy when the staged note is gone', () => {
+    state.entity = entity({
+      name: 'A post',
+      types: [{ id: TEMPLATE_ONTOLOGY.TWEET_TYPE_ID, name: 'Tweet' }],
+    });
+    state.actions = { onAddFlag: () => 'f1e2d3c4b5a697887766554433221100' };
+
+    const { result, rerender } = renderHook(() => useLivePostTemplate({ entityId: state.entity!.id, spaceId: SPACE }));
+    act(() => result.current.data!.onAddNote!({ tag: 'Missing context', text: 'A note.', sourceUrl: '' }));
+    rerender();
+
+    expect(result.current.data!.notes).toEqual([]);
   });
 });

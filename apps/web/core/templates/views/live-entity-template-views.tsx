@@ -24,7 +24,6 @@ export interface LiveEntityTemplateViewProps {
   spaceId: string;
   serverCoverUrl?: string | null;
   compact?: boolean;
-  footer?: React.ReactNode;
 }
 
 function TemplateLoadingSkeleton({ maxWidth = 840 }: { maxWidth?: number }) {
@@ -41,7 +40,6 @@ export function LiveEventTemplateView({
   spaceId,
   serverCoverUrl,
   compact = false,
-  footer,
 }: LiveEntityTemplateViewProps) {
   const { data, isLoading, actionCallbacks } = useLiveEventTemplate({
     entityId,
@@ -57,7 +55,6 @@ export function LiveEventTemplateView({
       actionCallbacks={actionCallbacks}
       compact={compact}
       headerActions={<EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable compact={compact} />}
-      footer={footer}
     />
   );
 }
@@ -67,7 +64,6 @@ export function LiveNewsStoryTemplateView({
   spaceId,
   serverCoverUrl,
   compact = false,
-  footer,
 }: LiveEntityTemplateViewProps) {
   const { data, isLoading, isSectionsLoading, actionCallbacks } = useLiveNewsStoryTemplate({
     entityId,
@@ -85,7 +81,6 @@ export function LiveNewsStoryTemplateView({
       compact={compact}
       isLoadingSections={isSectionsLoading}
       headerActions={<EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable compact={compact} />}
-      footer={footer}
     />
   );
 }
@@ -95,7 +90,6 @@ export function LiveSourceTemplateView({
   spaceId,
   serverCoverUrl,
   compact = false,
-  footer,
 }: LiveEntityTemplateViewProps) {
   const { data, isLoading, isSectionsLoading, actionCallbacks } = useLiveSourceTemplate({
     entityId,
@@ -112,7 +106,6 @@ export function LiveSourceTemplateView({
       compact={compact}
       isLoadingSections={isSectionsLoading}
       headerActions={<EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable compact={compact} />}
-      footer={footer}
     />
   );
 }
@@ -122,7 +115,6 @@ export function LivePostTemplateView({
   spaceId,
   serverCoverUrl,
   compact = false,
-  footer,
 }: LiveEntityTemplateViewProps) {
   const { data, isLoading, actionCallbacks } = useLivePostTemplate({
     entityId,
@@ -138,7 +130,6 @@ export function LivePostTemplateView({
       actionCallbacks={actionCallbacks}
       compact={compact}
       headerActions={<EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable compact={compact} />}
-      footer={footer}
     />
   );
 }
@@ -148,7 +139,6 @@ export function LivePodcastShowTemplateView({
   spaceId,
   serverCoverUrl,
   compact = false,
-  footer,
 }: LiveEntityTemplateViewProps) {
   const { data, isLoading, actionCallbacks } = useLivePodcastShowTemplate({
     entityId,
@@ -164,7 +154,6 @@ export function LivePodcastShowTemplateView({
       actionCallbacks={actionCallbacks}
       compact={compact}
       headerActions={<EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable compact={compact} />}
-      footer={footer}
     />
   );
 }
@@ -174,7 +163,6 @@ export function LivePodcastEpisodeTemplateView({
   spaceId,
   serverCoverUrl,
   compact = false,
-  footer,
 }: LiveEntityTemplateViewProps) {
   const { data, isLoading, actionCallbacks } = useLivePodcastEpisodeTemplate({
     entityId,
@@ -190,7 +178,6 @@ export function LivePodcastEpisodeTemplateView({
       actionCallbacks={actionCallbacks}
       compact={compact}
       headerActions={<EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable compact={compact} />}
-      footer={footer}
     />
   );
 }

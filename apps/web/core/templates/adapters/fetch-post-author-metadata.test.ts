@@ -78,6 +78,14 @@ describe('fetchPostAuthorMetadata', () => {
     expect(meta?.handle).toBe(handle);
   });
 
+  it.each(['https://x.com/status/123', 'https://x.com/share?url=1', 'https://x.com/i/web/status/123'])(
+    'reads no handle from the app route %s',
+    async postUrl => {
+      const meta = await metaFor({ postUrl });
+      expect(meta?.handle).toBeUndefined();
+    }
+  );
+
   it('uses the first avatar that has an image', async () => {
     const meta = await metaFor({ author: { name: 'A', avatars: [null, 'https://example.com/a.png'] } });
     expect(meta?.avatarUrl).toBe('https://example.com/a.png');

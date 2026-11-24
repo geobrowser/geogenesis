@@ -299,9 +299,10 @@ export function ClaimVotePills({
   fill?: boolean;
 }) {
   return (
-    <span className={cx('flex flex-col gap-1', fill ? 'w-full' : 'shrink-0')}>
+    <span className={cx('flex flex-col gap-1', fill ? 'w-full' : 'max-w-full shrink-0')}>
+      {/* Wraps rather than running past a narrow card (a 320px phone): Disagree drops below Agree. */}
       <div
-        className={cx('flex items-center gap-1.5', fill ? 'pt-0.5' : 'shrink-0')}
+        className={cx('flex items-center gap-1.5', fill ? 'pt-0.5' : 'flex-wrap')}
         role="group"
         aria-label={`Vote on ${title}`}
       >
@@ -318,7 +319,8 @@ export function ClaimVotePills({
               title={vote.titleFor(choice)}
               onClick={() => vote.press(choice)}
               className={cx(
-                'inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full border px-2.5 text-[13px] font-medium whitespace-nowrap transition-colors disabled:cursor-default disabled:opacity-60',
+                // 8px narrower below 360px so the pair still fits one line in a 320px phone's rows.
+                'inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full border px-2.5 text-[13px] font-medium whitespace-nowrap transition-colors disabled:cursor-default disabled:opacity-60 max-[359px]:px-1.5',
                 fill && 'flex-1 justify-center',
                 pressed ? 'border-text bg-text text-white' : 'border-grey-02 bg-white text-text hover:border-text'
               )}

@@ -33,7 +33,8 @@ const state = vi.hoisted(() => ({
   page: null as Entity | null,
   corpus: [] as Entity[],
   viewerSpaceId: null as string | null,
-  coverage: [] as { entityId: string; spaceId: string; title: string }[],
+  coverage: [] as { entityId: string; spaceId: string; title: string; types?: { id: string; name: string | null }[] }[],
+  tweetAuthors: undefined as Map<string, { name?: string; handle?: string; avatarUrl?: string | null }> | undefined,
   entityReads: [] as { id?: string; spaceId?: string }[],
   infiniteQueries: [] as { queryKey: unknown[]; queryFn: (ctx: { pageParam: string | null }) => Promise<unknown> }[],
   graphqlVariables: [] as Record<string, unknown>[],
@@ -69,7 +70,12 @@ vi.mock('~/core/sync/use-store', () => ({
 vi.mock('@tanstack/react-query', async importOriginal => ({
   ...(await importOriginal<typeof import('@tanstack/react-query')>()),
   useQuery: ({ queryKey }: { queryKey: unknown[] }) => ({
-    data: queryKey[1] === 'multi-space-votes' ? state.votes : undefined,
+    data:
+      queryKey[1] === 'multi-space-votes'
+        ? state.votes
+        : queryKey[1] === 'tweet-authors'
+          ? state.tweetAuthors
+          : undefined,
     isLoading: false,
   }),
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),
@@ -185,6 +191,7 @@ beforeEach(() => {
   state.infiniteQueries = [];
   state.graphqlVariables = [];
   state.votes = undefined;
+  state.tweetAuthors = undefined;
   mocks.useClaimRecord.mockReset().mockReturnValue({
     claimRows: [],
     debateRows: [],
@@ -201,7 +208,7 @@ beforeEach(() => {
       page: {
         rows: state.coverage
           .filter(row => spaceIds === undefined || spaceIds.includes(row.spaceId))
-          .map(row => ({ ...row, types: [], createdAtSec: 0, description: null, imageUrl: null })),
+          .map(row => ({ ...row, types: row.types ?? [], createdAtSec: 0, description: null, imageUrl: null })),
         endCursor: null,
         hasNextPage: false,
       },
@@ -413,5 +420,34 @@ describe('Topic template', () => {
     await waitFor(() => expect(result.current.data?.contestedClaims).toBeDefined());
     const [claim] = result.current.data!.contestedClaims!;
     expect(claim!.split.rows).toEqual([expect.objectContaining({ label: 'Everyone', voterCount: 3 })]);
+  });
+
+  it('names an X card’s author the way the Post page does, never a bogus handle (GEO-3824)', async () => {
+    topicCorpus();
+    state.coverage = [
+      {
+        entityId: 'a1b2c3d4e5f60718293a4b5c6d7e8f90',
+        spaceId: SPACE,
+        title: 'A tweet',
+        types: [{ id: TEMPLATE_ONTOLOGY.TWEET_TYPE_ID, name: 'Tweet' }],
+      },
+      {
+        entityId: 'b1b2c3d4e5f60718293a4b5c6d7e8f90',
+        spaceId: SPACE,
+        title: 'A tweet with an app-route link',
+        types: [{ id: TEMPLATE_ONTOLOGY.TWEET_TYPE_ID, name: 'Tweet' }],
+      },
+    ];
+    // The Post page's lookup: an x.com/status/123 link yields no handle there, so none here.
+    state.tweetAuthors = new Map([
+      ['a1b2c3d4e5f60718293a4b5c6d7e8f90', { name: 'Shashank Joshi', handle: '@shashj' }],
+      ['b1b2c3d4e5f60718293a4b5c6d7e8f90', { name: undefined, handle: undefined }],
+    ]);
+    const { result } = renderHook(() => useLiveTopicTemplate({ entityId: PAGE, spaceId: SPACE }));
+
+    await waitFor(() => expect(result.current.data?.sections).toBeDefined());
+    const [named, unnamed] = result.current.data!.sections![0]!.items;
+    expect(named).toMatchObject({ publisher: 'Shashank Joshi', authorHandle: '@shashj' });
+    expect(unnamed).toMatchObject({ publisher: 'Tweet', authorHandle: undefined });
   });
 });

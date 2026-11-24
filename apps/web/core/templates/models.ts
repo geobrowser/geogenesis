@@ -198,7 +198,11 @@ export interface EntityContextDataModel {
 export interface EntityActionCallbacks {
   onAddTriple?: (targetId: string, predicate: string, values: readonly string[]) => void;
   onDeleteTriple?: (targetId: string, valueId: string) => void;
-  onAddFlag?: (targetId: string, draft: { reason: string; body: string; sourceUrl?: string }) => void;
+  /** Returns the new note's entity id when one was staged. */
+  onAddFlag?: (
+    targetId: string,
+    draft: { reason: string; body: string; sourceUrl?: string }
+  ) => string | undefined | void;
   onAddClaim?: (draft: { title: string; kind: ClaimKind; stance?: ClaimStance; note?: string }) => void;
   onAddQuote?: (draft: { text: string; speaker?: string; location?: string }) => void;
   onAddEvent?: (draft: { title: string; when?: string; summary?: string }) => void;

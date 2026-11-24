@@ -437,6 +437,22 @@ export function outletInitialsFrom(name: string): string {
   return (initials || trimmed[0]?.toUpperCase() || 'G').slice(0, 3);
 }
 
+/**
+ * Second-level labels that ccTLDs register names under (example.co.uk, abc.net.au, folha.com.br).
+ * Not the full public suffix list: enough to name a publisher, without a dependency for it.
+ */
+const COUNTRY_SECOND_LEVEL_LABELS = new Set(['ac', 'co', 'com', 'edu', 'go', 'gob', 'gov', 'ne', 'net', 'or', 'org']);
+
+/** The label a site registered: businessinsider in markets.businessinsider.com, bbc in bbc.co.uk. */
+function registrableLabel(parts: readonly string[]): string {
+  if (parts.length < 2) return parts[0]!;
+  const tld = parts[parts.length - 1]!;
+  const secondLevel = parts[parts.length - 2]!;
+  const underCountrySecondLevel =
+    parts.length >= 3 && tld.length === 2 && COUNTRY_SECOND_LEVEL_LABELS.has(secondLevel.toLowerCase());
+  return underCountrySecondLevel ? parts[parts.length - 3]! : secondLevel;
+}
+
 /** Derives a clean publication display name from an article URL when no Publisher relation exists. */
 export function publicationFromUrl(rawUrl: string | null | undefined): string | undefined {
   if (!rawUrl) return undefined;
@@ -444,8 +460,7 @@ export function publicationFromUrl(rawUrl: string | null | undefined): string | 
     const host = new URL(rawUrl).hostname.replace(/^www\./i, '');
     const parts = host.split('.').filter(Boolean);
     if (parts.length === 0) return undefined;
-    // Pick the registrable label (e.g. markets.businessinsider.com -> businessinsider)
-    const label = parts.length >= 3 && parts[parts.length - 1]!.length >= 2 ? parts[parts.length - 2]! : parts[0]!;
+    const label = registrableLabel(parts);
     return label.charAt(0).toUpperCase() + label.slice(1);
   } catch {
     return undefined;

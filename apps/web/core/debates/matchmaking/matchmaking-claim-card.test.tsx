@@ -32,6 +32,9 @@ const mocks = vi.hoisted(() => ({
   submitResponse: vi.fn(),
   submitResponseAsync: vi.fn(),
   isConnected: true,
+  /** The index has answered that the signed-in account has no personal space. */
+  hasNoPersonalSpace: false,
+  showOnboarding: vi.fn(),
   /** The viewer's side as the index reports it when a replay reads it fresh. */
   freshViewerDirection: null as 'positive' | 'negative' | null,
   /** A fresh read held open, so a test can act while it is in flight. */
@@ -172,6 +175,7 @@ vi.mock('~/core/hooks/use-entity-vote', () => ({
       isProcessingResponse: false,
       isResponseIndexingDelayed: false,
       isConnected: mocks.isConnected,
+      hasNoPersonalSpace: mocks.hasNoPersonalSpace,
       personalSpaceId: mocks.viewerSpaceId,
     };
   },
@@ -217,6 +221,8 @@ vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
 vi.mock('~/core/responses/replay-viewer-response', () => ({
   readViewerResponseForReplay: () => mocks.freshRead ?? Promise.resolve(mocks.freshViewerDirection),
 }));
+
+vi.mock('~/core/hooks/use-onboarding', () => ({ useShowOnboarding: () => mocks.showOnboarding }));
 
 vi.mock('~/core/state/pending-personal-space', () => ({
   usePendingPersonalSpace: () => ({ isPending: mocks.accountSetupPending }),
@@ -302,6 +308,8 @@ beforeEach(() => {
   mocks.submitResponse.mockReset();
   mocks.submitResponseAsync = vi.fn().mockResolvedValue(undefined);
   mocks.isConnected = true;
+  mocks.hasNoPersonalSpace = false;
+  mocks.showOnboarding.mockReset();
   mocks.freshViewerDirection = null;
   mocks.freshRead = null;
   mocks.authenticated = true;
@@ -1139,6 +1147,60 @@ describe('a side picked before the account can publish', () => {
     expect(queued()).toHaveLength(0);
     // Nor kept on the device: this is an account, and only signed-out votes wait for a save.
     expect(readLocalVotes().votes).toHaveLength(0);
+  });
+});
+
+/** GEO-3822: signed in, the index says no personal space, and none is being made. */
+describe('a signed-in account with no personal space', () => {
+  const noSide = readiness({ viewer_response: null });
+
+  beforeEach(() => {
+    clearLocalVotes();
+    mocks.isConnected = false;
+    mocks.hasNoPersonalSpace = true;
+  });
+
+  it.each([
+    ['a host that keeps signed-out votes', true],
+    ['a host that does not', false],
+  ])('keeps the pills live and opens account setup on a press, on %s', (_host, allowsSignedOutVotes) => {
+    renderCard(
+      <MatchmakingClaimCard
+        claim={claim}
+        positions={positions}
+        readiness={noSide}
+        allowsSignedOutVotes={allowsSignedOutVotes}
+      />
+    );
+
+    const agree = screen.getByRole('button', { name: /^Agree/ });
+    expect(agree).toBeEnabled();
+    expect(agree).toHaveAttribute('title', ENTITY_RESPONSE_COPY.stance.finishSetup);
+    fireEvent.click(agree);
+
+    expect(mocks.showOnboarding).toHaveBeenCalledTimes(1);
+    expect(mocks.submitResponse).not.toHaveBeenCalled();
+    expect(queued()).toHaveLength(0);
+    expect(readLocalVotes().votes).toHaveLength(0);
+  });
+
+  it('stays as it was while the personal-space lookup has not answered', () => {
+    mocks.hasNoPersonalSpace = false;
+    renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={noSide} />);
+
+    const agree = screen.getByRole('button', { name: /^Agree/ });
+    expect(agree).toBeDisabled();
+    expect(agree).toHaveAttribute('title', ENTITY_RESPONSE_COPY.stance.connect);
+  });
+
+  it('queues a press as before once account setup is under way', () => {
+    mocks.accountSetupPending = true;
+    renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={noSide} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^Agree/ }));
+
+    expect(mocks.showOnboarding).not.toHaveBeenCalled();
+    expect(queued()).toHaveLength(1);
   });
 });
 
