@@ -37,6 +37,7 @@ import {
 import { useInitialHydrationGate } from './use-initial-hydration-gate';
 import { useLiveEntityActions } from './use-live-entity-actions';
 import { useEntitySummaryBatch } from './use-topic-media-batch';
+import { useEntityWithViewerSources } from './use-viewer-sources';
 
 /**
  * Deduplicate ordered story section relations (`Blocks` / `Perspectives`) by `toEntity.id`,
@@ -94,9 +95,12 @@ export function useLiveNewsStoryTemplate({
   }, [entity]);
 
   // Source relations to batch-hydrate for Publisher, Publish datetime, Cover, Summary, and Web URL
+  // Page-space Sources plus the viewer's own personal-space ones, so a non-member who added a source
+  // sees it (GEO-3819).
+  const sourcesEntity = useEntityWithViewerSources({ entity, entityId, spaceId });
   const sourceRelations = React.useMemo(
-    () => readEntityRelations(entity, TEMPLATE_ONTOLOGY.SOURCES_PROPERTY_ID),
-    [entity]
+    () => readEntityRelations(sourcesEntity, TEMPLATE_ONTOLOGY.SOURCES_PROPERTY_ID),
+    [sourcesEntity]
   );
 
   const dedupeRelations = React.useCallback((raw: readonly Relation[]): Relation[] => {

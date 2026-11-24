@@ -137,14 +137,17 @@ export function useTopicCoverage({
   first,
   after,
   spaceIds,
+  enabled = true,
 }: {
   topicId: string;
   first: number;
   after?: string;
   /** Undefined leaves the query unscoped, which is what the scope hook returns while it resolves. */
   spaceIds?: string[];
+  enabled?: boolean;
 }) {
   const { data, isLoading, isPlaceholderData } = useQuery({
+    enabled,
     queryKey: ['topic', 'coverage', ID.uuidToHex(topicId), first, after ?? null, spaceIds ?? null],
     queryFn: ({ signal }) =>
       Effect.runPromise(

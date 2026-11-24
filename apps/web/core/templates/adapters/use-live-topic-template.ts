@@ -58,6 +58,7 @@ import { topicCoverageIngestionLink } from './source-ingestion-links';
 import { resolveDebateStillSrc, useDebateParticipantsBatch } from './use-debate-participants-batch';
 import { useInitialHydrationGate } from './use-initial-hydration-gate';
 import { useLiveEntityActions } from './use-live-entity-actions';
+import { useViewerSpaceId, useViewerTopicSources } from './use-viewer-sources';
 
 const LIVE_CLAIMS_LIMIT = 40;
 const LIVE_COVERAGE_LIMIT = 12;
@@ -406,10 +407,29 @@ export function useLiveTopicTemplate({
     first: LIVE_COVERAGE_LIMIT,
   });
 
+  // The viewer's own personal-space sources tagged with this Topic, so a non-member who added one sees
+  // it (GEO-3819): published ones by a second coverage read scoped to that space alone (skipped when
+  // the scope already includes it, or while it is unscoped), staged ones from the local store.
+  const viewerSpaceId = useViewerSpaceId(spaceId);
+  const viewerSpaceInScope =
+    spaceIds === undefined || (viewerSpaceId !== null && spaceIds.some(id => ID.equals(id, viewerSpaceId)));
+  const viewerCoverage = useTopicCoverage({
+    topicId: entityId,
+    spaceIds: viewerSpaceId ? [viewerSpaceId] : undefined,
+    first: LIVE_COVERAGE_LIMIT,
+    enabled: viewerSpaceId !== null && !viewerSpaceInScope,
+  });
+  const viewerLocalSources = useViewerTopicSources(entityId, viewerSpaceId);
+  const coverageRows = React.useMemo(
+    () =>
+      viewerCoverage.page.rows.length > 0 ? [...coverage.page.rows, ...viewerCoverage.page.rows] : coverage.page.rows,
+    [coverage.page.rows, viewerCoverage.page.rows]
+  );
+
   // Batch-hydrate Tweet / Post author names, @handles, and avatars for Sources & evidence cards
   const tweetCoverageIds = React.useMemo(() => {
     const ids: string[] = [];
-    for (const row of coverage.page.rows) {
+    for (const row of coverageRows) {
       const typeIds = row.types.map(t => t.id);
       if (
         typeIds.some(
@@ -420,7 +440,7 @@ export function useLiveTopicTemplate({
       }
     }
     return ids;
-  }, [coverage.page.rows]);
+  }, [coverageRows]);
 
   const tweetAuthorsQuery = useQuery({
     queryKey: ['live-topic-template', 'tweet-authors', tweetCoverageIds.join(',')],
@@ -940,9 +960,9 @@ export function useLiveTopicTemplate({
 
     const tweetAuthorsByHex = tweetAuthorsQuery.data;
 
-    for (const row of coverage.page.rows) {
+    const pushCoverageRow = (row: (typeof coverageRows)[number]) => {
       const hex = ID.uuidToHex(row.entityId);
-      if (seenCoverageIds.has(hex)) continue;
+      if (seenCoverageIds.has(hex)) return;
       seenCoverageIds.add(hex);
       const typeIds = row.types.map(type => type.id);
       const firstTypeName = row.types.find(type => type.name)?.name ?? null;
@@ -963,7 +983,9 @@ export function useLiveTopicTemplate({
         thumbnailUrl: resolveTemplateImageUrl(row.imageUrl) ?? undefined,
         href: NavUtils.toEntity(row.spaceId || spaceId, row.entityId),
       });
-    }
+    };
+
+    for (const row of coverage.page.rows) pushCoverageRow(row);
 
     for (const rel of directStories) {
       const hex = ID.uuidToHex(rel.toEntity.id);
@@ -977,6 +999,24 @@ export function useLiveTopicTemplate({
         publisher: 'News story',
         title: rel.toEntity.name,
         href: NavUtils.toEntity(rel.toSpaceId ?? spaceId, rel.toEntity.id),
+      });
+    }
+
+    // After the page's own: the viewer's published personal-space sources, then their staged ones.
+    for (const row of viewerCoverage.page.rows) pushCoverageRow(row);
+    for (const source of viewerLocalSources) {
+      const hex = ID.uuidToHex(source.id);
+      if (seenCoverageIds.has(hex)) continue;
+      seenCoverageIds.add(hex);
+      const { kind, label, mediaType } = classifyCoverage(source.typeIds, source.typeName);
+      coverageItems.push({
+        id: source.id,
+        kind,
+        kindLabel: label,
+        mediaType,
+        publisher: label,
+        title: source.name || source.id,
+        href: NavUtils.toEntity(source.spaceId, source.id),
       });
     }
 
@@ -1048,6 +1088,8 @@ export function useLiveTopicTemplate({
     bestNewsQuery.data,
     countsByTopicId,
     coverage.page.rows,
+    viewerCoverage.page.rows,
+    viewerLocalSources,
     debateParticipantsQuery.data,
     entity,
     entityId,
