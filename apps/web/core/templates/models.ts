@@ -8,8 +8,34 @@
  * Optional modules on page models follow Geo's progressive disclosure rule:
  * "Modules render only when they have something to say."
  */
+import type { Entity } from '~/core/types';
 
 export type VoteChoice = 'agree' | 'disagree' | null;
+
+/**
+ * The published claim a list row's Agree / Disagree pills vote on (GEO-3819).
+ *
+ * Set by live adapters so the row saves the vote through the same control as Explore feed cards
+ * (signed-out presses keep the vote on the device and open the save-votes sheet). Rows without a
+ * target (fixtures, claims proposed on this page and not yet published) fall back to `onVote`.
+ */
+export interface ClaimVoteTarget {
+  claimId: string;
+  /** The space the vote is read from and written to. Use the space the row's `href` opens. */
+  spaceId: string;
+  title: string;
+  /** The claim on the graph, when the adapter has it. A stub is used otherwise. */
+  entity?: Entity | null;
+  /**
+   * Set when the row's `agreeCount` / `disagreeCount` come from the adapter's own query (e.g. totals
+   * across spaces) rather than from `spaceId`'s counts: the viewer's vote in `spaceId` from that same
+   * query, so the row can swap it for the live vote without counting it twice. Leave unset to draw
+   * the counts of `spaceId` itself.
+   */
+  baselineVote?: VoteChoice;
+  /** Called once a vote from this row is indexed, so the adapter can refetch its own counts. */
+  onSettled?: () => void;
+}
 
 /**
  * Stored epistemic property on a Claim (`CLAIM_IS_FACTUAL_PROPERTY_ID`).
@@ -117,6 +143,8 @@ export interface ClaimSummaryModel {
   onOpenDebates?: () => void;
   badgeLabel?: string;
   userVote?: VoteChoice;
+  /** Saved inline voting: the row votes on this claim. Takes precedence over `onVote`. */
+  voteTarget?: ClaimVoteTarget;
   /** Optional inline Agree / Disagree voting directly from a claim list row. */
   onVote?: (choice: Exclude<VoteChoice, null>) => void;
   onClearVote?: () => void;
@@ -246,6 +274,8 @@ export interface SubClaimModel {
   debateCount?: number;
   debatesHref?: string;
   userVote?: VoteChoice;
+  /** Saved inline voting: the row votes on this claim. Takes precedence over `onVote`. */
+  voteTarget?: ClaimVoteTarget;
   onVote?: (choice: Exclude<VoteChoice, null>) => void;
   onClearVote?: () => void;
   sources: readonly SourceChipModel[];
@@ -503,6 +533,8 @@ export interface TopicRecentDebateModel {
   agreeCount?: number;
   disagreeCount?: number;
   userVote?: VoteChoice;
+  /** Saved inline voting: the row votes on this claim. Takes precedence over `onVote`. */
+  voteTarget?: ClaimVoteTarget;
   onVote?: (choice: Exclude<VoteChoice, null>) => void;
   onClearVote?: () => void;
   href?: string;
