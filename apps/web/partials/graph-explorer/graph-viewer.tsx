@@ -6,16 +6,10 @@ import { centreTextInSpace } from '~/core/graph-explorer/centre-text';
 import { nodeClaimSpaceId } from '~/core/graph-explorer/claims-about';
 import { type GraphNode, hop1AsGraphHop } from '~/core/graph-explorer/fetch-graph-neighbourhood';
 import { type GraphFilterOverrides, type GraphScope, resolveGraphFilter } from '~/core/graph-explorer/graph-filter';
-import { graphKindOf } from '~/core/graph-explorer/graph-kinds';
 import { type GraphHistory, goBack, recentre } from '~/core/graph-explorer/history';
 import { DESKTOP_GRAPH_CAPS, type GraphKindFilter, PHONE_GRAPH_CAPS } from '~/core/graph-explorer/select-graph';
 import { type Spoke, buildSpokes, entitySpaceId } from '~/core/graph-explorer/spokes';
-import {
-  useClaimsAbout,
-  useGraphHop,
-  useGraphNeighbourhood,
-  usePrefetchGraphHop,
-} from '~/core/graph-explorer/use-graph-explorer';
+import { useClaimsAbout, useGraphNeighbourhood, usePrefetchHop1 } from '~/core/graph-explorer/use-graph-explorer';
 import { useMediaQuery } from '~/core/hooks/use-media-query';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { normId } from '~/core/utils/norm-id';
@@ -61,7 +55,6 @@ export function GraphViewer({
   const centreId = history.centreId;
   const hubId = scope?.topicId ? normId(scope.topicId) : null;
   const topicSpaceId = scope?.topicSpaceId ? normId(scope.topicSpaceId) : null;
-  const hop = useGraphHop(centreId, filter);
   const neighbourhood = useGraphNeighbourhood({
     centreId,
     filter,
@@ -71,22 +64,20 @@ export function GraphViewer({
   });
   const claims = useClaimsAbout(centreId, filter, scope?.topicSpaceId ?? null);
   const claimPages = React.useMemo(() => claims.data?.pages.map(page => page.claims) ?? [], [claims.data]);
-  const prefetch = usePrefetchGraphHop(filter);
+  const prefetch = usePrefetchHop1(filter);
 
-  const hopData = hop.data ?? null;
-  // The neighbourhood's relations once it answers for this centre, so the list matches the map.
+  // Hop 1 once it answers for this centre: the panel, its list and the map read the same data.
   const hop1 = neighbourhood.isSwitching ? null : (neighbourhood.hop1.data ?? null);
-  const spokes = React.useMemo(() => {
-    if (!filter) return [];
-    if (hop1?.centre?.id === centreId) return buildSpokes(hop1AsGraphHop(hop1), centreId, filter, true);
-    return hopData ? buildSpokes(hopData, centreId, filter) : [];
-  }, [centreId, filter, hop1, hopData]);
+  const spokes = React.useMemo(
+    () => (filter && hop1?.centre?.id === centreId ? buildSpokes(hop1AsGraphHop(hop1), centreId, filter) : []),
+    [centreId, filter, hop1]
+  );
 
   React.useEffect(() => {
-    const centreName = hopData?.centre?.name;
+    const centreName = hop1?.centre?.id === centreId ? hop1.centre.name : null;
     if (!centreName) return;
     setNames(current => (current[centreId] === centreName ? current : { ...current, [centreId]: centreName }));
-  }, [centreId, hopData]);
+  }, [centreId, hop1]);
 
   const goTo = React.useCallback(
     (id: string, name: string | null) => {
@@ -171,17 +162,21 @@ export function GraphViewer({
   );
 
   function renderPanel() {
-    if (filter && hop.isError && !hopData) {
+    if (filter && neighbourhood.hop1.isError && !hop1) {
       return (
         <div className="flex flex-col items-start gap-2" role="alert">
           <p className="text-body text-text">Couldn’t load this part of the graph.</p>
-          <button type="button" className="text-metadataMedium underline" onClick={() => void hop.refetch()}>
+          <button
+            type="button"
+            className="text-metadataMedium underline"
+            onClick={() => void neighbourhood.hop1.refetch()}
+          >
             Try again
           </button>
         </div>
       );
     }
-    if (!filter || !hopData) {
+    if (!filter || !hop1) {
       return (
         <div className="flex flex-col gap-3" aria-busy>
           <Skeleton className="h-12 w-full rounded-lg" />
@@ -189,7 +184,7 @@ export function GraphViewer({
         </div>
       );
     }
-    const rawCentre = hopData.centre;
+    const rawCentre = hop1.centre;
     if (!rawCentre) {
       return (
         <p role="status" className="text-body text-text">
@@ -202,18 +197,14 @@ export function GraphViewer({
       (topicSpaceId && hubId && rawCentre.id === hubId ? topicSpaceId : null) ??
       entitySpaceId(rawCentre, filter.spaceIds, null);
     const centre = { ...rawCentre, ...centreTextInSpace(rawCentre, centreSpaceId) };
-    // The neighbourhood answers for the centre once it has landed; before that it is the last one.
-    const node = !neighbourhood.isSwitching && neighbourhood.centre?.id === centreId ? neighbourhood.centre : null;
-    const claimSpaceId = node?.kind === 'claim' ? nodeClaimSpaceId(node, topicSpaceId) : null;
+    const node = rawCentre;
+    const claimSpaceId = node.kind === 'claim' ? nodeClaimSpaceId(node, topicSpaceId) : null;
 
     let summary: React.ReactNode = null;
     if (claimSpaceId) summary = <ClaimActions claimId={centreId} spaceId={claimSpaceId} />;
     else if (centreId === hubId)
       summary = <TopicClaimsSummary topicId={centreId} spaceId={topicSpaceId} onOpenClaim={id => goTo(id, null)} />;
-    const counts =
-      node && neighbourhood.hop1.data ? (
-        <KindCounts neighbours={neighbourhood.hop1.data.neighbours} moreKinds={neighbourhood.hop1.data.moreKinds} />
-      ) : null;
+    const counts = <KindCounts neighbours={hop1.neighbours} moreKinds={hop1.moreKinds} />;
 
     return (
       <EntityPanel
@@ -231,20 +222,18 @@ export function GraphViewer({
         tab={tab}
         onTabChange={setTab}
         onSelect={select}
-        truncated={hop1?.centre?.id === centreId ? false : hopData.truncated}
+        truncated={hop1.moreKinds.length > 0}
         emptyMessages={{
           relationships: relationshipsEmptyMessage(filter),
           claims: claimsEmptyMessage(filter, topicName),
           description: descriptionEmptyMessage(centreSpaceId),
         }}
-        showClaims={graphKindOf(rawCentre.types.map(type => type.id)) !== 'claim'}
+        showClaims={rawCentre.kind !== 'claim'}
         summary={
-          summary || counts ? (
-            <>
-              {summary}
-              {counts}
-            </>
-          ) : null
+          <>
+            {summary}
+            {counts}
+          </>
         }
       />
     );

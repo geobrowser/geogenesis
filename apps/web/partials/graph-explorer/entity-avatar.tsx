@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import type { GraphEntity } from '~/core/graph-explorer/fetch-graph-hop';
+import type { GraphEntity } from '~/core/graph-explorer/graph-entity';
 import { getImagePath, isRenderableImageSrc } from '~/core/utils/utils';
 
 export function entityImageSrc(entity: Pick<GraphEntity, 'image'>): string | null {

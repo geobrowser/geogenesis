@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { GraphEntity, GraphHop, GraphRelation } from './fetch-graph-hop';
+import type { GraphEntity, GraphHop, GraphRelation } from './graph-entity';
 import { resolveGraphFilter } from './graph-filter';
 import {
   BROADER_TOPICS_PROPERTY_ID,
@@ -49,7 +49,6 @@ function hop(relations: GraphRelation[]): GraphHop {
   return {
     centre: { ...entity(CENTRE, 'Centre', [TOPIC_TYPE_ID]), description: null, texts: [] },
     relations,
-    truncated: false,
   };
 }
 
@@ -103,7 +102,7 @@ describe('buildSpokes', () => {
     expect(spoke.hasOutgoing).toBe(true);
   });
 
-  it('drops the centre, unnamed entities and filtered types', () => {
+  it('drops the centre and unnamed entities; hop 1 has already chosen the kinds', () => {
     const spokes = buildSpokes(
       hop([
         relation({
@@ -130,7 +129,7 @@ describe('buildSpokes', () => {
       CENTRE,
       filter
     );
-    expect(spokes.map(spoke => spoke.entity.name)).toEqual(['Kept']);
+    expect(spokes.map(spoke => spoke.entity.name)).toEqual(['A claim', 'Kept']);
   });
 
   it('puts outgoing relations first, by position, then name', () => {

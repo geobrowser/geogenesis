@@ -48,7 +48,6 @@ export const RELATION_LABELS: Record<string, { out: string; in: string }> = {
 export const SUBTOPIC_PROPERTY_IDS = [SUBTOPIC_RELATION_TYPE_ID, UNNAMED_SUBTOPIC_PROPERTY_ID];
 
 /** Entity-to-entity relations that become spokes. Everything else (Types, Tags, Sources, Stories…) is plumbing or coverage. */
-export const DEFAULT_SPOKE_RELATION_TYPE_IDS = Object.keys(RELATION_LABELS);
 
 /**
  * Claim → entity relations that make a claim "about" an entity. `Topics` covers topics; the rest
@@ -122,8 +121,6 @@ export const NEIGHBOUR_KIND_TYPE_IDS = {
     'e640a82eb8fd40f2b1ba6201e602642f',
   ],
 } as const;
-
-export const DEFAULT_INCLUDE_TYPE_IDS: string[] = Object.values(NEIGHBOUR_KIND_TYPE_IDS).flat();
 
 const NEWS_EVENT_TYPE_ID = 'bb9a85bd6dc64efd8232e2782cb4b5f8';
 

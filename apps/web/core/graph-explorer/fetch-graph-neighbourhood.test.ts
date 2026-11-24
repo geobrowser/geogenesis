@@ -111,7 +111,10 @@ describe('decodeHop1', () => {
 describe('hop documents', () => {
   it('declares exactly the variables it is sent, with and without the topic lens', () => {
     const lensed = resolveGraphFilter({ spaceIds: ['a'.repeat(32)], topicId: TOPIC, topicSpaceId: null });
-    const open = resolveGraphFilter({ spaceIds: ['a'.repeat(32)], topicId: TOPIC, topicSpaceId: null }, { lens: 'off' });
+    const open = resolveGraphFilter(
+      { spaceIds: ['a'.repeat(32)], topicId: TOPIC, topicSpaceId: null },
+      { lens: 'off' }
+    );
     const narrow = resolveGraphFilter(null, { kinds: ['ent'] });
     for (const filter of [lensed, open, narrow]) {
       const on = lensTopicFor(filter) !== null;

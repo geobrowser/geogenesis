@@ -3,9 +3,8 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { graphExplorerActiveAtom } from '~/atoms';
-
 import { GraphExplorerPage } from './graph-explorer-page';
+import { graphExplorerActiveAtom } from '~/atoms';
 
 const TOPIC = '4ed3162278994f29bde7a6f7cf60e28e';
 const flags = vi.hoisted(() => ({ graphExplorer: true }));

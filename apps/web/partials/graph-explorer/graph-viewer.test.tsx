@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { GraphHop } from '~/core/graph-explorer/fetch-graph-hop';
+import type { GraphHop } from '~/core/graph-explorer/graph-entity';
 import { startGraphHistory } from '~/core/graph-explorer/history';
 import {
   CLAIM_TYPE_ID,
@@ -49,7 +49,6 @@ const hops: Record<string, GraphHop> = {
         },
       },
     ],
-    truncated: false,
   },
   [PERSON]: {
     centre: {
@@ -63,12 +62,11 @@ const hops: Record<string, GraphHop> = {
       image: null,
     },
     relations: [],
-    truncated: false,
   },
 };
 
 const hooks = vi.hoisted(() => ({
-  useGraphHop: vi.fn(),
+  hopFor: vi.fn(),
   useClaimsAbout: vi.fn(),
   prefetch: vi.fn(),
   useGraphNeighbourhood: vi.fn(),
@@ -78,9 +76,8 @@ const EMPTY_SUMMARY = { claims: [], bands: { agreed: 0, contested: 0, rejected: 
 const topicSummary = vi.hoisted(() => ({ data: null as unknown }));
 
 vi.mock('~/core/graph-explorer/use-graph-explorer', () => ({
-  useGraphHop: hooks.useGraphHop,
   useClaimsAbout: hooks.useClaimsAbout,
-  usePrefetchGraphHop: () => hooks.prefetch,
+  usePrefetchHop1: () => hooks.prefetch,
   useGraphNeighbourhood: hooks.useGraphNeighbourhood,
   useTopicClaimsSummary: () => ({ isLoading: false, isError: false, data: topicSummary.data }),
 }));
@@ -94,6 +91,10 @@ vi.mock('~/core/responses/use-claim-response-summaries', () => ({
   ClaimResponseBatchBoundary: ({ children }: { children: React.ReactNode }) => children,
   useClaimResponseSummaryBatch: () => ({ isSuccess: true, isPlaceholderData: false, isError: false }),
 }));
+vi.mock('~/core/claims/browse/claim-response-summary', () => ({
+  useClaimResponseSummary: () => ({ isLoading: false, hasCounts: false, positive: 0, negative: 0 }),
+}));
+vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({ EntityVoteButtons: () => <div /> }));
 vi.mock('./graph-claim-row', () => ({
   GraphClaimRow: ({ claim }: { claim: { name: string } }) => <li>{claim.name}</li>,
 }));
@@ -113,11 +114,24 @@ beforeAll(() => {
   } as unknown as typeof ResizeObserver;
 });
 
-/** The 3D view's selection, built from the same hop fixtures. */
+/** Hop 1 and the 3D view's selection, built from the hop fixtures. */
 function neighbourhood({ centreId, filter }: { centreId: string; filter: unknown }) {
-  const hop = hops[centreId];
-  if (!filter || !hop?.centre)
+  const hop: GraphHop | undefined = hooks.hopFor(centreId);
+  if (!filter || !hop)
     return { selection: null, kinds: [], hop1: { isError: false }, centre: null, isSwitching: false };
+  if (!hop.centre)
+    return {
+      selection: null,
+      kinds: [],
+      hop1: { isError: false, data: { centre: null, neighbours: [], moreKinds: [] } },
+      centre: null,
+      isSwitching: false,
+    };
+  const centreKind = hop.centre.types.some(type => type.id === CLAIM_TYPE_ID)
+    ? 'claim'
+    : centreId === TOPIC
+      ? 'topic'
+      : 'ent';
   const node = (entity: GraphHop['relations'][number]['entity'], kind: 'topic' | 'ent') => ({
     ...entity,
     kind,
@@ -127,8 +141,14 @@ function neighbourhood({ centreId, filter }: { centreId: string; filter: unknown
     agrees: 0,
     disagrees: 0,
   });
+  const centre = {
+    ...node(hop.centre, 'ent'),
+    kind: centreKind,
+    description: hop.centre.description,
+    texts: hop.centre.texts,
+  };
   const nodes = [
-    { node: node(hop.centre, centreId === TOPIC ? 'topic' : 'ent'), hop: 0, parentId: null },
+    { node: centre, hop: 0, parentId: null },
     ...hop.relations.map(relation => ({ node: node(relation.entity, 'ent'), hop: 1, parentId: centreId })),
   ];
   const links = hop.relations.map(relation => ({
@@ -145,8 +165,15 @@ function neighbourhood({ centreId, filter }: { centreId: string; filter: unknown
   return {
     selection: { nodes, links },
     kinds: ['ent'],
-    hop1: { isError: false },
-    centre: hop.centre,
+    hop1: {
+      isError: false,
+      data: {
+        centre,
+        neighbours: links.map((link, i) => ({ node: nodes[i + 1].node, edge: link.edge })),
+        moreKinds: [],
+      },
+    },
+    centre,
     isSwitching: false,
   };
 }
@@ -154,11 +181,7 @@ function neighbourhood({ centreId, filter }: { centreId: string; filter: unknown
 beforeEach(() => {
   topicSummary.data = EMPTY_SUMMARY;
   hooks.useGraphNeighbourhood.mockImplementation(neighbourhood);
-  hooks.useGraphHop.mockImplementation((id: string, filter: unknown) =>
-    filter
-      ? { data: hops[id], isLoading: false, isError: false, refetch: vi.fn() }
-      : { data: undefined, isLoading: true }
-  );
+  hooks.hopFor.mockImplementation((id: string) => hops[id]);
   hooks.useClaimsAbout.mockReturnValue({
     data: { pages: [{ claims: [], endCursor: null, hasNextPage: false }] },
     isLoading: false,
@@ -188,7 +211,9 @@ const scope = { spaceIds: [SPACE], topicId: null, topicSpaceId: null } as const;
 describe('GraphViewer', () => {
   it('waits for the scope before asking for anything', () => {
     render(<Viewer start={TOPIC} scope={null} />);
-    expect(hooks.useGraphHop).toHaveBeenCalledWith(TOPIC, null);
+    expect(hooks.useGraphNeighbourhood).toHaveBeenCalledWith(
+      expect.objectContaining({ centreId: TOPIC, filter: null })
+    );
     expect(screen.queryByText('Isaac Herzog')).toBeNull();
   });
 
@@ -202,13 +227,13 @@ describe('GraphViewer', () => {
     render(<Viewer start={TOPIC} scope={scope} />);
     fireEvent.click(screen.getByRole('button', { name: 'Isaac Herzog' }));
 
-    expect(hooks.useGraphHop).toHaveBeenLastCalledWith(PERSON, expect.anything());
+    expect(hooks.useGraphNeighbourhood).toHaveBeenLastCalledWith(expect.objectContaining({ centreId: PERSON }));
     expect(
       screen.getAllByText('No relationships of the shown types in this topic’s spaces yet.').length
     ).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole('button', { name: 'Back to Israel-Gaza war' }));
-    expect(hooks.useGraphHop).toHaveBeenLastCalledWith(TOPIC, expect.anything());
+    expect(hooks.useGraphNeighbourhood).toHaveBeenLastCalledWith(expect.objectContaining({ centreId: TOPIC }));
     expect(screen.queryByRole('button', { name: /^Back to/ })).toBeNull();
   });
 
@@ -243,13 +268,9 @@ describe('GraphViewer', () => {
   });
 
   it('says so when the entity is not in the graph', () => {
-    hooks.useGraphHop.mockReturnValue({
-      data: { centre: null, relations: [], truncated: false },
-      isLoading: false,
-      isError: false,
-    });
+    hooks.hopFor.mockReturnValue({ centre: null, relations: [] });
     render(<Viewer start={TOPIC} scope={scope} />);
-    expect(screen.getByText('This entity isn’t in the knowledge graph.')).toBeTruthy();
+    expect(screen.getAllByText('This entity isn’t in the knowledge graph.').length).toBeGreaterThan(0);
   });
 
   it('names the topic when no claims about a re-centred entity carry it', () => {
@@ -285,7 +306,7 @@ describe('GraphViewer', () => {
     const OTHER_SPACE = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
     const NAME = 'a126ca530c8e48d5b88882c734c38935';
     const DESCRIPTION = '9b1f76ff9711404c861e59dc3fa7d037';
-    hooks.useGraphHop.mockImplementation((id: string) => {
+    hooks.hopFor.mockImplementation((id: string) => {
       const hop = hops[id];
       const texts =
         id === TOPIC
@@ -297,11 +318,7 @@ describe('GraphViewer', () => {
               { propertyId: NAME, spaceId: SPACE, text: 'Isaac Herzog' },
               { propertyId: DESCRIPTION, spaceId: SPACE, text: 'President of Israel.' },
             ];
-      return {
-        data: { ...hop, centre: { ...hop.centre!, spaceIds: [OTHER_SPACE, SPACE], texts } },
-        isLoading: false,
-        isError: false,
-      };
+      return { ...hop, centre: { ...hop.centre!, spaceIds: [OTHER_SPACE, SPACE], texts } };
     });
     // The topic is named only in SPACE, so only `topicSpaceId` can send it to OTHER_SPACE.
     render(<Viewer start={TOPIC} scope={{ ...scope, topicId: TOPIC, topicSpaceId: OTHER_SPACE }} />);
@@ -364,10 +381,9 @@ describe('GraphViewer', () => {
   });
 
   it('has no Claims tab when the centre is itself a claim', () => {
-    hooks.useGraphHop.mockImplementation(() => ({
-      data: { ...hops[TOPIC], centre: { ...hops[TOPIC].centre!, types: [{ id: CLAIM_TYPE_ID, name: 'Claim' }] } },
-      isLoading: false,
-      isError: false,
+    hooks.hopFor.mockImplementation(() => ({
+      ...hops[TOPIC],
+      centre: { ...hops[TOPIC].centre!, types: [{ id: CLAIM_TYPE_ID, name: 'Claim' }] },
     }));
     render(<Viewer start={TOPIC} scope={scope} />);
     expect(screen.getByRole('tab', { name: 'Details' })).toBeTruthy();

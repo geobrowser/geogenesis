@@ -10,7 +10,7 @@ import { AVATAR_PROPERTY_ID, COVER_PROPERTY_ID, IMAGE_URL_PROPERTY_ID } from '~/
 import { normId } from '~/core/utils/norm-id';
 
 import { TOPIC_LENS_FILTER, TOPIC_LENS_VARIABLES, topicLensVariables } from './claims-about';
-import { type GraphCentreText, type GraphEntity, type GraphHop, type RawEntity, decodeEntity } from './fetch-graph-hop';
+import { type GraphCentreText, type GraphEntity, type GraphHop, type RawEntity, decodeEntity } from './graph-entity';
 import type { GraphFilter } from './graph-filter';
 import {
   DATE_PROPERTY_IDS,
@@ -450,6 +450,5 @@ export function hop1AsGraphHop(hop1: GraphHop1): GraphHop {
       position: null,
       entity: node,
     })),
-    truncated: false,
   };
 }

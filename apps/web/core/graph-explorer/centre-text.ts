@@ -2,7 +2,7 @@ import type { Value } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { normId } from '~/core/utils/norm-id';
 
-import type { GraphCentre } from './fetch-graph-hop';
+import type { GraphCentre } from './graph-entity';
 
 /**
  * The centre's name and description as `spaceId` wrote them, by the same rule as an entity page

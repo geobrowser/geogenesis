@@ -1,7 +1,6 @@
 import { normId } from '~/core/utils/norm-id';
 
 import { GRAPH_KINDS, type GraphKind, parseGraphKinds } from './graph-kinds';
-import { DEFAULT_EXCLUDE_TYPE_IDS, DEFAULT_INCLUDE_TYPE_IDS, DEFAULT_SPOKE_RELATION_TYPE_IDS } from './ontology';
 
 /** What the view is about. Independent: an empty space scope keeps the topic lens. */
 export type GraphScope = {
@@ -20,35 +19,23 @@ export type GraphSpaceSource = 'topic' | 'selected' | 'all';
 export type GraphFilter = {
   spaceIds?: string[];
   spaceSource: GraphSpaceSource;
-  includeTypeIds: string[];
-  excludeTypeIds: string[];
-  relationTypeIds: string[];
   /** Node kinds the 3D view may show, in priority order. */
   kinds: readonly GraphKind[];
   /** The topic lens: content on the map and claims in the Claims tab must carry this topic. */
   topicLensId?: string;
 };
 
-export const DEFAULT_GRAPH_FILTER: Pick<GraphFilter, 'includeTypeIds' | 'excludeTypeIds' | 'relationTypeIds'> = {
-  includeTypeIds: DEFAULT_INCLUDE_TYPE_IDS,
-  excludeTypeIds: DEFAULT_EXCLUDE_TYPE_IDS,
-  relationTypeIds: DEFAULT_SPOKE_RELATION_TYPE_IDS,
-};
-
-/** URL overrides (comma-separated ids). `spaces` replaces the scope's spaces, `addSpaces` widens them; the rest replace their list. */
+/** URL overrides. `spaces` (comma-separated ids) replaces the scope's spaces, `addSpaces` widens them. */
 export type GraphFilterOverrides = {
   spaces?: string[];
   addSpaces?: string[];
-  types?: string[];
-  excludeTypes?: string[];
-  relations?: string[];
   /** `?kinds=ent,claim` narrows the node kinds. */
   kinds?: GraphKind[];
   /** `?lens=off` (or the older `?claims=all`) lifts the topic lens. */
   lens?: 'off';
 };
 
-const OVERRIDE_PARAMS = ['spaces', 'addSpaces', 'types', 'excludeTypes', 'relations'] as const;
+const OVERRIDE_PARAMS = ['spaces', 'addSpaces'] as const;
 
 const HEX_ID = /^[0-9a-f]{32}$/;
 
@@ -73,7 +60,7 @@ export function parseGraphFilterOverrides(params: Pick<URLSearchParams, 'get'>):
   return overrides;
 }
 
-/** Scope + defaults + overrides. An empty include override keeps the default, never a match-nothing filter. */
+/** Scope + defaults + overrides. */
 export function resolveGraphFilter(scope: GraphScope | null, overrides: GraphFilterOverrides = {}): GraphFilter {
   const replaced = overrides.spaces && overrides.spaces.length > 0;
   const base = replaced ? overrides.spaces : (scope?.spaceIds ?? undefined);
@@ -84,39 +71,12 @@ export function resolveGraphFilter(scope: GraphScope | null, overrides: GraphFil
   return {
     spaceIds: hasSpaces ? spaceIds : undefined,
     spaceSource: !hasSpaces ? 'all' : replaced || added ? 'selected' : 'topic',
-    includeTypeIds: nonEmpty(overrides.types) ?? DEFAULT_GRAPH_FILTER.includeTypeIds,
-    excludeTypeIds: overrides.excludeTypes ?? DEFAULT_GRAPH_FILTER.excludeTypeIds,
-    relationTypeIds: nonEmpty(overrides.relations) ?? DEFAULT_GRAPH_FILTER.relationTypeIds,
     kinds: overrides.kinds ?? GRAPH_KINDS,
     topicLensId: scope?.topicId && overrides.lens !== 'off' ? normId(scope.topicId) : undefined,
   };
 }
 
-function nonEmpty(ids: string[] | undefined) {
-  return ids && ids.length > 0 ? ids : undefined;
-}
-
-/**
- * The client half of the type filter. The server applies the include list; this re-checks it and
- * applies "exclude wins" for entities carrying both an included and an excluded type.
- */
-export function keepNeighbour(typeIds: readonly string[], filter: GraphFilter): boolean {
-  const ids = typeIds.map(normId);
-  const exclude = new Set(filter.excludeTypeIds.map(normId));
-  if (ids.some(id => exclude.has(id))) return false;
-  const include = new Set(filter.includeTypeIds.map(normId));
-  return ids.some(id => include.has(id));
-}
-
 /** Stable key for react-query: same filter, same cache entry. */
 export function graphFilterKey(filter: GraphFilter) {
-  return [
-    filter.spaceIds?.join(',') ?? '*',
-    filter.spaceSource,
-    [...filter.includeTypeIds].sort().join(','),
-    [...filter.excludeTypeIds].sort().join(','),
-    [...filter.relationTypeIds].sort().join(','),
-    filter.kinds.join(','),
-    filter.topicLensId ?? '*',
-  ];
+  return [filter.spaceIds?.join(',') ?? '*', filter.spaceSource, filter.kinds.join(','), filter.topicLensId ?? '*'];
 }

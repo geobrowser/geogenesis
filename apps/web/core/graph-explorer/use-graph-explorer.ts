@@ -15,7 +15,6 @@ import { useClaimSpaceAllowlist } from '~/core/debates/use-claim-space-allowlist
 import { useTopicSpaceScope } from '~/core/topics/use-topic-space-scope';
 
 import { type ClaimsAboutPage, fetchClaimsAbout } from './claims-about';
-import { fetchGraphHop } from './fetch-graph-hop';
 import { fetchCrossLinks, fetchHop1, fetchHop2 } from './fetch-graph-neighbourhood';
 import { type GraphFilter, type GraphScope, graphFilterKey } from './graph-filter';
 import { type GraphCaps, type GraphKindFilter, presentKinds, selectGraph, selectHop1 } from './select-graph';
@@ -40,25 +39,13 @@ export function useTopicGraphScope(
   }, [allowlist, spaceIds, topicId, topicSpaceId]);
 }
 
-const graphHopQueryKey = (entityId: string, filter: GraphFilter) =>
-  ['graph-explorer', 'hop', entityId, ...graphFilterKey(filter)] as const;
-
-export function useGraphHop(entityId: string, filter: GraphFilter | null) {
-  return useQuery({
-    queryKey: filter ? graphHopQueryKey(entityId, filter) : ['graph-explorer', 'hop', entityId, 'pending'],
-    queryFn: ({ signal }) => fetchGraphHop(entityId, filter!, signal),
-    enabled: filter !== null,
-    staleTime: STALE_MS,
-  });
-}
-
 export const GRAPH_HOP_PREFETCH_DELAY_MS = 150;
 
 /**
- * Warms the hop for a node held under the pointer or focus for `GRAPH_HOP_PREFETCH_DELAY_MS`, so a
- * sweep across the spokes fires nothing. One pending node at a time; `null` cancels it.
+ * Warms hop 1 for a node held under the pointer or focus for `GRAPH_HOP_PREFETCH_DELAY_MS`, so a
+ * sweep across the nodes fires nothing. One pending node at a time; `null` cancels it.
  */
-export function usePrefetchGraphHop(filter: GraphFilter | null) {
+export function usePrefetchHop1(filter: GraphFilter | null) {
   const queryClient = useQueryClient();
   const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -76,11 +63,6 @@ export function usePrefetchGraphHop(filter: GraphFilter | null) {
       if (!filter || !entityId) return;
       timer.current = setTimeout(() => {
         timer.current = null;
-        void queryClient.prefetchQuery({
-          queryKey: graphHopQueryKey(entityId, filter),
-          queryFn: ({ signal }) => fetchGraphHop(entityId, filter, signal),
-          staleTime: STALE_MS,
-        });
         void queryClient.prefetchQuery({
           queryKey: [...neighbourhoodKey('hop1', filter), entityId],
           queryFn: ({ signal }) => fetchHop1(entityId, filter, signal),

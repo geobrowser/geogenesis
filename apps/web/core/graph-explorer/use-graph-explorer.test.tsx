@@ -6,10 +6,10 @@ import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { resolveGraphFilter } from './graph-filter';
-import { GRAPH_HOP_PREFETCH_DELAY_MS, usePrefetchGraphHop } from './use-graph-explorer';
+import { GRAPH_HOP_PREFETCH_DELAY_MS, usePrefetchHop1 } from './use-graph-explorer';
 
-const fetchGraphHop = vi.hoisted(() => vi.fn(async () => ({ centre: null, relations: [], truncated: false })));
-vi.mock('./fetch-graph-hop', () => ({ fetchGraphHop }));
+const fetchHop1 = vi.hoisted(() => vi.fn(async () => ({ centre: null, neighbours: [], moreKinds: [] })));
+vi.mock('./fetch-graph-neighbourhood', () => ({ fetchHop1, fetchHop2: vi.fn(), fetchCrossLinks: vi.fn() }));
 vi.mock('~/core/debates/use-claim-space-allowlist', () => ({ useClaimSpaceAllowlist: () => ({ allowlist: [] }) }));
 vi.mock('~/core/topics/use-topic-space-scope', () => ({ useTopicSpaceScope: () => undefined }));
 
@@ -21,7 +21,7 @@ function setup() {
   const wrapper = ({ children }: { children: React.ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
-  return renderHook(() => usePrefetchGraphHop(filter), { wrapper });
+  return renderHook(() => usePrefetchHop1(filter), { wrapper });
 }
 
 beforeEach(() => vi.useFakeTimers());
@@ -30,7 +30,7 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe('usePrefetchGraphHop', () => {
+describe('usePrefetchHop1', () => {
   it('fetches nothing while the pointer sweeps across nodes', () => {
     const { result } = setup();
     act(() => {
@@ -41,7 +41,7 @@ describe('usePrefetchGraphHop', () => {
       result.current(null);
       vi.advanceTimersByTime(GRAPH_HOP_PREFETCH_DELAY_MS * 2);
     });
-    expect(fetchGraphHop).not.toHaveBeenCalled();
+    expect(fetchHop1).not.toHaveBeenCalled();
   });
 
   it('warms a node held for the delay', () => {
@@ -50,7 +50,7 @@ describe('usePrefetchGraphHop', () => {
       result.current(id(1));
       vi.advanceTimersByTime(GRAPH_HOP_PREFETCH_DELAY_MS);
     });
-    expect(fetchGraphHop).toHaveBeenCalledTimes(1);
-    expect(fetchGraphHop).toHaveBeenCalledWith(id(1), filter, expect.anything());
+    expect(fetchHop1).toHaveBeenCalledTimes(1);
+    expect(fetchHop1).toHaveBeenCalledWith(id(1), filter, expect.anything());
   });
 });

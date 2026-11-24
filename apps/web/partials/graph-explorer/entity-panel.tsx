@@ -3,7 +3,8 @@
 import * as React from 'react';
 
 import type { ClaimAbout } from '~/core/graph-explorer/claims-about';
-import type { GraphCentre } from '~/core/graph-explorer/fetch-graph-hop';
+import { HOP1_PER_KIND } from '~/core/graph-explorer/fetch-graph-neighbourhood';
+import type { GraphCentre } from '~/core/graph-explorer/graph-entity';
 import { type Spoke, groupSpokesByLabel } from '~/core/graph-explorer/spokes';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -196,7 +197,7 @@ function RelationshipsTab({
           </ul>
         </div>
       ))}
-      {truncated && <EmptyNote>Showing the first 100 relations in each direction.</EmptyNote>}
+      {truncated && <EmptyNote>Showing the first {HOP1_PER_KIND} of each kind in each direction.</EmptyNote>}
     </div>
   );
 }

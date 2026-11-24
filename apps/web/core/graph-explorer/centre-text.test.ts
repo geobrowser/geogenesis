@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { centreTextInSpace } from './centre-text';
-import type { GraphCentre } from './fetch-graph-hop';
+import type { GraphCentre } from './graph-entity';
 
 const NAME = 'a126ca530c8e48d5b88882c734c38935';
 const DESCRIPTION = '9b1f76ff9711404c861e59dc3fa7d037';

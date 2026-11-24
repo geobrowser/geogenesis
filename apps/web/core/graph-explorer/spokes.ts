@@ -4,8 +4,8 @@ import { normId } from '~/core/utils/norm-id';
 import { entityHomeSpaceId } from '~/core/utils/space/entity-home-space';
 import { getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
 
-import type { GraphEntity, GraphHop, GraphRelation } from './fetch-graph-hop';
-import { type GraphFilter, keepNeighbour } from './graph-filter';
+import type { GraphEntity, GraphHop, GraphRelation } from './graph-entity';
+import type { GraphFilter } from './graph-filter';
 import { CONTENT_RELATION_LABELS } from './graph-kinds';
 import { RELATION_LABELS } from './ontology';
 
@@ -69,24 +69,16 @@ export function namedSpaceIds(
 }
 
 /**
- * One spoke per named neighbour the filter keeps (`keepAll` skips the type allowlist), merging
- * relations to the same neighbour. Order: outgoing first, then curator `position`, then name.
+ * One spoke per named neighbour, merging relations to the same neighbour. Order: outgoing first,
+ * then curator `position`, then name.
  */
-export function buildSpokes(hop: GraphHop, centreId: string, filter: GraphFilter, keepAll = false): Spoke[] {
+export function buildSpokes(hop: GraphHop, centreId: string, filter: Pick<GraphFilter, 'spaceIds'>): Spoke[] {
   const centre = normId(centreId);
   const byId = new Map<string, Spoke & { order: string }>();
 
   for (const relation of hop.relations) {
     const entity = relation.entity;
     if (entity.id === centre || !entity.name) continue;
-    if (
-      !keepAll &&
-      !keepNeighbour(
-        entity.types.map(type => type.id),
-        filter
-      )
-    )
-      continue;
 
     const label = relationLabel(relation);
     const existing = byId.get(entity.id);
