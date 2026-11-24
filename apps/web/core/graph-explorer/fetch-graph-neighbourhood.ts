@@ -565,9 +565,8 @@ function fetchHop2Links(
 }
 
 /**
- * Each direction around each hop-1 node, a few at a time, then their nodes, drawn together. A side
- * that fails or runs out of time leaves its node without it; every side or the nodes failing, or a
- * cancel, fails the hop.
+ * Each side of each hop-1 node, a few at a time, then their nodes. A failed side drops out alone;
+ * every side or the nodes failing, or a cancel, fails the hop.
  */
 export async function fetchHop2(ids: readonly string[], filter: GraphFilter, signal?: AbortSignal) {
   if (ids.length === 0) return {} as GraphHop2;
