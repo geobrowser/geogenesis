@@ -21,7 +21,7 @@ const TOPIC_CLAIMS_PAGE = 500;
 const TOPIC_CLAIMS_PAGES = 4;
 /** Gaza held 423 claims in World affairs in Nov 2026. */
 export const MAX_TOPIC_CLAIMS = TOPIC_CLAIMS_PAGE * TOPIC_CLAIMS_PAGES;
-const COUNT_CHUNK = 250;
+export const COUNT_CHUNK = 250;
 
 type Counts = { positive: number; negative: number };
 
@@ -55,6 +55,26 @@ export function claimCountsKey(claim: ClaimAbout) {
   return entityResponseCountsQueryKey(claim.id, claim.spaceId, 0, 'stance');
 }
 
+/** Every claim about `entityId` in the filter, up to MAX_TOPIC_CLAIMS; `truncated` past the cap. */
+export async function fetchAllClaimsAbout(
+  entityId: string,
+  filter: GraphFilter,
+  requestedSpaceId: string | null,
+  signal?: AbortSignal
+): Promise<{ claims: ClaimAbout[]; truncated: boolean }> {
+  const claims: ClaimAbout[] = [];
+  let after: string | null = null;
+  for (let page = 0; ; page++) {
+    const result = await fetchClaimsAbout(entityId, filter, requestedSpaceId, after, signal, TOPIC_CLAIMS_PAGE);
+    claims.push(...result.claims);
+    if (!result.hasNextPage) return { claims, truncated: false };
+    if (!result.endCursor || result.endCursor === after)
+      throw new Error('Topic claims have a next page but no new cursor');
+    if (page + 1 >= TOPIC_CLAIMS_PAGES) return { claims, truncated: true };
+    after = result.endCursor;
+  }
+}
+
 /**
  * The Claims tab's claims about the topic, up to MAX_TOPIC_CLAIMS, with their stance counts
  * loaded into the shared per-claim cache, each in the space it is voted in.
@@ -74,22 +94,7 @@ export async function fetchTopicClaims({
   personalSpaceId: string | null;
   signal?: AbortSignal;
 }): Promise<{ claims: ClaimAbout[]; truncated: boolean; counts: LoadedCounts }> {
-  const claims: ClaimAbout[] = [];
-  let after: string | null = null;
-  let truncated = false;
-  for (let page = 0; ; page++) {
-    const result = await fetchClaimsAbout(topicId, filter, topicSpaceId, after, signal, TOPIC_CLAIMS_PAGE);
-    claims.push(...result.claims);
-    if (!result.hasNextPage) break;
-    if (!result.endCursor || result.endCursor === after)
-      throw new Error('Topic claims have a next page but no new cursor');
-    if (page + 1 >= TOPIC_CLAIMS_PAGES) {
-      truncated = true;
-      break;
-    }
-    after = result.endCursor;
-  }
-
+  const { claims, truncated } = await fetchAllClaimsAbout(topicId, filter, topicSpaceId, signal);
   const bySpace = new Map<string, ClaimAbout[]>();
   for (const claim of claims) bySpace.set(claim.spaceId, [...(bySpace.get(claim.spaceId) ?? []), claim]);
   const loads: Promise<unknown>[] = [];
