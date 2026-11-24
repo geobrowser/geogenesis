@@ -124,13 +124,9 @@ describe('useTemplateAddPublish', () => {
     expect(outcome).toMatchObject({ ok: true, spaceId: PAGE_SPACE });
     const [args] = mocks.makeProposal.mock.calls[0]!;
     expect(args).toMatchObject({ spaceId: PAGE_SPACE, name: 'Add claim: Aid entered on Monday' });
-    // Once published, exactly those rows are written to the store, already marked published.
-    expect(mocks.store.setValues).toHaveBeenCalledWith(args.values);
-    expect(mocks.store.setRelations).toHaveBeenCalledWith(args.relations);
-    expect(mocks.store.setAsPublished).toHaveBeenCalledWith(
-      args.values.map((v: { id: string }) => v.id),
-      args.relations.map((r: { id: string }) => r.id)
-    );
+    // Published from the edits alone; the local store (and so Review edits) never holds them.
+    expect(mocks.store.setValues).not.toHaveBeenCalled();
+    expect(mocks.store.setRelations).not.toHaveBeenCalled();
     expect(
       args.relations.some((r: { type: { id: string } }) => r.type.id === TEMPLATE_ONTOLOGY.TOPICS_PROPERTY_ID)
     ).toBe(true);
@@ -169,7 +165,7 @@ describe('useTemplateAddPublish', () => {
     expect(mocks.store.setRelations).not.toHaveBeenCalled();
   });
 
-  it('nothing is in the store while the publish is in flight', async () => {
+  it('nothing is written to the store, during the publish or after', async () => {
     let finish!: () => void;
     mocks.makeProposal.mockImplementation(
       (args: { onSuccess?: () => void }) =>
@@ -186,7 +182,7 @@ describe('useTemplateAddPublish', () => {
 
     await act(async () => finish());
     await expect(pending).resolves.toMatchObject({ ok: true });
-    expect(mocks.store.setValues).toHaveBeenCalledTimes(1);
+    expect(mocks.store.setValues).not.toHaveBeenCalled();
   });
 
   it('signed out, the form asks for sign-in and writes nothing', async () => {

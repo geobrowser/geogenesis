@@ -41,6 +41,10 @@ describe('usePendingAdds', () => {
     // The refetched list has it (in the other id spelling): the list's own row takes over.
     rerender({ listed: [REAL_ID.replace(/-/g, '')] });
     expect(result.current.rows).toEqual([]);
+
+    // A later list that leaves it out doesn't bring the local row back.
+    rerender({ listed: [] });
+    expect(result.current.rows).toEqual([]);
   });
 
   it('drops the row when the publish fails', async () => {

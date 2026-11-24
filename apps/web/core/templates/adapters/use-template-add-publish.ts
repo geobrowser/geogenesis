@@ -15,7 +15,6 @@ import { ID } from '~/core/id';
 import { useQueuedAction } from '~/core/state/pending-actions';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { useStatusBar } from '~/core/state/status-bar-store';
-import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import type { TemplateAddResult } from '../models';
@@ -53,8 +52,8 @@ export function parseTemplateAddIntent(intent: string | undefined): TemplateAddA
   return null;
 }
 
-// Publishes a template add, then stores it as published so nothing reaches Review edits. Drafts
-// made while a new account's space is created are queued; failures show in the status bar.
+// Publishes a template add straight from its edits, never through the local store, so nothing
+// reaches Review edits. Drafts made while a new account's space is created are queued.
 export function useTemplateAddPublish({ owner, pageSpaceId }: { owner: TemplateAddOwner; pageSpaceId: string }) {
   const { authenticated } = usePrivy();
   const queryClient = useQueryClient();
@@ -62,7 +61,6 @@ export function useTemplateAddPublish({ owner, pageSpaceId }: { owner: TemplateA
   const { personalSpaceId, isRegistered, isLoading: isPersonalSpaceLoading } = usePersonalSpaceId();
   const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
   const { makeProposal } = usePublish();
-  const { store } = useSyncEngine();
   const { dispatch } = useStatusBar();
   const promptSignIn = usePrivySignIn(undefined, {
     analytics: {
@@ -102,9 +100,7 @@ export function useTemplateAddPublish({ owner, pageSpaceId }: { owner: TemplateA
       const edits = buildTemplateAddEdits(owner, action, writeSpace.spaceId);
       if (!edits) return fail(`Your ${noun} is empty.`);
 
-      // Published from the edits themselves and only then written to the store, already marked
-      // published: a list that reads the store would otherwise show the entity, live and actionable,
-      // before it exists, and a failed publish would leave rows for Review edits.
+      // The page shows the addition through its pending row until the refetched lists have it.
       const ok = await publishOnce(makeProposal, {
         values: edits.values,
         relations: edits.relations,
@@ -114,20 +110,13 @@ export function useTemplateAddPublish({ owner, pageSpaceId }: { owner: TemplateA
       // `usePublish` has already shown why (or the viewer dismissed the signature).
       if (!ok) return fail(`Your ${noun} could not be published.`, { show: false });
 
-      store.setValues(edits.values);
-      store.setRelations(edits.relations);
-      store.setAsPublished(
-        edits.values.map(value => value.id),
-        edits.relations.map(relation => relation.id)
-      );
-
       void refetchPageLists(queryClient, owner.entityId);
       for (const delay of INDEXER_REFETCH_DELAYS_MS) {
         window.setTimeout(() => void refetchPageLists(queryClient, owner.entityId), delay);
       }
       return { ok: true, id: edits.entityId, spaceId: writeSpace.spaceId };
     },
-    [fail, makeProposal, owner, pageSpaceId, queryClient, store, tx]
+    [fail, makeProposal, owner, pageSpaceId, queryClient, tx]
   );
 
   // The press waiting on a queued draft, settled when the queue replays it.

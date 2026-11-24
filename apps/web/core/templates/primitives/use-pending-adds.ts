@@ -58,6 +58,10 @@ export function usePendingAdds<Row extends { id: string }>(listedIds: readonly s
 
   const listed = React.useMemo(() => new Set(listedIds.map(normId)), [listedIds]);
   const visible = React.useMemo(() => rows.filter(row => !listed.has(normId(row.id))), [listed, rows]);
+  // Once listed, a row is gone for good: a later list that leaves it out mustn't bring it back.
+  React.useEffect(() => {
+    if (visible.length !== rows.length) setRows(visible);
+  }, [rows.length, visible]);
 
   return { rows: visible, add };
 }

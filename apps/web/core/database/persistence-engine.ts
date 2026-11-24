@@ -89,9 +89,6 @@ export class PersistenceEngine {
   }
 
   private async onPublished(valueIds: string[], relationIds: string[]) {
-    // Rows published before their flush must not be flushed back as unpublished edits.
-    for (const id of valueIds) this.pendingValues.delete(id);
-    for (const id of relationIds) this.pendingRelations.delete(id);
     try {
       if (valueIds.length > 0) {
         await db.values.bulkDelete(valueIds);
