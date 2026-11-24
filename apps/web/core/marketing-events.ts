@@ -14,6 +14,7 @@ import type { ActiveResponseDirection, ResponseKind } from '~/core/responses/ent
  * | geo_vote                | vote_cast (outcome_phase = submitted)                 |
  * | geo_vote_anonymous      | action_completed (action = local_vote), cast/switch   |
  * | geo_watch_debate        | debate_playback_interval (WATCH_DEBATE_MS unmuted)    |
+ *   (a full debate, or an Explore card's moments reel summed across its clips, GEO-3833)
  * | geo_join_space          | action_completed (action = join_space)                |
  * | geo_share_open          | (share sheet opened; no Geo event)                    |
  * | geo_share               | debate_share_action                                   |
