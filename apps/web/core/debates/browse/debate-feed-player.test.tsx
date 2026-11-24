@@ -3710,6 +3710,23 @@ describe('holding the full recordings until the viewer asks (feed bandwidth)', (
     expect(attachedWhenReported).toEqual([true]);
   });
 
+  it('reports each Play and Pause after the hold lifts once each, as before the hold', () => {
+    const fixture = (playing: boolean) =>
+      controllerFixture({ mutedByUser: true, turnSlot: 1, playing, posters: stills });
+    mocks.controller = fixture(false);
+    const { getAllByRole, getByRole, rerender } = render(<DebateFeedPlayer debate={debate} active holdFullPlayback />);
+
+    fireEvent.click(getByRole('button', { name: 'Play debate' }));
+    mocks.controller = fixture(true);
+    rerender(<DebateFeedPlayer debate={debate} active holdFullPlayback />);
+    fireEvent.click(getAllByRole('button', { name: 'Pause debate' })[0]);
+    mocks.controller = fixture(false);
+    rerender(<DebateFeedPlayer debate={debate} active holdFullPlayback />);
+    fireEvent.click(getAllByRole('button', { name: 'Play debate' })[0]);
+
+    expect(mocks.control.mock.calls.map(([control]) => control)).toEqual(['play', 'pause', 'play']);
+  });
+
   it('keeps a Play tap while scrolling into view and starts only once active', () => {
     const fixture = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false, posters: stills });
     mocks.controller = fixture;
