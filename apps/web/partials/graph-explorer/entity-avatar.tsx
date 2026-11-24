@@ -11,6 +11,13 @@ export function entityImageSrc(entity: Pick<GraphEntity, 'image'>): string | nul
   return isRenderableImageSrc(src) ? src : null;
 }
 
+/** A debate's share card, when it has one that can render. */
+export function entityCardSrc(entity: Pick<GraphEntity, 'card'>): string | null {
+  if (!entity.card) return null;
+  const src = getImagePath(entity.card);
+  return isRenderableImageSrc(src) ? src : null;
+}
+
 export function EntityAvatar({ entity, size }: { entity: Pick<GraphEntity, 'image' | 'name'>; size: number }) {
   const src = entityImageSrc(entity);
   const [failed, setFailed] = React.useState(false);
