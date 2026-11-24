@@ -3,7 +3,7 @@ import { normId } from '~/core/utils/norm-id';
 
 import { type ClaimBand, MIN_RESPONSES_FOR_BAND, agreePercent, claimBand } from './claim-band';
 import type { GraphNode } from './fetch-graph-neighbourhood';
-import { GRAPH_KIND_REDUNDANT_LABELS, type GraphKind, isGenericRelationLabel } from './graph-kinds';
+import { GRAPH_KIND_REDUNDANT_LABELS, type GraphKind, isGenericRelationLabel, labelKey } from './graph-kinds';
 import type { GraphKindFilter, GraphSelection } from './select-graph';
 import type { Spoke } from './spokes';
 import type { SummarisedClaim } from './topic-claims-summary';
@@ -127,10 +127,6 @@ export function groupByKind(spokes: readonly Spoke[], nodes: ReadonlyMap<string,
     const list = groups.get(kind);
     return list ? [{ kind, spokes: list }] : [];
   });
-}
-
-function labelKey(label: string) {
-  return label.trim().toLowerCase().replace(/ies$/, 'y').replace(/s$/, '');
 }
 
 /**

@@ -181,6 +181,25 @@ describe('row labels that repeat the group', () => {
       { relation: null, sub: 'Debate' },
     ],
     [
+      'Events drops Source (incoming) on a case event that cites the article',
+      { kind: 'event', relations: ['Source (incoming)'], typeLabel: 'Case event' },
+      { relation: null, sub: 'Case event' },
+    ],
+    [
+      'Other drops Debates (incoming) on a vote and Events/Sources (incoming) fallbacks',
+      {
+        kind: 'other',
+        relations: ['Debates (incoming)', 'Events (incoming)', 'Sources (incoming)'],
+        typeLabel: 'Vote',
+      },
+      { relation: null, sub: 'Vote' },
+    ],
+    [
+      'an incoming fallback named for a non-kind noun stays',
+      { kind: 'ent', relations: ['Countries (incoming)'], typeLabel: 'Person' },
+      { relation: 'Countries (incoming)', sub: 'Person' },
+    ],
+    [
       'an incoming fallback that says how stays',
       { kind: 'claim', relations: ['Claims (incoming)', 'Addresses (incoming)'] },
       { relation: 'Addresses (incoming)', sub: null },

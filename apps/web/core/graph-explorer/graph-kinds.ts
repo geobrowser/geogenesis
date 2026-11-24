@@ -49,27 +49,30 @@ export const GRAPH_KIND_REDUNDANT_LABELS: Record<GraphKind, readonly string[]> =
   other: [],
 };
 
+/** A label compared ignoring case and a plural "s" or "ies": "Countries" and "Country" match. */
+export function labelKey(label: string) {
+  return label.trim().toLowerCase().replace(/ies$/, 'y').replace(/s$/, '');
+}
+
 /**
  * Relation labels that only say a row is related, not how, so no row shows them: "On this topic",
  * "Topic", the fallback "Relation", every "Related …" label ("Related person", "Related to",
  * "Related claim", a fallback "Related topics (incoming)"…), and a fallback that is only a kind's
- * name seen from its target ("Claims (incoming)" on a debate that lists the claim). Matched ignoring case.
+ * name seen from its target ("Claims (incoming)" on a debate that lists the claim, "Source (incoming)"
+ * on a case event that cites an article). Matched ignoring case.
  */
-const GENERIC_RELATION_LABELS = new Set([
-  'on this topic',
-  'topic',
-  'topics',
-  'topic (incoming)',
-  'topics (incoming)',
-  'claim (incoming)',
-  'claims (incoming)',
-  'relation',
-  'relation (incoming)',
-]);
+const GENERIC_RELATION_LABELS = new Set(['on this topic', 'topic', 'topics', 'relation', 'relation (incoming)']);
+
+/** Kind nouns whose bare "(incoming)" fallback says nothing beyond the kind, matched by labelKey. */
+const KIND_NOUNS = new Set(
+  ['Topic', 'Claim', 'Story', 'News story', 'Event', 'Source', 'Court case', 'Legal case', 'Debate'].map(labelKey)
+);
 
 export function isGenericRelationLabel(label: string) {
   const key = label.trim().toLowerCase();
-  return GENERIC_RELATION_LABELS.has(key) || /^related\b/.test(key);
+  if (GENERIC_RELATION_LABELS.has(key) || /^related\b/.test(key)) return true;
+  const incoming = /^(.+) \(incoming\)$/.exec(key);
+  return incoming !== null && KIND_NOUNS.has(labelKey(incoming[1]));
 }
 
 export const NEWS_EVENT_TYPE_ID = 'bb9a85bd6dc64efd8232e2782cb4b5f8';
