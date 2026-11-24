@@ -195,17 +195,24 @@ export function useLivePostTemplate({
         };
       });
 
-    const noteValue = (noteId: string, propertyId: string) =>
-      noteValues.find(v => normId(v.entity.id) === normId(noteId) && v.property.id === propertyId)?.value;
+    // Read in the space the relation points the note at, like the note's name.
+    const noteValue = (noteId: string, noteSpaceId: string, propertyId: string) =>
+      noteValues.find(
+        v =>
+          normId(v.entity.id) === normId(noteId) &&
+          v.property.id === propertyId &&
+          normId(v.spaceId) === normId(noteSpaceId)
+      )?.value;
     const graphNotes: PostContextNoteModel[] = communityNotes
       .filter(rel => Boolean(rel.toEntity.name))
       .map((rel): PostContextNoteModel => {
         const id = rel.toEntity.id;
-        const sourceUrl = noteValue(id, TEMPLATE_ONTOLOGY.WEB_URL_PROPERTY_ID);
+        const noteSpaceId = rel.toSpaceId ?? spaceId;
+        const sourceUrl = noteValue(id, noteSpaceId, TEMPLATE_ONTOLOGY.WEB_URL_PROPERTY_ID);
         const isDraft = Boolean(rel.isLocal) && !rel.hasBeenPublished;
         return {
           id,
-          tag: noteValue(id, SystemIds.DESCRIPTION_PROPERTY) ?? 'Community note',
+          tag: noteValue(id, noteSpaceId, SystemIds.DESCRIPTION_PROPERTY) ?? 'Community note',
           status: isDraft ? 'mine' : 'shown',
           statusLabel: isDraft ? 'Added' : 'Shown',
           text: rel.toEntity.name ?? id,

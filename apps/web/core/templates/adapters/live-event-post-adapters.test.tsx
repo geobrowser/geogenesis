@@ -389,6 +389,13 @@ describe('useLivePostTemplate community notes', () => {
       relations: [relation(TEMPLATE_ONTOLOGY.COMMUNITY_NOTES_PROPERTY_ID, 'aaaa0000aaaa0000aaaa0000aaaa0000', 'Older')],
     });
     stageNote({ reason: 'Missing context', body: 'Draft text', sourceUrl: 'https://example.com/a' });
+    // The same note's tag in an unrelated space is not this page's.
+    state.values.push({
+      ...noteValue(SystemIds.DESCRIPTION_PROPERTY, 'Other space tag'),
+      id: 'other',
+      spaceId: 'aaaabbbbccccddddeeeeffff00001111',
+    });
+    state.values.reverse();
 
     const { result } = renderHook(() => useLivePostTemplate({ entityId: state.entity!.id, spaceId: SPACE }));
 
