@@ -338,7 +338,7 @@ describe('the stage', () => {
 
   it('keeps the end card, dark', () => {
     renderFull({ playbackEnded: true, playing: false });
-    expect(screen.getByTestId('end-card')).toHaveAttribute('data-tone', 'dark');
+    expect(screen.getByTestId('end-card').getAttribute('data-tone')).toBe('dark');
   });
 });
 
