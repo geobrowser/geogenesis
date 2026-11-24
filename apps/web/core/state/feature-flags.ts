@@ -116,6 +116,13 @@ export const featureFlagDefinitions = [
       'Enable the redesigned Topic and Claim templates and register structured templates for News stories, Sources, Posts, and Events.',
     enabledByDefault: true,
   },
+  {
+    id: 'templateListRanking',
+    label: 'Rank template lists',
+    description:
+      'Show the ranking control on template lists. Off until a ranking publishes to the graph (GEO-3835); it only saves to this browser.',
+    enabledByDefault: false,
+  },
 ] as const;
 
 export type FeatureFlagId = (typeof featureFlagDefinitions)[number]['id'];

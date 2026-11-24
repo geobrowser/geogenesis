@@ -29,6 +29,18 @@ import {
   VoteBox,
 } from './index';
 
+const flagMocks = vi.hoisted(() => ({ templateListRanking: false }));
+
+// Template list ranking ships off (GEO-3835); the workspace tests turn it on.
+vi.mock('~/core/state/feature-flags', async importOriginal => {
+  const actual = await importOriginal<typeof import('~/core/state/feature-flags')>();
+  return {
+    ...actual,
+    useFeatureFlag: (id: Parameters<typeof actual.useFeatureFlag>[0]) =>
+      id === 'templateListRanking' ? flagMocks.templateListRanking : actual.useFeatureFlag(id),
+  };
+});
+
 afterEach(cleanup);
 
 // The shipped switch, read before any test flips it, and put back after each one that does.
@@ -436,6 +448,58 @@ describe('Context & Disputes empty states, inline pill +, and pagination', () =>
 });
 
 describe('ListRanking header control & workspace', () => {
+  const RANKING_CLAIMS: ClaimSummaryModel[] = [
+    { id: 'rank-c1', title: 'First global claim', kind: 'fact', split: { rows: [], isSplit: true, totalVotes: 20 } },
+    {
+      id: 'rank-c2',
+      title: 'Second global claim',
+      kind: 'judgment',
+      split: { rows: [], isSplit: true, totalVotes: 12 },
+    },
+    { id: 'rank-c3', title: 'Third global claim', kind: 'fact', split: { rows: [], isSplit: true, totalVotes: 4 } },
+  ];
+
+  beforeEach(() => {
+    flagMocks.templateListRanking = true;
+  });
+  afterEach(() => {
+    flagMocks.templateListRanking = false;
+  });
+
+  it('hides the ranking control and ignores a saved ranking while templateListRanking is off', () => {
+    window.localStorage.clear();
+    // Save a personal ranking with the flag on, so this browser holds one.
+    render(
+      <EntityActionProvider>
+        <ClaimExplorer contestedClaims={RANKING_CLAIMS} agreedClaims={[]} />
+      </EntityActionProvider>
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Rank Claims' }));
+    const dialog = screen.getByRole('dialog', { name: 'Rank Claims' });
+    const globalSection = within(dialog).getByRole('region', { name: 'Global ranking' });
+    fireEvent.click(within(globalSection).getByRole('button', { name: 'Add Third global claim to my ranking' }));
+    fireEvent.click(
+      within(within(dialog).getByRole('region', { name: 'My ranking' })).getByRole('button', {
+        name: 'Publish ranking',
+      })
+    );
+    cleanup();
+
+    flagMocks.templateListRanking = false;
+    render(
+      <EntityActionProvider>
+        <ClaimExplorer contestedClaims={RANKING_CLAIMS} agreedClaims={[]} />
+      </EntityActionProvider>
+    );
+
+    expect(screen.queryByRole('button', { name: /Rank Claims|Edit my ranking/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'My ranking' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Add claim' })).toBeInTheDocument();
+    const first = screen.getByText('First global claim');
+    const third = screen.getByText('Third global claim');
+    expect(first.compareDocumentPosition(third) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it('opens the 2-column ranking workspace from the list header icon, builds a personal ranking, and reorders the list live', () => {
     window.localStorage.clear();
     const claims: ClaimSummaryModel[] = [
