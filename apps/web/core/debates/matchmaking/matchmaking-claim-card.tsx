@@ -1270,6 +1270,7 @@ export function PositionRow({
   endSlotWraps,
   showParticipants = true,
   analyticsSurface,
+  outline = 'dashed',
 }: {
   positions: DebateClaimPositionSummary[];
   responseKind: ResponseKind;
@@ -1320,6 +1321,8 @@ export function PositionRow({
   showParticipants?: boolean;
   /** Names the two pills for click analytics: "<surface> Claim card agree" / "… disagree". */
   analyticsSurface?: DebateActionAnalyticsSurface;
+  /** See `PositionButton`'s `outline`. Every host but the graph explorer's open claim keeps the dashed card pill. */
+  outline?: 'dashed' | 'solid';
 }) {
   const copy = CLAIM_RESPONSE_COPY;
   const forSide = showParticipants ? positions.find(position => position.position === true) : undefined;
@@ -1381,6 +1384,7 @@ export function PositionRow({
             pending={pending}
             title={titleFor?.(true)}
             localOnly={localSide === true}
+            outline={outline}
             analytics={
               analyticsSurface
                 ? debateActionAnalyticsAttributes(analyticsSurface, `Claim card ${copy.positiveAction.toLowerCase()}`)
@@ -1402,6 +1406,7 @@ export function PositionRow({
             pending={pending}
             title={titleFor?.(false)}
             localOnly={localSide === false}
+            outline={outline}
             analytics={
               analyticsSurface
                 ? debateActionAnalyticsAttributes(analyticsSurface, `Claim card ${copy.negativeAction.toLowerCase()}`)
@@ -1475,6 +1480,7 @@ function PositionButton({
   localOnly = false,
   analytics,
   compactMobile = false,
+  outline = 'dashed',
 }: {
   label: string;
   summary: DebateClaimPositionSummary | undefined;
@@ -1490,6 +1496,11 @@ function PositionButton({
   analytics?: DebateAnalyticsAttributes;
   /** Fit the debate card's response pills beside its supporting actions on phones. */
   compactMobile?: boolean;
+  /**
+   * `'solid'` is the graph explorer's open claim (GEO-3841): a 32px pill with a solid grey outline, the
+   * map panel in the Gaza prototype. The held side is the same grey fill either way.
+   */
+  outline?: 'dashed' | 'solid';
 }) {
   // `@container` so the avatar stack can measure the pill it is sitting in — see `PositionAvatars`,
   // which sheds faces rather than letting the label truncate.
@@ -1507,9 +1518,10 @@ function PositionButton({
   // band. Figma names this colour "Secondary/Line dividers", which is the same name this token
   // already has — the two systems agree, and the pill borrows it rather than inventing a shade.
   const className = cx(
-    '@container flex min-h-7 items-center justify-center rounded-full border px-3 text-button text-text',
+    '@container flex items-center justify-center rounded-full border px-3 text-button text-text',
+    outline === 'solid' ? 'min-h-8' : 'min-h-7',
     compactMobile && 'md:px-1.5 md:text-[15px] md:@max-[280px]/debate-actions:px-1',
-    selected ? 'border-transparent bg-divider' : 'border-dashed border-grey-03 bg-white'
+    selected ? 'border-transparent bg-divider' : cx(outline === 'dashed' && 'border-dashed', 'border-grey-03 bg-white')
   );
   // Icon, label and faces are one centred group at a single 6px gap, per the Figma card. They used
   // to be two groups pushed to opposite ends by `justify-between`, which left the faces adrift at

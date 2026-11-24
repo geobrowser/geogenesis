@@ -28,9 +28,6 @@ import { RespondersPopoverContent } from '~/partials/entity-page/entity-vote-but
 import { CLAIM_RESPONSE_OBJECT_TYPE, type ClaimResponseSummary, claimSummaryTier } from './claim-response-summary';
 import { ClaimSideResponders } from './claim-side-responders';
 
-/** Rings the responder faces in grey, for a summary drawn on a grey box rather than on white. */
-export const GREY_SURFACE_RING_STYLE = { '--avatar-group-ring': 'var(--color-grey-01)' } as React.CSSProperties;
-
 /**
  * Where opinion sits on a claim, and how many people put it there.
  *
@@ -50,7 +47,6 @@ export function ClaimSummary({
   summary,
   className,
   layout = 'stacked',
-  detail,
 }: {
   entityId: string;
   spaceId: string;
@@ -66,11 +62,6 @@ export function ClaimSummary({
    * and it is the part that would quietly diverge if this were copied.
    */
   layout?: 'stacked' | 'inline';
-  /**
-   * Said after the share, as "71% agree · 7 votes". The host's own words: only the graph explorer's
-   * open claim asks for one, so every other surface reads as it did.
-   */
-  detail?: string;
 }) {
   const copy = CLAIM_RESPONSE_COPY;
   const tier = claimSummaryTier(summary.total);
@@ -112,11 +103,6 @@ export function ClaimSummary({
       <Text as="span" variant="metadata" color="grey-04">
         {copy.positiveAction.toLowerCase()}
       </Text>
-      {detail ? (
-        <Text as="span" variant="metadata" color="grey-04" className="tabular-nums">
-          · {detail}
-        </Text>
-      ) : null}
     </span>
   );
 
@@ -125,7 +111,10 @@ export function ClaimSummary({
       // The responder faces sit on this band, not on white, so the rings they draw have to be the
       // band's colour. Set here rather than passed down: the stack is five components away, through
       // ranking code that has no opinion about what it is standing on.
-      <div className={cx('flex items-center gap-3', className)} style={GREY_SURFACE_RING_STYLE}>
+      <div
+        className={cx('flex items-center gap-3', className)}
+        style={{ '--avatar-group-ring': 'var(--color-grey-01)' } as React.CSSProperties}
+      >
         {share}
         {/* The bar takes the middle and gives way first: `min-w-0` so a narrow card shortens the
             rail rather than wrapping the reading off the end of it. Thinner than the stacked one —

@@ -52,6 +52,18 @@ describe('PositionRow', () => {
     expect(grid.className).not.toContain('md:grid-cols');
   });
 
+  // GEO-3841 gave the graph explorer's open claim a solid outline; every other host keeps the card's.
+  it('draws dashed 28px pills unless the host asks for the solid outline', () => {
+    const { unmount } = render(<PositionRow positions={positions} responseKind="stance" viewerPosition={null} />);
+    const pill = () => screen.getByText('Agree').closest('.rounded-full') as HTMLElement;
+    expect(pill()).toHaveClass('border-dashed', 'min-h-7');
+    unmount();
+
+    render(<PositionRow positions={positions} responseKind="stance" viewerPosition={null} outline="solid" />);
+    expect(pill()).toHaveClass('border-grey-03', 'min-h-8');
+    expect(pill()).not.toHaveClass('border-dashed');
+  });
+
   it('measures against its own width, not an ancestor container', () => {
     render(<PositionRow positions={positions} responseKind="stance" viewerPosition={null} />);
 

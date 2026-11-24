@@ -91,7 +91,9 @@ export function TopicClaimsSummary({
 export function ClaimActions({ claimId, spaceId }: { claimId: string; spaceId: string }) {
   const analytics = useGraphAnalytics();
   return (
-    <section aria-label="Respond" className="flex flex-col gap-3 rounded-xl bg-grey-01 p-3">
+    // On the panel's white rather than in a grey box, as in the prototype's map panel: the bar's grey
+    // track and the held pill's fill are the only greys in the block.
+    <section aria-label="Respond" className="flex flex-col gap-3">
       <ActionContextProvider value={{ list_id: 'graph_explorer_centre' }}>
         <GraphClaimPosition claimId={claimId} spaceId={spaceId} />
       </ActionContextProvider>

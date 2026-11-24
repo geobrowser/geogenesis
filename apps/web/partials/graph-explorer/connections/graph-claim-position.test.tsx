@@ -25,18 +25,19 @@ vi.mock('~/core/sync/use-store', () => ({
 }));
 
 // The counts have landed, and geo-chat has no row for this claim: what most of the map's spaces get.
-vi.mock('~/core/claims/browse/claim-response-summary', async importOriginal => ({
-  ...(await importOriginal<typeof import('~/core/claims/browse/claim-response-summary')>()),
-  useClaimResponseSummary: () => ({
-    isLoading: false,
-    isViewerResponseLoading: false,
-    hasCounts: true,
-    positive: mocks.counts.positive,
-    negative: mocks.counts.negative,
-    total: mocks.counts.positive + mocks.counts.negative,
-    indexedViewerDirection: mocks.indexedViewerDirection,
-  }),
-}));
+vi.mock('~/core/claims/browse/claim-response-summary', async importOriginal => {
+  const actual = await importOriginal<typeof import('~/core/claims/browse/claim-response-summary')>();
+  return {
+    ...actual,
+    useClaimResponseSummary: () => ({
+      ...actual.summarizeClaimResponses(mocks.counts.positive, mocks.counts.negative),
+      isLoading: false,
+      isViewerResponseLoading: false,
+      hasCounts: true,
+      indexedViewerDirection: mocks.indexedViewerDirection,
+    }),
+  };
+});
 
 // Everything from the hook down to the pills is real, including the signed-out device vote; only
 // the publish and the session are stubbed.
@@ -64,15 +65,6 @@ vi.mock('~/core/state/save-votes-prompt', async importOriginal => {
   return { ...actual, openSaveVotesPrompt: vi.fn() };
 });
 vi.mock('~/core/analytics-operations', () => ({ recordAction: vi.fn() }));
-
-vi.mock('~/core/claims/browse/claim-summary', async importOriginal => ({
-  ...(await importOriginal<typeof import('~/core/claims/browse/claim-summary')>()),
-  ClaimSummary: ({ summary, detail }: { summary: { positive: number; total: number }; detail?: string }) => (
-    <div data-testid="claim-summary">
-      {summary.positive} of {summary.total} agree{detail ? ` · ${detail}` : ''}
-    </div>
-  ),
-}));
 
 vi.mock('~/design-system/prefetch-link', () => ({
   PrefetchLink: ({ children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => <a {...props}>{children}</a>,
@@ -106,18 +98,48 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('the open claim’s Agree and Disagree', () => {
-  it('draws labeled Agree and Disagree under the claim’s split', () => {
+  // The prototype's map panel: "71% agree" and the count on one line, a thin bar, two outlined pills.
+  it('reads the share and the count over a bar, then the two pills', () => {
     renderActions();
 
+    const percent = screen.getByText('71%');
+    expect(percent.parentElement).toHaveTextContent('71% agree');
+    const count = screen.getByText('7 votes');
+    // The count sits on the share's row, at the other end of it.
+    expect(count.parentElement).toBe(percent.parentElement?.parentElement);
+    const bar = screen.getByRole('img', { name: '71% agree, 29% disagree' });
+    expect((bar.firstElementChild as HTMLElement).style.width).toBe('71%');
+
     const agree = screen.getByRole('button', { name: 'Agree' });
-    const split = screen.getByTestId('claim-summary');
-    expect(split).toHaveTextContent('5 of 7 agree · 7 votes');
-    // The split reads first, then the buttons that change it.
-    expect(split.compareDocumentPosition(agree) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    // The box is grey: the split's responder faces ring in grey, not white.
-    expect(split.parentElement?.style.getPropertyValue('--avatar-group-ring')).toBe('var(--color-grey-01)');
-    expect(screen.getByRole('button', { name: 'Disagree' })).toBeInTheDocument();
+    const disagree = screen.getByRole('button', { name: 'Disagree' });
+    expect(count.compareDocumentPosition(bar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(bar.compareDocumentPosition(agree) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // Solid outlines, not the debate card's dashed ones, and no faces in them.
+    for (const pill of [agree, disagree]) {
+      expect(pill).toHaveClass('border-grey-03', 'min-h-8');
+      expect(pill).not.toHaveClass('border-dashed');
+      expect(pill.querySelector('img')).toBeNull();
+    }
     expect(screen.getByRole('link', { name: 'Open the claim →' })).toBeInTheDocument();
+  });
+
+  it('says "No votes yet" and draws no share or bar before anyone has voted', () => {
+    mocks.counts = { positive: 0, negative: 0 };
+    renderActions();
+
+    expect(screen.getByText('No votes yet')).toBeInTheDocument();
+    expect(screen.queryByText(/%/)).toBeNull();
+    expect(screen.queryByRole('img', { name: /agree/ })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Agree' })).toBeInTheDocument();
+  });
+
+  // ClaimSummary's rule: the share from the first vote on.
+  it('gives the share from a single vote', () => {
+    mocks.counts = { positive: 1, negative: 0 };
+    renderActions();
+
+    expect(screen.getByText('100%')).toBeInTheDocument();
+    expect(screen.getByText('1 vote')).toBeInTheDocument();
   });
 
   // Review finding: with neither geo-chat's row nor the graph entity, the response kind never
@@ -141,20 +163,26 @@ describe('the open claim’s Agree and Disagree', () => {
 
     mocks.indexedViewerDirection = 'positive';
     rerender();
-    expect(screen.getByRole('button', { name: /^Agree.*your response/ })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', { name: 'Disagree' })).toHaveAttribute('aria-pressed', 'false');
+    const held = screen.getByRole('button', { name: /^Agree.*your response/ });
+    expect(held).toHaveAttribute('aria-pressed', 'true');
+    // Held is the grey fill, as in the prototype; the other side keeps its outline.
+    expect(held).toHaveClass('bg-divider', 'border-transparent');
+    const other = screen.getByRole('button', { name: 'Disagree' });
+    expect(other).toHaveAttribute('aria-pressed', 'false');
+    expect(other).toHaveClass('bg-white', 'border-grey-03');
   });
 
   // Preview test, ticket AC2: the vote count shows beside the percentage and moves with a vote.
   it('says how many voted, and counts a vote once it lands', () => {
     const { rerender } = renderActions();
-    expect(screen.getByTestId('claim-summary')).toHaveTextContent('· 7 votes');
+    expect(screen.getByText('7 votes')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Agree' }));
     // The summary hook adds the viewer's side to the counts (stubbed here as the counts it returns).
     mocks.counts = { positive: 6, negative: 2 };
     rerender();
-    expect(screen.getByTestId('claim-summary')).toHaveTextContent('6 of 8 agree · 8 votes');
+    expect(screen.getByText('75%')).toBeInTheDocument();
+    expect(screen.getByText('8 votes')).toBeInTheDocument();
   });
 
   it('labels the buttons for click analytics as the graph explorer’s', () => {
@@ -180,6 +208,12 @@ describe('the open claim’s Agree and Disagree', () => {
     ]);
     expect(screen.getByRole('button', { name: /^Disagree.*your response/ })).toHaveAttribute('aria-pressed', 'true');
     expect(openSaveVotesPrompt).toHaveBeenCalledTimes(1);
+
+    // "Not counted yet · Save" under the pill pressed, and Save opens the sheet.
+    const save = screen.getByRole('button', { name: 'Save' });
+    expect(save.closest('p')).toHaveTextContent('Not counted yet · Save');
+    fireEvent.click(save);
+    expect(openSaveVotesPrompt).toHaveBeenLastCalledWith('inline_save');
   });
 
   // The vote's action carries the centre's list, so the graph explorer's votes can be told apart.
