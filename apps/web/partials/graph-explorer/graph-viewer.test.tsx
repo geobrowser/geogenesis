@@ -1,12 +1,14 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 
 import * as React from 'react';
 
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { captureSafely } from '~/core/analytics-capture-safely';
 import type { GraphHop } from '~/core/graph-explorer/graph-entity';
-import { startGraphHistory } from '~/core/graph-explorer/history';
+import { GraphAnalyticsProvider, useGraphExplorerSession } from '~/core/graph-explorer/graph-explorer-analytics';
+import { type GraphHistory, recentre, startGraphHistory } from '~/core/graph-explorer/history';
 import {
   CLAIM_TYPE_ID,
   NEIGHBOUR_KIND_TYPE_IDS,
@@ -82,6 +84,7 @@ vi.mock('~/core/graph-explorer/use-graph-explorer', () => ({
   useGraphNeighbourhood: hooks.useGraphNeighbourhood,
   useTopicClaimsSummary: () => ({ isLoading: false, isError: false, data: topicSummary.data }),
 }));
+vi.mock('~/core/analytics-capture-safely', () => ({ captureSafely: vi.fn() }));
 vi.mock('~/core/hooks/use-media-query', () => ({ useMediaQuery: () => false }));
 vi.mock('~/core/sync/use-store', () => ({ useQueryEntity: () => ({ entity: null, isLoading: false }) }));
 vi.mock('~/core/hooks/use-is-mobile-layout', () => ({ useIsMobileLayout: () => false }));
@@ -402,9 +405,7 @@ describe('GraphViewer', () => {
     };
     render(<Viewer start={TOPIC} scope={{ ...scope, topicId: TOPIC, topicSpaceId: SPACE }} />);
     expect(
-      screen.getByText(
-        'At least 1 claim with 3+ responses; only its first 2,000 claims were counted.'
-      )
+      screen.getByText('At least 1 claim with 3+ responses; only its first 2,000 claims were counted.')
     ).toBeTruthy();
   });
 
@@ -424,5 +425,67 @@ describe('GraphViewer', () => {
     expect(screen.getByText('A topic.')).toBeTruthy();
     expect(screen.queryByRole('heading', { name: /^Claims/ })).toBeNull();
     expect(screen.queryByText(/No claims/)).toBeNull();
+  });
+});
+
+/** The page's session around the viewer, with a way to move history as browser Back would. */
+function TrackedViewer({ move }: { move: React.MutableRefObject<((next: GraphHistory) => void) | null> }) {
+  const [history, setHistory] = React.useState(() => startGraphHistory(TOPIC));
+  const [client] = React.useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }));
+  const session = useGraphExplorerSession({ entityId: TOPIC, topicId: TOPIC, spaceId: null, trailDepth: 0 });
+  move.current = setHistory;
+  return (
+    <QueryClientProvider client={client}>
+      <GraphAnalyticsProvider value={session}>
+        <GraphViewer scope={scope} history={history} onNavigate={setHistory} />
+      </GraphAnalyticsProvider>
+    </QueryClientProvider>
+  );
+}
+
+describe('GraphViewer analytics', () => {
+  const events = (name: string) =>
+    vi
+      .mocked(captureSafely)
+      .mock.calls.filter(([event]) => event === name)
+      .map(([, props]) => props as Record<string, unknown>);
+
+  it('sends opened once when the first centre draws, then a recentred per hop with its method', () => {
+    const move: React.MutableRefObject<((next: GraphHistory) => void) | null> = { current: null };
+    const { unmount } = render(<TrackedViewer move={move} />);
+    expect(events('graph_explorer_opened')).toEqual([
+      expect.objectContaining({ entity_id: TOPIC, load_outcome: 'ready', layout: 'desktop', entity_kind: 'topic' }),
+    ]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Isaac Herzog' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Israel-Gaza war' }));
+    // Browser Forward: the URL moves with nothing in the explorer tagging it.
+    React.act(() => move.current!(recentre(startGraphHistory(TOPIC), PERSON)));
+
+    expect(events('graph_explorer_recentred').map(props => [props.method, props.hop_index, props.entity_id])).toEqual([
+      ['node', 1, PERSON],
+      ['back', 2, TOPIC],
+      ['history', 3, PERSON],
+    ]);
+    expect(events('graph_explorer_opened')).toHaveLength(1);
+
+    unmount();
+    expect(events('graph_explorer_left')).toEqual([
+      expect.objectContaining({ exit: 'navigated', hops: 3, entity_id: PERSON }),
+    ]);
+  });
+
+  it('reports a kind filter change, not a repeat', () => {
+    const move: React.MutableRefObject<((next: GraphHistory) => void) | null> = { current: null };
+    render(<TrackedViewer move={move} />);
+    const chips = within(screen.getByRole('group', { name: 'Show' }));
+    fireEvent.click(chips.getByRole('button', { name: 'People and groups' }));
+    fireEvent.click(chips.getByRole('button', { name: 'People and groups' }));
+    fireEvent.click(chips.getByRole('button', { name: 'Everything' }));
+    expect(
+      events('graph_explorer_interacted')
+        .filter(props => props.interaction === 'filter')
+        .map(props => props.value)
+    ).toEqual(['ent', 'all']);
   });
 });

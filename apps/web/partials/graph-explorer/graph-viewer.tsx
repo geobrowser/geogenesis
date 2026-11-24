@@ -6,6 +6,7 @@ import { useActionContext } from '~/core/action-context-provider';
 import { centreTextInSpace } from '~/core/graph-explorer/centre-text';
 import { nodeClaimSpaceId } from '~/core/graph-explorer/claims-about';
 import { type GraphNode, hop1AsGraphHop } from '~/core/graph-explorer/fetch-graph-neighbourhood';
+import { type RecentreMethod, useGraphAnalytics } from '~/core/graph-explorer/graph-explorer-analytics';
 import { type GraphFilterOverrides, type GraphScope, resolveGraphFilter } from '~/core/graph-explorer/graph-filter';
 import { shareGraph } from '~/core/graph-explorer/graph-share';
 import { type GraphHistory, goBack, recentre } from '~/core/graph-explorer/history';
@@ -54,6 +55,7 @@ export function GraphViewer({
   // Names of entities already seen, for "Back to X" and the trail before a hop is refetched.
   const [names, setNames] = React.useState<Record<string, string>>({});
   const phone = useMediaQuery(PHONE_QUERY);
+  const analytics = useGraphAnalytics();
 
   const centreId = history.centreId;
   const hubId = scope?.topicId ? normId(scope.topicId) : null;
@@ -101,6 +103,31 @@ export function GraphViewer({
     [hop1Nodes, neighbourhood.selection]
   );
 
+  // After the URL changed, so the event carries the new centre's page view.
+  const trailDepth = history.back.length;
+  React.useEffect(() => {
+    analytics?.recentred(centreId, { trailDepth, kindFilter });
+    // A kind change is not a hop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [analytics, centreId, trailDepth]);
+
+  const settled: { outcome: 'ready' | 'error' | 'not_in_graph'; kind?: GraphNode['kind'] } | null =
+    neighbourhood.hop1.isError && !hop1
+      ? { outcome: 'error' }
+      : hop1?.centre?.id === centreId && neighbourhood.selection
+        ? { outcome: 'ready', kind: hop1.centre.kind }
+        : hop1 && !hop1.centre
+          ? { outcome: 'not_in_graph' }
+          : null;
+  React.useEffect(() => {
+    if (settled)
+      analytics?.opened(settled.outcome, {
+        entityKind: settled.kind,
+        layout: phone ? 'phone' : 'desktop',
+        trailDepth,
+      });
+  }, [analytics, phone, settled?.kind, settled?.outcome, trailDepth]); // eslint-disable-line react-hooks/exhaustive-deps
+
   React.useEffect(() => {
     const centreName = hop1?.centre?.id === centreId ? hop1.centre.name : null;
     if (!centreName) return;
@@ -108,19 +135,28 @@ export function GraphViewer({
   }, [centreId, hop1]);
 
   const goTo = React.useCallback(
-    (id: string, name: string | null) => {
+    (id: string, name: string | null, method: RecentreMethod = 'panel', kind?: GraphNode['kind']) => {
       if (name) setNames(current => ({ ...current, [id]: name }));
+      analytics?.tag(method, normId(id), kind);
       onNavigate(recentre(history, id));
     },
-    [history, onNavigate]
+    [analytics, history, onNavigate]
   );
   const selectNode = React.useCallback(
-    (node: GraphNode) => {
+    (node: GraphNode, method: RecentreMethod = 'node') => {
       // A chip that would hide the new centre gives way, as in the design.
       if (kindFilter !== 'all' && node.kind !== kindFilter && node.kind !== 'topic') setKindFilter('all');
-      goTo(node.id, node.name);
+      goTo(node.id, node.name, method, node.kind);
     },
     [goTo, kindFilter]
+  );
+  const pickKind = React.useCallback(
+    (next: GraphKindFilter) => {
+      if (next === kindFilter) return;
+      setKindFilter(next);
+      analytics?.interacted({ interaction: 'filter', value: next });
+    },
+    [analytics, kindFilter]
   );
 
   const previousId = history.back.at(-1);
@@ -129,7 +165,10 @@ export function GraphViewer({
   const back = previousId
     ? {
         label: `Back to ${names[previousId] ?? previousEntity?.name ?? 'previous'}`,
-        onClick: () => onNavigate(goBack(history)),
+        onClick: () => {
+          analytics?.tag('back', normId(previousId));
+          onNavigate(goBack(history));
+        },
       }
     : null;
   const trail = [...history.back, centreId].flatMap(id => (names[id] ? [names[id]] : []));
@@ -139,10 +178,16 @@ export function GraphViewer({
     <GraphTopBar
       back={back}
       trail={trail.length ? trail : topicName ? [topicName] : []}
-      search={<GraphSearch nodes={selection?.nodes.slice(1).map(entry => entry.node) ?? []} onPick={selectNode} />}
+      search={
+        <GraphSearch
+          nodes={selection?.nodes.slice(1).map(entry => entry.node) ?? []}
+          onPick={node => selectNode(node, 'search')}
+          onSearched={resultCount => analytics?.interacted({ interaction: 'search', result_count: resultCount })}
+        />
+      }
       kinds={neighbourhood.kinds}
       kindFilter={kindFilter}
-      onKindFilter={setKindFilter}
+      onKindFilter={pickKind}
       share={share}
       close={close}
     />
@@ -156,7 +201,7 @@ export function GraphViewer({
         selection={selection ?? SKELETON_SELECTION[phone ? 'phone' : 'desktop']}
         phone={phone}
         topicSpaceId={topicSpaceId}
-        onSelect={selectNode}
+        onSelect={node => selectNode(node)}
         onPrefetch={prefetch}
         emptyMessage={filter ? relationshipsEmptyMessage(filter) : ''}
       />
@@ -236,7 +281,7 @@ export function GraphViewer({
             topicId={centreId}
             filter={filter}
             topicSpaceId={topicSpaceId}
-            onOpenClaim={id => goTo(id, null)}
+            onOpenClaim={id => goTo(id, null, 'summary')}
           />
           <TopicOverview
             topicId={centreId}

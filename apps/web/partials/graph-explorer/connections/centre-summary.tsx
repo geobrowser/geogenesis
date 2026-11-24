@@ -6,6 +6,7 @@ import cx from 'classnames';
 
 import { ActionContextProvider } from '~/core/action-context-provider';
 import { CLAIM_BAND_LABELS, type ClaimBand, MIN_RESPONSES_FOR_BAND } from '~/core/graph-explorer/claim-band';
+import { useGraphAnalytics } from '~/core/graph-explorer/graph-explorer-analytics';
 import type { GraphFilter } from '~/core/graph-explorer/graph-filter';
 import { MAX_TOPIC_CLAIMS, claimsHeadline, summaryPercent } from '~/core/graph-explorer/topic-claims-summary';
 import { useTopicClaimsSummary } from '~/core/graph-explorer/use-graph-explorer';
@@ -32,6 +33,8 @@ export function TopicClaimsSummary({
   onOpenClaim: (claimId: string) => void;
 }) {
   const summary = useTopicClaimsSummary(topicId, filter, topicSpaceId);
+  const analytics = useGraphAnalytics();
+  const seenRef = useSeenFor(1_000, () => analytics?.interacted({ interaction: 'summary_seen' }));
   if (summary.isLoading) return <Skeleton className="h-[96px] w-full rounded-lg" />;
   if (summary.isError || !summary.data) {
     return <p className="text-metadata text-grey-04">Couldn’t load how people responded to this topic’s claims.</p>;
@@ -42,7 +45,7 @@ export function TopicClaimsSummary({
   const topTotal = top ? top.positive + top.negative : 0;
   const counted = `only its first ${MAX_TOPIC_CLAIMS.toLocaleString('en-US')} claims were counted`;
   return (
-    <section aria-label="How people responded" className="flex flex-col gap-3 rounded-xl bg-grey-01 p-3">
+    <section ref={seenRef} aria-label="How people responded" className="flex flex-col gap-3 rounded-xl bg-grey-01 p-3">
       <h3 className="text-metadataMedium text-text">How people responded</h3>
       {!headline ? (
         <p className="text-metadata text-grey-04">
@@ -88,6 +91,7 @@ export function TopicClaimsSummary({
 
 /** Responding to a claim from the map, in the claim's own space. */
 export function ClaimActions({ claimId, spaceId }: { claimId: string; spaceId: string }) {
+  const analytics = useGraphAnalytics();
   return (
     <section aria-label="Respond" className="flex flex-col gap-3 rounded-xl bg-grey-01 p-3">
       <ActionContextProvider value={{ list_id: 'graph_explorer_centre' }}>
@@ -98,10 +102,37 @@ export function ClaimActions({ claimId, spaceId }: { claimId: string; spaceId: s
       </ActionContextProvider>
       <Link
         href={NavUtils.toEntity(spaceId, claimId)}
+        onClick={() => analytics?.interacted({ interaction: 'open_page', value: 'claim', target_id: claimId })}
         className="self-start text-metadataMedium text-text underline-offset-2 hover:underline"
       >
         Open the claim →
       </Link>
     </section>
+  );
+}
+
+/** A ref whose element, at least half visible for `ms`, calls `onSeen`. */
+function useSeenFor(ms: number, onSeen: () => void) {
+  const callback = React.useRef(onSeen);
+  React.useEffect(() => {
+    callback.current = onSeen;
+  });
+  const observer = React.useRef<IntersectionObserver | null>(null);
+  React.useEffect(() => () => observer.current?.disconnect(), []);
+  return React.useCallback(
+    (element: HTMLElement | null) => {
+      observer.current?.disconnect();
+      if (!element || typeof IntersectionObserver === 'undefined') return;
+      let timer: number | undefined;
+      observer.current = new IntersectionObserver(
+        ([entry]) => {
+          window.clearTimeout(timer);
+          if (entry?.isIntersecting) timer = window.setTimeout(() => callback.current(), ms);
+        },
+        { threshold: 0.5 }
+      );
+      observer.current.observe(element);
+    },
+    [ms]
   );
 }

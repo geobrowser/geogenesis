@@ -5,6 +5,7 @@ import * as React from 'react';
 import { type ClaimAbout, nodeClaimSpaceId } from '~/core/graph-explorer/claims-about';
 import { type GraphNode, HOP1_PER_KIND } from '~/core/graph-explorer/fetch-graph-neighbourhood';
 import type { GraphCentre } from '~/core/graph-explorer/graph-entity';
+import { useGraphAnalytics } from '~/core/graph-explorer/graph-explorer-analytics';
 import type { GraphKind } from '~/core/graph-explorer/graph-kinds';
 import { groupByKind } from '~/core/graph-explorer/panel-sections';
 import type { Spoke } from '~/core/graph-explorer/spokes';
@@ -158,6 +159,7 @@ function Details({
   centreSpaceId: string | null;
   emptyMessage: string;
 }) {
+  const analytics = useGraphAnalytics();
   return (
     <div className="flex flex-col gap-3">
       {centre.description ? (
@@ -169,6 +171,7 @@ function Details({
       {centreSpaceId && (
         <Link
           href={NavUtils.toEntity(centreSpaceId, centre.id)}
+          onClick={() => analytics?.interacted({ interaction: 'open_page', value: 'entity', target_id: centre.id })}
           className="self-start text-metadataMedium text-text underline-offset-2 hover:underline"
         >
           Open page →

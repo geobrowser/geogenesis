@@ -6,6 +6,7 @@ import * as React from 'react';
 
 import { usePathname, useSearchParams } from 'next/navigation';
 
+import { GraphAnalyticsProvider, useGraphExplorerSession } from '~/core/graph-explorer/graph-explorer-analytics';
 import { parseGraphFilterOverrides } from '~/core/graph-explorer/graph-filter';
 import { recordGraphShareLanding } from '~/core/graph-explorer/graph-share';
 import { historyFromUrl } from '~/core/graph-explorer/history';
@@ -88,9 +89,15 @@ function TopicGraph({
         )
       : null);
   const scope = useTopicGraphScope(routeSpaceId, topicId, topicSpaceId);
+  const session = useGraphExplorerSession({
+    entityId,
+    topicId,
+    spaceId: routeSpaceId,
+    trailDepth: history.back.length,
+  });
 
   return (
-    <>
+    <GraphAnalyticsProvider value={session}>
       <h1 className="sr-only">Graph explorer{topic?.name ? `: ${topic.name}` : ''}</h1>
       <GraphViewer
         history={history}
@@ -108,7 +115,7 @@ function TopicGraph({
             : { href: NavUtils.toExplore(), label: 'Close the map and go to Explore' }
         }
       />
-    </>
+    </GraphAnalyticsProvider>
   );
 }
 

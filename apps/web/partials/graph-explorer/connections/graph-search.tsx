@@ -26,14 +26,30 @@ export function searchNodes(nodes: readonly GraphNode[], query: string): GraphNo
 }
 
 /** Finds within the map on screen; picking a result re-centres on it. */
-export function GraphSearch({ nodes, onPick }: { nodes: readonly GraphNode[]; onPick: (node: GraphNode) => void }) {
+export function GraphSearch({
+  nodes,
+  onPick,
+  onSearched,
+}: {
+  nodes: readonly GraphNode[];
+  onPick: (node: GraphNode) => void;
+  /** Once per focus that typed something, when it closes or picks: the count only, never the text. */
+  onSearched?: (resultCount: number) => void;
+}) {
   const [query, setQuery] = React.useState('');
+  const typed = React.useRef(false);
   const [open, setOpen] = React.useState(false);
   const [active, setActive] = React.useState(0);
   const results = React.useMemo(() => searchNodes(nodes, query), [nodes, query]);
   const listId = React.useId();
 
+  const report = () => {
+    if (typed.current) onSearched?.(results.length);
+    typed.current = false;
+  };
+
   const pick = (node: GraphNode) => {
+    report();
     setQuery('');
     setOpen(false);
     onPick(node);
@@ -52,11 +68,15 @@ export function GraphSearch({ nodes, onPick }: { nodes: readonly GraphNode[]; on
         value={query}
         onChange={event => {
           setQuery(event.target.value);
+          if (event.target.value.trim()) typed.current = true;
           setActive(0);
           setOpen(true);
         }}
         onFocus={() => setOpen(true)}
-        onBlur={() => setOpen(false)}
+        onBlur={() => {
+          report();
+          setOpen(false);
+        }}
         onKeyDown={event => {
           if (event.key === 'ArrowDown') setActive(index => Math.min(results.length - 1, index + 1));
           else if (event.key === 'ArrowUp') setActive(index => Math.max(0, index - 1));

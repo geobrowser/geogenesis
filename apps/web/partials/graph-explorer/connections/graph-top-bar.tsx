@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { useGraphAnalytics } from '~/core/graph-explorer/graph-explorer-analytics';
 import { GRAPH_KIND_LABELS } from '~/core/graph-explorer/graph-kinds';
 import type { GraphShareResult } from '~/core/graph-explorer/graph-share';
 import type { GraphKindFilter } from '~/core/graph-explorer/select-graph';
@@ -36,6 +37,7 @@ export function GraphTopBar({
   share?: { native: boolean; onShare: () => Promise<GraphShareResult> } | null;
   close: { href: string; label: string } | null;
 }) {
+  const analytics = useGraphAnalytics();
   const chips: GraphKindFilter[] = ['all', ...kinds.filter(kind => kind !== 'all' && kind !== 'topic')];
   return (
     <div className="relative z-[2] flex shrink-0 items-center gap-3 border-b border-[#f0f0f0] bg-white px-4 py-3 md:gap-2 lg:flex-wrap">
@@ -95,6 +97,7 @@ export function GraphTopBar({
           href={close.href}
           aria-label={close.label}
           title={close.label}
+          onClick={() => analytics?.markExit('close')}
           className={cx(ROUND, !share && 'md:ml-auto')}
         >
           ×

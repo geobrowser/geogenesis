@@ -4,14 +4,16 @@ import * as React from 'react';
 
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { captureSafely } from '~/core/analytics-capture-safely';
 import type { GraphNode } from '~/core/graph-explorer/fetch-graph-neighbourhood';
+import { GraphAnalyticsProvider, startGraphExplorerSession } from '~/core/graph-explorer/graph-explorer-analytics';
 import type { GraphKind } from '~/core/graph-explorer/graph-kinds';
 import type { GraphSelection } from '~/core/graph-explorer/select-graph';
 import type { SelectedNode } from '~/core/graph-explorer/select-graph';
 import { SKELETON_SELECTION, isSkeletonNode } from '~/core/graph-explorer/skeleton-graph';
 
 import { ConnectionsCanvas, clearance, nodeScale, overlapShare, overlaps } from './connections-canvas';
-import { searchNodes } from './graph-search';
+import { GraphSearch, searchNodes } from './graph-search';
 import { GraphTopBar } from './graph-top-bar';
 
 const motion = vi.hoisted(() => ({ reduce: false }));
@@ -39,6 +41,7 @@ vi.mock('~/core/graph-explorer/layout-3d', async importOriginal => {
     },
   };
 });
+vi.mock('~/core/analytics-capture-safely', () => ({ captureSafely: vi.fn() }));
 vi.mock('framer-motion', () => ({ useReducedMotion: () => motion.reduce }));
 vi.mock('~/design-system/prefetch-link', () => ({
   PrefetchLink: ({ children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => <a {...props}>{children}</a>,
@@ -170,6 +173,30 @@ describe('ConnectionsCanvas', () => {
     fireEvent.pointerUp(window, { pointerId: 1, clientX: 160, clientY: 110 });
     fireEvent.click(target);
     expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('reports one rotate per centre for a long drag, and one zoom per centre for the buttons', () => {
+    const session = startGraphExplorerSession({ entityId: 'c', topicId: 't', spaceId: null, trailDepth: 0 });
+    session.opened('ready', { layout: 'desktop', trailDepth: 0 });
+    render(
+      <GraphAnalyticsProvider value={session}>
+        <Canvas />
+      </GraphAnalyticsProvider>
+    );
+    const target = screen.getByRole('button', { name: 'Isaac Herzog' });
+    fireEvent.pointerDown(target, { pointerId: 1, clientX: 100, clientY: 100 });
+    for (let x = 110; x < 600; x += 10) fireEvent.pointerMove(window, { pointerId: 1, clientX: x, clientY: 110 });
+    fireEvent.pointerUp(window, { pointerId: 1, clientX: 600, clientY: 110 });
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }));
+    const interactions = vi
+      .mocked(captureSafely)
+      .mock.calls.filter(([name]) => name === 'graph_explorer_interacted')
+      .map(([, props]) => [props?.interaction, props?.value]);
+    expect(interactions).toEqual([
+      ['rotate', undefined],
+      ['zoom', 'buttons'],
+    ]);
   });
 
   it('turns on its own when idle, but not under reduced motion', () => {
@@ -458,6 +485,21 @@ describe('GraphTopBar share', () => {
   it('has no share control without a topic to share in', () => {
     bar(null);
     expect(screen.queryByRole('button', { name: /copy|share/i })).toBeNull();
+  });
+});
+
+describe('GraphSearch', () => {
+  it('reports one search per focus that typed, with the result count only', () => {
+    const onSearched = vi.fn();
+    render(<GraphSearch nodes={[person]} onPick={vi.fn()} onSearched={onSearched} />);
+    const box = screen.getByRole('combobox', { name: 'Find on the map' });
+    fireEvent.focus(box);
+    fireEvent.change(box, { target: { value: 'Is' } });
+    fireEvent.change(box, { target: { value: 'Isa' } });
+    fireEvent.blur(box);
+    fireEvent.focus(box);
+    fireEvent.blur(box);
+    expect(onSearched.mock.calls).toEqual([[1]]);
   });
 });
 

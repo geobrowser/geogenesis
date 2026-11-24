@@ -6,6 +6,7 @@ import cx from 'classnames';
 import { useReducedMotion } from 'framer-motion';
 
 import type { GraphEdge, GraphNode } from '~/core/graph-explorer/fetch-graph-neighbourhood';
+import { useGraphAnalytics } from '~/core/graph-explorer/graph-explorer-analytics';
 import {
   DESKTOP_LAYOUT,
   PHONE_LAYOUT,
@@ -107,6 +108,11 @@ export function ConnectionsCanvas({
   children,
 }: ConnectionsCanvasProps) {
   const reduceMotion = useReducedMotion() ?? false;
+  const analytics = useGraphAnalytics();
+  const analyticsRef = React.useRef(analytics);
+  React.useEffect(() => {
+    analyticsRef.current = analytics;
+  }, [analytics]);
   const stageRef = React.useRef<HTMLDivElement>(null);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const elements = React.useRef(new Map<string, HTMLElement>());
@@ -577,6 +583,7 @@ export function ConnectionsCanvas({
           state.userZoom = true;
           state.distance = clampDistance((state.distance * before) / now);
         }
+        analyticsRef.current?.interacted({ interaction: 'zoom', value: 'gesture' });
         moved.current = true;
         active();
         return;
@@ -584,6 +591,7 @@ export function ConnectionsCanvas({
       if (Math.abs(event.clientX - origin[0]) + Math.abs(event.clientY - origin[1]) > DRAG_THRESHOLD_PX)
         moved.current = true;
       if (moved.current) {
+        analyticsRef.current?.interacted({ interaction: 'rotate' });
         state.vy = (event.clientX - previous[0]) * 0.0055;
         state.vp = (event.clientY - previous[1]) * 0.0045;
         state.yaw += state.vy;
@@ -605,6 +613,7 @@ export function ConnectionsCanvas({
       const state = engine.current;
       state.userZoom = true;
       state.distance = clampDistance(state.distance * Math.exp(event.deltaY * 0.0012));
+      analyticsRef.current?.interacted({ interaction: 'zoom', value: 'gesture' });
       active();
     };
     stage.addEventListener('pointerdown', down);
@@ -622,6 +631,7 @@ export function ConnectionsCanvas({
   }, []);
 
   const zoom = (factor: number | null) => {
+    analytics?.interacted({ interaction: 'zoom', value: 'buttons' });
     const state = engine.current;
     state.lastActive = performance.now();
     wake.current();
@@ -643,6 +653,7 @@ export function ConnectionsCanvas({
     const step = { ArrowLeft: [-0.02, 0], ArrowRight: [0.02, 0], ArrowUp: [0, -0.02], ArrowDown: [0, 0.02] }[event.key];
     if (!step) return;
     event.preventDefault();
+    analytics?.interacted({ interaction: 'rotate' });
     state.vy += step[0];
     state.vp += step[1];
     state.lastActive = performance.now();
