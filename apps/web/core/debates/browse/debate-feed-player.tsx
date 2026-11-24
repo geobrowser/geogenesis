@@ -489,7 +489,10 @@ function PairedDebateFeedPlayer({
     sound: SoundSource | null = mutedByDefault ? 'play' : null,
     analytics?: Record<string, unknown>
   ) => {
-    measurement.control(playing ? 'pause' : playbackEnded ? 'replay' : 'play', analytics);
+    const control = playing ? 'pause' : playbackEnded ? 'replay' : 'play';
+    // Only the full screen's transport names its input; every other press reports as it did.
+    if (analytics) measurement.control(control, analytics);
+    else measurement.control(control);
     if (playbackEnded) resetAnimationSeek();
     if (!playing) {
       // A tap outside a feed is a choice about that one debate, not the viewer saying they are here
