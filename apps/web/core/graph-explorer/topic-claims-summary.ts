@@ -7,7 +7,15 @@ import { type ClaimBand, agreePercent, claimBand } from './claim-band';
 import { type ClaimAbout, fetchClaimsAbout } from './claims-about';
 import type { GraphFilter } from './graph-filter';
 
-export type SummarisedClaim = { id: string; name: string; positive: number; negative: number; band: ClaimBand };
+export type SummarisedClaim = {
+  id: string;
+  name: string;
+  /** Where it is voted and counted. */
+  spaceId: string;
+  positive: number;
+  negative: number;
+  band: ClaimBand;
+};
 
 export type TopicClaimsSummary = {
   /** Claims about the topic with at least one response, most responses first. */
@@ -38,7 +46,7 @@ export function summariseTopicClaims(
   for (const claim of claims) {
     const counts = countsOf(claim);
     const band = counts ? claimBand(counts.positive, counts.negative) : null;
-    if (counts && band) summarised.push({ id: claim.id, name: claim.name, ...counts, band });
+    if (counts && band) summarised.push({ id: claim.id, name: claim.name, spaceId: claim.spaceId, ...counts, band });
   }
   summarised.sort((a, b) => b.positive + b.negative - (a.positive + a.negative) || a.name.localeCompare(b.name));
   const bands = { agreed: 0, contested: 0, rejected: 0 };

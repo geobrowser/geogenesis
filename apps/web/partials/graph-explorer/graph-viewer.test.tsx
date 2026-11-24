@@ -397,7 +397,7 @@ describe('GraphViewer', () => {
 
   it('says a cut-short topic summary is a lower bound', () => {
     topicSummary.data = {
-      claims: [{ id: 'c', name: 'A claim', positive: 3, negative: 0, band: 'agreed' }],
+      claims: [{ id: 'c', name: 'A claim', spaceId: 's', positive: 3, negative: 0, band: 'agreed' }],
       bands: { agreed: 1, contested: 0, rejected: 0 },
       truncated: true,
     };

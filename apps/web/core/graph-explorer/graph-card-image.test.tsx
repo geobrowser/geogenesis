@@ -76,10 +76,10 @@ const SHAPES: Record<string, GraphCardData> = {
     {
       summary: {
         claims: [
-          { id: 'a', name: 'a', positive: 5, negative: 0, band: 'agreed' },
-          { id: 'b', name: 'b', positive: 2, negative: 2, band: 'contested' },
-          { id: 'd', name: 'd', positive: 0, negative: 3, band: 'rejected' },
-          { id: 'e', name: 'e', positive: 1, negative: 0, band: 'agreed' },
+          { id: 'a', name: 'a', spaceId: 's', positive: 5, negative: 0, band: 'agreed' },
+          { id: 'b', name: 'b', spaceId: 's', positive: 2, negative: 2, band: 'contested' },
+          { id: 'd', name: 'd', spaceId: 's', positive: 0, negative: 3, band: 'rejected' },
+          { id: 'e', name: 'e', spaceId: 's', positive: 1, negative: 0, band: 'agreed' },
         ],
         bands: { agreed: 2, contested: 1, rejected: 1 },
         truncated: false,

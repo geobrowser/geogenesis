@@ -7,7 +7,8 @@ import * as React from 'react';
 import cx from 'classnames';
 import { Effect } from 'effect';
 
-import { CLAIM_RESPONSE_OBJECT_TYPE } from '~/core/claims/browse/claim-response-summary';
+import { ActionContextProvider } from '~/core/action-context-provider';
+import { CLAIM_RESPONSE_OBJECT_TYPE, useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
 import type { ClaimBand } from '~/core/graph-explorer/claim-band';
 import { CLAIM_BAND_LABELS } from '~/core/graph-explorer/claim-band';
 import type { GraphNode } from '~/core/graph-explorer/fetch-graph-neighbourhood';
@@ -24,19 +25,19 @@ import {
   mostLinked,
   shownAgreement,
   topClaimsInBand,
-  votesLabel,
 } from '~/core/graph-explorer/panel-sections';
 import type { GraphSelection } from '~/core/graph-explorer/select-graph';
-import { summaryPercent } from '~/core/graph-explorer/topic-claims-summary';
 import { useTopicClaimsSummary } from '~/core/graph-explorer/use-graph-explorer';
 import { getEntityResponseCounts } from '~/core/io/queries';
 import { entityResponseCountsQueryKey } from '~/core/responses/entity-response';
 
 import { Skeleton } from '~/design-system/skeleton';
 
+import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
+
 import { BAND_SWATCHES, nodeDateLabel, nodeTypeLabel } from './connections/node-card';
 import { typeNames } from './entity-panel';
-import { useClaimSpaceBatches } from './graph-claim-list';
+import { ClaimBatchRow, type ClaimBatchStatus, useClaimSpaceBatches } from './graph-claim-list';
 
 /** A claim the panel lists: read and counted in its own space. */
 export type PanelClaim = { id: string; name: string; spaceId: string; relation?: string };
@@ -59,15 +60,12 @@ function Row({
   title,
   sub,
   relation,
-  band,
   hidden = false,
   onClick,
 }: {
   title: string;
   sub?: string | null;
   relation?: string | null;
-  /** Claims only: their band swatch, grey below the threshold. */
-  band?: ClaimBand | null;
   hidden?: boolean;
   onClick: () => void;
 }) {
@@ -79,15 +77,6 @@ function Row({
         onClick={onClick}
         className="flex w-full items-start gap-2 rounded-md px-1 py-1.5 text-left transition-colors hover:bg-grey-01 focus-visible:bg-grey-01"
       >
-        {band !== undefined && (
-          <i
-            aria-hidden
-            className={cx(
-              'mt-[5px] block h-[10px] w-[10px] shrink-0 rounded-[3px]',
-              band ? BAND_SWATCHES[band] : 'bg-grey-02'
-            )}
-          />
-        )}
         <span className="flex min-w-0 flex-col">
           {relation && <span className="truncate text-footnote text-grey-04">{relation}</span>}
           <span className="text-metadataMedium wrap-break-word text-text">{title}</span>
@@ -121,8 +110,6 @@ export function TopicOverview({
   const agreed = topClaimsInBand(claims, 'agreed');
   const people = mostLinked(selection, topicId);
   const news = latestNews(nodes);
-  const claimLine = (claim: (typeof claims)[number]) =>
-    `${summaryPercent(claim)}% agree · ${votesLabel(claim.positive + claim.negative)}`;
 
   return (
     <>
@@ -135,13 +122,13 @@ export function TopicOverview({
       {fights.length > 0 && (
         <Section title="The biggest fights">
           <ul className="flex flex-col">
-            {fights.map(claim => (
-              <Row
+            {fights.map((claim, index) => (
+              <ClaimRow
                 key={claim.id}
-                title={claim.name}
-                sub={claimLine(claim)}
-                band={claim.band}
-                onClick={() => onOpen(claim.id, claim.name)}
+                claim={claim}
+                listId="graph_explorer_fights"
+                position={index + 1}
+                onOpen={onOpen}
               />
             ))}
           </ul>
@@ -150,13 +137,13 @@ export function TopicOverview({
       {agreed.length > 0 && (
         <Section title="Widely agreed, most votes">
           <ul className="flex flex-col">
-            {agreed.map(claim => (
-              <Row
+            {agreed.map((claim, index) => (
+              <ClaimRow
                 key={claim.id}
-                title={claim.name}
-                sub={claimLine(claim)}
-                band={claim.band}
-                onClick={() => onOpen(claim.id, claim.name)}
+                claim={claim}
+                listId="graph_explorer_agreed"
+                position={index + 1}
+                onOpen={onOpen}
               />
             ))}
           </ul>
@@ -253,7 +240,86 @@ function useClaimCounts(claims: readonly PanelClaim[]) {
   });
   const counts = claims.map((_, index) => results[index]?.data as Counts | undefined);
   const settled = claims.every(claim => status[claim.spaceId] === 'ready' || status[claim.spaceId] === 'failed');
-  return { counts, settled, batches };
+  return { counts, settled, status, batches };
+}
+
+/**
+ * Most votes first, ordered once the counts are in and again only when the claims change, so a
+ * row never moves under the viewer's vote.
+ */
+function useVoteOrder(claims: readonly PanelClaim[], counts: ReadonlyArray<Counts | undefined>, settled: boolean) {
+  const [order, setOrder] = React.useState<{ key: string; ids: string[] } | null>(null);
+  const key = claims.map(claim => claim.id).join(',');
+  const total = (index: number) => (counts[index] ? counts[index].positive + counts[index].negative : 0);
+  const ranked = settled
+    ? claims.map((claim, index) => ({ id: claim.id, total: total(index) })).sort((a, b) => b.total - a.total)
+    : null;
+  const rankedIds = ranked?.map(entry => entry.id).join(',');
+  React.useEffect(() => {
+    if (rankedIds && order?.key !== key) setOrder({ key, ids: rankedIds.split(',') });
+  }, [key, order?.key, rankedIds]);
+  if (order?.key !== key) return claims;
+  const byId = new Map(claims.map(claim => [claim.id, claim]));
+  return order.ids.flatMap(id => byId.get(id) ?? []);
+}
+
+/**
+ * A claim with its vote buttons beside it: the title re-centres the map, the buttons only vote.
+ * Its line reads the cache the vote box and map node read, so a vote shows in all three.
+ */
+function ClaimRow({
+  claim,
+  listId,
+  position,
+  batch,
+  onOpen,
+}: {
+  claim: PanelClaim;
+  listId: string;
+  position: number;
+  /** The claim space's batch, when the list loads one; without it the row reads its own counts. */
+  batch?: ClaimBatchStatus;
+  onOpen: Open;
+}) {
+  const content = (
+    <ActionContextProvider value={{ list_id: listId, item_position: position }}>
+      <ClaimRowContent claim={claim} onOpen={onOpen} />
+    </ActionContextProvider>
+  );
+  return <li>{batch ? <ClaimBatchRow status={batch}>{content}</ClaimBatchRow> : content}</li>;
+}
+
+function ClaimRowContent({ claim, onOpen }: { claim: PanelClaim; onOpen: Open }) {
+  const summary = useClaimResponseSummary(claim.id, claim.spaceId, 'stance');
+  const counts = summary.hasCounts ? { positive: summary.positive, negative: summary.negative } : undefined;
+  const band = shownAgreement(counts).band;
+  return (
+    <div className="flex flex-col gap-1 rounded-md px-1 py-1.5 transition-colors hover:bg-grey-01">
+      <button
+        type="button"
+        onClick={() => onOpen(claim.id, claim.name)}
+        className="flex items-start gap-2 text-left focus-visible:underline"
+      >
+        <i
+          aria-hidden
+          className={cx(
+            'mt-[5px] block h-[10px] w-[10px] shrink-0 rounded-[3px]',
+            band ? BAND_SWATCHES[band] : 'bg-grey-02'
+          )}
+        />
+        <span className="flex min-w-0 flex-col">
+          {claim.relation && <span className="truncate text-footnote text-grey-04">{claim.relation}</span>}
+          <span className="text-metadataMedium wrap-break-word text-text">{claim.name}</span>
+        </span>
+      </button>
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 pl-[18px]">
+        <span className="text-footnote text-grey-04 tabular-nums">
+          {summary.isLoading && !counts ? '…' : (agreementLine(counts) ?? 'Votes unavailable')}
+        </span>
+        <EntityVoteButtons entityId={claim.id} spaceId={claim.spaceId} responseKind="stance" hideEmptyClaimShare />
+      </div>
+    </div>
+  );
 }
 
 /** Claims around the centre, most votes first once counted, with their bands in one bar. */
@@ -273,11 +339,8 @@ function ClaimsGroup({
   onOpen: Open;
 }) {
   const [all, setAll] = React.useState(false);
-  const { counts, settled, batches } = useClaimCounts(claims);
-  const rows = claims.map((claim, index) => ({ claim, counts: counts[index] }));
-  // Sorted once every count is in, so rows don't jump as each space answers.
-  const total = (entry: (typeof rows)[number]) => (entry.counts ? entry.counts.positive + entry.counts.negative : 0);
-  if (settled) rows.sort((a, b) => total(b) - total(a));
+  const { counts, settled, status, batches } = useClaimCounts(claims);
+  const rows = useVoteOrder(claims, counts, settled);
   const tally = bandTally(counts);
 
   return (
@@ -289,17 +352,18 @@ function ClaimsGroup({
         <>
           {tally.banded > 1 && <BandBar bands={tally.bands} banded={tally.banded} />}
           <ul className="flex flex-col">
-            {rows.map(({ claim, counts: claimCounts }, index) => (
-              <Row
-                key={claim.id}
-                hidden={!all && index >= GROUP_ROWS}
-                relation={claim.relation}
-                title={claim.name}
-                sub={agreementLine(claimCounts)}
-                band={shownAgreement(claimCounts).band}
-                onClick={() => onOpen(claim.id, claim.name)}
-              />
-            ))}
+            {rows.map((claim, index) =>
+              !all && index >= GROUP_ROWS ? null : (
+                <ClaimRow
+                  key={claim.id}
+                  claim={claim}
+                  listId="graph_explorer_claims"
+                  position={index + 1}
+                  batch={status[claim.spaceId] ?? 'pending'}
+                  onOpen={onOpen}
+                />
+              )
+            )}
           </ul>
           {!all && claims.length > GROUP_ROWS && <ShowAll total={claims.length} onClick={() => setAll(true)} />}
           {(all || claims.length <= GROUP_ROWS) && onLoadMore && (

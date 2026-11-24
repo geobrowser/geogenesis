@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { CLAIM_RESPONSE_OBJECT_TYPE } from '~/core/claims/browse/claim-response-summary';
+import { entityResponseCountsQueryKey } from '~/core/responses/entity-response';
 import { ARTICLE_TYPE_ID } from '~/core/topics/ontology';
 
 import type { GraphEdge, GraphNode } from './fetch-graph-neighbourhood';
@@ -15,7 +17,7 @@ import {
 } from './panel-sections';
 import type { GraphSelection } from './select-graph';
 import type { Spoke } from './spokes';
-import type { SummarisedClaim } from './topic-claims-summary';
+import { type SummarisedClaim, claimCountsKey } from './topic-claims-summary';
 
 const id = (n: number) => String(n).padStart(32, '0');
 const node = (n: number, kind: GraphKind, extra: Partial<GraphNode> = {}): GraphNode => ({
@@ -44,6 +46,7 @@ const edge = (from: number, to: number): GraphEdge => ({
 const claim = (n: number, positive: number, negative: number, band: SummarisedClaim['band']): SummarisedClaim => ({
   id: id(n),
   name: `Claim ${n}`,
+  spaceId: 's',
   positive,
   negative,
   band,
@@ -139,5 +142,15 @@ describe('grouping by kind', () => {
       'other',
     ]);
     expect(groupByKind([], nodes)).toEqual([]);
+  });
+});
+
+describe('one vote, every view', () => {
+  it('has the topic summary read the cache the rows, vote box and map nodes read', () => {
+    const claim = { id: id(7), name: 'A claim', spaceId: 'space' };
+    // Rows and map nodes read it through useClaimResponseSummary(id, spaceId, 'stance').
+    expect(claimCountsKey(claim)).toEqual(
+      entityResponseCountsQueryKey(claim.id, claim.spaceId, CLAIM_RESPONSE_OBJECT_TYPE, 'stance')
+    );
   });
 });

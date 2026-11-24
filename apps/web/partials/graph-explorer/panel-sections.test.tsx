@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 
 import * as React from 'react';
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { NEWS_STORY_TYPE_ID } from '~/core/constants';
 import type { GraphNode } from '~/core/graph-explorer/fetch-graph-neighbourhood';
@@ -17,8 +17,58 @@ import { NeighbourGroups, type PanelClaim, TopicOverview } from './panel-section
 const mocks = vi.hoisted(() => ({
   summary: { isLoading: false, isError: false, data: undefined as unknown },
   batches: [] as string[],
+  votes: [] as Array<{ list_id?: string; item_position?: number; page_type?: string }>,
 }));
 vi.mock('~/core/graph-explorer/use-graph-explorer', () => ({ useTopicClaimsSummary: () => mocks.summary }));
+// The row's line reads the shared count cache, as the real hook does once its batch has answered.
+vi.mock('~/core/claims/browse/claim-response-summary', async () => {
+  const { useQuery } = await vi.importActual<typeof import('@tanstack/react-query')>('@tanstack/react-query');
+  const { entityResponseCountsQueryKey: key } = await vi.importActual<
+    typeof import('~/core/responses/entity-response')
+  >('~/core/responses/entity-response');
+  return {
+    CLAIM_RESPONSE_OBJECT_TYPE: 0,
+    useClaimResponseSummary: (entityId: string, spaceId: string) => {
+      const { data } = useQuery<{ positive: number; negative: number }>({
+        queryKey: key(entityId, spaceId, 0, 'stance'),
+        enabled: false,
+      });
+      return { hasCounts: !!data, isLoading: false, positive: data?.positive ?? 0, negative: data?.negative ?? 0 };
+    },
+  };
+});
+// A vote: records its scope, then the read-back lands in the count cache.
+vi.mock('~/partials/entity-page/entity-vote-buttons', async () => {
+  const { useQueryClient } = await vi.importActual<typeof import('@tanstack/react-query')>('@tanstack/react-query');
+  const { useActionContext } = await vi.importActual<typeof import('~/core/action-context-provider')>(
+    '~/core/action-context-provider'
+  );
+  const { entityResponseCountsQueryKey: key } = await vi.importActual<
+    typeof import('~/core/responses/entity-response')
+  >('~/core/responses/entity-response');
+  return {
+    EntityVoteButtons: ({ entityId, spaceId }: { entityId: string; spaceId: string }) => {
+      const client = useQueryClient();
+      const getContext = useActionContext('entity_vote_buttons', 'claim', entityId);
+      return (
+        <button
+          type="button"
+          aria-label="Agree"
+          onClick={() => {
+            mocks.votes.push(getContext());
+            client.setQueryData(
+              key(entityId, spaceId, 0, 'stance'),
+              (old?: { positive: number; negative: number }) => ({
+                positive: (old?.positive ?? 0) + 1,
+                negative: old?.negative ?? 0,
+              })
+            );
+          }}
+        />
+      );
+    },
+  };
+});
 vi.mock('~/core/responses/use-claim-response-summaries', () => ({
   ClaimResponseBatchBoundary: ({ children }: { children: React.ReactNode }) => children,
   useClaimResponseSummaryBatch: ({ spaceId }: { spaceId: string }) => {
@@ -56,16 +106,27 @@ const idle = {
   fetchNextPage: vi.fn(),
 };
 
-let client: QueryClient;
+let client = new QueryClient();
 function wrap(ui: React.ReactElement) {
-  client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
 }
+const seed = (n: number, spaceId: string, positive: number, negative: number) =>
+  client.setQueryData(entityResponseCountsQueryKey(id(n), spaceId, 0, 'stance'), { positive, negative });
+const rows = (region: HTMLElement) =>
+  within(region)
+    .getAllByRole('listitem')
+    .map(item => item.textContent);
+
+beforeEach(() => {
+  client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  window.history.replaceState({}, '', `/explore/graph/${id(1)}?topic=${id(1)}`);
+});
 
 afterEach(() => {
   cleanup();
   mocks.summary = { isLoading: false, isError: false, data: undefined };
   mocks.batches.length = 0;
+  mocks.votes.length = 0;
 });
 
 describe('TopicOverview', () => {
@@ -85,31 +146,37 @@ describe('TopicOverview', () => {
     return onOpen;
   };
 
-  it('lists fights and settled claims with 3+ votes, re-centring on click', () => {
+  it('lists fights and settled claims with 3+ votes, voting in place and re-centring on the title', async () => {
     mocks.summary.data = {
       claims: [
-        { id: id(2), name: 'A fight', positive: 30, negative: 25, band: 'contested' },
-        { id: id(3), name: 'Settled', positive: 9, negative: 1, band: 'agreed' },
-        { id: id(4), name: 'Too few', positive: 1, negative: 1, band: 'contested' },
+        { id: id(2), name: 'A fight', spaceId: 's', positive: 30, negative: 25, band: 'contested' },
+        { id: id(3), name: 'Settled', spaceId: 's', positive: 9, negative: 1, band: 'agreed' },
+        { id: id(4), name: 'Too few', spaceId: 's', positive: 1, negative: 1, band: 'contested' },
       ],
       bands: { agreed: 1, contested: 2, rejected: 0 },
       truncated: false,
     };
+    seed(2, 's', 30, 25);
+    seed(3, 's', 9, 1);
     const onOpen = overview();
     const fights = screen.getByRole('region', { name: 'The biggest fights' });
-    expect(
-      within(fights)
-        .getAllByRole('button')
-        .map(button => button.textContent)
-    ).toEqual(['A fight55% agree · 55 votes']);
+    expect(rows(fights)).toEqual(['A fight55% agree · 55 votes']);
     expect(within(screen.getByRole('region', { name: 'Widely agreed, most votes' })).getByText('Settled')).toBeTruthy();
-    fireEvent.click(within(fights).getByRole('button'));
+    fireEvent.click(within(fights).getByRole('button', { name: 'A fight' }));
     expect(onOpen).toHaveBeenCalledWith(id(2), 'A fight');
+
+    // Voting from the list: no re-centre, its own list scope, and the row updates.
+    fireEvent.click(within(fights).getByRole('button', { name: 'Agree' }));
+    expect(onOpen).toHaveBeenCalledTimes(1);
+    expect(mocks.votes).toEqual([
+      expect.objectContaining({ list_id: 'graph_explorer_fights', item_position: 1, page_type: 'graph_explorer' }),
+    ]);
+    await waitFor(() => expect(rows(fights)).toEqual(['A fight55% agree · 56 votes']));
   });
 
   it('says once that nothing has enough votes, and shows nothing for a topic without responses', () => {
     mocks.summary.data = {
-      claims: [{ id: id(4), name: 'Too few', positive: 1, negative: 1, band: 'contested' }],
+      claims: [{ id: id(4), name: 'Too few', spaceId: 's', positive: 1, negative: 1, band: 'contested' }],
       bands: { agreed: 0, contested: 1, rejected: 0 },
       truncated: false,
     };
@@ -185,29 +252,33 @@ describe('NeighbourGroups', () => {
     expect(within(region).getAllByRole('button')).toHaveLength(8);
   });
 
-  it('sorts claims by votes in their own spaces, with one band bar, one batch per space', async () => {
+  it('sorts claims by votes in their own spaces, with a band bar, one batch per space and votes in place', async () => {
     const claims: PanelClaim[] = [
       { id: id(1), name: 'Few', spaceId: 'a' },
       { id: id(2), name: 'Many', spaceId: 'b', relation: 'Supports' },
       { id: id(3), name: 'Some', spaceId: 'a' },
     ];
-    groups({ claims });
-    const counts = (n: number, spaceId: string, positive: number, negative: number) =>
-      React.act(() =>
-        client.setQueryData(entityResponseCountsQueryKey(id(n), spaceId, 0, 'stance'), { positive, negative })
-      );
-    counts(1, 'a', 1, 0);
-    counts(2, 'b', 40, 2);
-    counts(3, 'a', 2, 3);
+    seed(1, 'a', 1, 0);
+    seed(2, 'b', 40, 2);
+    seed(3, 'a', 2, 3);
+    const onOpen = vi.fn();
+    groups({ claims, onOpen });
     const region = screen.getByRole('region', { name: 'Claims · 3' });
-    await waitFor(() => expect(region.textContent).toContain('42 votes'));
-    expect(
-      within(region)
-        .getAllByRole('button')
-        .map(button => button.textContent)
-    ).toEqual(['SupportsMany95% agree · 42 votes', 'Some40% agree · 5 votes', 'Few1 vote']);
+    await waitFor(() =>
+      expect(rows(region)).toEqual(['SupportsMany95% agree · 42 votes', 'Some40% agree · 5 votes', 'Few1 vote'])
+    );
     expect(region.textContent).toContain('Of 2 with 3+ votes: 1 widely agreed, 1 contested');
     expect(new Set(mocks.batches)).toEqual(new Set(['a', 'b']));
+
+    // A vote from the third row: scoped to the list at its position, updates the row, and stays put.
+    fireEvent.click(within(within(region).getAllByRole('listitem')[2]).getByRole('button', { name: 'Agree' }));
+    expect(onOpen).not.toHaveBeenCalled();
+    expect(mocks.votes).toEqual([
+      expect.objectContaining({ list_id: 'graph_explorer_claims', item_position: 3, page_type: 'graph_explorer' }),
+    ]);
+    await waitFor(() => expect(rows(region)[2]).toBe('Few2 votes'));
+    fireEvent.click(within(region).getByRole('button', { name: 'Few' }));
+    expect(onOpen).toHaveBeenCalledWith(id(1), 'Few');
   });
 
   it('keeps the honest empty states', () => {
