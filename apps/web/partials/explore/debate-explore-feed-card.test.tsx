@@ -1123,8 +1123,8 @@ describe('DebateExploreFeedCard', () => {
       expect(surface(container)).toHaveAttribute('data-debate-card-surface', 'app');
       expect(surface(container)).toHaveClass(
         'max-w-[480px]',
-        '[--debate-card-chrome:228px]',
-        'md:[--debate-card-chrome:200px]'
+        '[--debate-card-chrome:240px]',
+        'md:[--debate-card-chrome:212px]'
       );
       expect(surface(container).style.getPropertyValue('--debate-card-media-width')).toBe(
         'clamp(280px, calc((100svh - 76px - var(--debate-card-chrome)) * 480 / 578), 100%)'
