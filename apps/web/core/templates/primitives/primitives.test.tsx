@@ -22,6 +22,7 @@ import {
   SourceChipList,
   SplitBars,
   TemplateBreadcrumb,
+  TemplateTitleRow,
   VoteBox,
 } from './index';
 
@@ -286,6 +287,36 @@ describe('TemplateBreadcrumb', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Topic root' }));
     expect(onRoot).toHaveBeenCalledTimes(1);
     expect(screen.getByText('Current claim')).toHaveAttribute('aria-current', 'page');
+  });
+});
+
+describe('TemplateTitleRow', () => {
+  it('stacks the actions above the title below 560px and puts them beside it from 560px', () => {
+    render(
+      <TemplateTitleRow actions={<button type="button">Menu</button>}>
+        <h1>A sentence-long event title</h1>
+      </TemplateTitleRow>
+    );
+
+    const actions = screen.getByRole('button', { name: 'Menu' }).parentElement!;
+    const row = actions.parentElement!;
+    // The actions come after the title in the DOM (reading order) and column-reverse draws them on top.
+    expect(row.lastElementChild).toBe(actions);
+    expect(row.firstElementChild).toBe(screen.getByRole('heading', { name: 'A sentence-long event title' }));
+    expect(row).toHaveClass('flex-col-reverse', '@[560px]:flex-row', '@[560px]:justify-between');
+    expect(actions).toHaveClass('shrink-0', 'self-end', '@[560px]:self-auto', '@[560px]:pt-1.5');
+  });
+
+  it('takes a different top offset for the actions', () => {
+    render(
+      <TemplateTitleRow actions={<button type="button">Menu</button>} actionsClassName="@[560px]:pt-1">
+        <h1>Show</h1>
+      </TemplateTitleRow>
+    );
+
+    const actions = screen.getByRole('button', { name: 'Menu' }).parentElement!;
+    expect(actions).toHaveClass('@[560px]:pt-1');
+    expect(actions).not.toHaveClass('@[560px]:pt-1.5');
   });
 });
 

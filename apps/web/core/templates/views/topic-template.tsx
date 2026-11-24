@@ -21,6 +21,7 @@ import {
   TEMPLATE_CARD_SURFACE,
   TemplateBadge,
   TemplateShell,
+  TemplateTitleRow,
 } from '../primitives';
 
 export interface TopicTemplateProps {
@@ -122,17 +123,22 @@ export function TopicTemplate({
         subtopicsNav
       ) : (
         <header className="flex flex-col gap-3.5">
-          {/* On a phone the actions (following count, Follow, history, menu) sit above the title on a
-              row of their own; beside a title they run past the screen edge. */}
-          <div className="flex flex-col-reverse gap-2 @[560px]:flex-row @[560px]:items-start @[560px]:justify-between @[560px]:gap-4">
+          <TemplateTitleRow
+            actions={
+              <>
+                <EntityContextTogglePill />
+                {headerActions ?? (
+                  <EntityOverflowMenu
+                    target={{ id: model.id, kind: 'Topic', title: model.title }}
+                    isPageRoot
+                    size="md"
+                  />
+                )}
+              </>
+            }
+          >
             <h1 className="m-0 text-entityTitle text-pretty text-text">{model.title}</h1>
-            <div className="flex shrink-0 items-center gap-2 self-end @[560px]:self-auto @[560px]:pt-1.5">
-              <EntityContextTogglePill />
-              {headerActions ?? (
-                <EntityOverflowMenu target={{ id: model.id, kind: 'Topic', title: model.title }} isPageRoot size="md" />
-              )}
-            </div>
-          </div>
+          </TemplateTitleRow>
 
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
             <TemplateBadge tone="neutral">Topic</TemplateBadge>

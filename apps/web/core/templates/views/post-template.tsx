@@ -20,6 +20,7 @@ import {
   TEMPLATE_CARD_SURFACE,
   TemplateBadge,
   TemplateShell,
+  TemplateTitleRow,
 } from '../primitives';
 
 export interface PostTemplateProps {
@@ -97,17 +98,18 @@ export function PostTemplate({
       className={className}
     >
       <header className="flex flex-col gap-3.5">
-        {/* On a phone the actions sit above the title instead of beside it, or they squeeze the title
-            into a column a few words wide (same as the Event header). */}
-        <div className="flex flex-col-reverse gap-2 @[560px]:flex-row @[560px]:items-start @[560px]:justify-between @[560px]:gap-4">
+        <TemplateTitleRow
+          actions={
+            <>
+              <EntityContextTogglePill />
+              {headerActions ?? (
+                <EntityOverflowMenu target={{ id: model.id, kind: 'Post', title: postTitle }} isPageRoot size="md" />
+              )}
+            </>
+          }
+        >
           <h1 className="m-0 text-entityTitle text-pretty text-text">{postTitle}</h1>
-          <div className="flex shrink-0 items-center gap-2 self-end @[560px]:self-auto @[560px]:pt-1.5">
-            <EntityContextTogglePill />
-            {headerActions ?? (
-              <EntityOverflowMenu target={{ id: model.id, kind: 'Post', title: postTitle }} isPageRoot size="md" />
-            )}
-          </div>
-        </div>
+        </TemplateTitleRow>
         <div className="flex flex-wrap items-center gap-2">
           <TemplateBadge tone="post">Post</TemplateBadge>
           <TemplateBadge tone="neutral">{model.platform}</TemplateBadge>
