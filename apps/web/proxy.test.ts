@@ -242,6 +242,39 @@ describe('short share links (GEO-3485)', () => {
   it('only routes /debate through the proxy when it carries a short code', () => {
     expect(config.matcher).toContainEqual({ source: '/debate/:path*', has: [{ type: 'query', key: 'si' }] });
   });
+
+  it('redirects a short graph link to its tagged landing, keeping topic and space', async () => {
+    const response = await proxy(
+      request(
+        shared(
+          `https://www.geobrowser.io/explore/graph/${VALID_ENTITY}?topic=${VALID_SPACE}&space=${VALID_SPACE}`,
+          'graph',
+          VALID_ENTITY,
+          'copy_link',
+          SHARE_ID
+        ),
+        { headers: NAVIGATION }
+      )
+    );
+
+    expect(response.status).toBe(307);
+    const landing = new URL(response.headers.get('location')!);
+    expect(landing.pathname).toBe(`/explore/graph/${VALID_ENTITY}`);
+    expect(landing.searchParams.get('topic')).toBe(VALID_SPACE);
+    expect(landing.searchParams.has('si')).toBe(false);
+    expect(landing.searchParams.get('utm_content')).toBe(`v1:graph:${VALID_ENTITY}:${SHARE_ID}`);
+  });
+
+  it('opens a graph link as it is when its code does not parse', async () => {
+    const response = await proxy(request(`/explore/graph/${VALID_ENTITY}?si=nonsense`, { headers: NAVIGATION }));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('location')).toBeNull();
+  });
+
+  it('only routes /explore/graph through the proxy when it carries a short code', () => {
+    expect(config.matcher).toContainEqual({ source: '/explore/graph/:path*', has: [{ type: 'query', key: 'si' }] });
+  });
 });
 
 describe('old debate URLs open the debates app (GEO-3695)', () => {

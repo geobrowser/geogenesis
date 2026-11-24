@@ -36,11 +36,20 @@ vi.mock('./graph-claim-row', async () => {
   const { useClaimResponseBatchState } = await vi.importActual<
     typeof import('~/core/responses/use-claim-response-summaries')
   >('~/core/responses/use-claim-response-summaries');
+  const { useActionContext } = await vi.importActual<typeof import('~/core/action-context-provider')>(
+    '~/core/action-context-provider'
+  );
   return {
     GraphClaimRow: ({ claim }: { claim: { id: string; name: string } }) => {
       const batch = useClaimResponseBatchState();
+      const vote = useActionContext('entity_vote_buttons', 'claim', claim.id)();
       return (
-        <li data-testid="row" data-managed={String(batch.managed)} data-ready={String(batch.managed && batch.ready)}>
+        <li
+          data-testid="row"
+          data-managed={String(batch.managed)}
+          data-ready={String(batch.managed && batch.ready)}
+          data-vote={`${vote.list_id}#${vote.item_position}@${vote.page_type}`}
+        >
           {claim.name}
         </li>
       );
@@ -70,6 +79,17 @@ describe('GraphClaimList', () => {
       'Claim 2',
       'Claim 3',
       'Claim 4',
+    ]);
+  });
+
+  it('scopes each vote to the explorer’s claim list, numbered across pages', () => {
+    window.history.replaceState({}, '', `/explore/graph/${A}?topic=${B}`);
+    render(<GraphClaimList pages={[[claim(1, A), claim(2, B)], [claim(3, A)]]} />);
+
+    expect(screen.getAllByTestId('row').map(row => row.dataset.vote)).toEqual([
+      'graph_explorer_claims#1@graph_explorer',
+      'graph_explorer_claims#2@graph_explorer',
+      'graph_explorer_claims#3@graph_explorer',
     ]);
   });
 

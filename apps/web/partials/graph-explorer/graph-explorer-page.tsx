@@ -7,6 +7,7 @@ import * as React from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 
 import { parseGraphFilterOverrides } from '~/core/graph-explorer/graph-filter';
+import { stripLandingShareTags } from '~/core/graph-explorer/graph-share';
 import { historyFromUrl } from '~/core/graph-explorer/history';
 import { entitySpaceId, namedSpaceIds } from '~/core/graph-explorer/spokes';
 import { useTopicGraphScope } from '~/core/graph-explorer/use-graph-explorer';
@@ -41,6 +42,8 @@ export function GraphExplorerPage({ entityId: routeEntityId }: { entityId: strin
   const overrides = React.useMemo(() => parseGraphFilterOverrides(new URLSearchParams(searchKey)), [searchKey]);
   // Everything below reads client stores (entity store, viewer's spaces), so it renders after hydration.
   const hydrated = useHydrated();
+  // Once per landing: a re-share from the URL bar must not credit whoever shared this link.
+  React.useEffect(() => stripLandingShareTags(), []);
 
   // Open to anyone with a link; the flag only hides the entry points. Only the global mode is unbuilt.
   if (topicId === null) return <NotAvailable />;

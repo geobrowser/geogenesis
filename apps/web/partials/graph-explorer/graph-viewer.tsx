@@ -2,10 +2,12 @@
 
 import * as React from 'react';
 
+import { useActionContext } from '~/core/action-context-provider';
 import { centreTextInSpace } from '~/core/graph-explorer/centre-text';
 import { nodeClaimSpaceId } from '~/core/graph-explorer/claims-about';
 import { type GraphNode, hop1AsGraphHop } from '~/core/graph-explorer/fetch-graph-neighbourhood';
 import { type GraphFilterOverrides, type GraphScope, resolveGraphFilter } from '~/core/graph-explorer/graph-filter';
+import { shareGraph } from '~/core/graph-explorer/graph-share';
 import { type GraphHistory, goBack, recentre } from '~/core/graph-explorer/history';
 import { DESKTOP_GRAPH_CAPS, type GraphKindFilter, PHONE_GRAPH_CAPS } from '~/core/graph-explorer/select-graph';
 import { SKELETON_SELECTION } from '~/core/graph-explorer/skeleton-graph';
@@ -66,6 +68,20 @@ export function GraphViewer({
   const claims = useClaimsAbout(centreId, filter, scope?.topicSpaceId ?? null);
   const claimPages = React.useMemo(() => claims.data?.pages.map(page => page.claims) ?? [], [claims.data]);
   const prefetch = usePrefetchHop1(filter);
+  const getShareContext = useActionContext('share_dialog', 'graph', centreId);
+  const share = React.useMemo(
+    () =>
+      hubId
+        ? {
+            native: phone,
+            onShare: () =>
+              shareGraph({ entityId: centreId, topicId: hubId, spaceId: topicSpaceId }, getShareContext(), {
+                nativeShare: phone,
+              }),
+          }
+        : null,
+    [centreId, getShareContext, hubId, phone, topicSpaceId]
+  );
 
   // Hop 1 once it answers for this centre: the panel, its list and the map read the same data.
   const hop1 = neighbourhood.isSwitching ? null : (neighbourhood.hop1.data ?? null);
@@ -118,6 +134,7 @@ export function GraphViewer({
       kinds={neighbourhood.kinds}
       kindFilter={kindFilter}
       onKindFilter={setKindFilter}
+      share={share}
       close={close}
     />
   );

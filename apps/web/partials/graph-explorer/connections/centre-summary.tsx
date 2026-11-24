@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { ActionContextProvider } from '~/core/action-context-provider';
 import { CLAIM_BAND_LABELS, type ClaimBand } from '~/core/graph-explorer/claim-band';
 import type { GraphNode } from '~/core/graph-explorer/fetch-graph-neighbourhood';
 import type { GraphFilter } from '~/core/graph-explorer/graph-filter';
@@ -118,7 +119,9 @@ export function TopicClaimsSummary({
 export function ClaimActions({ claimId, spaceId }: { claimId: string; spaceId: string }) {
   return (
     <section aria-label="Respond" className="flex flex-col gap-3 rounded-xl bg-grey-01 p-3">
-      <EntityVoteButtons entityId={claimId} spaceId={spaceId} responseKind="stance" hideEmptyClaimShare />
+      <ActionContextProvider value={{ list_id: 'graph_explorer_centre' }}>
+        <EntityVoteButtons entityId={claimId} spaceId={spaceId} responseKind="stance" hideEmptyClaimShare />
+      </ActionContextProvider>
       <Link
         href={NavUtils.toEntity(spaceId, claimId)}
         className="self-start text-metadataMedium text-text underline-offset-2 hover:underline"

@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { ActionContextProvider } from '~/core/action-context-provider';
 import type { ClaimAbout } from '~/core/graph-explorer/claims-about';
 import {
   ClaimResponseBatchBoundary,
@@ -18,20 +19,26 @@ export function GraphClaimList({ pages }: { pages: ClaimAbout[][] }) {
   return (
     <ul className="flex flex-col gap-2">
       {pages.map((claims, index) => (
-        <ClaimPage key={index} claims={claims} />
+        <ClaimPage
+          key={index}
+          claims={claims}
+          offset={pages.slice(0, index).reduce((total, page) => total + page.length, 0)}
+        />
       ))}
     </ul>
   );
 }
 
-function ClaimPage({ claims }: { claims: ClaimAbout[] }) {
+function ClaimPage({ claims, offset }: { claims: ClaimAbout[]; offset: number }) {
   const { status, batches } = useClaimSpaceBatches(claims);
   return (
     <>
       {batches}
-      {claims.map(claim => (
+      {claims.map((claim, index) => (
         <ClaimBatchRow key={claim.id} status={status[claim.spaceId] ?? 'pending'}>
-          <GraphClaimRow claim={claim} />
+          <ActionContextProvider value={{ list_id: 'graph_explorer_claims', item_position: offset + index + 1 }}>
+            <GraphClaimRow claim={claim} />
+          </ActionContextProvider>
         </ClaimBatchRow>
       ))}
     </>

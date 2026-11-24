@@ -5,6 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { GRAPH_KIND_LABELS } from '~/core/graph-explorer/graph-kinds';
+import type { GraphShareResult } from '~/core/graph-explorer/graph-share';
 import type { GraphKindFilter } from '~/core/graph-explorer/select-graph';
 
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
@@ -12,7 +13,7 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 const ROUND =
   'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#dbdbdb] text-[16px] text-text hover:border-text';
 
-/** The design's top bar: Back, where you are, in-map search, kind chips, close. */
+/** The design's top bar: Back, where you are, in-map search, kind chips, share, close. */
 export function GraphTopBar({
   back,
   trail,
@@ -20,6 +21,7 @@ export function GraphTopBar({
   kinds,
   kindFilter,
   onKindFilter,
+  share = null,
   close,
 }: {
   back: { label: string; onClick: () => void } | null;
@@ -30,6 +32,8 @@ export function GraphTopBar({
   kinds: readonly GraphKindFilter[];
   kindFilter: GraphKindFilter;
   onKindFilter: (kind: GraphKindFilter) => void;
+  /** `native`: the phone's share sheet, else the link is copied. */
+  share?: { native: boolean; onShare: () => Promise<GraphShareResult> } | null;
   close: { href: string; label: string } | null;
 }) {
   const chips: GraphKindFilter[] = ['all', ...kinds.filter(kind => kind !== 'all' && kind !== 'topic')];
@@ -85,11 +89,41 @@ export function GraphTopBar({
           ))}
         </div>
       )}
+      {share && <ShareButton native={share.native} onShare={share.onShare} />}
       {close && (
-        <Link href={close.href} aria-label={close.label} title={close.label} className={cx(ROUND, 'md:ml-auto')}>
+        <Link
+          href={close.href}
+          aria-label={close.label}
+          title={close.label}
+          className={cx(ROUND, !share && 'md:ml-auto')}
+        >
           ×
         </Link>
       )}
     </div>
+  );
+}
+
+function ShareButton({ native, onShare }: { native: boolean; onShare: () => Promise<GraphShareResult> }) {
+  const [state, setState] = React.useState<'idle' | 'copied' | 'failed'>('idle');
+  React.useEffect(() => {
+    if (state === 'idle') return;
+    const timer = window.setTimeout(() => setState('idle'), 2000);
+    return () => window.clearTimeout(timer);
+  }, [state]);
+  const label = state === 'copied' ? 'Copied' : state === 'failed' ? 'Couldn’t copy' : native ? 'Share' : 'Copy link';
+  return (
+    <button
+      type="button"
+      onClick={() =>
+        onShare().then(
+          result => setState(result === 'copied' ? 'copied' : 'idle'),
+          () => setState('failed')
+        )
+      }
+      className="inline-flex h-8 shrink-0 items-center rounded-full border border-[#dbdbdb] px-[14px] text-[13px] font-medium whitespace-nowrap text-text hover:border-text md:ml-auto"
+    >
+      <span aria-live="polite">{label}</span>
+    </button>
   );
 }

@@ -95,6 +95,10 @@ type PendingCall =
   | {
       method: 'loggedOut' | 'identityReset' | 'reconcileAnonymousIdentity';
       properties: AnalyticsProperties;
+    }
+  | {
+      method: 'afterRuntime';
+      run: () => void;
     };
 
 type PrivyWallet = {
@@ -397,6 +401,10 @@ export function pageViewed(properties: AnalyticsProperties = {}) {
     return;
   }
 
+  const cleaned = cleanedHref;
+  cleanedHref = null;
+  if (cleaned?.href === window.location.href && Date.now() - cleaned.at < 1000) return;
+
   const pageViewKey = `${document.title}|${window.location.href}`;
   const now = Date.now();
 
@@ -420,6 +428,26 @@ export function pageViewed(properties: AnalyticsProperties = {}) {
     },
   });
   notifyActionPageView();
+}
+
+/**
+ * Runs `run` once the runtime has taken every call queued before it, such as the landing page view
+ * with its tags. Straight away when analytics is off: there is nothing to wait for.
+ */
+export function afterAnalyticsRuntime(run: () => void) {
+  if (typeof window === 'undefined') return;
+  if (!isAnalyticsEnabled) {
+    run();
+    return;
+  }
+  callOrQueue({ method: 'afterRuntime', run });
+}
+
+let cleanedHref: { href: string; at: number } | null = null;
+
+/** The URL is about to lose its landing tags: the page view that change triggers is not a new one. */
+export function skipPageViewFor(href: string) {
+  cleanedHref = { href, at: Date.now() };
 }
 
 export function identify(user: AnalyticsIdentity, traits: AnalyticsProperties = {}) {
@@ -727,6 +755,11 @@ function invokeRuntimeUnsafe(call: PendingCall) {
 
   if (!analytics) {
     return false;
+  }
+
+  if (call.method === 'afterRuntime') {
+    call.run();
+    return true;
   }
 
   if (call.method === 'capture' && analytics.capture) {

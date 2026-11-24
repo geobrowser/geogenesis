@@ -7,6 +7,7 @@ import * as React from 'react';
 import { CURATED_TOPIC_TAG_ID, TAG_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/constants';
 import { readTypes } from '~/core/database/entities';
 import { TopicFollowControl } from '~/core/follows/follow-control';
+import { markGraphExplorerEntry } from '~/core/graph-explorer/graph-share';
 import { graphExplorerHref } from '~/core/graph-explorer/href';
 import { useCanUserEdit } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
@@ -359,6 +360,7 @@ export function TopicPageView({
               {graphExplorerEnabled && !isEditing && (
                 <Link
                   href={graphExplorerHref({ entityId, topicId: entityId, spaceId })}
+                  onClick={() => markGraphExplorerEntry('topic_page')}
                   className={`${TOPIC_META_CHIP_CLASS} transition-colors hover:text-text`}
                 >
                   Explore graph

@@ -24,6 +24,42 @@ describe('analytics', () => {
     vi.restoreAllMocks();
   });
 
+  it('runs a task after the runtime has taken the calls queued before it', async () => {
+    const { afterAnalyticsRuntime, capture } = await import('./analytics');
+    const order: string[] = [];
+    capture('share_link_handoff', { n: 1 });
+    afterAnalyticsRuntime(() => order.push('task'));
+    expect(order).toEqual([]);
+    // The runtime arriving: the next call drains the queue in order first.
+    window.lytics = {
+      capture: (_name: string, properties?: Record<string, unknown>) => void order.push(`capture ${properties?.n}`),
+    };
+    capture('share_link_handoff', { n: 2 });
+    expect(order).toEqual(['capture 1', 'task', 'capture 2']);
+    // Spends this module's deferred load, which would otherwise answer the next test's release.
+    releaseDeferredScript();
+  });
+
+  it('skips only the page view a URL clean-up causes, and only right after it', async () => {
+    const viewed = vi.fn();
+    window.lytics = { capture: vi.fn(), pageViewed: viewed };
+    const { pageViewed, skipPageViewFor } = await import('./analytics');
+    window.history.replaceState({}, '', '/explore/graph/abc?topic=t');
+    skipPageViewFor(window.location.href);
+    pageViewed();
+    expect(viewed).not.toHaveBeenCalled();
+    pageViewed();
+    expect(viewed).toHaveBeenCalledOnce();
+
+    vi.useFakeTimers();
+    skipPageViewFor('http://localhost:3000/elsewhere');
+    vi.advanceTimersByTime(1500);
+    window.history.replaceState({}, '', '/elsewhere');
+    pageViewed();
+    vi.useRealTimers();
+    expect(viewed).toHaveBeenCalledTimes(2);
+  });
+
   it('does not fill a deferred Explore action with the entity on the completion page', async () => {
     const send = vi.fn();
     window.lytics = { capture: send };

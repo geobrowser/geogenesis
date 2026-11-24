@@ -422,6 +422,45 @@ describe('GraphTopBar chips', () => {
   });
 });
 
+describe('GraphTopBar share', () => {
+  const bar = (share: React.ComponentProps<typeof GraphTopBar>['share']) =>
+    render(
+      <GraphTopBar
+        back={null}
+        trail={['Centre']}
+        search={null}
+        kinds={[]}
+        kindFilter="all"
+        onKindFilter={() => {}}
+        share={share}
+        close={null}
+      />
+    );
+
+  it('copies on desktop and says so', async () => {
+    const onShare = vi.fn(async () => 'copied' as const);
+    bar({ native: false, onShare });
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Copy link' })));
+    expect(onShare).toHaveBeenCalledOnce();
+    expect(screen.getByRole('button', { name: 'Copied' })).toBeTruthy();
+  });
+
+  it('offers Share on phones, stays put when the sheet was used, and admits a failed copy', async () => {
+    const onShare = vi.fn(async () => 'shared' as const);
+    bar({ native: true, onShare });
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Share' })));
+    expect(screen.getByRole('button', { name: 'Share' })).toBeTruthy();
+    onShare.mockRejectedValueOnce(new Error('denied'));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Share' })));
+    expect(screen.getByRole('button', { name: 'Couldn’t copy' })).toBeTruthy();
+  });
+
+  it('has no share control without a topic to share in', () => {
+    bar(null);
+    expect(screen.queryByRole('button', { name: /copy|share/i })).toBeNull();
+  });
+});
+
 describe('searchNodes', () => {
   it('finds names containing the text, those starting with it first, ignoring case', () => {
     const nodes = [node(3, 'ent', 'Benjamin Netanyahu'), node(4, 'story', 'Netanyahu visits'), node(5, 'src', 'Other')];
