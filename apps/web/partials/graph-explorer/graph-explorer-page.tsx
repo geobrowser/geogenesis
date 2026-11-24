@@ -1,0 +1,154 @@
+'use client';
+
+import { IdUtils } from '@geoprotocol/geo-sdk/lite';
+
+import * as React from 'react';
+
+import { usePathname, useSearchParams } from 'next/navigation';
+
+import { GraphAnalyticsProvider, useGraphExplorerSession } from '~/core/graph-explorer/graph-explorer-analytics';
+import { parseGraphFilterOverrides } from '~/core/graph-explorer/graph-filter';
+import { recordGraphShareLanding } from '~/core/graph-explorer/graph-share';
+import { historyFromUrl } from '~/core/graph-explorer/history';
+import { entitySpaceId, namedSpaceIds } from '~/core/graph-explorer/spokes';
+import { useTopicGraphScope } from '~/core/graph-explorer/use-graph-explorer';
+import { useGraphExplorerUnavailable } from '~/core/graph-explorer/use-graph-explorer-active';
+import { useGraphNavigation } from '~/core/graph-explorer/use-graph-navigation';
+import { useHydrated } from '~/core/hooks/use-hydrated';
+import { isHiddenEntity } from '~/core/moderation/hidden';
+import { useQueryEntity } from '~/core/sync/use-store';
+import { useTopicSpaceScope } from '~/core/topics/use-topic-space-scope';
+import { normId } from '~/core/utils/norm-id';
+import { NavUtils } from '~/core/utils/utils';
+
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+
+import { GraphExplorerShell } from './graph-explorer-shell';
+import { GraphViewer } from './graph-viewer';
+
+/**
+ * Full-screen: its route has no navbar or sidebar, so the explorer sits in flow and
+ * body portals open over it. Desktop scrolls the panel only; narrower screens scroll the whole view.
+ */
+export function GraphExplorerPage({ entityId: routeEntityId }: { entityId: string }) {
+  const searchParams = useSearchParams();
+  // Hops change the path with the history API, which leaves the route's own param on the first centre.
+  const pathCentre = usePathname()?.split('/').at(-1);
+  const entityId = pathCentre && IdUtils.isValid(pathCentre) ? normId(pathCentre) : routeEntityId;
+  const topicParam = searchParams.get('topic');
+  const topicId = topicParam && IdUtils.isValid(topicParam) ? normId(topicParam) : null;
+  const spaceParam = searchParams.get('space');
+  const routeSpaceId = spaceParam && IdUtils.isValid(spaceParam) ? normId(spaceParam) : null;
+  const searchKey = searchParams.toString();
+  // Keyed on the string so a new URLSearchParams object with the same contents keeps the filter stable.
+  const overrides = React.useMemo(() => parseGraphFilterOverrides(new URLSearchParams(searchKey)), [searchKey]);
+  // Everything below reads client stores (entity store, viewer's spaces), so it renders after hydration.
+  const hydrated = useHydrated();
+  React.useEffect(() => recordGraphShareLanding(), []);
+
+  // Open to anyone with a link; the flag only hides the entry points. Only the global mode is unbuilt.
+  if (topicId === null) return <NotAvailable />;
+  if (!hydrated) return <GraphExplorerShell />;
+  return (
+    <div className="flex h-[100dvh] flex-col overflow-hidden bg-white md:h-auto md:min-h-[100dvh] md:overflow-visible">
+      <TopicGraph
+        entityId={entityId}
+        topicId={topicId}
+        routeSpaceId={routeSpaceId}
+        overrides={overrides}
+        searchKey={searchKey}
+      />
+    </div>
+  );
+}
+
+function TopicGraph({
+  entityId,
+  topicId,
+  routeSpaceId,
+  overrides,
+  searchKey,
+}: {
+  entityId: string;
+  topicId: string;
+  routeSpaceId: string | null;
+  overrides: ReturnType<typeof parseGraphFilterOverrides>;
+  searchKey: string;
+}) {
+  const params = React.useMemo(() => new URLSearchParams(searchKey), [searchKey]);
+  const history = React.useMemo(() => historyFromUrl(entityId, params), [entityId, params]);
+  const navigate = useGraphNavigation(history, params);
+  const topicSpaces = useTopicSpaceScope(routeSpaceId);
+  const { entity: topic } = useQueryEntity({ id: topicId, spaceId: routeSpaceId ?? undefined });
+  const topicSpaceId =
+    routeSpaceId ??
+    (topic
+      ? entitySpaceId(
+          { spaceIds: topic.spaces ?? [], namedSpaceIds: namedSpaceIds(topic.values ?? []) },
+          topicSpaces,
+          null
+        )
+      : null);
+  // A hidden topic keeps its name off the page; the map shows it as not in the graph.
+  const topicName = topic && !isHiddenEntity(topic) ? topic.name : null;
+  const scope = useTopicGraphScope(routeSpaceId, topicId, topicSpaceId);
+  const session = useGraphExplorerSession({
+    entityId,
+    topicId,
+    spaceId: routeSpaceId,
+    trailDepth: history.back.length,
+  });
+
+  return (
+    <GraphAnalyticsProvider value={session}>
+      <h1 className="sr-only">Graph explorer{topicName ? `: ${topicName}` : ''}</h1>
+      <GraphViewer
+        history={history}
+        onNavigate={navigate}
+        scope={scope}
+        overrides={overrides}
+        topicName={topicName ?? null}
+        // With the navbar gone, close is the way out: the topic page when its space is known, else Explore.
+        close={
+          topicSpaceId
+            ? {
+                href: NavUtils.toEntity(topicSpaceId, topicId),
+                label: `Close the map and go to ${topicName ?? 'the topic'}`,
+              }
+            : { href: NavUtils.toExplore(), label: 'Close the map and go to Explore' }
+        }
+      />
+    </GraphAnalyticsProvider>
+  );
+}
+
+function NotAvailable() {
+  useGraphExplorerUnavailable();
+  return (
+    <div className="flex min-h-[60vh] flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
+      <h1 className="text-mediumTitle text-text">Not available yet</h1>
+      <p className="max-w-[420px] text-body text-grey-04">
+        The graph explorer opens from a topic for now. Open a topic and choose Explore graph.
+      </p>
+      <Link href="/explore" className="text-metadataMedium text-text underline-offset-2 hover:underline">
+        Go to Explore
+      </Link>
+    </div>
+  );
+}
+
+/** A graph link whose id is not an entity id: the app's chrome comes back with a way out. */
+export function GraphExplorerNotFound() {
+  useGraphExplorerUnavailable();
+  return (
+    <div className="flex min-h-[60vh] flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
+      <h1 className="text-mediumTitle text-text">Nothing to show</h1>
+      <p className="max-w-[420px] text-body text-grey-04">
+        This link doesn’t point to anything in the knowledge graph.
+      </p>
+      <Link href="/explore" className="text-metadataMedium text-text underline-offset-2 hover:underline">
+        Go to Explore
+      </Link>
+    </div>
+  );
+}

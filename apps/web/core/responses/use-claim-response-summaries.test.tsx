@@ -198,6 +198,39 @@ describe('useClaimResponseSummaryBatch', () => {
     await waitFor(() => expect(mocks.loadMetadataCaches).toHaveBeenCalled());
     expect(result.current.isError).toBe(false);
   });
+  it('settles the responder metadata query, whose loader only seeds other caches', async () => {
+    mocks.loadCaches.mockResolvedValue(
+      new Map([
+        [
+          'claim-1:stance',
+          {
+            counts: { positive: 1, negative: 0 },
+            viewerResponse: null,
+            responders: [{ userId: 'profile-2', direction: 'positive' }],
+          },
+        ],
+      ])
+    );
+    const { wrapper, queryClient } = createHarness();
+    renderHook(
+      () =>
+        useClaimResponseSummaryBatch({
+          spaceId: 'space-1',
+          targets: [{ entityId: 'claim-1', responseKind: 'stance' }],
+          enabled: true,
+        }),
+      { wrapper }
+    );
+
+    await waitFor(() => expect(mocks.loadMetadataCaches).toHaveBeenCalled());
+    // The key without responders is the disabled one from before the batch answered.
+    const metadata = () =>
+      queryClient
+        .getQueryCache()
+        .findAll({ queryKey: ['claim-response-responder-metadata'] })
+        .find(query => (query.queryKey[3] as string[]).length > 0);
+    await waitFor(() => expect(metadata()?.state.status).toBe('success'));
+  });
 });
 
 describe('useClaimResponseSummaryBatch after a vote cancels it', () => {

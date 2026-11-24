@@ -47,6 +47,7 @@ describe('feature flags', () => {
       spaceChat: false,
       debateDeviceSwitchRecording: false,
       googleSignIn: false,
+      graphExplorer: false,
       bountiesTab: true,
       signInRecoveryAutoOpen: true,
     });
@@ -83,6 +84,7 @@ describe('feature flags', () => {
       spaceChat: false,
       debateDeviceSwitchRecording: false,
       googleSignIn: false,
+      graphExplorer: false,
       bountiesTab: true,
       signInRecoveryAutoOpen: true,
     });
