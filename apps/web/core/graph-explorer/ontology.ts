@@ -1,16 +1,6 @@
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/claims/ontology';
-import { NEWS_STORY_TYPE_ID, SUBTOPIC_RELATION_TYPE_ID } from '~/core/constants';
-import {
-  ARTICLE_TYPE_ID,
-  DATASET_TYPE_ID,
-  EPISODE_TYPE_ID,
-  OFFICIAL_DOCUMENT_TYPE_ID,
-  PAPER_TYPE_ID,
-  POST_TYPE_ID,
-  QUOTE_TYPE_ID,
-  TWEET_TYPE_ID,
-  UNNAMED_SUBTOPIC_PROPERTY_ID,
-} from '~/core/topics/ontology';
+import { SUBTOPIC_RELATION_TYPE_ID } from '~/core/constants';
+import { UNNAMED_SUBTOPIC_PROPERTY_ID } from '~/core/topics/ontology';
 
 /** Several kinds have more than one Type entity of the same name (Person ×7), so a kind is a list of ids. */
 
@@ -121,23 +111,3 @@ export const NEIGHBOUR_KIND_TYPE_IDS = {
     'e640a82eb8fd40f2b1ba6201e602642f',
   ],
 } as const;
-
-const NEWS_EVENT_TYPE_ID = 'bb9a85bd6dc64efd8232e2782cb4b5f8';
-
-/**
- * Content types. They win over an included type, so a `Claim/News event` or an `Answer/Claim` never
- * becomes a spoke even if a curator also typed it Topic.
- */
-export const DEFAULT_EXCLUDE_TYPE_IDS: string[] = [
-  CLAIM_TYPE_ID,
-  NEWS_EVENT_TYPE_ID,
-  NEWS_STORY_TYPE_ID,
-  TWEET_TYPE_ID,
-  ARTICLE_TYPE_ID,
-  POST_TYPE_ID,
-  EPISODE_TYPE_ID,
-  QUOTE_TYPE_ID,
-  PAPER_TYPE_ID,
-  DATASET_TYPE_ID,
-  OFFICIAL_DOCUMENT_TYPE_ID,
-];

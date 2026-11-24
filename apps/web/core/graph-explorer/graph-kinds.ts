@@ -48,6 +48,7 @@ export const GRAPH_KIND_TYPE_IDS: Record<GraphKind, readonly string[]> = {
     ...NEIGHBOUR_KIND_TYPE_IDS.organisation,
     '93b314b5126246e9babfc4dbe0c57d68', // Company ×2
     'e059a29e6f6b437bbc15c7983d078c0d',
+    '531ac4c5e40946ad9dd3abcd2db955a0', // Publisher
     ...NEIGHBOUR_KIND_TYPE_IDS.court,
     ...NEIGHBOUR_KIND_TYPE_IDS.government,
     ...NEIGHBOUR_KIND_TYPE_IDS.place,
