@@ -492,65 +492,65 @@ function AddContextPopoverInner({ onSubmit, align = 'end' }: AddContextPopoverPr
         }
       }}
     >
-          <form onSubmit={handleSubmit} className="flex flex-col gap-2.5">
-            <div className="flex flex-wrap gap-1.5">
-              {SUGGESTED_PREDICATES.map(item => (
-                <button
-                  key={item}
-                  type="button"
-                  onClick={() => setPredicate(item)}
-                  className={cx(
-                    'cursor-pointer rounded-full border px-2.5 py-0.5 text-[12px] font-medium transition-colors',
-                    predicate === item
-                      ? 'border-text bg-text text-white'
-                      : 'border-grey-02 bg-white text-grey-05 hover:border-text hover:text-text'
-                  )}
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-2.5">
+        <div className="flex flex-wrap gap-1.5">
+          {SUGGESTED_PREDICATES.map(item => (
+            <button
+              key={item}
+              type="button"
+              onClick={() => setPredicate(item)}
+              className={cx(
+                'cursor-pointer rounded-full border px-2.5 py-0.5 text-[12px] font-medium transition-colors',
+                predicate === item
+                  ? 'border-text bg-text text-white'
+                  : 'border-grey-02 bg-white text-grey-05 hover:border-text hover:text-text'
+              )}
+            >
+              {item}
+            </button>
+          ))}
+        </div>
 
-            <label className="flex flex-col gap-1">
-              <span className="text-[12.5px] font-medium text-grey-04">Property (relation key)</span>
-              <input
-                type="text"
+        <label className="flex flex-col gap-1">
+          <span className="text-[12.5px] font-medium text-grey-04">Property (relation key)</span>
+          <input
+            type="text"
             autoFocus={autoFocus}
-                value={predicate}
-                onChange={e => setPredicate(e.target.value)}
-                placeholder="e.g. Legal status, Supporting reports"
+            value={predicate}
+            onChange={e => setPredicate(e.target.value)}
+            placeholder="e.g. Legal status, Supporting reports"
             className="h-9 w-full rounded-lg border border-grey-02 bg-white px-3 text-[13.5px] text-text placeholder:text-grey-03 focus:border-text focus:outline-hidden md:text-[16px]"
-              />
-            </label>
+          />
+        </label>
 
-            <label className="flex flex-col gap-1">
-              <span className="text-[12.5px] font-medium text-grey-04">Values (comma-separated)</span>
-              <input
-                type="text"
-                value={valuesInput}
-                onChange={e => setValuesInput(e.target.value)}
-                placeholder="e.g. ICJ Provisional Order, UN inquiry"
+        <label className="flex flex-col gap-1">
+          <span className="text-[12.5px] font-medium text-grey-04">Values (comma-separated)</span>
+          <input
+            type="text"
+            value={valuesInput}
+            onChange={e => setValuesInput(e.target.value)}
+            placeholder="e.g. ICJ Provisional Order, UN inquiry"
             className="h-9 w-full rounded-lg border border-grey-02 bg-white px-3 text-[13.5px] text-text placeholder:text-grey-03 focus:border-text focus:outline-hidden md:text-[16px]"
-              />
-            </label>
+          />
+        </label>
 
         <div className={ADD_FORM_ACTIONS_CLASS}>
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                className="inline-flex h-8 cursor-pointer items-center rounded-full border border-grey-02 bg-white px-3.5 text-[13px] font-medium text-text hover:border-text"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={!predicate.trim() || !valuesInput.trim()}
-                className="inline-flex h-8 cursor-pointer items-center rounded-full border border-text bg-text px-3.5 text-[13px] font-medium text-white disabled:opacity-40"
-              >
-                Add context
-              </button>
-            </div>
-          </form>
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="inline-flex h-8 cursor-pointer items-center rounded-full border border-grey-02 bg-white px-3.5 text-[13px] font-medium text-text hover:border-text"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={!predicate.trim() || !valuesInput.trim()}
+            className="inline-flex h-8 cursor-pointer items-center rounded-full border border-text bg-text px-3.5 text-[13px] font-medium text-white disabled:opacity-40"
+          >
+            Add context
+          </button>
+        </div>
+      </form>
     </AddFormSurface>
   );
 }
@@ -608,66 +608,66 @@ function AddFlagPopoverInner({ onSubmit, align = 'end' }: AddFlagPopoverProps) {
         }
       }}
     >
-          <form onSubmit={handleSubmit} className="flex flex-col gap-2.5">
-            <div className="flex flex-wrap gap-1.5">
-              {FLAG_REASONS.map(option => (
-                <button
-                  key={option}
-                  type="button"
-                  aria-pressed={reason === option}
-                  onClick={() => setReason(option)}
-                  className={cx(
-                    'cursor-pointer rounded-full border px-2.5 py-0.5 text-[12px] font-medium transition-colors',
-                    reason === option
-                      ? 'border-text bg-text text-white'
-                      : 'border-grey-02 bg-white text-grey-05 hover:border-text hover:text-text'
-                  )}
-                >
-                  {option}
-                </button>
-              ))}
-            </div>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-2.5">
+        <div className="flex flex-wrap gap-1.5">
+          {FLAG_REASONS.map(option => (
+            <button
+              key={option}
+              type="button"
+              aria-pressed={reason === option}
+              onClick={() => setReason(option)}
+              className={cx(
+                'cursor-pointer rounded-full border px-2.5 py-0.5 text-[12px] font-medium transition-colors',
+                reason === option
+                  ? 'border-text bg-text text-white'
+                  : 'border-grey-02 bg-white text-grey-05 hover:border-text hover:text-text'
+              )}
+            >
+              {option}
+            </button>
+          ))}
+        </div>
 
-            <label className="flex flex-col gap-1">
-              <span className="text-[12.5px] font-medium text-grey-04">Why are you disputing this?</span>
-              <textarea
-                rows={3}
+        <label className="flex flex-col gap-1">
+          <span className="text-[12.5px] font-medium text-grey-04">Why are you disputing this?</span>
+          <textarea
+            rows={3}
             autoFocus={autoFocus}
-                value={body}
-                onChange={e => setBody(e.target.value)}
-                placeholder="Describe what is inaccurate, disputed, or missing..."
+            value={body}
+            onChange={e => setBody(e.target.value)}
+            placeholder="Describe what is inaccurate, disputed, or missing..."
             className="w-full resize-none rounded-lg border border-grey-02 bg-white px-3 py-2 text-[13.5px] leading-[19px] text-text placeholder:text-grey-03 focus:border-text focus:outline-hidden md:text-[16px] md:leading-[22px]"
-              />
-            </label>
+          />
+        </label>
 
-            <label className="flex flex-col gap-1">
-              <span className="text-[12.5px] font-medium text-grey-04">Supporting source (optional)</span>
-              <input
-                type="url"
-                value={sourceUrl}
-                onChange={e => setSourceUrl(e.target.value)}
-                placeholder="https://..."
+        <label className="flex flex-col gap-1">
+          <span className="text-[12.5px] font-medium text-grey-04">Supporting source (optional)</span>
+          <input
+            type="url"
+            value={sourceUrl}
+            onChange={e => setSourceUrl(e.target.value)}
+            placeholder="https://..."
             className="h-9 w-full rounded-lg border border-grey-02 bg-white px-3 text-[13.5px] text-text placeholder:text-grey-03 focus:border-text focus:outline-hidden md:text-[16px]"
-              />
-            </label>
+          />
+        </label>
 
         <div className={ADD_FORM_ACTIONS_CLASS}>
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                className="inline-flex h-8 cursor-pointer items-center rounded-full border border-grey-02 bg-white px-3.5 text-[13px] font-medium text-text hover:border-text"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={body.trim().length < 5}
-                className="inline-flex h-8 cursor-pointer items-center rounded-full border border-text bg-text px-3.5 text-[13px] font-medium text-white disabled:opacity-40"
-              >
-                Submit dispute
-              </button>
-            </div>
-          </form>
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="inline-flex h-8 cursor-pointer items-center rounded-full border border-grey-02 bg-white px-3.5 text-[13px] font-medium text-text hover:border-text"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={body.trim().length < 5}
+            className="inline-flex h-8 cursor-pointer items-center rounded-full border border-text bg-text px-3.5 text-[13px] font-medium text-white disabled:opacity-40"
+          >
+            Submit dispute
+          </button>
+        </div>
+      </form>
     </AddFormSurface>
   );
 }
@@ -722,71 +722,71 @@ export function AddClaimPopover({
         }
       }}
     >
-          <form onSubmit={handleSubmit} className="flex flex-col gap-2.5">
-            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Claim epistemic type">
-              {(
-                [
-                  { id: 'fact', label: 'Factual' },
-                  { id: 'judgment', label: 'Judgment' },
-                ] as const
-              ).map(option => (
-                <button
-                  key={option.id}
-                  type="button"
-                  aria-pressed={kind === option.id}
-                  onClick={() => setKind(option.id)}
-                  className={cx(
-                    'cursor-pointer rounded-full border px-2.5 py-0.5 text-[12px] font-medium transition-colors',
-                    kind === option.id
-                      ? 'border-text bg-text text-white'
-                      : 'border-grey-02 bg-white text-grey-05 hover:border-text hover:text-text'
-                  )}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-2.5">
+        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Claim epistemic type">
+          {(
+            [
+              { id: 'fact', label: 'Factual' },
+              { id: 'judgment', label: 'Judgment' },
+            ] as const
+          ).map(option => (
+            <button
+              key={option.id}
+              type="button"
+              aria-pressed={kind === option.id}
+              onClick={() => setKind(option.id)}
+              className={cx(
+                'cursor-pointer rounded-full border px-2.5 py-0.5 text-[12px] font-medium transition-colors',
+                kind === option.id
+                  ? 'border-text bg-text text-white'
+                  : 'border-grey-02 bg-white text-grey-05 hover:border-text hover:text-text'
+              )}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
 
-            <label className="flex flex-col gap-1">
-              <span className="text-[12.5px] font-medium text-grey-04">Claim</span>
-              <textarea
-                rows={2}
+        <label className="flex flex-col gap-1">
+          <span className="text-[12.5px] font-medium text-grey-04">Claim</span>
+          <textarea
+            rows={2}
             autoFocus={autoFocus}
-                value={title}
-                onChange={e => setTitle(e.target.value)}
-                placeholder={placeholder}
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+            placeholder={placeholder}
             className="w-full resize-none rounded-lg border border-grey-02 bg-white px-3 py-2 text-[13.5px] leading-[19px] text-text placeholder:text-grey-03 focus:border-text focus:outline-hidden md:text-[16px] md:leading-[22px]"
-              />
-            </label>
+          />
+        </label>
 
-            <label className="flex flex-col gap-1">
-              <span className="text-[12.5px] font-medium text-grey-04">Context note (optional)</span>
-              <input
-                type="text"
-                value={note}
-                onChange={e => setNote(e.target.value)}
-                placeholder="Key citation or clarification..."
+        <label className="flex flex-col gap-1">
+          <span className="text-[12.5px] font-medium text-grey-04">Context note (optional)</span>
+          <input
+            type="text"
+            value={note}
+            onChange={e => setNote(e.target.value)}
+            placeholder="Key citation or clarification..."
             className="h-9 w-full rounded-lg border border-grey-02 bg-white px-3 text-[13.5px] text-text placeholder:text-grey-03 focus:border-text focus:outline-hidden md:text-[16px]"
-              />
-            </label>
+          />
+        </label>
 
         <div className={ADD_FORM_ACTIONS_CLASS}>
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                className="inline-flex h-8 cursor-pointer items-center rounded-full border border-grey-02 bg-white px-3.5 text-[13px] font-medium text-text hover:border-text"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={title.trim().length < 4}
-                className="inline-flex h-8 cursor-pointer items-center rounded-full border border-text bg-text px-3.5 text-[13px] font-medium text-white disabled:opacity-40"
-              >
-                {label}
-              </button>
-            </div>
-          </form>
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="inline-flex h-8 cursor-pointer items-center rounded-full border border-grey-02 bg-white px-3.5 text-[13px] font-medium text-text hover:border-text"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={title.trim().length < 4}
+            className="inline-flex h-8 cursor-pointer items-center rounded-full border border-text bg-text px-3.5 text-[13px] font-medium text-white disabled:opacity-40"
+          >
+            {label}
+          </button>
+        </div>
+      </form>
     </AddFormSurface>
   );
 }
@@ -857,73 +857,73 @@ export function AddEntityItemPopover({
         }
       }}
     >
-          <form onSubmit={handleSubmit} className="flex flex-col gap-2.5">
-            <label className="flex flex-col gap-1">
-              <span className="text-[12.5px] font-medium text-grey-04">{primaryLabel}</span>
-              {multilinePrimary ? (
-                <textarea
-                  rows={3}
+      <form onSubmit={handleSubmit} className="flex flex-col gap-2.5">
+        <label className="flex flex-col gap-1">
+          <span className="text-[12.5px] font-medium text-grey-04">{primaryLabel}</span>
+          {multilinePrimary ? (
+            <textarea
+              rows={3}
               autoFocus={autoFocus}
-                  value={primary}
-                  onChange={e => setPrimary(e.target.value)}
-                  placeholder={primaryPlaceholder}
+              value={primary}
+              onChange={e => setPrimary(e.target.value)}
+              placeholder={primaryPlaceholder}
               className="w-full resize-none rounded-lg border border-grey-02 bg-white px-3 py-2 text-[13.5px] leading-[19px] text-text placeholder:text-grey-03 focus:border-text focus:outline-hidden md:text-[16px] md:leading-[22px]"
-                />
-              ) : (
-                <input
-                  type="text"
+            />
+          ) : (
+            <input
+              type="text"
               autoFocus={autoFocus}
-                  value={primary}
-                  onChange={e => setPrimary(e.target.value)}
-                  placeholder={primaryPlaceholder}
+              value={primary}
+              onChange={e => setPrimary(e.target.value)}
+              placeholder={primaryPlaceholder}
               className="h-9 w-full rounded-lg border border-grey-02 bg-white px-3 text-[13.5px] text-text placeholder:text-grey-03 focus:border-text focus:outline-hidden md:text-[16px]"
-                />
-              )}
-            </label>
+            />
+          )}
+        </label>
 
-            {secondaryLabel && (
-              <label className="flex flex-col gap-1">
-                <span className="text-[12.5px] font-medium text-grey-04">{secondaryLabel}</span>
-                <input
-                  type="text"
-                  value={secondary}
-                  onChange={e => setSecondary(e.target.value)}
-                  placeholder={secondaryPlaceholder}
+        {secondaryLabel && (
+          <label className="flex flex-col gap-1">
+            <span className="text-[12.5px] font-medium text-grey-04">{secondaryLabel}</span>
+            <input
+              type="text"
+              value={secondary}
+              onChange={e => setSecondary(e.target.value)}
+              placeholder={secondaryPlaceholder}
               className="h-9 w-full rounded-lg border border-grey-02 bg-white px-3 text-[13.5px] text-text placeholder:text-grey-03 focus:border-text focus:outline-hidden md:text-[16px]"
-                />
-              </label>
-            )}
+            />
+          </label>
+        )}
 
-            {tertiaryLabel && (
-              <label className="flex flex-col gap-1">
-                <span className="text-[12.5px] font-medium text-grey-04">{tertiaryLabel}</span>
-                <input
-                  type="text"
-                  value={tertiary}
-                  onChange={e => setTertiary(e.target.value)}
-                  placeholder={tertiaryPlaceholder}
+        {tertiaryLabel && (
+          <label className="flex flex-col gap-1">
+            <span className="text-[12.5px] font-medium text-grey-04">{tertiaryLabel}</span>
+            <input
+              type="text"
+              value={tertiary}
+              onChange={e => setTertiary(e.target.value)}
+              placeholder={tertiaryPlaceholder}
               className="h-9 w-full rounded-lg border border-grey-02 bg-white px-3 text-[13.5px] text-text placeholder:text-grey-03 focus:border-text focus:outline-hidden md:text-[16px]"
-                />
-              </label>
-            )}
+            />
+          </label>
+        )}
 
         <div className={ADD_FORM_ACTIONS_CLASS}>
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                className="inline-flex h-8 cursor-pointer items-center rounded-full border border-grey-02 bg-white px-3.5 text-[13px] font-medium text-text hover:border-text"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={primary.trim().length < 2}
-                className="inline-flex h-8 cursor-pointer items-center rounded-full border border-text bg-text px-3.5 text-[13px] font-medium text-white disabled:opacity-40"
-              >
-                {label}
-              </button>
-            </div>
-          </form>
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="inline-flex h-8 cursor-pointer items-center rounded-full border border-grey-02 bg-white px-3.5 text-[13px] font-medium text-text hover:border-text"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={primary.trim().length < 2}
+            className="inline-flex h-8 cursor-pointer items-center rounded-full border border-text bg-text px-3.5 text-[13px] font-medium text-white disabled:opacity-40"
+          >
+            {label}
+          </button>
+        </div>
+      </form>
     </AddFormSurface>
   );
 }
