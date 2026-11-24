@@ -69,6 +69,8 @@ export type GraphHop1 = {
   neighbours: Array<{ node: GraphNode; edge: GraphEdge }>;
   /** Kinds with more than one page around the centre. */
   moreKinds: GraphKind[];
+  /** Kinds whose request failed, so missing here. */
+  failedKinds?: GraphKind[];
 };
 
 /** Neighbours of each hop-1 node, keyed by that node's id. */
@@ -104,10 +106,8 @@ const NODE_VARIABLES = `
 `;
 
 /**
- * Kinds and directions asked entity first: neighbours whose own relations reach the centre. Asked
- * relation first, a kind that is rare among a large topic's backlinks walks nearly all of them
- * before it fills a page (World affairs: 6 to 8 s each). Dense kinds stay relation first: it is as
- * fast there and keeps today's picks.
+ * Asked entity first: relation first, a kind rare among a large topic's backlinks walks nearly all
+ * of them to fill a page. Dense kinds stay relation first, as fast there and keeping their picks.
  */
 export const ENTITY_FIRST: ReadonlySet<string> = new Set(['ent_in', 'other_in']);
 
@@ -428,7 +428,8 @@ export async function fetchHop1(centreId: string, filter: GraphFilter, signal?: 
   const settled = filter.kinds.filter((_, index) => kinds[index].status === 'fulfilled');
   const response: Hop1Response = { entity: centre.value.entity };
   for (const result of kinds) if (result.status === 'fulfilled') Object.assign(response, result.value);
-  return decodeHop1(response, centreId, settled);
+  const failedKinds = filter.kinds.filter(kind => !settled.includes(kind));
+  return { ...decodeHop1(response, centreId, settled), failedKinds };
 }
 
 /**

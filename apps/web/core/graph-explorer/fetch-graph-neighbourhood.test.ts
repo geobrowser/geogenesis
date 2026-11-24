@@ -440,6 +440,7 @@ describe('fetchHop1', () => {
     const hop = await fetchHop1(CENTRE, filter);
     expect(hop.centre?.id).toBe(CENTRE);
     expect(hop.neighbours.map(({ node }) => node.name)).toEqual(['A story']);
+    expect(hop.failedKinds).toEqual(['ent']);
   });
 
   it('fails when the centre fails, or every kind does', async () => {

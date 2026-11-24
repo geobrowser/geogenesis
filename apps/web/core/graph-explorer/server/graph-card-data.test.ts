@@ -134,6 +134,13 @@ describe('loadGraphCardData', () => {
     expect(data?.neighbours[0].image).toBeNull();
   });
 
+  it('marks the card degraded when a kind failed to load', async () => {
+    const d = deps({
+      fetchHop1: vi.fn(async (): Promise<GraphHop1> => ({ ...hop1([graphNode('e1', 'ent')]), failedKinds: ['story'] })),
+    });
+    expect((await loadGraphCardData(ids, d))?.degraded).toBe(true);
+  });
+
   it('reads a claim centre’s counts in its own space', async () => {
     const CLAIM = 'cccccccccccccccccccccccccccccccc';
     const d = deps({
