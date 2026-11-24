@@ -221,9 +221,9 @@ describe('the full screen header', () => {
   it('shows the elapsed time and length either side of the rail, and × closes', () => {
     const { onClose, container } = renderFull({ playheadSeconds: 65 });
     const header = container.querySelector<HTMLElement>('[data-debate-full-header]')!;
-    expect(within(header).getByText('1:05')).toBeInTheDocument();
-    expect(within(header).getByText('2:00')).toBeInTheDocument();
-    expect(within(header).getByRole('slider', { name: 'Debate timeline' })).toBeInTheDocument();
+    expect(within(header).getByText('1:05')).toBeTruthy();
+    expect(within(header).getByText('2:00')).toBeTruthy();
+    expect(within(header).getByRole('slider', { name: 'Debate timeline' })).toBeTruthy();
     fireEvent.click(within(header).getByRole('button', { name: 'Close full debate' }));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
@@ -271,13 +271,13 @@ describe('the full screen header', () => {
     };
     renderFull();
     expect(screen.queryAllByRole('button', { name: /^Moment / })).toHaveLength(0);
-    expect(screen.getByRole('button', { name: 'Jump to: A claim' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Jump to: A claim' })).toBeTruthy();
   });
 
   it('shows only × for the combined video of an in-app browser', () => {
     mocks.inlineUnavailable = true;
     const { onClose, container } = renderFull();
-    expect(screen.getByTestId('combined-player')).toBeInTheDocument();
+    expect(screen.getByTestId('combined-player')).toBeTruthy();
     const header = container.querySelector<HTMLElement>('[data-debate-full-header]')!;
     expect(within(header).queryByRole('slider')).toBeNull();
     fireEvent.click(within(header).getByRole('button', { name: 'Close full debate' }));
@@ -310,7 +310,7 @@ describe('the stage', () => {
     expect(screen.queryByTestId('claim-stack')).toBeNull();
     expect(screen.queryByRole('button', { name: /Start over/ })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Pause debate' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Unmute' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Unmute' })).toBeTruthy();
   });
 
   it('drops the Open rounds counter too (D12)', () => {
@@ -355,7 +355,7 @@ describe('the transport', () => {
   it('is up while paused', () => {
     const { transport } = renderFull({ playing: false, userPaused: true });
     expect(transport().dataset.debateTransport).toBe('shown');
-    expect(within(transport()).getByRole('button', { name: 'Play video' })).toBeInTheDocument();
+    expect(within(transport()).getByRole('button', { name: 'Play video' })).toBeTruthy();
   });
 
   it('goes away after three seconds of play', () => {
@@ -405,13 +405,13 @@ describe('the transport', () => {
 describe('prompts', () => {
   it("says the app's Tap to play when the browser refused", () => {
     renderFull({ playing: false, autoplayBlocked: true });
-    expect(screen.getByRole('button', { name: 'Tap to play' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Tap to play' })).toBeTruthy();
     expect(screen.queryByText('Watch the debate')).toBeNull();
   });
 
   it('keeps the Watch pill on a held page, dark', () => {
     renderFull({ playing: false }, { holdFullPlayback: true });
-    expect(screen.getByRole('button', { name: 'Watch the debate · 2 min' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Watch the debate · 2 min' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Play debate' })).toBeNull();
   });
 });

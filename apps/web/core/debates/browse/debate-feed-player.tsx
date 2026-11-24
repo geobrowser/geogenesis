@@ -1438,8 +1438,9 @@ function PairedDebateFeedPlayer({
   // The split grows toward whoever holds the turn (the app's 68/32), and evens out between turns.
   const speakingSlot = betweenTurns ? null : (turnState?.slot ?? null);
   const splitFraction = !full || speakingSlot == null ? 0.5 : speakingSlot === topSlot ? 0.68 : 0.32;
+  // Fixed shares (not 1 - x) so the inline style reads 0.32, not 0.31999999999999995.
   const tileGrow = (slot: 1 | 2): React.CSSProperties | undefined =>
-    full ? { flexGrow: slot === topSlot ? splitFraction : 1 - splitFraction, flexBasis: 0 } : undefined;
+    full ? { flexGrow: speakingSlot == null ? 0.5 : speakingSlot === slot ? 0.68 : 0.32, flexBasis: 0 } : undefined;
   const tilePositionProps = (slot: 1 | 2) =>
     slot === topSlot
       ? { className: topSlot === 2 ? 'order-1' : undefined }
