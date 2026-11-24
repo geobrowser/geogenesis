@@ -85,6 +85,13 @@ type EntityVoteButtonsProps = {
   showInlineError?: boolean;
   /** Whether to load counts yet. Until true, with nothing cached, the skeleton shows instead of a zero. */
   nearViewport?: boolean;
+  /** Drop a claim's share while nobody has responded, for rows that say "No responses yet" themselves. */
+  hideEmptyClaimShare?: boolean;
+  /**
+   * Drop a claim's share label for rows that state the agreement themselves; the responder faces
+   * still open the list of who responded.
+   */
+  hideClaimShare?: boolean;
 };
 
 /**
@@ -115,6 +122,8 @@ function EntityResponseButtons({
   compact = false,
   showInlineError = false,
   nearViewport = true,
+  hideEmptyClaimShare = false,
+  hideClaimShare = false,
 }: EntityVoteButtonsProps) {
   const getContext = useActionContext('entity_vote_buttons', 'entity', entityId);
   const responseBatch = useClaimResponseBatchState();
@@ -408,6 +417,7 @@ function EntityResponseButtons({
   // thing that could fall out of step.
   const isClaimResponse = queryResponseKind !== 'curation';
   const displayLabel = isClaimResponse ? percentLabel : scoreLabel;
+  const hideLabel = isClaimResponse && (hideClaimShare || (hideEmptyClaimShare && effectiveTotal === 0));
 
   // Grey whichever side is held; the filled icon says which one you picked. The thumbs used to rest
   // lighter and darken when picked, and curation got no class at all, pinning its arrows' colour on
@@ -518,15 +528,17 @@ function EntityResponseButtons({
       >
         <ResponsePositionIcon responseKind={queryResponseKind} position selected={positiveActive} />
       </ResponseButton>
-      <RespondersPopover entityId={entityId} spaceId={spaceId} responseKind={queryResponseKind}>
-        <button
-          className="min-w-[2ch] cursor-pointer text-center text-[16px]! leading-5 tabular-nums hover:text-grey-04"
-          title={totalResponders > 0 ? responseCopy.viewResponders : undefined}
-          disabled={totalResponders === 0}
-        >
-          {displayLabel}
-        </button>
-      </RespondersPopover>
+      {hideLabel ? null : (
+        <RespondersPopover entityId={entityId} spaceId={spaceId} responseKind={queryResponseKind}>
+          <button
+            className="min-w-[2ch] cursor-pointer text-center text-[16px]! leading-5 tabular-nums hover:text-grey-04"
+            title={totalResponders > 0 ? responseCopy.viewResponders : undefined}
+            disabled={totalResponders === 0}
+          >
+            {displayLabel}
+          </button>
+        </RespondersPopover>
+      )}
       <ResponseButton
         selected={negativeActive}
         pending={isSubmittingResponse}

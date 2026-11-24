@@ -37,6 +37,14 @@ describe('entity tab navigation', () => {
     ).toBe(true);
   });
 
+  it('keeps the Chat tab selected on a channel, and no other tab on a sub-path', () => {
+    const at = (href: string, fullPath: string) =>
+      isEntityTabActive({ href, activeTabId: null, fullPath, sidePanel: false });
+    expect(at('/space/s/chat', '/space/s/chat/markets')).toBe(true);
+    expect(at('/space/s', '/space/s/chat/markets')).toBe(false);
+    expect(at('/space/s/chat', '/space/s/chatter')).toBe(false);
+  });
+
   it('keeps system and authored side-panel tabs mutually exclusive', () => {
     expect(
       isEntityTabActive({

@@ -8,7 +8,8 @@ import { GeoChatRequestError } from '~/core/debates/api';
 import { useDebateVisibility } from '~/core/debates/debate-attention';
 import { useSpaceChatRoomScope } from '~/core/debates/debate-gateway';
 import { useGeoChatAuth } from '~/core/debates/hooks';
-import { useGeoChatAccountStatus } from '~/core/debates/use-geo-chat-account-status';
+import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
+import { useGeoChatAccountStatus, useGeoChatViewer } from '~/core/debates/use-geo-chat-account-status';
 import { normId } from '~/core/utils/norm-id';
 
 import {
@@ -23,6 +24,7 @@ import {
   setSpaceChatReaction,
 } from './api';
 import {
+  type SpaceChatRoomsData,
   type SpaceChatState,
   parseReactionCounts,
   spaceChatQueryKeys,
@@ -35,6 +37,7 @@ import {
   withoutPendingMessage,
   withoutPendingReaction,
 } from './state';
+import type { ChatViewer } from './viewer';
 
 const FIRST_PAGE_LIMIT = 50;
 /** A poll asks only for messages after the newest held. */
@@ -45,6 +48,8 @@ const POLL_FULL_READ_MS = 30_000;
 const POLL_VISIBLE_MS = 5_000;
 /** Signed in with the gateway up, events keep it current; a remount within this reads the cache. */
 const SIGNED_IN_STALE_MS = 30_000;
+/** Signed out, the channel list re-reads this often while visible (GEO-3818). */
+const ROOM_LIST_POLL_MS = 60_000;
 
 /**
  * The account chat reads and writes as. `null` signed out, and while geo-chat is still setting the
@@ -66,28 +71,38 @@ export function useSpaceChatAuth(): { ready: boolean; auth: SpaceChatAuth | null
  * The space's chat rooms. `supported: false` for a space with no chat (geo-chat's 404 for a space
  * that is not a public DAO space), so the tab hides.
  */
-export function useSpaceChatRooms(spaceId: string, enabled: boolean) {
+export function useSpaceChatRooms(spaceId: string, enabled: boolean, { pollSignedOut = false } = {}) {
   const { ready, auth } = useSpaceChatAuth();
+  // One list per viewer, archived channels included; the channel view filters them out.
+  const includeArchived = true;
   const query = useQuery({
-    queryKey: spaceChatQueryKeys.rooms(spaceId, auth?.accountKey ?? null),
-    queryFn: async ({ signal }) => {
+    queryKey: spaceChatQueryKeys.rooms(spaceId, auth?.accountKey ?? null, includeArchived),
+    queryFn: async ({ signal }): Promise<SpaceChatRoomsData> => {
       try {
-        const { rooms } = await listSpaceChatRooms(spaceId, auth, signal);
-        return { supported: true as const, rooms };
+        const list = await listSpaceChatRooms(spaceId, auth, signal, includeArchived);
+        return {
+          supported: true,
+          rooms: list.rooms,
+          channelsEnabled: list.channels_enabled === true,
+          canManageChannels: list.can_manage_channels === true,
+        };
       } catch (error) {
         if (error instanceof GeoChatRequestError && error.status === 404) {
-          return { supported: false as const, rooms: [] as SpaceChatRoom[] };
+          return { supported: false, rooms: [], channelsEnabled: false, canManageChannels: false };
         }
         throw error;
       }
     },
     enabled: enabled && ready,
     staleTime: 60_000,
+    // Signed out there is no space scope for `space.channels_changed`, so the channel list polls.
+    refetchInterval: pollSignedOut && ready && auth === null ? ROOM_LIST_POLL_MS : false,
+    refetchIntervalInBackground: false,
     retry: false,
     // Rights change outside this tab (joining, removal), so a focus past the stale time re-reads.
     refetchOnWindowFocus: true,
   });
-  const memberRoom = query.data?.rooms.find(room => room.kind === 'member') ?? null;
+  const memberRoom = query.data?.rooms.find(room => room.kind === 'member' && !room.archived) ?? null;
   return { ...query, memberRoom };
 }
 
@@ -111,7 +126,8 @@ export type SpaceChatRoomView = {
  */
 export function useSpaceChatRoom(
   room: Pick<SpaceChatRoom, 'id' | 'space_id' | 'kind'> | null,
-  enabled = true
+  enabled = true,
+  { onSent }: { onSent?: () => void } = {}
 ): SpaceChatRoomView {
   const { ready, auth } = useSpaceChatAuth();
   const queryClient = useQueryClient();
@@ -130,7 +146,8 @@ export function useSpaceChatRoom(
   // Live only once this room is confirmed: a refused or pending room polls like a dropped socket.
   const live = useSpaceChatRoomScope(
     room,
-    enabled && ready && (auth !== null || (visible && room?.kind === 'member')),
+    // Signed out, every room but #editors may be readable; the room list only offers those that are.
+    enabled && ready && (auth !== null || (visible && room !== null && room.kind !== 'editor')),
     auth !== null
   );
   const lastFullReadAt = React.useRef(0);
@@ -172,6 +189,8 @@ export function useSpaceChatRoom(
   // A resend of a failed send reuses its nonce, whatever was sent in between: if the first post was
   // stored after all, geo-chat returns it instead of posting twice, and charges no quota.
   const failedSends = React.useRef(new Map<string, string>());
+  const onSentRef = React.useRef(onSent);
+  onSentRef.current = onSent;
   const send = React.useCallback(
     async (body: string, replyTo: string | null) => {
       if (!auth || !roomId) throw new GeoChatRequestError('Sign in to chat', 'authentication_required', 401);
@@ -190,6 +209,7 @@ export function useSpaceChatRoom(
           await postSpaceChatMessage(roomId, { client_nonce: clientNonce, body, reply_to_message_id: replyTo }, auth)
         );
         failedSends.current.delete(key);
+        onSentRef.current?.();
       } catch (error) {
         update(state => withoutPendingMessage(state, clientNonce));
         failedSends.current.set(key, clientNonce);
@@ -268,4 +288,12 @@ function newClientNonce() {
   return typeof crypto !== 'undefined' && 'randomUUID' in crypto
     ? `c-${crypto.randomUUID()}`
     : `c-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
+
+/** The signed-in viewer for space chat's "is this me" checks (see `isViewerId`). */
+export function useChatViewer(): ChatViewer | null {
+  const userId = useCurrentGeoChatUserId();
+  // Subscribed: a pending profile gains its person id later, under the same user id.
+  const personId = useGeoChatViewer()?.personId ?? null;
+  return React.useMemo(() => (userId ? { userId, personId } : null), [personId, userId]);
 }

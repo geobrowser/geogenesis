@@ -116,14 +116,17 @@ export function useClaimResponseSummaryBatch({
       normalizedTargets.map(claimResponseTargetKey),
       responderSpaceIds,
     ],
-    queryFn: ({ signal }) =>
-      loadClaimResponderMetadataCaches({
+    // The loader only seeds other caches; React Query rejects `undefined` as a query's data.
+    queryFn: async ({ signal }) => {
+      await loadClaimResponderMetadataCaches({
         queryClient,
         spaceId,
         targets: normalizedTargets,
         summaries: responseBatch.data!,
         signal,
-      }),
+      });
+      return null;
+    },
     enabled: responseBatch.isSuccess && responderSpaceIds.length > 0,
     staleTime: 60_000,
     retry: 2,

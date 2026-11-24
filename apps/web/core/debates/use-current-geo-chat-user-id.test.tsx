@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -53,6 +53,18 @@ describe('useCurrentGeoChatUserId', () => {
     expect(mocks.resolve).not.toHaveBeenCalled();
   });
 
+  it('follows the stored session when it changes after mount', () => {
+    mocks.stored = 'user-a';
+    render(<Probe />);
+    expect(readId()).toBe('user-a');
+
+    mocks.stored = 'user-b';
+    act(() => {
+      window.dispatchEvent(new StorageEvent('storage', { key: 'geo:chat-session' }));
+    });
+    expect(readId()).toBe('user-b');
+  });
+
   it('resolves the id when the session has not been written yet', async () => {
     render(<Probe />);
 
@@ -83,6 +95,41 @@ describe('useCurrentGeoChatUserId', () => {
     view.rerender(<Probe />);
 
     await waitFor(() => expect(readId()).toBe('unknown'));
+  });
+
+  it('reads a stored id when the auth hook gives no account key', () => {
+    mocks.stored = 'user-a';
+    mocks.accountKey = undefined as unknown as string;
+    render(<Probe />);
+    expect(readId()).toBe('user-a');
+  });
+
+  it('keeps the last id through a session reset for the same account', async () => {
+    mocks.stored = 'user-a';
+    mocks.resolve.mockReturnValue(new Promise(() => {}));
+    const view = render(<Probe />);
+    expect(readId()).toBe('user-a');
+
+    mocks.stored = null;
+    view.rerender(<Probe />);
+    expect(readId()).toBe('user-a');
+
+    mocks.authenticated = false;
+    view.rerender(<Probe />);
+    expect(readId()).toBe('unknown');
+  });
+
+  it('answers with the new account’s id after a switch, never the old one', async () => {
+    mocks.stored = 'user-a';
+    const view = render(<Probe />);
+    expect(readId()).toBe('user-a');
+
+    mocks.stored = null;
+    mocks.accountKey = 'account-b';
+    mocks.resolve.mockResolvedValue('user-b');
+    view.rerender(<Probe />);
+    expect(readId()).toBe('unknown');
+    await waitFor(() => expect(readId()).toBe('user-b'));
   });
 
   it('lets the stored session take over from a resolved id', async () => {

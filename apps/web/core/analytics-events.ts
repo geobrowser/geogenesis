@@ -85,6 +85,10 @@ export type AnalyticsEventName =
   | 'form_started'
   | 'form_submission'
   | 'graph_entity_viewed'
+  | 'graph_explorer_interacted'
+  | 'graph_explorer_left'
+  | 'graph_explorer_opened'
+  | 'graph_explorer_recentred'
   | 'graph_relationship_followed'
   | 'identity_reset'
   | 'lobby_created'
@@ -117,5 +121,6 @@ export type AnalyticsEventName =
   | 'signup_completed'
   | 'signup_cta_clicked'
   | 'space_created'
+  | 'voice_moved_to_other_tab'
   | 'vote_cast'
   | 'wallet_connection_stalled';
