@@ -174,3 +174,63 @@ describe('ControversialTag', () => {
     expect(screen.getByText('Controversial')).toHaveClass('ml-2');
   });
 });
+
+// GEO-3833: the debates app's results row, revealed under the vote pills once the viewer has voted.
+describe('ClaimSummary results layout', () => {
+  function renderResults(value: ClaimResponseSummary, tone?: 'light' | 'dark') {
+    return render(
+      <ClaimSummary
+        entityId={ENTITY}
+        spaceId={SPACE}
+        responseKind="stance"
+        summary={value}
+        layout="results"
+        tone={tone}
+      />
+    );
+  }
+
+  it('reads "{p}% Agree" and "{n} Votes", grouped the en-US way, with the bar filled to the share', () => {
+    const { container } = renderResults(summary({ ...summarizeClaimResponses(1500, 500) }));
+
+    expect(screen.getByText('75% Agree')).toBeInTheDocument();
+    expect(screen.getByText('2,000 Votes')).toBeInTheDocument();
+    const fill = container.querySelector('[data-claim-results] [role="img"] > div') as HTMLElement;
+    expect(fill.style.width).toBe('75%');
+    expect(fill).toHaveClass('bg-[#151515]');
+  });
+
+  it('says "1 Vote" for a single vote', () => {
+    renderResults(summary({ ...summarizeClaimResponses(1, 0) }));
+
+    expect(screen.getByText('100% Agree')).toBeInTheDocument();
+    expect(screen.getByText('1 Vote')).toBeInTheDocument();
+  });
+
+  it('says the results are loading rather than drawing nothing under a fresh vote', () => {
+    renderResults(summary({ isLoading: true, hasCounts: false }));
+
+    expect(screen.getByText('Loading results…')).toBeInTheDocument();
+    expect(screen.queryByText(/% Agree/)).toBeNull();
+  });
+
+  it('says the results are unavailable where the counts failed', () => {
+    renderResults(summary({ hasCounts: false }));
+
+    expect(screen.getByText('Results unavailable')).toBeInTheDocument();
+  });
+
+  // A signed-out vote on a claim nobody else has answered: "0% Agree" would contradict the vote.
+  it('draws nothing where no vote has been counted yet', () => {
+    const { container } = renderResults(summary());
+
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('draws white on a dark surface', () => {
+    const { container } = renderResults(summary({ ...summarizeClaimResponses(3, 1) }), 'dark');
+
+    expect(container.querySelector('[data-claim-results] [role="img"] > div')).toHaveClass('bg-white');
+    expect(screen.getByText('4 Votes')).toHaveClass('text-white/70');
+  });
+});

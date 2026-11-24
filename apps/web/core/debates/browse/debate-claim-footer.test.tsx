@@ -278,3 +278,75 @@ describe('DebateClaimFooter', () => {
     expect(slot).not.toHaveClass('claim-row-end-inline:col-span-1');
   });
 });
+
+// GEO-3833: the debates app's card — claim, then the vote row, then the results once voted, then
+// the meta row last.
+describe('DebateClaimFooter app look', () => {
+  const renderApp = (props: Partial<React.ComponentProps<typeof DebateClaimFooter>> = {}) =>
+    renderFooter({ look: 'app', ...props });
+  const follows = (a: Node, b: Node) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+  it('orders the claim, the vote row and the meta row as the app does', () => {
+    renderApp();
+
+    const title = screen.getByRole('heading', { name: claim.claim });
+    const agree = screen.getByRole('button', { name: 'Agree' });
+    const meta = screen.getByText('Relationships');
+    expect(follows(title, agree)).toBe(true);
+    expect(follows(agree, meta)).toBe(true);
+  });
+
+  it('draws the app’s 44px outlined pills, with the actions on the same row', () => {
+    renderApp();
+
+    const agree = screen.getByRole('button', { name: 'Agree' });
+    expect(agree).toHaveClass('h-11', 'rounded-full', 'border-[#8a8a8a]', 'font-semibold');
+    expect(agree).not.toHaveClass('border-dashed');
+    const grid = agree.parentElement!.parentElement!;
+    expect(grid).toHaveClass('grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]');
+    expect(grid.children).toHaveLength(3);
+    // The label gives way to the thumb in a narrow row, but stays the button's name.
+    expect(screen.getByText('Agree')).toHaveClass('@max-[300px]/debate-actions:sr-only');
+  });
+
+  it('shows no results before a vote', () => {
+    renderApp();
+
+    expect(screen.queryByTestId('claim-summary')).toBeNull();
+  });
+
+  it('reveals the results row once the viewer holds a side, and marks the picked pill', () => {
+    mocks.viewerPosition = false;
+    renderApp();
+
+    const disagree = screen.getByRole('button', { name: /^Disagree/ });
+    expect(disagree).toHaveAttribute('aria-pressed', 'true');
+    expect(disagree).toHaveClass('border-[#151515]', 'font-bold');
+    const results = screen.getByTestId('claim-summary');
+    expect(results).toHaveAttribute('data-layout', 'results');
+    expect(follows(disagree, results)).toBe(true);
+    expect(follows(results, screen.getByText('Relationships'))).toBe(true);
+  });
+
+  // Signed out: the vote is on this device only. The note moves from under the pill to under the
+  // results, where the app's row would show the count it is not yet part of.
+  it('notes a side held only on this device under the results, not under its pill', () => {
+    mocks.viewerPosition = true;
+    mocks.localVoteSide = true;
+    renderApp();
+
+    const note = screen.getByText(/^Not counted yet/);
+    const agree = screen.getByRole('button', { name: /^Agree/ });
+    expect(agree.parentElement!.contains(note)).toBe(false);
+    expect(follows(screen.getByTestId('claim-summary'), note)).toBe(true);
+    expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
+  });
+
+  it('holds a disabled app row while the debate is unresolved', () => {
+    renderApp({ claim: null });
+
+    expect(screen.getByRole('button', { name: 'Agree' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Agree' })).toHaveClass('h-11');
+    expect(screen.getByRole('button', { name: 'Comments (2)' })).toBeEnabled();
+  });
+});
