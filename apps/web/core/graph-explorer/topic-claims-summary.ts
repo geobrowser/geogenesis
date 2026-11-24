@@ -1,46 +1,39 @@
-import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
+import type { QueryClient } from '@tanstack/react-query';
 
-import { Effect } from 'effect';
-import { parse } from 'graphql';
-
-import { graphql } from '~/core/io/graphql-client';
-import { type ClaimResponseSummaryRow, getClaimResponseSummaryPage } from '~/core/io/queries';
-import {
-  CLAIM_RESPONSE_SUMMARY_PAGE_SIZE,
-  groupClaimResponseSummaryRows,
-} from '~/core/responses/claim-response-summaries';
-import { responseKindToVoteKind } from '~/core/responses/entity-response';
-import type { CursorPage } from '~/core/sync/collect-cursor-pages';
-import { normId } from '~/core/utils/norm-id';
+import { loadClaimResponseSummaryCaches } from '~/core/responses/claim-response-summaries';
+import { entityResponseCountsQueryKey } from '~/core/responses/entity-response';
 
 import { type ClaimBand, agreePercent, claimBand } from './claim-band';
-import { CLAIM_ABOUT_PROPERTY_IDS, CLAIM_TYPE_ID } from './ontology';
+import { type ClaimAbout, fetchClaimsAbout } from './claims-about';
+import type { GraphFilter } from './graph-filter';
 
 export type SummarisedClaim = { id: string; name: string; positive: number; negative: number; band: ClaimBand };
 
 export type TopicClaimsSummary = {
-  /** Claims about the topic with at least one response in the space, most responses first. */
+  /** Claims about the topic with at least one response, most responses first. */
   claims: SummarisedClaim[];
   bands: Record<ClaimBand, number>;
-  /** The space has more responses than were read, so the counts are lower bounds. */
+  /** The topic has more claims than were counted, so the counts are lower bounds. */
   truncated: boolean;
 };
 
-/** About 1.2s of reading; World affairs held 1,600 stance rows in Nov 2026. */
-export const MAX_STANCE_PAGES = 5;
-const CLAIM_LOOKUP_SIZE = 1000;
+const TOPIC_CLAIMS_PAGE = 500;
+const TOPIC_CLAIMS_PAGES = 4;
+/** Gaza held 423 claims in World affairs in Nov 2026. */
+export const MAX_TOPIC_CLAIMS = TOPIC_CLAIMS_PAGE * TOPIC_CLAIMS_PAGES;
+const COUNT_CHUNK = 250;
 
-/** Bands and order for the topic's claims, from the space's stance rows (one per user, latest wins). */
+type Counts = { positive: number; negative: number };
+
+/** Bands and order for the topic's claims, from each claim's counts in its own space. */
 export function summariseTopicClaims(
-  rows: readonly ClaimResponseSummaryRow[],
-  claims: ReadonlyArray<{ id: string; name: string }>,
+  claims: readonly ClaimAbout[],
+  countsOf: (claim: ClaimAbout) => Counts | undefined,
   truncated = false
 ): TopicClaimsSummary {
-  const targets = claims.map(claim => ({ entityId: claim.id, responseKind: 'stance' as const }));
-  const summaries = groupClaimResponseSummaryRows(targets, [...rows], null);
   const summarised: SummarisedClaim[] = [];
   for (const claim of claims) {
-    const counts = summaries.get(`${claim.id}:stance`)?.counts;
+    const counts = countsOf(claim);
     const band = counts ? claimBand(counts.positive, counts.negative) : null;
     if (counts && band) summarised.push({ id: claim.id, name: claim.name, ...counts, band });
   }
@@ -50,82 +43,64 @@ export function summariseTopicClaims(
   return { claims: summarised, bands, truncated };
 }
 
-/**
- * Up to `maxPages` pages of stance rows, ordered by claim. When more remain, the last claim's rows
- * may be cut short, so they are dropped rather than counted wrong.
- */
-export async function readStanceRows(
-  fetchPage: (after: string | undefined) => Promise<CursorPage<ClaimResponseSummaryRow>>,
-  maxPages = MAX_STANCE_PAGES
-): Promise<{ rows: ClaimResponseSummaryRow[]; truncated: boolean }> {
-  const rows: ClaimResponseSummaryRow[] = [];
-  let after: string | undefined;
-  for (let page = 0; page < maxPages; page++) {
-    const result = await fetchPage(after);
-    rows.push(...result.items);
-    if (!result.hasNextPage) return { rows, truncated: false };
-    if (!result.endCursor || result.endCursor === after)
-      throw new Error('Stance responses have a next page but no new cursor');
-    after = result.endCursor;
-  }
-  const last = rows.at(-1)?.objectId;
-  return { rows: rows.filter(row => row.objectId !== last), truncated: true };
-}
-
 export function summaryPercent(claim: SummarisedClaim) {
   return agreePercent(claim.positive, claim.negative);
 }
 
-type VotedClaimsResponse = { entitiesConnection: { nodes: Array<{ id: string; name: string | null }> } | null };
+/** The cache the node cards and vote buttons read; a vote's read-back updates it. */
+export function claimCountsKey(claim: ClaimAbout) {
+  return entityResponseCountsQueryKey(claim.id, claim.spaceId, 0, 'stance');
+}
 
-const votedClaimsDocument: TypedDocumentNode<VotedClaimsResponse> = parse(`
-  query TopicVotedClaims($ids: [UUID!], $topicId: UUID!, $aboutPropertyIds: [UUID!], $claimTypeId: UUID!) {
-    entitiesConnection(
-      first: 1000
-      filter: {
-        id: { in: $ids }
-        typeIds: { anyEqualTo: $claimTypeId }
-        relations: { some: { typeId: { in: $aboutPropertyIds }, toEntityId: { is: $topicId } } }
-      }
-    ) {
-      nodes { id name }
+/**
+ * The Claims tab's claims about the topic, up to MAX_TOPIC_CLAIMS, with their stance counts
+ * loaded into the shared per-claim cache, each in the space it is voted in.
+ */
+export async function fetchTopicClaims({
+  topicId,
+  filter,
+  topicSpaceId,
+  queryClient,
+  personalSpaceId,
+  signal,
+}: {
+  topicId: string;
+  filter: GraphFilter;
+  topicSpaceId: string | null;
+  queryClient: QueryClient;
+  personalSpaceId: string | null;
+  signal?: AbortSignal;
+}): Promise<{ claims: ClaimAbout[]; truncated: boolean }> {
+  const claims: ClaimAbout[] = [];
+  let after: string | null = null;
+  let truncated = false;
+  for (let page = 0; ; page++) {
+    const result = await fetchClaimsAbout(topicId, filter, topicSpaceId, after, signal, TOPIC_CLAIMS_PAGE);
+    claims.push(...result.claims);
+    if (!result.hasNextPage) break;
+    if (!result.endCursor || result.endCursor === after)
+      throw new Error('Topic claims have a next page but no new cursor');
+    if (page + 1 >= TOPIC_CLAIMS_PAGES) {
+      truncated = true;
+      break;
     }
+    after = result.endCursor;
   }
-`);
 
-/** Stance responses in `spaceId`, up to MAX_STANCE_PAGES, kept only for claims about the topic. */
-export async function fetchTopicClaimsSummary(topicId: string, spaceId: string, signal?: AbortSignal) {
-  const filter = {
-    spaceId: { is: spaceId },
-    objectType: { is: 0 },
-    voteKind: { is: responseKindToVoteKind('stance') },
-    voteType: { in: [0, 1] },
-  };
-  const { rows, truncated } = await readStanceRows(after =>
-    Effect.runPromise(getClaimResponseSummaryPage(filter, CLAIM_RESPONSE_SUMMARY_PAGE_SIZE, after, signal))
-  );
-  const ids = [...new Set(rows.map(row => normId(row.objectId)))];
-  if (ids.length === 0) return summariseTopicClaims([], [], truncated);
-  const chunks: string[][] = [];
-  for (let i = 0; i < ids.length; i += CLAIM_LOOKUP_SIZE) chunks.push(ids.slice(i, i + CLAIM_LOOKUP_SIZE));
-  const claims = await Promise.all(
-    chunks.map(chunk =>
-      Effect.runPromise(
-        graphql({
-          query: votedClaimsDocument,
-          decoder: (response: VotedClaimsResponse) =>
-            (response.entitiesConnection?.nodes ?? []).flatMap(node =>
-              node.name?.trim() ? [{ id: normId(node.id), name: node.name.trim() }] : []
-            ),
-          variables: { ids: chunk, topicId, aboutPropertyIds: CLAIM_ABOUT_PROPERTY_IDS, claimTypeId: CLAIM_TYPE_ID },
+  const bySpace = new Map<string, ClaimAbout[]>();
+  for (const claim of claims) bySpace.set(claim.spaceId, [...(bySpace.get(claim.spaceId) ?? []), claim]);
+  const loads: Promise<unknown>[] = [];
+  for (const [spaceId, inSpace] of bySpace)
+    for (let i = 0; i < inSpace.length; i += COUNT_CHUNK)
+      loads.push(
+        loadClaimResponseSummaryCaches({
+          queryClient,
+          spaceId,
+          targets: inSpace.slice(i, i + COUNT_CHUNK).map(claim => ({ entityId: claim.id, responseKind: 'stance' })),
+          personalSpaceId,
           signal,
         })
-      )
-    )
-  );
-  return summariseTopicClaims(
-    rows.map(row => ({ ...row, objectId: normId(row.objectId) })),
-    claims.flat(),
-    truncated
-  );
+      );
+  await Promise.all(loads);
+  return { claims, truncated };
 }

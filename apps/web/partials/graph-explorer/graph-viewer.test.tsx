@@ -368,15 +368,15 @@ describe('GraphViewer', () => {
     render(<Viewer start={TOPIC} scope={{ ...scope, topicId: TOPIC, topicSpaceId: SPACE }} />);
     expect(
       screen.getByText(
-        'At least 1 claim about this topic has responses in this space so far; these counts cover only part of this space’s responses.'
+        'At least 1 claim about this topic has responses so far; only its first 2,000 claims were counted.'
       )
     ).toBeTruthy();
   });
 
-  it('claims nothing about the topic when the responses read hold none of its claims', () => {
+  it('says how far it counted when none of the counted claims have responses', () => {
     topicSummary.data = { ...EMPTY_SUMMARY, truncated: true };
     render(<Viewer start={TOPIC} scope={{ ...scope, topicId: TOPIC, topicSpaceId: SPACE }} />);
-    expect(screen.getByText(/more responses than could be read/)).toBeTruthy();
+    expect(screen.getByText('None of the first 2,000 claims about this topic have responses yet.')).toBeTruthy();
     expect(screen.queryByText(/No claims about this topic/)).toBeNull();
   });
 

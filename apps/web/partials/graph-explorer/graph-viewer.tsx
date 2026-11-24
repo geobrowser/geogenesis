@@ -203,7 +203,14 @@ export function GraphViewer({
     let summary: React.ReactNode = null;
     if (claimSpaceId) summary = <ClaimActions claimId={centreId} spaceId={claimSpaceId} />;
     else if (centreId === hubId)
-      summary = <TopicClaimsSummary topicId={centreId} spaceId={topicSpaceId} onOpenClaim={id => goTo(id, null)} />;
+      summary = (
+        <TopicClaimsSummary
+          topicId={centreId}
+          filter={filter}
+          topicSpaceId={topicSpaceId}
+          onOpenClaim={id => goTo(id, null)}
+        />
+      );
     const counts = <KindCounts neighbours={hop1.neighbours} moreKinds={hop1.moreKinds} />;
 
     return (

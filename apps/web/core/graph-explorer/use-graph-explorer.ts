@@ -12,13 +12,14 @@ import {
 import * as React from 'react';
 
 import { useClaimSpaceAllowlist } from '~/core/debates/use-claim-space-allowlist';
+import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useTopicSpaceScope } from '~/core/topics/use-topic-space-scope';
 
 import { type ClaimsAboutPage, fetchClaimsAbout } from './claims-about';
 import { fetchCrossLinks, fetchHop1, fetchHop2 } from './fetch-graph-neighbourhood';
 import { type GraphFilter, type GraphScope, graphFilterKey } from './graph-filter';
 import { type GraphCaps, type GraphKindFilter, presentKinds, selectGraph, selectHop1 } from './select-graph';
-import { fetchTopicClaimsSummary } from './topic-claims-summary';
+import { claimCountsKey, fetchTopicClaims, summariseTopicClaims } from './topic-claims-summary';
 
 const STALE_MS = 60_000;
 
@@ -203,12 +204,50 @@ export function useGraphNeighbourhood({
   return { hop1, centre: hop1Data?.centre ?? null, selection, kinds, isSwitching: hop1.isPlaceholderData };
 }
 
-/** Responses to the topic's claims in its space, for the topic panel. */
-export function useTopicClaimsSummary(topicId: string | null, spaceId: string | null) {
-  return useQuery({
-    queryKey: ['graph-explorer', 'topic-claims-summary', topicId, spaceId],
-    queryFn: ({ signal }) => fetchTopicClaimsSummary(topicId!, spaceId!, signal),
-    enabled: Boolean(topicId && spaceId),
+/**
+ * How people responded to the topic's claims, each counted in the space it is voted in. Reads the
+ * shared per-claim counts, so it agrees with the node cards and moves when a vote lands.
+ */
+export function useTopicClaimsSummary(topicId: string | null, filter: GraphFilter | null, topicSpaceId: string | null) {
+  const queryClient = useQueryClient();
+  const { personalSpaceId, isLoading: personalSpaceLoading } = usePersonalSpaceId();
+  const claims = useQuery({
+    queryKey: [
+      'graph-explorer',
+      'topic-claims',
+      topicId,
+      topicSpaceId ?? '*',
+      personalSpaceId,
+      ...(filter ? graphFilterKey(filter) : ['pending']),
+    ],
+    queryFn: ({ signal }) =>
+      fetchTopicClaims({ topicId: topicId!, filter: filter!, topicSpaceId, queryClient, personalSpaceId, signal }),
+    enabled: Boolean(topicId && filter) && !personalSpaceLoading,
     staleTime: STALE_MS,
   });
+
+  const listed = claims.data;
+  const keys = React.useMemo(
+    () => new Set(listed?.claims.map(claim => hashKey(claimCountsKey(claim))) ?? []),
+    [listed]
+  );
+  const [version, setVersion] = React.useState(0);
+  React.useEffect(() => {
+    if (keys.size === 0) return;
+    return queryClient.getQueryCache().subscribe(event => {
+      if (event.type === 'updated' && keys.has(event.query.queryHash)) setVersion(current => current + 1);
+    });
+  }, [keys, queryClient]);
+
+  const data = React.useMemo(() => {
+    void version;
+    if (!listed) return undefined;
+    return summariseTopicClaims(
+      listed.claims,
+      claim => queryClient.getQueryData<{ positive: number; negative: number }>(claimCountsKey(claim)),
+      listed.truncated
+    );
+  }, [listed, queryClient, version]);
+
+  return { data, isLoading: claims.isLoading || personalSpaceLoading, isError: claims.isError };
 }

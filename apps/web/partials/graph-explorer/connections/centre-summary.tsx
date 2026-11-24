@@ -6,8 +6,9 @@ import cx from 'classnames';
 
 import { CLAIM_BAND_LABELS, type ClaimBand } from '~/core/graph-explorer/claim-band';
 import type { GraphNode } from '~/core/graph-explorer/fetch-graph-neighbourhood';
+import type { GraphFilter } from '~/core/graph-explorer/graph-filter';
 import { GRAPH_KINDS, GRAPH_KIND_LABELS, type GraphKind } from '~/core/graph-explorer/graph-kinds';
-import { summaryPercent } from '~/core/graph-explorer/topic-claims-summary';
+import { MAX_TOPIC_CLAIMS, summaryPercent } from '~/core/graph-explorer/topic-claims-summary';
 import { useTopicClaimsSummary } from '~/core/graph-explorer/use-graph-explorer';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -51,15 +52,16 @@ export function KindCounts({
 /** The topic's claims by agreement in its space, from real responses, stated as sparse as it is. */
 export function TopicClaimsSummary({
   topicId,
-  spaceId,
+  filter,
+  topicSpaceId,
   onOpenClaim,
 }: {
   topicId: string;
-  spaceId: string | null;
+  filter: GraphFilter;
+  topicSpaceId: string | null;
   onOpenClaim: (claimId: string) => void;
 }) {
-  const summary = useTopicClaimsSummary(topicId, spaceId);
-  if (!spaceId) return null;
+  const summary = useTopicClaimsSummary(topicId, filter, topicSpaceId);
   if (summary.isLoading) return <Skeleton className="h-[96px] w-full rounded-lg" />;
   if (summary.isError || !summary.data) {
     return <p className="text-metadata text-grey-04">Couldn’t load how people responded to this topic’s claims.</p>;
@@ -72,16 +74,16 @@ export function TopicClaimsSummary({
       {claims.length === 0 ? (
         <p className="text-metadata text-grey-04">
           {truncated
-            ? 'This space has more responses than could be read here, so how people responded to this topic’s claims isn’t known yet.'
-            : 'No claims about this topic have responses in this space yet.'}
+            ? `None of the first ${MAX_TOPIC_CLAIMS.toLocaleString('en-US')} claims about this topic have responses yet.`
+            : 'No claims about this topic have responses yet.'}
         </p>
       ) : (
         <>
           <p className="text-metadata text-grey-04">
             {truncated ? 'At least ' : claims.length < 10 ? 'Only ' : ''}
             {claims.length} {claims.length === 1 ? 'claim' : 'claims'} about this topic{' '}
-            {claims.length === 1 ? 'has' : 'have'} responses in this space so far
-            {truncated ? '; these counts cover only part of this space’s responses.' : '.'}
+            {claims.length === 1 ? 'has' : 'have'} responses so far
+            {truncated ? `; only its first ${MAX_TOPIC_CLAIMS.toLocaleString('en-US')} claims were counted.` : '.'}
           </p>
           <ul className="flex flex-col gap-1">
             {(Object.keys(CLAIM_BAND_LABELS) as ClaimBand[]).map(band => (

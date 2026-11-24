@@ -149,7 +149,12 @@ export function decodeClaimsAbout(response: ClaimsAboutResponse, requestedSpaceI
   };
 }
 
-export function claimsAboutVariables(entityId: string, filter: GraphFilter, after: string | null) {
+export function claimsAboutVariables(
+  entityId: string,
+  filter: GraphFilter,
+  after: string | null,
+  first = CLAIMS_ABOUT_PAGE_SIZE
+) {
   const topicId = claimsTopicFor(entityId, filter);
   return {
     id: normId(entityId),
@@ -159,7 +164,7 @@ export function claimsAboutVariables(entityId: string, filter: GraphFilter, afte
     namePropertyId: NAME_PROPERTY_ID,
     unplacingPropertyIds: [NAME_PROPERTY_ID, ...[...HIDDEN_PROPERTIES].map(normId)],
     ...(topicId ? topicLensVariables(topicId) : {}),
-    first: CLAIMS_ABOUT_PAGE_SIZE,
+    first,
     after,
   };
 }
@@ -169,13 +174,14 @@ export function fetchClaimsAbout(
   filter: GraphFilter,
   requestedSpaceId: string | null,
   after: string | null,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  first = CLAIMS_ABOUT_PAGE_SIZE
 ) {
   return Effect.runPromise(
     graphql({
       query: claimsTopicFor(entityId, filter) ? claimsAboutTopicDocument : claimsAboutDocument,
       decoder: (response: ClaimsAboutResponse) => decodeClaimsAbout(response, requestedSpaceId),
-      variables: claimsAboutVariables(entityId, filter, after),
+      variables: claimsAboutVariables(entityId, filter, after, first),
       signal,
     })
   );
