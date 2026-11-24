@@ -36,7 +36,10 @@ export function DebateClaimControls({
 }: {
   claimId: string;
   spaceId: string;
-  response: Pick<ReturnType<typeof useDebateClaimResponse>, 'responseKind' | 'summary' | 'control'>;
+  response: Pick<
+    ReturnType<typeof useDebateClaimResponse>,
+    'responseKind' | 'summary' | 'control' | 'isResponseKindResolved'
+  >;
   /** See `PositionRow`: off where the host already shows who voted. */
   showParticipants?: boolean;
   /** Actions drawn at the end of the row, dropping under the pills when the row is narrow. */
