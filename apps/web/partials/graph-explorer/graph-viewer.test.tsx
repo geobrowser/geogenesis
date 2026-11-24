@@ -272,6 +272,36 @@ describe('GraphViewer', () => {
     expect(screen.getByRole('button', { name: 'Show more claims' })).toBeTruthy();
   });
 
+  it('draws a skeleton graph while nothing is loaded, with nothing in it to focus', () => {
+    hooks.hopFor.mockReturnValue(undefined);
+    render(<Viewer start={TOPIC} scope={scope} />);
+    const stage = screen.getByTestId('connections-stage');
+    expect(stage.getAttribute('aria-busy')).toBe('true');
+    expect(stage.textContent).toContain('Loading connections');
+    const placeholders = stage.querySelectorAll('[data-skeleton-node]');
+    expect(placeholders.length).toBeGreaterThan(10);
+    for (const node of placeholders) {
+      expect(node.getAttribute('aria-hidden')).toBe('true');
+      expect(node.matches('button, a, [tabindex]')).toBe(false);
+      expect(node.querySelector('button, a, [tabindex]')).toBeNull();
+    }
+    expect(stage.querySelectorAll('button[data-node-id]')).toHaveLength(0);
+  });
+
+  it('shows the error, not a skeleton, when the connections fail to load', () => {
+    hooks.useGraphNeighbourhood.mockImplementation(() => ({
+      selection: null,
+      kinds: [],
+      hop1: { isError: true, refetch: vi.fn() },
+      centre: null,
+      isSwitching: false,
+    }));
+    render(<Viewer start={TOPIC} scope={scope} />);
+    expect(screen.getByText(/Couldn’t load the connections/)).toBeTruthy();
+    expect(screen.queryByTestId('connections-stage')).toBeNull();
+    expect(document.querySelector('[data-skeleton-node]')).toBeNull();
+  });
+
   it('says so when the entity is not in the graph', () => {
     hooks.hopFor.mockReturnValue({ centre: null, relations: [] });
     render(<Viewer start={TOPIC} scope={scope} />);

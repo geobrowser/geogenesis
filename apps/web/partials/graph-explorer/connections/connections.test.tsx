@@ -7,6 +7,8 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import type { GraphNode } from '~/core/graph-explorer/fetch-graph-neighbourhood';
 import type { GraphKind } from '~/core/graph-explorer/graph-kinds';
 import type { GraphSelection } from '~/core/graph-explorer/select-graph';
+import type { SelectedNode } from '~/core/graph-explorer/select-graph';
+import { SKELETON_SELECTION, isSkeletonNode } from '~/core/graph-explorer/skeleton-graph';
 
 import { ConnectionsCanvas, clearance, overlapShare } from './connections-canvas';
 import { searchNodes } from './graph-search';
@@ -283,6 +285,66 @@ describe('ConnectionsCanvas', () => {
     const first = target.style.transform;
     runFrames(1200);
     expect(target.style.transform).toBe(first);
+  });
+});
+
+describe('ConnectionsCanvas skeleton', () => {
+  const skeleton = SKELETON_SELECTION.desktop;
+  const props = { phone: false, onSelect: vi.fn(), labelFor: () => 'label' };
+  const renderNode = (entry: SelectedNode) => (isSkeletonNode(entry.node) ? null : entry.node.name);
+  const positionOf = (element: Element) =>
+    (element as HTMLElement).style.transform.match(/translate3d\(([^)]*)\)/)?.[1];
+
+  it('marks the stage busy and makes the placeholders inert', () => {
+    render(<ConnectionsCanvas selection={skeleton} renderNode={renderNode} {...props} />);
+    runFrames(100);
+    const stage = screen.getByTestId('connections-stage');
+    expect(stage.getAttribute('aria-busy')).toBe('true');
+    expect(screen.queryAllByRole('button', { name: /./ }).filter(b => b.dataset.nodeId)).toHaveLength(0);
+    expect(stage.querySelectorAll('[data-skeleton-node][aria-hidden="true"]')).toHaveLength(skeleton.nodes.length);
+  });
+
+  it('hands over to the real graph: real nodes start on the placeholders, which fade out', () => {
+    const { rerender } = render(<ConnectionsCanvas selection={skeleton} renderNode={renderNode} {...props} />);
+    runFrames(400);
+    const stage = screen.getByTestId('connections-stage');
+    const placeholderPositions = new Set(
+      [...stage.querySelectorAll('[data-skeleton-node]:not([data-node-id="skeleton:centre"])')].map(element =>
+        positionOf(element)
+      )
+    );
+    rerender(<ConnectionsCanvas selection={selection} renderNode={renderNode} {...props} />);
+    runFrames(now + 16);
+    expect(stage.getAttribute('aria-busy')).toBeNull();
+    // A hop-1 node's first frame is on a placeholder, not on the centre it would otherwise grow from.
+    expect(placeholderPositions.has(positionOf(screen.getByRole('button', { name: 'Isaac Herzog' })))).toBe(true);
+    expect(stage.querySelectorAll('[data-skeleton-node]').length).toBeGreaterThan(0);
+    runFrames(now + 2000);
+    // Let the removal timer run.
+    return new Promise<void>(resolve =>
+      setTimeout(() => {
+        act(() => {});
+        expect(stage.querySelectorAll('[data-skeleton-node]')).toHaveLength(0);
+        expect(screen.getByRole('button', { name: 'Isaac Herzog' })).toBeTruthy();
+        resolve();
+      }, 500)
+    );
+  });
+
+  it('holds still under reduced motion: no spin and no pulse', () => {
+    motion.reduce = true;
+    const { container } = render(
+      <ConnectionsCanvas
+        selection={skeleton}
+        renderNode={entry => <span className={motion.reduce ? undefined : 'animate-pulse'}>{entry.node.id}</span>}
+        {...props}
+      />
+    );
+    runFrames(100);
+    const first = [...container.querySelectorAll('[data-skeleton-node]')].map(element => positionOf(element));
+    runFrames(8000);
+    expect([...container.querySelectorAll('[data-skeleton-node]')].map(element => positionOf(element))).toEqual(first);
+    expect(frames).toHaveLength(0);
   });
 });
 

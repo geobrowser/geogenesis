@@ -8,6 +8,7 @@ import { type GraphNode, hop1AsGraphHop } from '~/core/graph-explorer/fetch-grap
 import { type GraphFilterOverrides, type GraphScope, resolveGraphFilter } from '~/core/graph-explorer/graph-filter';
 import { type GraphHistory, goBack, recentre } from '~/core/graph-explorer/history';
 import { DESKTOP_GRAPH_CAPS, type GraphKindFilter, PHONE_GRAPH_CAPS } from '~/core/graph-explorer/select-graph';
+import { SKELETON_SELECTION } from '~/core/graph-explorer/skeleton-graph';
 import { type Spoke, buildSpokes, entitySpaceId } from '~/core/graph-explorer/spokes';
 import { useClaimsAbout, useGraphNeighbourhood, usePrefetchHop1 } from '~/core/graph-explorer/use-graph-explorer';
 import { useMediaQuery } from '~/core/hooks/use-media-query';
@@ -121,11 +122,12 @@ export function GraphViewer({
     />
   );
 
+  // While nothing is loaded the same stage draws a skeleton, so the real graph eases in from it.
   let stage: React.ReactNode;
-  if (selection) {
+  if (selection || (!neighbourhood.hop1.isError && !(neighbourhood.hop1.data && !neighbourhood.centre))) {
     stage = (
       <ConnectionsStage
-        selection={selection}
+        selection={selection ?? SKELETON_SELECTION[phone ? 'phone' : 'desktop']}
         phone={phone}
         topicSpaceId={topicSpaceId}
         onSelect={selectNode}
@@ -142,10 +144,8 @@ export function GraphViewer({
         </button>
       </StageNote>
     );
-  } else if (neighbourhood.hop1.data && !neighbourhood.centre) {
-    stage = <StageNote role="status">This entity isn’t in the knowledge graph.</StageNote>;
   } else {
-    stage = <StageNote aria-busy>Loading connections…</StageNote>;
+    stage = <StageNote role="status">This entity isn’t in the knowledge graph.</StageNote>;
   }
 
   return (

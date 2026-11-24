@@ -3,16 +3,19 @@
 import * as React from 'react';
 
 import cx from 'classnames';
+import { useReducedMotion } from 'framer-motion';
 
 import { CLAIM_BAND_LABELS } from '~/core/graph-explorer/claim-band';
 import { nodeClaimSpaceId } from '~/core/graph-explorer/claims-about';
 import type { GraphEdge, GraphNode } from '~/core/graph-explorer/fetch-graph-neighbourhood';
 import type { GraphSelection, SelectedNode } from '~/core/graph-explorer/select-graph';
+import { isSkeletonNode, isSkeletonSelection } from '~/core/graph-explorer/skeleton-graph';
 import { relationLabel } from '~/core/graph-explorer/spokes';
 
 import { ClaimBatchRow, useClaimSpaceBatches } from '../graph-claim-list';
 import { ConnectionsCanvas } from './connections-canvas';
 import { BAND_SWATCHES, NodeCard } from './node-card';
+import { SkeletonNode } from './skeleton-node';
 
 /** The design switches to its phone numbers below 600px. */
 export const PHONE_QUERY = '(max-width: 599px)';
@@ -38,7 +41,7 @@ export function ConnectionsStage({
   const claimSpaces = React.useMemo(() => {
     const spaces = new Map<string, string>();
     for (const { node } of selection.nodes) {
-      if (node.kind !== 'claim') continue;
+      if (node.kind !== 'claim' || isSkeletonNode(node)) continue;
       const spaceId = nodeClaimSpaceId(node, topicSpaceId);
       if (spaceId) spaces.set(node.id, spaceId);
     }
@@ -47,15 +50,25 @@ export function ConnectionsStage({
   const claimTargets = React.useMemo(() => [...claimSpaces].map(([id, spaceId]) => ({ id, spaceId })), [claimSpaces]);
   const { status, batches } = useClaimSpaceBatches(claimTargets);
 
+  const reduceMotion = useReducedMotion() ?? false;
   const renderNode = React.useCallback(
     (entry: SelectedNode, isCentre: boolean) => {
+      if (isSkeletonNode(entry.node))
+        return (
+          <SkeletonNode
+            kind={entry.node.kind === 'claim' ? 'claim' : 'ent'}
+            isCentre={isCentre}
+            phone={phone}
+            pulse={!reduceMotion && 'animate-pulse'}
+          />
+        );
       const spaceId = claimSpaces.get(entry.node.id) ?? null;
       const card = (
         <NodeCard node={entry.node} hop={entry.hop} isCentre={isCentre} phone={phone} claimSpaceId={spaceId} />
       );
       return spaceId ? <ClaimBatchRow status={status[spaceId] ?? 'pending'}>{card}</ClaimBatchRow> : card;
     },
-    [claimSpaces, phone, status]
+    [claimSpaces, phone, reduceMotion, status]
   );
 
   const labelFor = React.useCallback(
@@ -79,7 +92,7 @@ export function ConnectionsStage({
         renderNode={renderNode}
         labelFor={labelFor}
       >
-        {selection.nodes.length === 1 && (
+        {selection.nodes.length === 1 && !isSkeletonSelection(selection) && (
           <p className="pointer-events-none absolute inset-x-6 top-1/2 mt-20 text-center text-[13px] text-[#a8a8a8]">
             {emptyMessage}
           </p>

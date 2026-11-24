@@ -19,10 +19,15 @@ import {
   starfield,
 } from '~/core/graph-explorer/layout-3d';
 import type { GraphSelection, SelectedNode } from '~/core/graph-explorer/select-graph';
+import { INITIAL_VIEW, isSkeletonNode, isSkeletonSelection } from '~/core/graph-explorer/skeleton-graph';
 
 const MOVE_MS = 950;
 const LEAVE_MS = 420;
 const FADE_IN_MS = 500;
+
+/** The stage's night sky; the server-rendered skeleton stage uses it too. */
+export const STAGE_BACKGROUND =
+  'bg-[radial-gradient(ellipse_45%_40%_at_22%_28%,rgba(154,96,255,.16),transparent_70%),radial-gradient(ellipse_40%_35%_at_80%_74%,rgba(255,121,0,.10),transparent_70%),radial-gradient(ellipse_at_50%_45%,#1c1c21_0%,#111114_55%,#070708_100%)]';
 const IDLE_ROTATE_AFTER_MS = 2600;
 /** How long the idle spin runs before the loop sleeps; shorter on phone to save battery. */
 const IDLE_SPIN_MS = { phone: 12_000, desktop: 45_000 };
@@ -71,6 +76,8 @@ type Engine = {
   width: number;
   height: number;
   dpr: number;
+  /** Placeholders only: links are faint and carry no moving dots. */
+  skeleton: boolean;
 };
 
 export type ConnectionsCanvasProps = {
@@ -102,7 +109,7 @@ export function ConnectionsCanvas({
   const reduceMotion = useReducedMotion() ?? false;
   const stageRef = React.useRef<HTMLDivElement>(null);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
-  const elements = React.useRef(new Map<string, HTMLButtonElement>());
+  const elements = React.useRef(new Map<string, HTMLElement>());
   const moved = React.useRef(false);
   const dragging = React.useRef(false);
   /** Removal timers; a new selection must not cancel the last one's or its leaving nodes stay. */
@@ -122,8 +129,8 @@ export function ConnectionsCanvas({
     views: new Map(),
     links: [],
     centreId: selection.nodes[0]?.node.id ?? '',
-    yaw: 0.6,
-    pitch: -0.28,
+    yaw: INITIAL_VIEW.yaw,
+    pitch: INITIAL_VIEW.pitch,
     distance: 1000,
     distanceFrom: 1000,
     fit: 1000,
@@ -137,6 +144,7 @@ export function ConnectionsCanvas({
     width: 0,
     height: 0,
     dpr: 1,
+    skeleton: false,
   });
   const [leaving, setLeaving] = React.useState<SelectedNode[]>([]);
   const [layoutMs, setLayoutMs] = React.useState<number | null>(null);
@@ -153,7 +161,18 @@ export function ConnectionsCanvas({
     const now = performance.now();
     const ids = selection.nodes.map(entry => entry.node.id);
     const centreId = ids[0];
-    const previous = new Map([...state.views.values()].filter(view => view.alive).map(view => [view.id, view.p]));
+    const alive = [...state.views.values()].filter(view => view.alive);
+    const previous = new Map(alive.map(view => [view.id, view.p]));
+    const skeleton = isSkeletonSelection(selection);
+    // Real nodes replacing a skeleton start where its placeholders are, hop by hop, as the skeleton fades.
+    if (!skeleton && alive.length > 0 && alive.every(view => isSkeletonNode(view.entry.node))) {
+      const byHop = [0, 1, 2].map(hop => alive.filter(view => view.hop === hop));
+      const used = [0, 0, 0];
+      for (const entry of selection.nodes) {
+        const pool = byHop[entry.hop];
+        if (pool.length > 0) previous.set(entry.node.id, pool[used[entry.hop]++ % pool.length].p);
+      }
+    }
     const start = performance.now();
     const target = simulateLayout({
       ids,
@@ -188,14 +207,21 @@ export function ConnectionsCanvas({
         existing.entry = entry;
       } else {
         const parent = entry.parentId ? state.views.get(entry.parentId) : null;
-        const p: Vec3 = parent?.alive ? [...parent.p] : [0, 0, 0];
+        // A skeleton opens in place; anything else grows from a placeholder, its parent or the centre.
+        const p: Vec3 = skeleton
+          ? [...to]
+          : previous.has(id)
+            ? [...previous.get(id)!]
+            : parent?.alive
+              ? [...parent.p]
+              : [0, 0, 0];
         state.views.set(id, {
           id,
           p,
           from: p,
           to,
           hop: entry.hop,
-          born: now,
+          born: skeleton ? now - FADE_IN_MS : now,
           alive: true,
           died: 0,
           entry,
@@ -219,8 +245,10 @@ export function ConnectionsCanvas({
     state.fit = fitDistance(state.near, state.width || 1280, state.height || 860, phone);
     state.distanceFrom = state.distance;
     state.anim = { t0: now, duration: reduceMotion ? 0 : MOVE_MS };
-    // Each selection, the first included, restarts the idle clock so the spin follows it.
-    state.lastActive = now;
+    // Each selection, the first included, restarts the idle clock so the spin follows it. A skeleton
+    // spins at once, as there is nothing to read yet.
+    state.lastActive = skeleton ? now - IDLE_ROTATE_AFTER_MS : now;
+    state.skeleton = skeleton;
     wake.current();
 
     const sweep = () => {
@@ -439,7 +467,7 @@ export function ConnectionsCanvas({
         if (!A || !B) continue;
         const on = hover !== null && (link.a === hover || link.b === hover);
         const fog = Math.max(0.25, Math.min(1, 1 - ((A.depth + B.depth) / 2 + 150) / 1100));
-        let alpha = (link.hop === 1 ? 0.34 : link.hop === 2 ? 0.2 : 0.08) * fog;
+        let alpha = (link.hop === 1 ? 0.34 : link.hop === 2 ? 0.2 : 0.08) * fog * (state.skeleton ? 0.45 : 1);
         if (hover) alpha = on ? 0.9 : alpha * 0.3;
         context.strokeStyle = `rgba(255,255,255,${alpha.toFixed(3)})`;
         context.lineWidth = on ? 1.6 : link.hop === 1 ? 1.1 : 0.8;
@@ -447,7 +475,7 @@ export function ConnectionsCanvas({
         context.moveTo(A.x, A.y);
         context.lineTo(B.x, B.y);
         context.stroke();
-        if (!reduceMotion && link.hop < 3 && (!hover || on)) {
+        if (!reduceMotion && !state.skeleton && link.hop < 3 && (!hover || on)) {
           for (let q = 0; q < (link.hop === 1 ? 2 : 1); q++) {
             const t = (now / (link.hop === 1 ? 2200 : 3000) + hash01(link.a + link.b + q)) % 1;
             context.fillStyle = `rgba(255,255,255,${(on ? 0.95 : 0.6 * fog).toFixed(3)})`;
@@ -619,6 +647,7 @@ export function ConnectionsCanvas({
   };
 
   const centreId = selection.nodes[0]?.node.id;
+  const loading = isSkeletonSelection(selection);
 
   return (
     <div
@@ -626,16 +655,43 @@ export function ConnectionsCanvas({
       tabIndex={0}
       aria-label="Map of connections. Arrow keys turn it."
       onKeyDown={onStageKey}
+      aria-busy={loading || undefined}
       data-testid="connections-stage"
       data-layout-ms={layoutMs ?? undefined}
-      className="relative h-full w-full cursor-grab touch-none overflow-hidden bg-[radial-gradient(ellipse_45%_40%_at_22%_28%,rgba(154,96,255,.16),transparent_70%),radial-gradient(ellipse_40%_35%_at_80%_74%,rgba(255,121,0,.10),transparent_70%),radial-gradient(ellipse_at_50%_45%,#1c1c21_0%,#111114_55%,#070708_100%)] outline-none select-none focus-visible:ring-2 focus-visible:ring-white/60 active:cursor-grabbing"
+      className={cx(
+        'relative h-full w-full cursor-grab touch-none overflow-hidden outline-none select-none focus-visible:ring-2 focus-visible:ring-white/60 active:cursor-grabbing',
+        STAGE_BACKGROUND
+      )}
     >
+      {loading && <p className="sr-only">Loading connections</p>}
       <canvas ref={canvasRef} aria-hidden className="pointer-events-none absolute inset-0" />
       <div className="absolute inset-0">
         {shown.map(entry => {
           const id = entry.node.id;
           const isCentre = id === centreId;
           const gone = !selection.nodes.includes(entry);
+          if (isSkeletonNode(entry.node))
+            return (
+              <div
+                key={id}
+                ref={element => {
+                  if (element) {
+                    elements.current.set(id, element);
+                    watchSize(element);
+                  } else {
+                    const old = elements.current.get(id);
+                    if (old) resizes.current?.unobserve(old);
+                    elements.current.delete(id);
+                  }
+                }}
+                aria-hidden
+                data-node-id={id}
+                data-skeleton-node
+                className="pointer-events-none absolute top-0 left-0 opacity-0 will-change-transform"
+              >
+                {renderNode(entry, isCentre)}
+              </div>
+            );
           return (
             <button
               key={id}
@@ -715,7 +771,7 @@ export function ConnectionsCanvas({
         aria-hidden
         className={cx(
           'pointer-events-none absolute top-4 left-1/2 z-[9999] -translate-x-1/2 rounded-full bg-white/10 px-[14px] py-[6px] text-[13px] whitespace-nowrap text-[#e6e6e6] transition-opacity duration-500 md:text-[12px]',
-          hinted && 'opacity-0'
+          (hinted || loading) && 'opacity-0'
         )}
       >
         {canHover
