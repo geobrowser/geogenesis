@@ -279,21 +279,21 @@ describe('DebateClaimFooter', () => {
   });
 });
 
-// GEO-3833: the debates app's card — claim, then the vote row, then the results once voted, then
-// the meta row last.
+// GEO-3833: the debates app's card — Geo's meta row under the video, then the claim, the vote row
+// and the results once voted.
 describe('DebateClaimFooter app look', () => {
   const renderApp = (props: Partial<React.ComponentProps<typeof DebateClaimFooter>> = {}) =>
     renderFooter({ look: 'app', ...props });
   const follows = (a: Node, b: Node) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
 
-  it('orders the claim, the vote row and the meta row as the app does', () => {
+  it('puts the meta row above the claim, then the vote row', () => {
     renderApp();
 
     const title = screen.getByRole('heading', { name: claim.claim });
     const agree = screen.getByRole('button', { name: 'Agree' });
     const meta = screen.getByText('Relationships');
+    expect(follows(meta, title)).toBe(true);
     expect(follows(title, agree)).toBe(true);
-    expect(follows(agree, meta)).toBe(true);
   });
 
   it('draws the app’s 44px outlined pills, with the actions on the same row', () => {
