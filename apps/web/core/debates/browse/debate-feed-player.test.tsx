@@ -4704,7 +4704,7 @@ describe('DebateFeedPlayer top-left controls beside a top-right button', () => {
       />
     );
 
-    expect(controlsRow()).toHaveClass('flex-wrap');
+    expect(controlsRow().classList.contains('flex-wrap')).toBe(true);
     expect(controlsRow().parentElement!.className).toContain(
       'max-w-[calc(100%-var(--debate-top-right-width,12rem)-1.75rem)]'
     );

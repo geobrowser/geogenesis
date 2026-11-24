@@ -2398,7 +2398,7 @@ function DebaterVideo({
         <div
           className={cx(
             'absolute top-3 left-3 flex items-center gap-2',
-            topRight && 'max-w-[calc(100%-var(--debate-top-right-width,12rem)-1.75rem)]',
+            Boolean(topRight) && 'max-w-[calc(100%-var(--debate-top-right-width,12rem)-1.75rem)]',
             stamped ? 'z-30' : 'z-10'
           )}
         >
