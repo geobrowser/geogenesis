@@ -64,9 +64,8 @@ export function TopicTemplate({
   );
   const addedTimelineTurns = usePendingAdds<TopicTimelineHighlightModel>(listedTimelineIds);
   const [subtopicsExpanded, setSubtopicsExpanded] = React.useState(false);
-  // Phones show the subtopics only on request, so the description leads (GEO-3837). Desktop always
-  // shows them.
-  const [phoneSubtopicsOpen, setPhoneSubtopicsOpen] = React.useState(false);
+  // Subtopics show only on request, so the description leads (GEO-3837).
+  const [subtopicsOpen, setSubtopicsOpen] = React.useState(false);
   const subtopicsNavId = React.useId();
   const timelineHighlights = [...addedTimelineTurns.rows, ...(model.timelineHighlights ?? [])];
   const subtopics = model.subtopics ?? [];
@@ -75,14 +74,14 @@ export function TopicTemplate({
   const hasContextOrLive = (model.graphConnections && model.graphConnections.length > 0) || Boolean(actionCallbacks);
   const hasFlagsOrLive = Boolean(model.contextByEntityId?.[model.id]?.flags?.length) || Boolean(actionCallbacks);
 
-  const subtopicsNav = (collapsibleOnPhone: boolean) =>
+  const subtopicsNav = (collapsible: boolean) =>
     subtopics.length > 0 ? (
       <nav
-        id={collapsibleOnPhone ? subtopicsNavId : undefined}
+        id={collapsible ? subtopicsNavId : undefined}
         aria-label="Subtopics"
         className={cx(
           'flex-wrap items-center gap-1.5',
-          collapsibleOnPhone && !phoneSubtopicsOpen ? 'hidden @[760px]:flex' : 'flex',
+          collapsible && !subtopicsOpen ? 'hidden' : 'flex',
           !embedded && 'mt-1'
         )}
       >
@@ -174,13 +173,13 @@ export function TopicTemplate({
           {subtopics.length > 0 && (
             <button
               type="button"
-              aria-expanded={phoneSubtopicsOpen}
+              aria-expanded={subtopicsOpen}
               aria-controls={subtopicsNavId}
-              onClick={() => setPhoneSubtopicsOpen(open => !open)}
-              className="inline-flex cursor-pointer items-center gap-1 self-start border-0 bg-transparent p-0 text-[14px] font-medium text-grey-04 transition-colors hover:text-text @[760px]:hidden"
+              onClick={() => setSubtopicsOpen(open => !open)}
+              className="inline-flex cursor-pointer items-center gap-1 self-start border-0 bg-transparent p-0 text-[14px] font-medium text-grey-04 transition-colors hover:text-text"
             >
-              {phoneSubtopicsOpen ? 'Hide subtopics' : 'Show subtopics'}
-              <ChevronRightIcon className={cx('size-3.5', phoneSubtopicsOpen ? '-rotate-90' : 'rotate-90')} />
+              {subtopicsOpen ? 'Hide subtopics' : 'Show subtopics'}
+              <ChevronRightIcon className={cx('size-3.5', subtopicsOpen ? '-rotate-90' : 'rotate-90')} />
             </button>
           )}
           {subtopicsNav(true)}
@@ -358,19 +357,21 @@ function TimelineHighlightRow({
   );
 
   return (
-    // On phones the date sits just above its event's name (GEO-3837); the stacked gap and the name's
-    // top padding were 24px between them.
-    <li className="grid grid-cols-1 gap-1 @[680px]:grid-cols-[118px_28px_minmax(0,1fr)] @[680px]:gap-4">
-      {/* Left date */}
-      <div className="pt-4 text-[14px] font-semibold text-grey-04 @[680px]:pt-5 @[680px]:text-right">{turn.when}</div>
+    // Desktop: date | spine | event. Phones: a slim spine on the left, with the date just above its
+    // event's name beside it (GEO-3837).
+    <li className="grid grid-cols-[12px_minmax(0,1fr)] gap-x-3 @[680px]:grid-cols-[118px_28px_minmax(0,1fr)] @[680px]:gap-x-4">
+      {/* Date */}
+      <div className="col-start-2 row-start-1 pt-4 text-[14px] font-semibold text-grey-04 @[680px]:col-start-1 @[680px]:pt-5 @[680px]:text-right">
+        {turn.when}
+      </div>
 
-      {/* Continuous vertical timeline spine directly on page */}
-      <div className="relative hidden justify-center @[680px]:flex">
-        {!isFirst && <span aria-hidden className="absolute top-0 h-[28px] w-px bg-grey-02" />}
-        {!isLast && <span aria-hidden className="absolute top-[28px] bottom-0 w-px bg-grey-02" />}
+      {/* Continuous vertical timeline spine. The dot lines up with the date on phones, the name on desktop. */}
+      <div className="relative col-start-1 row-span-2 row-start-1 flex justify-center @[680px]:col-start-2 @[680px]:row-span-1">
+        {!isFirst && <span aria-hidden className="absolute top-0 h-[26px] w-px bg-grey-02 @[680px]:h-[28px]" />}
+        {!isLast && <span aria-hidden className="absolute top-[26px] bottom-0 w-px bg-grey-02 @[680px]:top-[28px]" />}
         <span
           aria-hidden
-          className="relative z-10 mt-[19px] inline-grid size-[18px] shrink-0 place-items-center rounded-full border border-grey-02 bg-white"
+          className="relative z-10 mt-[20px] inline-grid size-3 shrink-0 place-items-center rounded-full border border-transparent bg-white @[680px]:mt-[19px] @[680px]:size-[18px] @[680px]:border-grey-02"
         >
           <span className="size-2 rounded-full bg-text" />
         </span>
@@ -378,7 +379,10 @@ function TimelineHighlightRow({
 
       {/* Right: event milestone headline + concise summary + overflow menu */}
       <div
-        className={cx('flex min-w-0 flex-col gap-2.5 pt-1 pb-4 @[680px]:py-5', !isLast && 'border-b border-divider/90')}
+        className={cx(
+          'col-start-2 row-start-2 flex min-w-0 flex-col gap-2.5 pt-1 pb-4 @[680px]:col-start-3 @[680px]:row-start-1 @[680px]:py-5',
+          !isLast && 'border-b border-divider/90'
+        )}
       >
         <div className="flex min-w-0 items-start justify-between gap-3">
           {turn.href ? (

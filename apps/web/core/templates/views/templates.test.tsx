@@ -1013,6 +1013,8 @@ describe('News story Add claim with claim groups (GEO-3836)', () => {
   it('draws no Other claims section without flat claims or a way to add one', () => {
     render(<NewsStoryTemplate model={{ ...base, reportedClaims: [] }} />);
     expect(screen.queryByRole('region', { name: 'Other claims' })).toBeNull();
+  });
+});
 
 describe('GEO-3837 phone tidy-ups', () => {
   const split = (totalVotes: number) => ({
@@ -1023,7 +1025,7 @@ describe('GEO-3837 phone tidy-ups', () => {
     totalVotes,
   });
 
-  it('puts the subtopics behind "Show subtopics" on phones, and shows them on desktop', () => {
+  it('puts the subtopics behind "Show subtopics" at every width', () => {
     render(
       <TopicTemplate
         model={{
@@ -1039,9 +1041,10 @@ describe('GEO-3837 phone tidy-ups', () => {
     const toggle = screen.getByRole('button', { name: 'Show subtopics' });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
     expect(toggle).toHaveAttribute('aria-controls', nav.id);
-    expect(toggle).toHaveClass('@[760px]:hidden');
-    // jsdom applies no Tailwind: collapsed, the nav is hidden only below the desktop breakpoint.
-    expect(nav).toHaveClass('hidden', '@[760px]:flex');
+    expect(toggle).not.toHaveClass('@[760px]:hidden');
+    // jsdom applies no Tailwind: collapsed, the nav is hidden with no desktop override.
+    expect(nav).toHaveClass('hidden');
+    expect(nav).not.toHaveClass('@[760px]:flex');
 
     fireEvent.click(toggle);
     expect(screen.getByRole('button', { name: 'Hide subtopics' })).toHaveAttribute('aria-expanded', 'true');
@@ -1058,7 +1061,7 @@ describe('GEO-3837 phone tidy-ups', () => {
     expect(screen.queryByRole('button', { name: 'Show subtopics' })).toBeNull();
   });
 
-  it('keeps the timeline arrow to desktop and the date close to the name on phones', () => {
+  it('keeps the timeline arrow to desktop, and gives phones a slim spine beside the date and name', () => {
     render(
       <TopicTemplate
         model={{
@@ -1072,8 +1075,13 @@ describe('GEO-3837 phone tidy-ups', () => {
 
     const link = screen.getByRole('link', { name: /Attack on Israel/ });
     expect(link.querySelector('svg')).toHaveClass('hidden', '@[680px]:block');
+    // Phones: a slim spine column on the left, the date and the event stacked beside it.
     const row = link.closest('li')!;
-    expect(row).toHaveClass('gap-1', '@[680px]:gap-4');
+    expect(row).toHaveClass('grid-cols-[12px_minmax(0,1fr)]', '@[680px]:grid-cols-[118px_28px_minmax(0,1fr)]');
+    const spine = row.querySelector('[class*="row-span-2"]')!;
+    expect(spine).toHaveClass('col-start-1', 'flex');
+    expect(spine).not.toHaveClass('hidden');
+    expect(screen.getByText('Oct 2023')).toHaveClass('col-start-2', 'row-start-1');
   });
 
   it('draws the Claim page sub-claims with the Topic list rows', () => {

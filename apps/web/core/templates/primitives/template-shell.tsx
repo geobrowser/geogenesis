@@ -285,9 +285,12 @@ export function TemplateShell({
           style={compact || embedded ? undefined : { maxWidth }}
         >
           {!embedded && breadcrumbs && breadcrumbs.length > 0 && (
-            // Phones: the back link sits 20px under the cover and 16px over the title, not the 32px
-            // section gap, so it reads as part of the header (GEO-3837).
-            <TemplateBreadcrumb items={breadcrumbs} className={compact ? undefined : '-mt-3 -mb-4 @[600px]:my-0'} />
+            // The trail sits closer to the cover and the title than the section gap (32px on phones,
+            // 44px on desktop), so it reads as part of the header (GEO-3837).
+            <TemplateBreadcrumb
+              items={breadcrumbs}
+              className={compact ? undefined : '-mt-3 -mb-4 @[600px]:-mt-2 @[600px]:-mb-6'}
+            />
           )}
           {children}
         </div>
