@@ -591,10 +591,49 @@ describe('GraphViewer under a kind chip', () => {
     fireEvent.click(rows.find(row => headline.contains(row) === inHeadline)!);
     expect(chips().getByRole('button', { name: 'Everything' }).getAttribute('aria-pressed')).toBe('true');
   });
+
+  // The map's node of the same kind keeps the chip too, so these open the row inside the panel.
+  const panel = () => within(screen.getByRole('region', { name: 'About Israel-Gaza war' }));
+  const recentredKinds = () =>
+    vi
+      .mocked(captureSafely)
+      .mock.calls.filter(([event]) => event === 'graph_explorer_recentred')
+      .map(([, props]) => (props as Record<string, unknown>).kind_filter);
+
+  it('keeps the chip when opening a row of its kind from the panel, and reports the hop under it', () => {
+    mixedNeighbourhood();
+    const move: React.MutableRefObject<((next: GraphHistory) => void) | null> = { current: null };
+    render(<TrackedViewer move={move} />);
+    fireEvent.click(chips().getByRole('button', { name: 'News' }));
+    fireEvent.click(panel().getByRole('button', { name: /A news story/ }));
+    expect(chips().getByRole('button', { name: 'News' }).getAttribute('aria-pressed')).toBe('true');
+    expect(recentredKinds()).toEqual(['story']);
+  });
+
+  it('reports the hop under Everything when a summary claim opened under a chip', () => {
+    mixedNeighbourhood();
+    topicSummary.data = {
+      claims: [{ id: CLAIM, name: 'A claim', spaceId: SPACE, positive: 3, negative: 0, band: 'agreed' }],
+      truncated: false,
+    };
+    const move: React.MutableRefObject<((next: GraphHistory) => void) | null> = { current: null };
+    render(<TrackedViewer move={move} viewScope={topicScope} />);
+    fireEvent.click(chips().getByRole('button', { name: 'News' }));
+    fireEvent.click(
+      within(screen.getByRole('region', { name: 'How people responded' })).getByRole('button', { name: /A claim/ })
+    );
+    expect(recentredKinds()).toEqual(['all']);
+  });
 });
 
 /** The page's session around the viewer, with a way to move history as browser Back would. */
-function TrackedViewer({ move }: { move: React.MutableRefObject<((next: GraphHistory) => void) | null> }) {
+function TrackedViewer({
+  move,
+  viewScope = scope,
+}: {
+  move: React.MutableRefObject<((next: GraphHistory) => void) | null>;
+  viewScope?: React.ComponentProps<typeof GraphViewer>['scope'];
+}) {
   const [history, setHistory] = React.useState(() => startGraphHistory(TOPIC));
   const [client] = React.useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }));
   const session = useGraphExplorerSession({ entityId: TOPIC, topicId: TOPIC, spaceId: null, trailDepth: 0 });
@@ -602,7 +641,7 @@ function TrackedViewer({ move }: { move: React.MutableRefObject<((next: GraphHis
   return (
     <QueryClientProvider client={client}>
       <GraphAnalyticsProvider value={session}>
-        <GraphViewer scope={scope} history={history} onNavigate={setHistory} />
+        <GraphViewer scope={viewScope} history={history} onNavigate={setHistory} />
       </GraphAnalyticsProvider>
     </QueryClientProvider>
   );
