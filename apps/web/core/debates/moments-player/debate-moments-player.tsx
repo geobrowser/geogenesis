@@ -394,6 +394,10 @@ function MomentsStory({
     const atEdge = direction === 1 ? story.index >= story.count - 1 : story.index === 0;
     if (atEdge) {
       // The first card's left edge replays it, as in a story; the last card's right edge holds.
+      if (direction === -1 && failed) {
+        retry();
+        return;
+      }
       if (direction === -1 && videoRef.current) {
         videoRef.current.currentTime = 0;
         setClipPosition({ src, ms: 0 });
@@ -623,9 +627,9 @@ function MomentsStory({
       </div>
 
       {/* Tap zones. While playing, the middle pauses and in the moments the edges step; paused, a tap
-          anywhere plays (Preston, 12 Nov), so the edges only step once it is going. After a load error,
-          a tap anywhere retries. */}
-      {story.mode === 'moments' && active && (
+          anywhere plays (Preston, 12 Nov), so the edges only step once it is going, or to get past a
+          clip that failed. After a load error, the rest of the picture retries. */}
+      {story.mode === 'moments' && (active || failed) && (
         <>
           <button
             type="button"
@@ -645,7 +649,10 @@ function MomentsStory({
         type="button"
         aria-label={active ? 'Pause' : 'Play'}
         onClick={togglePlay}
-        className={cx(zoneClass, story.mode === 'moments' && active ? 'bottom-0 left-[30%] w-[40%]' : 'inset-0')}
+        className={cx(
+          zoneClass,
+          story.mode === 'moments' && (active || failed) ? 'bottom-0 left-[30%] w-[40%]' : 'inset-0'
+        )}
       />
 
       {advancing && !failed && (
