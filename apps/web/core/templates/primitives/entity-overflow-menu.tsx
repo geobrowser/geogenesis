@@ -354,6 +354,7 @@ export function AddFormSurface({
   heading,
   open,
   onOpenChange,
+  onClose,
   align = 'end',
   children,
 }: {
@@ -363,6 +364,8 @@ export function AddFormSurface({
   heading?: React.ReactNode;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** The header X. Separate from `onOpenChange` because the forms keep their draft when X closes them. */
+  onClose: () => void;
   align?: 'start' | 'center' | 'end';
   children: React.ReactNode;
 }) {
@@ -389,7 +392,7 @@ export function AddFormSurface({
       <span className="text-[13.5px] font-semibold text-text">{heading ?? label}</span>
       <button
         type="button"
-        onClick={() => onOpenChange(false)}
+        onClick={onClose}
         aria-label={`Close ${label.toLowerCase()}`}
         className="inline-grid size-6 cursor-pointer place-items-center border-0 bg-transparent text-grey-04 hover:text-text"
       >
@@ -478,6 +481,7 @@ function AddContextPopoverInner({ onSubmit, align = 'end' }: AddContextPopoverPr
       }
       open={open}
       align={align}
+      onClose={() => setOpen(false)}
       onOpenChange={next => {
         setOpen(next);
         if (!next) {
@@ -592,6 +596,7 @@ function AddFlagPopoverInner({ onSubmit, align = 'end' }: AddFlagPopoverProps) {
       }
       open={open}
       align={align}
+      onClose={() => setOpen(false)}
       onOpenChange={next => {
         setOpen(next);
         if (!next) {
@@ -701,6 +706,7 @@ export function AddClaimPopover({
       label={label}
       open={open}
       align={align}
+      onClose={() => setOpen(false)}
       onOpenChange={next => {
         setOpen(next);
         if (!next) {
@@ -831,6 +837,7 @@ export function AddEntityItemPopover({
       label={label}
       open={open}
       align={align}
+      onClose={() => setOpen(false)}
       onOpenChange={next => {
         setOpen(next);
         if (!next) {

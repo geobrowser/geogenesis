@@ -10,11 +10,8 @@ export type VisualViewportInset = {
 };
 
 /**
- * Reads how much of the layout viewport the visual viewport leaves uncovered at the bottom.
- *
- * iOS Safari and Android Chrome shrink only the visual viewport when the keyboard opens, so a
- * `fixed bottom-0` surface stays behind the keyboard. Positioning it by `bottom` and capping it by
- * `height` keeps it above. Null while disabled or where `visualViewport` is missing.
+ * The keyboard shrinks only the visual viewport, so a `fixed bottom-0` surface stays behind it.
+ * `bottom` and `height` place a surface above it. Null where `visualViewport` is missing.
  */
 export function readVisualViewportInset(): VisualViewportInset | null {
   if (typeof window === 'undefined' || !window.visualViewport) return null;

@@ -32,6 +32,10 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  // jsdom has neither; the keyboard tests set them.
+  delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+  delete (document.documentElement as { clientHeight?: unknown }).clientHeight;
+  Object.defineProperty(window, 'scrollY', { configurable: true, writable: true, value: 0 });
 });
 
 function openClaimForm(onSubmit = vi.fn(), onRowClick = vi.fn()) {
@@ -80,6 +84,16 @@ describe('AddFormSurface', () => {
     openClaimForm();
     fireEvent.click(screen.getByRole('button', { name: 'Close add claim' }));
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('keeps the draft when the X closes it, as before', () => {
+    openClaimForm();
+    fireEvent.change(screen.getByPlaceholderText('Write a clear, testable statement...'), {
+      target: { value: 'Rents rose in 2025' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Close add claim' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add claim' }));
+    expect(screen.getByPlaceholderText('Write a clear, testable statement...')).toHaveValue('Rents rose in 2025');
   });
 
   it('focuses the first field for a mouse and keyboard', () => {
@@ -165,8 +179,6 @@ describe('BottomSheet avoidKeyboard', () => {
 
     viewport.resize(800);
     expect(sheet.style.bottom).toBe('');
-    // jsdom has no scrollIntoView.
-    delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
   });
 
   it('leaves the scroll alone when it unmounts with the page', () => {
@@ -205,6 +217,5 @@ describe('BottomSheet avoidKeyboard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Close add claim' }));
 
     expect(scrollTo).toHaveBeenCalledWith(0, 1200);
-    Object.defineProperty(window, 'scrollY', { configurable: true, writable: true, value: 0 });
   });
 });

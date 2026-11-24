@@ -153,6 +153,7 @@ export function SourceIngestionPopover({
       label={label}
       open={open}
       align={align}
+      onClose={() => setOpen(false)}
       onOpenChange={next => {
         if (next && !authenticated) {
           promptSignIn();
