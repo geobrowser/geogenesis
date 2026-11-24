@@ -1,4 +1,4 @@
-export { ClaimExplorer, type ClaimExplorerProps } from './claim-explorer';
+export { ClaimExplorer, type ClaimExplorerProps, ClaimListRow, type ClaimListRowProps } from './claim-explorer';
 export { ClaimSummaryCard, type ClaimSummaryCardProps } from './claim-summary-card';
 export { ContextPeekDrawer, type ContextPeekDrawerProps } from './context-peek-drawer';
 export { EntityGraphExplorer, type EntityGraphExplorerProps } from './entity-graph-explorer';
