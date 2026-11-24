@@ -216,7 +216,9 @@ export function useLiveTopicTemplate({
   const spaceIds = React.useMemo(() => [normId(spaceId)], [spaceId]);
   const ancestors = useTopicAncestors(entityId, spaceId);
   const topicIds = React.useMemo(() => [entityId], [entityId]);
-  const { countsByTopicId } = useTopicConnectionCounts(topicIds, { spaceId });
+  // Claims a news story lists are the story's points, not the topic's: the counts, the feed check
+  // and the linked reads all leave them out, so the numbers match the lists (GEO-3847).
+  const { countsByTopicId } = useTopicConnectionCounts(topicIds, { spaceId, excludeNewsStoryClaims: true });
 
   const queryClient = useQueryClient();
 
@@ -292,6 +294,7 @@ export function useLiveTopicTemplate({
     topicId: entityId,
     spaceId,
     entityIds: feedEntityIds,
+    excludeNewsStoryClaims: true,
     // One check once every slice has landed, rather than one per slice.
     enabled:
       !topClaimsQuery.isLoading &&
@@ -334,6 +337,7 @@ export function useLiveTopicTemplate({
     rankInSpaceId: spaceId,
     spaceIds,
     scopeRelationToSpaces: true,
+    excludeNewsStoryClaims: true,
   });
 
   const { entities: linkedEvents } = useTopicLinkedEntities({
@@ -377,6 +381,7 @@ export function useLiveTopicTemplate({
     first: VIEWER_ADDED_LIMIT,
     spaceIds: viewerSpaceIds,
     scopeRelationToSpaces: true,
+    excludeNewsStoryClaims: true,
     enabled: viewerCoverageEnabled,
   });
   const { entities: viewerEventsRead } = useTopicLinkedEntities({

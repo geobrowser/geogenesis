@@ -177,10 +177,28 @@ function convertBacklinkConditionToRelationFilter(condition: BacklinkCondition):
     filter.fromEntityId = convertStringConditionToUuidFilter(condition.fromEntity.id);
   }
 
+  const fromEntity: EntityFilter = {};
+
   if (condition.fromEntity?.name) {
-    filter.fromEntity = {
-      name: convertStringConditionToStringFilter(condition.fromEntity.name),
-    } as EntityFilter;
+    fromEntity.name = convertStringConditionToStringFilter(condition.fromEntity.name);
+  }
+
+  const fromTypeIds = (condition.fromEntity?.types ?? []).flatMap(type => (type.id.equals ? [type.id.equals] : []));
+  if (fromTypeIds.length > 0) {
+    fromEntity.typeIds = { overlaps: fromTypeIds } as UuidListFilter;
+  }
+
+  const nestedBacklinks = (condition.fromEntity?.backlinks ?? []).map(nested => ({
+    backlinks: { some: convertBacklinkConditionToRelationFilter(nested) } as EntityToManyRelationFilter,
+  }));
+  if (nestedBacklinks.length === 1) {
+    fromEntity.backlinks = nestedBacklinks[0]!.backlinks;
+  } else if (nestedBacklinks.length > 1) {
+    fromEntity.and = nestedBacklinks as EntityFilter[];
+  }
+
+  if (Object.keys(fromEntity).length > 0) {
+    filter.fromEntity = fromEntity;
   }
 
   if (condition.typeOf?.id) {

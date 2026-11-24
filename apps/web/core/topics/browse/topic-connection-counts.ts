@@ -11,6 +11,7 @@ import { chunk } from '~/core/utils/chunk';
 import { normId } from '~/core/utils/norm-id';
 
 import { NEWS_STORY_TYPE_ID } from '../ontology';
+import { NOT_LISTED_BY_NEWS_STORY_FILTER } from './news-story-claims';
 
 /** How much is attached to a topic, as a card reports it. */
 export type TopicConnectionCounts = {
@@ -44,7 +45,7 @@ export const EMPTY_TOPIC_CONNECTION_COUNTS: TopicConnectionCounts = { claims: 0,
  * template's header, which lists only what the viewed space published: the entity must be in the
  * space and its Topics relation published there.
  */
-function buildCountsSource(topicCount: number, scoped: boolean): string {
+function buildCountsSource(topicCount: number, scoped: boolean, excludeNewsStoryClaims: boolean): string {
   const declarations = [
     '$topicsPropertyId: UUID!',
     '$claimTypeIds: [UUID!]',
@@ -53,6 +54,9 @@ function buildCountsSource(topicCount: number, scoped: boolean): string {
     ...(scoped ? ['$spaceIds: [UUID!]'] : []),
     ...Array.from({ length: topicCount }, (_, index) => `$topic${index}: UUID!`),
   ].join(', ');
+
+  // Claims a news story lists are left out, as the topic template's lists leave them out (GEO-3847).
+  const claimsClause = excludeNewsStoryClaims ? `, ${NOT_LISTED_BY_NEWS_STORY_FILTER}` : '';
 
   const buckets = Array.from({ length: topicCount }, (_, index) => {
     const topic = `$topic${index}`;
@@ -63,7 +67,7 @@ function buildCountsSource(topicCount: number, scoped: boolean): string {
       : `relations: { some: { typeId: { is: $topicsPropertyId }, toEntityId: { is: ${topic} } } }`;
 
     return /* GraphQL */ `
-      claims${index}: entitiesConnection(filter: { typeIds: { overlaps: $claimTypeIds }, ${namesTopic} }) {
+      claims${index}: entitiesConnection(filter: { typeIds: { overlaps: $claimTypeIds }, ${namesTopic}${claimsClause} }) {
         totalCount
       }
       news${index}: entitiesConnection(filter: { typeIds: { overlaps: $newsTypeIds }, ${namesTopic} }) {
@@ -92,12 +96,16 @@ function buildCountsSource(topicCount: number, scoped: boolean): string {
  */
 const documentsByShape = new Map<string, TypedDocumentNode<any, any>>();
 
-export function topicConnectionCountsDocument(topicCount: number, scoped = false): TypedDocumentNode<any, any> {
-  const shape = `${topicCount}:${scoped}`;
+export function topicConnectionCountsDocument(
+  topicCount: number,
+  scoped = false,
+  excludeNewsStoryClaims = false
+): TypedDocumentNode<any, any> {
+  const shape = `${topicCount}:${scoped}:${excludeNewsStoryClaims}`;
   const cached = documentsByShape.get(shape);
   if (cached) return cached;
 
-  const document = parse(buildCountsSource(topicCount, scoped)) as TypedDocumentNode<any, any>;
+  const document = parse(buildCountsSource(topicCount, scoped, excludeNewsStoryClaims)) as TypedDocumentNode<any, any>;
   documentsByShape.set(shape, document);
   return document;
 }
@@ -149,11 +157,17 @@ export function topicCountBatches(topicIds: readonly string[]): string[][] {
 /**
  * One batch of `topicCountBatches`, answered. Shared by the hook and the server's seed.
  * With `spaceId`, counts only entities in that space whose Topics relation that space published.
+ * With `excludeNewsStoryClaims`, claims a news story lists are not counted.
  */
-export function fetchTopicConnectionCountsBatch(ids: string[], signal?: AbortSignal, spaceId?: string) {
+export function fetchTopicConnectionCountsBatch(
+  ids: string[],
+  signal?: AbortSignal,
+  spaceId?: string,
+  excludeNewsStoryClaims = false
+) {
   return Effect.runPromise(
     graphql({
-      query: topicConnectionCountsDocument(ids.length, Boolean(spaceId)),
+      query: topicConnectionCountsDocument(ids.length, Boolean(spaceId), excludeNewsStoryClaims),
       decoder: (response: CountsResponse) => decodeTopicConnectionCounts(response, ids),
       variables: {
         topicsPropertyId: ID.uuidToHex(TOPICS_PROPERTY_ID),
@@ -168,7 +182,9 @@ export function fetchTopicConnectionCountsBatch(ids: string[], signal?: AbortSig
   );
 }
 
-export const topicConnectionCountsQueryKey = (ids: string[], spaceId?: string) =>
-  spaceId
+export const topicConnectionCountsQueryKey = (ids: string[], spaceId?: string, excludeNewsStoryClaims = false) => {
+  const base = spaceId
     ? (['topic', 'connection-counts', ids, normId(spaceId)] as const)
     : (['topic', 'connection-counts', ids] as const);
+  return excludeNewsStoryClaims ? ([...base, 'no-news-story-claims'] as const) : base;
+};

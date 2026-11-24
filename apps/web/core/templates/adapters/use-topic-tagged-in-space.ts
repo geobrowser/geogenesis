@@ -12,38 +12,11 @@ import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { ID } from '~/core/id';
 import { graphql } from '~/core/io/graphql-client';
 import { type CursorPage, collectCursorPages } from '~/core/sync/collect-cursor-pages';
+import { CLAIM_NOT_LISTED_BY_NEWS_STORY_FILTER } from '~/core/topics/browse/news-story-claims';
 
 const PAGE_SIZE = 1_000;
 
-const TOPIC_TAGGED_IN_SPACE_QUERY = parse(/* GraphQL */ `
-  query TopicTaggedInSpace(
-    $topicsPropertyId: UUID!
-    $topicId: UUID!
-    $spaceId: UUID!
-    $fromEntityIds: [UUID!]!
-    $first: Int!
-    $after: Cursor
-  ) {
-    relationsConnection(
-      first: $first
-      after: $after
-      filter: {
-        typeId: { is: $topicsPropertyId }
-        toEntityId: { is: $topicId }
-        spaceId: { is: $spaceId }
-        fromEntityId: { in: $fromEntityIds }
-      }
-    ) {
-      pageInfo {
-        hasNextPage
-        endCursor
-      }
-      nodes {
-        fromEntityId
-      }
-    }
-  }
-`) as TypedDocumentNode<
+type TopicTaggedInSpaceDocument = TypedDocumentNode<
   {
     relationsConnection?: {
       pageInfo?: { hasNextPage?: boolean | null; endCursor?: string | null } | null;
@@ -60,6 +33,42 @@ const TOPIC_TAGGED_IN_SPACE_QUERY = parse(/* GraphQL */ `
   }
 >;
 
+/** With `excludeNewsStoryClaims`, a claim a news story lists does not count as tagged (GEO-3847). */
+const buildTopicTaggedInSpaceQuery = (excludeNewsStoryClaims: boolean) =>
+  parse(/* GraphQL */ `
+  query TopicTaggedInSpace(
+    $topicsPropertyId: UUID!
+    $topicId: UUID!
+    $spaceId: UUID!
+    $fromEntityIds: [UUID!]!
+    $first: Int!
+    $after: Cursor
+  ) {
+    relationsConnection(
+      first: $first
+      after: $after
+      filter: {
+        typeId: { is: $topicsPropertyId }
+        toEntityId: { is: $topicId }
+        spaceId: { is: $spaceId }
+        fromEntityId: { in: $fromEntityIds }
+        ${excludeNewsStoryClaims ? `fromEntity: { ${CLAIM_NOT_LISTED_BY_NEWS_STORY_FILTER} }` : ''}
+      }
+    ) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      nodes {
+        fromEntityId
+      }
+    }
+  }
+`) as TopicTaggedInSpaceDocument;
+
+const TOPIC_TAGGED_IN_SPACE_QUERY = buildTopicTaggedInSpaceQuery(false);
+const TOPIC_TAGGED_IN_SPACE_NO_STORY_CLAIMS_QUERY = buildTopicTaggedInSpaceQuery(true);
+
 type FetchPage = (args: {
   fromEntityIds: string[];
   after: string | undefined;
@@ -73,12 +82,15 @@ export async function fetchTopicTaggedInSpace({
   entityIds,
   signal,
   fetchPage,
+  excludeNewsStoryClaims = false,
 }: {
   topicId: string;
   spaceId: string;
   entityIds: string[];
   signal?: AbortSignal;
   fetchPage?: FetchPage;
+  /** Also drop claims a news story lists, as the topic's claim lists and counts do. */
+  excludeNewsStoryClaims?: boolean;
 }): Promise<Set<string>> {
   const fromEntityIds = [...new Set(entityIds.map(id => ID.uuidToHex(id)))];
   if (fromEntityIds.length === 0) return new Set();
@@ -87,7 +99,7 @@ export async function fetchTopicTaggedInSpace({
     (args =>
       Effect.runPromise(
         graphql({
-          query: TOPIC_TAGGED_IN_SPACE_QUERY,
+          query: excludeNewsStoryClaims ? TOPIC_TAGGED_IN_SPACE_NO_STORY_CLAIMS_QUERY : TOPIC_TAGGED_IN_SPACE_QUERY,
           variables: {
             topicsPropertyId: ID.uuidToHex(TOPICS_PROPERTY_ID),
             topicId: ID.uuidToHex(topicId),
@@ -117,17 +129,21 @@ export function useTopicTaggedInSpace({
   spaceId,
   entityIds,
   enabled = true,
+  excludeNewsStoryClaims = false,
 }: {
   topicId: string;
   spaceId: string;
   entityIds: string[];
   /** False holds the check, and reports it loading, until the feed has settled. */
   enabled?: boolean;
+  /** Also drop claims a news story lists (GEO-3847). */
+  excludeNewsStoryClaims?: boolean;
 }): { tagged: Set<string> | null; isLoading: boolean } {
   const ids = React.useMemo(() => [...new Set(entityIds.map(id => ID.uuidToHex(id)))].sort(), [entityIds]);
   const query = useQuery({
-    queryKey: ['topic', 'tagged-in-space', ID.uuidToHex(topicId), ID.uuidToHex(spaceId), ids],
-    queryFn: ({ signal }) => fetchTopicTaggedInSpace({ topicId, spaceId, entityIds: ids, signal }),
+    queryKey: ['topic', 'tagged-in-space', ID.uuidToHex(topicId), ID.uuidToHex(spaceId), ids, excludeNewsStoryClaims],
+    queryFn: ({ signal }) =>
+      fetchTopicTaggedInSpace({ topicId, spaceId, entityIds: ids, signal, excludeNewsStoryClaims }),
     enabled: enabled && ids.length > 0,
     staleTime: 60_000,
   });

@@ -49,6 +49,8 @@ const state = vi.hoisted(() => ({
   /** Topic feed claims, and which of them the viewed space tagged (null: still checking). */
   feedClaims: undefined as { entityId: string; title: string; spaceId: string }[] | undefined,
   taggedInSpace: null as Set<string> | null,
+  /** Whether each feed tag check asked to drop claims a news story lists. */
+  taggedExcludesStoryClaims: [] as boolean[],
   feedNews: undefined as
     | { items: { entityId: string; title: string; spaceId: string; createdAtSec: number }[]; fromSpaceFeed: boolean }
     | undefined,
@@ -117,10 +119,19 @@ vi.mock('~/core/responses/use-claim-response-summaries', () => ({
 }));
 vi.mock('./use-live-entity-actions', () => ({ useLiveEntityActions: () => ({}) }));
 vi.mock('./use-topic-tagged-in-space', () => ({
-  useTopicTaggedInSpace: ({ entityIds }: { entityIds: string[] }) => ({
-    tagged: state.taggedInSpace,
-    isLoading: entityIds.length > 0 && state.taggedInSpace === null,
-  }),
+  useTopicTaggedInSpace: ({
+    entityIds,
+    excludeNewsStoryClaims = false,
+  }: {
+    entityIds: string[];
+    excludeNewsStoryClaims?: boolean;
+  }) => {
+    state.taggedExcludesStoryClaims.push(excludeNewsStoryClaims);
+    return {
+      tagged: state.taggedInSpace,
+      isLoading: entityIds.length > 0 && state.taggedInSpace === null,
+    };
+  },
 }));
 vi.mock('./use-viewer-sources', () => ({
   useEntityWithViewerSources: ({ entity }: { entity: Entity | null }) => entity,
@@ -218,6 +229,7 @@ beforeEach(() => {
   state.tweetAuthors = undefined;
   state.feedClaims = undefined;
   state.taggedInSpace = null;
+  state.taggedExcludesStoryClaims = [];
   state.feedNews = undefined;
   mocks.useClaimRecord.mockReset().mockReturnValue({
     claimRows: [],
@@ -422,7 +434,59 @@ describe('Topic template', () => {
     expect(model.contestedClaims?.map(claim => claim.title)).toEqual(['Claim here']);
     expect(model.timelineHighlights?.map(item => item.title)).toEqual(['Event here']);
     expect(model.sections?.[0]?.items.map(item => item.title)).toEqual(['Source here']);
-    expect(mocks.useTopicConnectionCounts).toHaveBeenCalledWith([PAGE], { spaceId: SPACE });
+    expect(mocks.useTopicConnectionCounts).toHaveBeenCalledWith([PAGE], {
+      spaceId: SPACE,
+      excludeNewsStoryClaims: true,
+    });
+  });
+
+  it('leaves out claims a news story lists, and counts the same way (GEO-3847)', async () => {
+    topicCorpus();
+    const storyId = 'story-1';
+    const sectionId = 'story-1-section';
+    const fromStory = (typeId: string, toId: string, fromId: string): Relation => ({
+      ...relation(typeId, toId, SPACE),
+      id: `${fromId}-${typeId}-${toId}`,
+      fromEntity: { id: fromId, name: null },
+    });
+    state.corpus = [
+      ...state.corpus,
+      // Tagged with the topic by the news pipeline, and listed by a story: one as a notable claim,
+      // one in a story section (a data block the story lists under Blocks).
+      linked('n1', 'Story notable claim', SPACE, [CLAIM_TYPE_ID], TOPICS_PROPERTY_ID),
+      linked('n2', 'Story section claim', SPACE, [CLAIM_TYPE_ID], TOPICS_PROPERTY_ID),
+      // An episode's notable claim is not a news story's: it stays.
+      linked('p1', 'Episode claim', SPACE, [CLAIM_TYPE_ID], TOPICS_PROPERTY_ID),
+      {
+        ...linked(storyId, 'Story', SPACE, [TEMPLATE_ONTOLOGY.NEWS_STORY_TYPE_ID], ContentIds.SOURCES_PROPERTY),
+        relations: [
+          fromStory(TEMPLATE_ONTOLOGY.NOTABLE_CLAIMS_PROPERTY_ID, 'n1', storyId),
+          fromStory(TEMPLATE_ONTOLOGY.BLOCKS_PROPERTY_ID, sectionId, storyId),
+        ],
+      },
+      {
+        ...linked(sectionId, 'Section', SPACE, [], ContentIds.SOURCES_PROPERTY),
+        relations: [fromStory(TEMPLATE_ONTOLOGY.COLLECTION_ITEM_PROPERTY_ID, 'n2', sectionId)],
+      },
+      {
+        ...linked('episode-1', 'Episode', SPACE, [TEMPLATE_ONTOLOGY.EPISODE_TYPE_ID], ContentIds.SOURCES_PROPERTY),
+        relations: [fromStory(TEMPLATE_ONTOLOGY.NOTABLE_CLAIMS_PROPERTY_ID, 'p1', 'episode-1')],
+      },
+    ];
+    const { result } = renderHook(() => useLiveTopicTemplate({ entityId: PAGE, spaceId: SPACE }));
+
+    await waitFor(() => expect(result.current.data?.contestedClaims).toBeDefined());
+    expect(result.current.data!.contestedClaims?.map(claim => claim.title).sort()).toEqual([
+      'Claim here',
+      'Episode claim',
+    ]);
+    // The header count and the feed check drop the same claims, so the numbers match the lists.
+    expect(mocks.useTopicConnectionCounts).toHaveBeenCalledWith([PAGE], {
+      spaceId: SPACE,
+      excludeNewsStoryClaims: true,
+    });
+    expect(state.taggedExcludesStoryClaims.length).toBeGreaterThan(0);
+    expect(state.taggedExcludesStoryClaims.every(Boolean)).toBe(true);
   });
 
   it('lists feed claims only once the viewed space is known to have tagged them', async () => {

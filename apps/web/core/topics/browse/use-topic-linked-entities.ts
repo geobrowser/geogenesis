@@ -10,6 +10,8 @@ import { EntitiesOrderBy } from '~/core/gql/graphql';
 import { useQueryEntities } from '~/core/sync/use-store';
 import type { Entity } from '~/core/types';
 
+import { LISTED_BY_NEWS_STORY } from './news-story-claims';
+
 /**
  * Entities that name this topic, one page at a time.
  *
@@ -38,6 +40,7 @@ export function useTopicLinkedEntities({
   rankInSpaceId,
   spaceIds,
   scopeRelationToSpaces = false,
+  excludeNewsStoryClaims = false,
 }: {
   topicId: string;
   /** Narrows to these types. Omit for everything that names the topic. */
@@ -54,6 +57,8 @@ export function useTopicLinkedEntities({
   spaceIds?: string[];
   /** Also require the Topics relation to be published in `spaceIds`. Ignored without `spaceIds`. */
   scopeRelationToSpaces?: boolean;
+  /** Drop entities a news story lists: the story's own points, not the topic's (GEO-3847). */
+  excludeNewsStoryClaims?: boolean;
 }) {
   const where = React.useMemo(
     () => ({
@@ -68,8 +73,9 @@ export function useTopicLinkedEntities({
           ...(scopeRelationToSpaces && spaceIds && spaceIds.length > 0 ? { space: { in: spaceIds } } : {}),
         },
       ],
+      ...(excludeNewsStoryClaims ? { NOT: LISTED_BY_NEWS_STORY } : {}),
     }),
-    [scopeRelationToSpaces, spaceIds, topicId, typeIds]
+    [excludeNewsStoryClaims, scopeRelationToSpaces, spaceIds, topicId, typeIds]
   );
 
   const {

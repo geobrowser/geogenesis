@@ -60,7 +60,14 @@ export type RelationCondition = {
 
 export type BacklinkCondition = {
   typeOf?: { id?: StringCondition; name?: StringCondition };
-  fromEntity?: { id?: StringCondition; name?: StringCondition };
+  fromEntity?: {
+    id?: StringCondition;
+    name?: StringCondition;
+    /** The pointing entity has one of these types. */
+    types?: { id: StringCondition }[];
+    /** The pointing entity is itself pointed at like this, each condition required. */
+    backlinks?: BacklinkCondition[];
+  };
   space?: StringCondition;
 };
 
@@ -241,19 +248,18 @@ export class EntityQuery {
   private matchesCondition(entity: Entity, condition: WhereCondition): boolean {
     // @TODO: We can just filter _all_ fields individually then return entities rather than M*N filtering we're currently
     // doing where we filter entities and their relations one at a time
-    // Handle OR conditions
-    if (condition.OR) {
-      return condition.OR.some(subCondition => this.matchesCondition(entity, subCondition));
+    // Logical keys AND with the fields beside them, as `convertWhereConditionToEntityFilter` sends
+    // them to the server: `{ types, NOT }` is "of this type and not that", not just "not that".
+    if (condition.OR && !condition.OR.some(subCondition => this.matchesCondition(entity, subCondition))) {
+      return false;
     }
 
-    // Handle AND conditions
-    if (condition.AND) {
-      return condition.AND.every(subCondition => this.matchesCondition(entity, subCondition));
+    if (condition.AND && !condition.AND.every(subCondition => this.matchesCondition(entity, subCondition))) {
+      return false;
     }
 
-    // Handle NOT condition
-    if (condition.NOT) {
-      return !this.matchesCondition(entity, condition.NOT);
+    if (condition.NOT && this.matchesCondition(entity, condition.NOT)) {
+      return false;
     }
 
     // Check individual field conditions
@@ -457,6 +463,25 @@ export class EntityQuery {
 
           // Check space
           if (cond.space && !this.matchesStringCondition(relation.spaceId, cond.space)) {
+            return false;
+          }
+
+          // Check fromEntity.types: the pointing entity is `otherEntity`
+          if (
+            cond.fromEntity?.types &&
+            cond.fromEntity.types.length > 0 &&
+            !cond.fromEntity.types.some(typeCondition =>
+              otherEntity.types.some(type => this.matchesStringCondition(type.id, typeCondition.id))
+            )
+          ) {
+            return false;
+          }
+
+          // Check fromEntity.backlinks, every condition against the pointing entity
+          if (
+            cond.fromEntity?.backlinks &&
+            !cond.fromEntity.backlinks.every(nested => this.matchesBacklinks(otherEntity, nested))
+          ) {
             return false;
           }
 
