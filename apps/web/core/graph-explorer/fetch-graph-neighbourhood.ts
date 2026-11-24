@@ -10,7 +10,7 @@ import { AVATAR_PROPERTY_ID, COVER_PROPERTY_ID, IMAGE_URL_PROPERTY_ID } from '~/
 import { HIDDEN_PROPERTY_ID, isHiddenMarker } from '~/core/moderation/hidden';
 import { normId } from '~/core/utils/norm-id';
 
-import { TOPIC_LENS_FILTER, TOPIC_LENS_VARIABLES, topicLensVariables } from './claims-about';
+import { TOPIC_LENS_FILTER, topicLensVariables } from './claims-about';
 import { type GraphCentreText, type GraphEntity, type GraphHop, type RawEntity, decodeEntity } from './graph-entity';
 import type { GraphFilter } from './graph-filter';
 import {
@@ -96,15 +96,6 @@ const NODE_FIELDS = /* GraphQL */ `
 const PLACED_FIELD = 'placed: valuesList(filter: { propertyId: { notIn: $unplacingPropertyIds } }) { spaceId }';
 const UNPLACING_PROPERTY_IDS = [normId(SystemIds.NAME_PROPERTY), ...[...HIDDEN_PROPERTIES].map(normId)];
 
-const NODE_VARIABLES = `
-  $hiddenPropertyId: UUID!
-  $namePropertyId: UUID!
-  $datePropertyIds: [UUID!]
-  $avatarPropertyId: UUID!
-  $coverPropertyId: UUID!
-  $imageUrlPropertyId: UUID!
-`;
-
 /**
  * Asked entity first: relation first, a kind rare among a large topic's backlinks walks nearly all
  * of them to fill a page. Dense kinds stay relation first, as fast there and keeping their picks.
@@ -131,57 +122,62 @@ function farEndFilter(kind: GraphKind, lensed: boolean) {
   return { types, lens, exclude };
 }
 
-function relationFirstConnection(kind: GraphKind, direction: 'in' | 'out', lensed: boolean) {
-  const self = direction === 'out' ? 'fromEntityId' : 'toEntityId';
-  const end = direction === 'out' ? 'toEntity' : 'fromEntity';
-  const { types, lens, exclude } = farEndFilter(kind, lensed);
-  return `${kind}_${direction}: relationsConnection(
-    first: $first
-    filter: {
-      ${self}: { is: $id }
-      spaceId: { in: $spaceIds }
-      typeId: { notIn: $plumbingPropertyIds }
-      ${end}: { ${types} ${lens} }
-      ${exclude ? `not: { ${end}: ${exclude} }` : ''}
-    }
-  ) {
-    nodes { id spaceId typeId type { name } ${end} { ${NODE_FIELDS} ${kind === 'claim' ? PLACED_FIELD : ''} } }
-    pageInfo { hasNextPage }
-  }`;
+/** The far end's kinds in hop 2. Lensed: content must carry the topic. `other`: also entities of no listed kind. */
+function hop2FarEnd(lensed: boolean, other: boolean) {
+  const branches = lensed
+    ? [
+        '{ typeIds: { overlaps: $openTypeIds }, not: { typeIds: { overlaps: $lensedTypeIds } } }',
+        `{ typeIds: { overlaps: $lensedTypeIds } ${TOPIC_LENS_FILTER} }`,
+      ]
+    : ['{ typeIds: { overlaps: $kindTypeIds } }'];
+  if (other) branches.push('{ not: { typeIds: { overlaps: $notOtherTypeIds } } }');
+  return `or: [${branches.join(' ')}]`;
 }
 
 /**
- * The same neighbours as `relationFirstConnection`, one per entity, each with one in-scope link to
- * the centre as its edge. Most recently updated first, as the claim lists order.
+ * The links around `$id` whose far end matches `farConditions`: ids only. Node fields come in one
+ * batched request per hop, so these stay under the API's admission cost floor and run in parallel
+ * without holding its expensive-query slots.
  */
-function entityFirstConnection(kind: GraphKind, direction: 'in' | 'out', lensed: boolean) {
-  const link = direction === 'out' ? 'backlinks' : 'relations';
+function linksSelection(
+  alias: string,
+  direction: 'in' | 'out',
+  farConditions: readonly string[],
+  entityFirst: boolean,
+  withPageInfo: boolean
+) {
   const self = direction === 'out' ? 'fromEntityId' : 'toEntityId';
-  const reaches = `{ ${self}: { is: $id }, spaceId: { in: $spaceIds }, typeId: { notIn: $plumbingPropertyIds } }`;
-  const { types, lens, exclude } = farEndFilter(kind, lensed);
-  const conditions = [
-    `{ ${types} }`,
-    lens && `{ ${lens} }`,
-    exclude && `{ not: ${exclude} }`,
-    `{ ${link}: { some: ${reaches} } }`,
-  ];
-  return `${kind}_${direction}: entitiesConnection(
+  const reaches = `${self}: { is: $id }, spaceId: { in: $spaceIds }, typeId: { notIn: $plumbingPropertyIds }`;
+  const pageInfo = withPageInfo ? 'pageInfo { hasNextPage }' : '';
+  if (!entityFirst) {
+    const end = direction === 'out' ? 'toEntity' : 'fromEntity';
+    return `${alias}: relationsConnection(
+      first: $first
+      filter: { ${reaches}, ${end}: { and: [${farConditions.join(' ')}] } }
+    ) { nodes { id spaceId typeId type { name } fromEntityId toEntityId } ${pageInfo} }`;
+  }
+  // One row per entity, with one in-scope link as its edge. Most recently updated first.
+  const link = direction === 'out' ? 'backlinks' : 'relations';
+  return `${alias}: entitiesConnection(
     first: $first
     orderBy: [UPDATED_AT_DESC, ID_ASC]
-    filter: { and: [${conditions.filter(Boolean).join(' ')}] }
+    filter: { and: [${farConditions.join(' ')} { ${link}: { some: { ${reaches} } } }] }
   ) {
-    nodes {
-      ${NODE_FIELDS} ${kind === 'claim' ? PLACED_FIELD : ''}
-      edge: ${link}List(first: 1, orderBy: [ID_ASC], filter: ${reaches}) { id spaceId typeId type { name } }
-    }
-    pageInfo { hasNextPage }
+    nodes { id edge: ${link}List(first: 1, orderBy: [ID_ASC], filter: { ${reaches} }) { id spaceId typeId type { name } } }
+    ${pageInfo}
   }`;
 }
 
-function kindConnection(kind: GraphKind, direction: 'in' | 'out', lensed: boolean, scoped: boolean) {
-  return isEntityFirst(`${kind}_${direction}`, scoped)
-    ? entityFirstConnection(kind, direction, lensed)
-    : relationFirstConnection(kind, direction, lensed);
+function kindLinks(kind: GraphKind, direction: 'in' | 'out', lensed: boolean, scoped: boolean) {
+  const { types, lens, exclude } = farEndFilter(kind, lensed);
+  const conditions = [`{ ${types} }`, lens && `{ ${lens} }`, exclude && `{ not: ${exclude} }`];
+  return linksSelection(
+    `${kind}_${direction}`,
+    direction,
+    conditions.filter((condition): condition is string => Boolean(condition)),
+    isEntityFirst(`${kind}_${direction}`, scoped),
+    true
+  );
 }
 
 const VARIABLE_TYPES: Record<string, string> = {
@@ -227,20 +223,46 @@ export const hop1CentreDocument = queryDocument(
   }`
 ) as TypedDocumentNode<{ entity: RawCentre | null }, Record<string, unknown>>;
 
-const hop1KindDocuments = new Map<string, TypedDocumentNode<Record<string, unknown>, Record<string, unknown>>>();
+type LinksResponse = Record<string, unknown>;
+const linksDocuments = new Map<string, TypedDocumentNode<LinksResponse, Record<string, unknown>>>();
+
+function cachedDocument(key: string, name: string, selection: () => string) {
+  const cached = linksDocuments.get(key);
+  if (cached) return cached;
+  const document = queryDocument(name, selection()) as TypedDocumentNode<LinksResponse, Record<string, unknown>>;
+  linksDocuments.set(key, document);
+  return document;
+}
 
 /** One request per kind, both directions, so a slow or failing kind can't hold up or blank the rest. */
 export function hop1KindDocument(kind: GraphKind, lensed: boolean, scoped: boolean) {
-  const key = `${kind}|${lensed}|${scoped}`;
-  const cached = hop1KindDocuments.get(key);
-  if (cached) return cached;
-  const document = queryDocument(
+  return cachedDocument(
+    `hop1|${kind}|${lensed}|${scoped}`,
     'GraphNeighbourhoodKind',
-    `${kindConnection(kind, 'out', lensed, scoped)}\n${kindConnection(kind, 'in', lensed, scoped)}`
-  ) as TypedDocumentNode<Record<string, unknown>, Record<string, unknown>>;
-  hop1KindDocuments.set(key, document);
-  return document;
+    () => `${kindLinks(kind, 'out', lensed, scoped)}\n${kindLinks(kind, 'in', lensed, scoped)}`
+  );
 }
+
+/** One direction around one hop-1 node (`$id`), relation first or entity first. */
+export function hop2Document(direction: 'in' | 'out', lensed: boolean, other: boolean, entityFirst: boolean) {
+  return cachedDocument(`hop2|${direction}|${lensed}|${other}|${entityFirst}`, 'GraphNeighbourhoodHop2', () =>
+    linksSelection('hop', direction, [`{ ${hop2FarEnd(lensed, other)} }`], entityFirst, false)
+  );
+}
+
+/** Every node's fields in one request; claims also carry their placement. */
+export const nodesDocument = queryDocument(
+  'GraphNeighbourhoodNodes',
+  `claims: entitiesConnection(first: $first, filter: { id: { in: $ids }, typeIds: { overlaps: $claimTypeIds } }) {
+    nodes { ${NODE_FIELDS} ${PLACED_FIELD} }
+  }
+  others: entitiesConnection(first: $first, filter: { id: { in: $ids }, not: { typeIds: { overlaps: $claimTypeIds } } }) {
+    nodes { ${NODE_FIELDS} }
+  }`
+) as TypedDocumentNode<
+  { claims: { nodes: RawNode[] } | null; others: { nodes: RawNode[] } | null },
+  Record<string, unknown>
+>;
 
 /** The topic content on the map must carry; also around the topic, where some links aren't `Topics`. */
 export function lensTopicFor(filter: GraphFilter): string | null {
@@ -277,6 +299,26 @@ export function hop1Variables(centreId: string, filter: GraphFilter) {
   };
 }
 
+export function hop2Variables(filter: GraphFilter) {
+  const topicId = lensTopicFor(filter);
+  const kinds = topicId
+    ? {
+        openTypeIds: filter.kinds
+          .filter(kind => !LENSED_KINDS.includes(kind))
+          .flatMap(kind => GRAPH_KIND_TYPE_IDS[kind]),
+        lensedTypeIds: lensedTypeIds(filter.kinds),
+        ...topicLensVariables(topicId),
+      }
+    : { kindTypeIds: filter.kinds.flatMap(kind => GRAPH_KIND_TYPE_IDS[kind]) };
+  return {
+    spaceIds: filter.spaceIds ?? null,
+    plumbingPropertyIds: PLUMBING_RELATION_TYPE_IDS,
+    ...kinds,
+    ...(filter.kinds.includes('other') ? { notOtherTypeIds: NOT_OTHER_TYPE_IDS } : {}),
+    first: HOP2_PER_NODE,
+  };
+}
+
 type RawNode = RawEntity & {
   agrees?: string | number | null;
   disagrees?: string | number | null;
@@ -286,55 +328,40 @@ type RawNode = RawEntity & {
   hidden?: Array<{ text: string | null; boolean: boolean | null }> | null;
 };
 
-type RawRelation = {
-  id: string;
-  spaceId: string;
-  typeId: string;
-  type: { name: string | null } | null;
-  toEntity?: RawNode | null;
-  fromEntity?: RawNode | null;
-};
-
-type RawConnection = { nodes: RawRelation[]; pageInfo?: { hasNextPage: boolean } } | null;
-
-type RawEntityFirstConnection = {
-  nodes: Array<RawNode & { edge?: Array<Omit<RawRelation, 'toEntity' | 'fromEntity'>> | null }>;
-  pageInfo?: { hasNextPage: boolean };
-} | null;
-
-/** An entity-first page in the relation-first shape: each entity behind its edge. */
-export function asRelationConnection(connection: RawEntityFirstConnection, direction: 'in' | 'out'): RawConnection {
-  if (!connection) return null;
-  const end = direction === 'out' ? 'toEntity' : 'fromEntity';
-  return {
-    nodes: connection.nodes.flatMap(({ edge, ...entity }) => {
-      const relation = edge?.[0];
-      return relation ? [{ ...relation, [end]: entity }] : [];
-    }),
-    pageInfo: connection.pageInfo,
-  };
-}
-
-/** A kind's two connections, its entity-first directions in the relation-first shape. */
-function normaliseKind(response: Record<string, unknown>, kind: GraphKind, scoped: boolean) {
-  const normalised: Record<string, RawConnection> = {};
-  for (const direction of ['out', 'in'] as const) {
-    const alias = `${kind}_${direction}`;
-    const connection = response[alias] ?? null;
-    normalised[alias] = isEntityFirst(alias, scoped)
-      ? asRelationConnection(connection as RawEntityFirstConnection, direction)
-      : (connection as RawConnection);
-  }
-  return normalised;
-}
-
 type RawCentre = RawNode & {
   description: string | null;
   texts?: Array<{ propertyId: string; spaceId: string; text: string | null }> | null;
 };
 
-/** `entity` plus one `<kind>_<direction>` connection per kind. */
-type Hop1Response = { entity: RawCentre | null; [alias: string]: RawConnection | RawCentre | null };
+type RawRelationFields = { id: string; spaceId: string; typeId: string; type: { name: string | null } | null };
+
+/** A link from the node asked about to `farId`. */
+export type RawLink = RawRelationFields & { farId: string };
+
+type RawLinks =
+  | {
+      nodes: Array<
+        | (RawRelationFields & { fromEntityId: string; toEntityId: string })
+        | { id: string; edge?: RawRelationFields[] | null }
+      >;
+      pageInfo?: { hasNextPage: boolean };
+    }
+  | null
+  | undefined;
+
+/** One side's links, whichever shape asked for them. */
+export function readLinks(connection: RawLinks, direction: 'in' | 'out') {
+  const links = (connection?.nodes ?? []).flatMap((row): RawLink[] => {
+    if ('edge' in row) {
+      const edge = row.edge?.[0];
+      return edge ? [{ ...edge, farId: normId(row.id) }] : [];
+    }
+    if (!('fromEntityId' in row)) return [];
+    const { fromEntityId, toEntityId, ...relation } = row;
+    return [{ ...relation, farId: normId(direction === 'out' ? toEntityId : fromEntityId) }];
+  });
+  return { links, more: connection?.pageInfo?.hasNextPage ?? false };
+}
 
 /**
  * Null for a hidden entity (Hidden = true in any space), or an unnamed or plumbing neighbour; any
@@ -358,55 +385,89 @@ export function decodeNode(raw: RawNode, isCentre = false): GraphNode | null {
   };
 }
 
-function decodeConnection(connection: RawConnection, selfId: string, direction: 'in' | 'out') {
-  return (connection?.nodes ?? []).flatMap(relation => {
-    const raw = direction === 'out' ? relation.toEntity : relation.fromEntity;
-    const node = raw ? decodeNode(raw) : null;
+/** Links in order, each with its far end's node; hidden, unnamed, unknown and self links drop. */
+export function decodeLinks(
+  links: readonly RawLink[],
+  selfId: string,
+  direction: 'in' | 'out',
+  nodes: ReadonlyMap<string, GraphNode>
+) {
+  return links.flatMap(link => {
+    const node = nodes.get(link.farId);
     if (!node || node.id === selfId) return [];
     const edge: GraphEdge = {
-      id: relation.id,
+      id: link.id,
       fromId: direction === 'out' ? selfId : node.id,
       toId: direction === 'out' ? node.id : selfId,
-      propertyId: normId(relation.typeId),
-      propertyName: relation.type?.name ?? null,
-      spaceId: normId(relation.spaceId),
+      propertyId: normId(link.typeId),
+      propertyName: link.type?.name ?? null,
+      spaceId: normId(link.spaceId),
     };
     return [{ node, edge }];
   });
 }
 
-export function decodeHop1(response: Hop1Response, centreId: string, kinds: readonly GraphKind[]): GraphHop1 {
-  const id = normId(centreId);
-  const rawCentre = response.entity;
-  const centreNode = rawCentre ? decodeNode(rawCentre, true) : null;
-  const centre: GraphNeighbourCentre | null =
-    rawCentre && centreNode
-      ? {
-          ...centreNode,
-          description: rawCentre.description?.trim() || null,
-          texts: (rawCentre.texts ?? []).flatMap(value =>
-            value.text
-              ? [{ propertyId: normId(value.propertyId), spaceId: normId(value.spaceId), text: value.text }]
-              : []
-          ),
-        }
-      : null;
-  // A hidden centre shows as not in the graph, with nothing around it.
-  if (rawCentre && !centreNode) return { centre: null, neighbours: [], moreKinds: [] };
-  const connection = (alias: string) => (response[alias] ?? null) as RawConnection;
-  const neighbours = kinds.flatMap(kind => [
-    ...decodeConnection(connection(`${kind}_out`), id, 'out'),
-    ...decodeConnection(connection(`${kind}_in`), id, 'in'),
-  ]);
-  const moreKinds = kinds.filter(
-    kind => connection(`${kind}_out`)?.pageInfo?.hasNextPage || connection(`${kind}_in`)?.pageInfo?.hasNextPage
+/** The nodes behind `ids`, decoded; hidden and unnamed ones are absent. */
+export async function fetchNodes(ids: readonly string[], signal?: AbortSignal): Promise<Map<string, GraphNode>> {
+  const unique = [...new Set(ids.map(normId))];
+  if (unique.length === 0) return new Map();
+  const response = await Effect.runPromise(
+    graphql({
+      query: nodesDocument,
+      decoder: response => response,
+      variables: pickVariables(nodesDocument, {
+        ids: unique,
+        first: unique.length,
+        claimTypeIds: GRAPH_KIND_TYPE_IDS.claim,
+        unplacingPropertyIds: UNPLACING_PROPERTY_IDS,
+        ...nodeVariables(),
+      }),
+      signal,
+      timeoutMs: GRAPH_REQUEST_TIMEOUT_MS,
+    })
   );
+  const raws = [...(response.claims?.nodes ?? []), ...(response.others?.nodes ?? [])];
+  return new Map(
+    raws.flatMap(raw => {
+      const node = decodeNode(raw);
+      return node ? [[normId(raw.id), node] as const] : [];
+    })
+  );
+}
+
+export type Hop1Side = { kind: GraphKind; direction: 'in' | 'out'; links: RawLink[]; more: boolean };
+
+export function decodeCentre(rawCentre: RawCentre): GraphNeighbourCentre | null {
+  const node = decodeNode(rawCentre, true);
+  if (!node) return null;
+  return {
+    ...node,
+    description: rawCentre.description?.trim() || null,
+    texts: (rawCentre.texts ?? []).flatMap(value =>
+      value.text ? [{ propertyId: normId(value.propertyId), spaceId: normId(value.spaceId), text: value.text }] : []
+    ),
+  };
+}
+
+/** Sides in kind order, out before in, as asked. */
+export function decodeHop1(
+  rawCentre: RawCentre | null,
+  sides: readonly Hop1Side[],
+  nodes: ReadonlyMap<string, GraphNode>,
+  centreId: string
+): GraphHop1 {
+  const id = normId(centreId);
+  const centre = rawCentre ? decodeCentre(rawCentre) : null;
+  // A hidden centre shows as not in the graph, with nothing around it.
+  if (rawCentre && !centre) return { centre: null, neighbours: [], moreKinds: [] };
+  const neighbours = sides.flatMap(side => decodeLinks(side.links, id, side.direction, nodes));
+  const moreKinds = [...new Set(sides.filter(side => side.more).map(side => side.kind))];
   return { centre, neighbours, moreKinds };
 }
 
 /**
- * The centre and each kind in parallel, drawn together once all settle. A kind that fails drops out;
- * the centre failing, or every kind, fails the hop.
+ * The centre and each kind's links in parallel, then their nodes, drawn together. A kind that fails
+ * drops out; the centre, the nodes, or every kind failing, or a cancel, fails the hop.
  */
 export async function fetchHop1(centreId: string, filter: GraphFilter, signal?: AbortSignal): Promise<GraphHop1> {
   const lensed = lensTopicFor(filter) !== null;
@@ -424,163 +485,90 @@ export async function fetchHop1(centreId: string, filter: GraphFilter, signal?: 
     );
   const [centre, ...kinds] = await Promise.allSettled([
     request(hop1CentreDocument),
-    ...filter.kinds.map(kind =>
-      request(hop1KindDocument(kind, lensed, scoped)).then(response => normaliseKind(response, kind, scoped))
-    ),
+    ...filter.kinds.map(kind => request(hop1KindDocument(kind, lensed, scoped))),
   ]);
   // A cancelled hop is not a partial one.
   if (signal?.aborted) throw signal.reason;
   if (centre.status === 'rejected') throw centre.reason;
   const failed = kinds.find(result => result.status === 'rejected');
   if (failed && kinds.every(result => result.status === 'rejected')) throw failed.reason;
-  const settled = filter.kinds.filter((_, index) => kinds[index].status === 'fulfilled');
-  const response: Hop1Response = { entity: centre.value.entity };
-  for (const result of kinds) if (result.status === 'fulfilled') Object.assign(response, result.value);
-  const failedKinds = filter.kinds.filter(kind => !settled.includes(kind));
-  return { ...decodeHop1(response, centreId, settled), failedKinds };
+  const rawCentre = centre.value.entity;
+  const failedKinds = filter.kinds.filter((_, index) => kinds[index].status === 'rejected');
+  if (rawCentre && !decodeCentre(rawCentre)) return { centre: null, neighbours: [], moreKinds: [], failedKinds };
+  const sides = filter.kinds.flatMap((kind, index): Hop1Side[] => {
+    const result = kinds[index];
+    if (result.status === 'rejected') return [];
+    return (['out', 'in'] as const).map(direction => ({
+      kind,
+      direction,
+      ...readLinks(result.value[`${kind}_${direction}`] as RawLinks, direction),
+    }));
+  });
+  const nodes = await fetchNodes(
+    sides.flatMap(side => side.links.map(link => link.farId)),
+    signal
+  );
+  return { ...decodeHop1(rawCentre, sides, nodes, centreId), failedKinds };
 }
 
 /**
- * Ids go in the document as literals: one alias pair per hop-1 node. Lensed: content must carry the
- * topic. `other`: also entities of no listed kind.
+ * Relation first gets this long; a node whose links are mostly of kinds the map doesn't show can
+ * walk them all, and is asked again entity first in the rest of the deadline.
  */
-export function hop2Document(ids: readonly string[], lensed: boolean, other: boolean) {
-  const branches = lensed
-    ? [
-        '{ typeIds: { overlaps: $openTypeIds }, not: { typeIds: { overlaps: $lensedTypeIds } } }',
-        `{ typeIds: { overlaps: $lensedTypeIds } ${TOPIC_LENS_FILTER} }`,
-      ]
-    : ['{ typeIds: { overlaps: $kindTypeIds } }'];
-  if (other) branches.push('{ not: { typeIds: { overlaps: $notOtherTypeIds } } }');
-  const kinds = `or: [${branches.join(' ')}]`;
-  const connection = (id: string, index: number, direction: 'in' | 'out') => {
-    const self = direction === 'out' ? 'fromEntityId' : 'toEntityId';
-    const end = direction === 'out' ? 'toEntity' : 'fromEntity';
-    return `n${index}_${direction}: relationsConnection(
-      first: $first
-      filter: {
-        ${self}: { is: "${normId(id)}" }
-        spaceId: { in: $spaceIds }
-        typeId: { notIn: $plumbingPropertyIds }
-        ${end}: { ${kinds} }
-      }
-    ) { nodes { id spaceId typeId type { name } ${end} { ${NODE_FIELDS} } } }`;
-  };
-  return parse(/* GraphQL */ `
-    query GraphNeighbourhoodHop2(
-      $spaceIds: [UUID!]
-      $plumbingPropertyIds: [UUID!]
-      ${lensed ? `$openTypeIds: [UUID!]\n$lensedTypeIds: [UUID!]\n${TOPIC_LENS_VARIABLES}` : '$kindTypeIds: [UUID!]'}
-      ${other ? '$notOtherTypeIds: [UUID!]' : ''}
-      $first: Int
-      ${NODE_VARIABLES}
-    ) {
-      ${ids.flatMap((id, index) => [connection(id, index, 'out'), connection(id, index, 'in')]).join('\n')}
-    }
-  `) as TypedDocumentNode<Record<string, RawConnection>, Record<string, unknown>>;
-}
+export const HOP2_FIRST_TRY_MS = 3_000;
 
-export function hop2Variables(filter: GraphFilter) {
-  const topicId = lensTopicFor(filter);
-  const kinds = topicId
-    ? {
-        openTypeIds: filter.kinds
-          .filter(kind => !LENSED_KINDS.includes(kind))
-          .flatMap(kind => GRAPH_KIND_TYPE_IDS[kind]),
-        lensedTypeIds: lensedTypeIds(filter.kinds),
-        ...topicLensVariables(topicId),
-      }
-    : { kindTypeIds: filter.kinds.flatMap(kind => GRAPH_KIND_TYPE_IDS[kind]) };
-  return {
-    spaceIds: filter.spaceIds ?? null,
-    plumbingPropertyIds: PLUMBING_RELATION_TYPE_IDS,
-    ...kinds,
-    ...(filter.kinds.includes('other') ? { notOtherTypeIds: NOT_OTHER_TYPE_IDS } : {}),
-    first: HOP2_PER_NODE,
-    ...nodeVariables(),
+/** One direction around one hop-1 node. */
+function fetchHop2Links(
+  id: string,
+  direction: 'in' | 'out',
+  filter: GraphFilter,
+  variables: Record<string, unknown>,
+  signal?: AbortSignal
+) {
+  const lensed = lensTopicFor(filter) !== null;
+  const other = filter.kinds.includes('other');
+  const ask = (entityFirst: boolean, timeoutMs: number) => {
+    const query = hop2Document(direction, lensed, other, entityFirst);
+    return graphql({
+      query,
+      decoder: (response: LinksResponse) => readLinks(response.hop as RawLinks, direction).links,
+      variables: pickVariables(query, { ...variables, id }),
+      signal,
+      timeoutMs,
+    });
   };
-}
-
-export function decodeHop2(response: Record<string, RawConnection>, ids: readonly string[]): GraphHop2 {
-  return Object.fromEntries(
-    ids.map((id, index) => {
-      const self = normId(id);
-      return [
-        self,
-        [
-          ...decodeConnection(response[`n${index}_out`] ?? null, self, 'out'),
-          ...decodeConnection(response[`n${index}_in`] ?? null, self, 'in'),
-        ],
-      ];
-    })
+  return Effect.runPromise(
+    ask(false, HOP2_FIRST_TRY_MS).pipe(
+      Effect.catchIf(
+        error => error.isTimeout,
+        () => ask(true, GRAPH_REQUEST_TIMEOUT_MS - HOP2_FIRST_TRY_MS)
+      )
+    )
   );
 }
 
+/**
+ * Each direction around each hop-1 node in parallel, then their nodes, drawn together. A side that
+ * fails leaves its node without it; every side or the nodes failing, or a cancel, fails the hop.
+ */
 export async function fetchHop2(ids: readonly string[], filter: GraphFilter, signal?: AbortSignal) {
   if (ids.length === 0) return {} as GraphHop2;
-  const hop2 = await Effect.runPromise(
-    graphql({
-      query: hop2Document(ids, lensTopicFor(filter) !== null, filter.kinds.includes('other')),
-      decoder: (response: Record<string, RawConnection>) => decodeHop2(response, ids),
-      variables: hop2Variables(filter),
-      signal,
-      timeoutMs: GRAPH_REQUEST_TIMEOUT_MS,
-    })
+  const variables = hop2Variables(filter);
+  const sides = ids.flatMap(id => (['out', 'in'] as const).map(direction => ({ id: normId(id), direction })));
+  const results = await Promise.allSettled(
+    sides.map(({ id, direction }) => fetchHop2Links(id, direction, filter, variables, signal))
   );
-  const claimIds = [
-    ...new Set(
-      Object.values(hop2)
-        .flat()
-        .filter(({ node }) => node.kind === 'claim')
-        .map(({ node }) => node.id)
-    ),
-  ];
-  if (claimIds.length === 0) return hop2;
-  const placed = await Effect.runPromise(
-    graphql({
-      query: placementDocument,
-      decoder: decodePlacement,
-      variables: { ids: claimIds, first: claimIds.length, unplacingPropertyIds: UNPLACING_PROPERTY_IDS },
-      signal,
-      timeoutMs: GRAPH_REQUEST_TIMEOUT_MS,
-    })
+  if (signal?.aborted) throw signal.reason;
+  const failed = results.find(result => result.status === 'rejected');
+  if (failed && results.every(result => result.status === 'rejected')) throw failed.reason;
+  const links = results.map(result => (result.status === 'fulfilled' ? result.value : []));
+  const nodes = await fetchNodes(
+    links.flat().map(link => link.farId),
+    signal
   );
-  return withPlacement(hop2, placed);
-}
-
-type PlacementResponse = {
-  entitiesConnection: { nodes: Array<{ id: string; placed: Array<{ spaceId: string }> | null }> } | null;
-};
-
-const placementDocument = parse(/* GraphQL */ `
-  query GraphNodePlacement($ids: [UUID!], $first: Int, $unplacingPropertyIds: [UUID!]) {
-    entitiesConnection(first: $first, filter: { id: { in: $ids } }) {
-      nodes { id ${PLACED_FIELD} }
-    }
-  }
-`) as TypedDocumentNode<PlacementResponse, Record<string, unknown>>;
-
-function decodePlacement(response: PlacementResponse): Map<string, string[]> {
-  return new Map(
-    (response.entitiesConnection?.nodes ?? []).map(node => [
-      normId(node.id),
-      [...new Set((node.placed ?? []).map(value => normId(value.spaceId)))],
-    ])
-  );
-}
-
-/** Hop 2 with each claim's placement filled in from the follow-up query. */
-export function withPlacement(hop2: GraphHop2, placed: ReadonlyMap<string, string[]>): GraphHop2 {
-  return Object.fromEntries(
-    Object.entries(hop2).map(([parent, entries]) => [
-      parent,
-      entries.map(entry =>
-        placed.has(entry.node.id)
-          ? { ...entry, node: { ...entry.node, placedSpaceIds: placed.get(entry.node.id)! } }
-          : entry
-      ),
-    ])
-  );
+  const hop2: GraphHop2 = Object.fromEntries(ids.map(id => [normId(id), []]));
+  sides.forEach(({ id, direction }, index) => hop2[id].push(...decodeLinks(links[index], id, direction, nodes)));
+  return hop2;
 }
 
 const crossLinksDocument = parse(/* GraphQL */ `

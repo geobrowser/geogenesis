@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { decodeClaimsAbout } from '../claims-about';
-import { type GraphHop1, type GraphNode, decodeHop1 } from '../fetch-graph-neighbourhood';
+import { type GraphHop1, type GraphNode, decodeHop1, decodeNode } from '../fetch-graph-neighbourhood';
 import type { GraphCardMeta } from '../graph-card-metadata';
 import type { GraphKind } from '../graph-kinds';
 import { NEIGHBOUR_KIND_TYPE_IDS, TOPIC_TYPE_ID } from '../ontology';
@@ -163,18 +163,12 @@ describe('loadGraphCardData', () => {
 
   it('leaves hidden neighbours and claims out of the picks, the kind counts and the summary', async () => {
     const person = (id: string, name: string, hidden = false) => ({
-      id: `r${id}`,
-      spaceId: SPACE,
-      typeId: 'p'.repeat(32),
-      type: null,
-      toEntity: {
-        id,
-        name,
-        spaceIds: [SPACE],
-        types: [{ id: NEIGHBOUR_KIND_TYPE_IDS.person[0], name: 'Person' }],
-        relationsList: [],
-        hidden: hidden ? [{ text: 'true', boolean: null }] : [],
-      },
+      id,
+      name,
+      spaceIds: [SPACE],
+      types: [{ id: NEIGHBOUR_KIND_TYPE_IDS.person[0], name: 'Person' }],
+      relationsList: [],
+      hidden: hidden ? [{ text: 'true', boolean: null }] : [],
     });
     const claim = (id: string, hidden: boolean) => ({
       id,
@@ -192,23 +186,35 @@ describe('loadGraphCardData', () => {
         fetchHop1: vi.fn(async () =>
           decodeHop1(
             {
-              entity: {
-                id: TOPIC,
-                name: 'Israel-Gaza war',
-                spaceIds: [SPACE],
-                types: [{ id: TOPIC_TYPE_ID, name: 'Topic' }],
-                relationsList: [],
-                description: null,
-                texts: [],
-              },
-              ent_out: {
-                nodes: [person(shown, 'Shown'), person(withheld, 'Withheld', true)],
-                pageInfo: { hasNextPage: false },
-              },
-              ent_in: null,
+              id: TOPIC,
+              name: 'Israel-Gaza war',
+              spaceIds: [SPACE],
+              types: [{ id: TOPIC_TYPE_ID, name: 'Topic' }],
+              relationsList: [],
+              description: null,
+              texts: [],
             },
-            TOPIC,
-            ['ent']
+            [
+              {
+                kind: 'ent',
+                direction: 'out',
+                links: [shown, withheld].map(id => ({
+                  id: `r${id}`,
+                  spaceId: SPACE,
+                  typeId: 'p'.repeat(32),
+                  type: null,
+                  farId: id,
+                })),
+                more: false,
+              },
+            ],
+            new Map(
+              [person(shown, 'Shown'), person(withheld, 'Withheld', true)].flatMap(raw => {
+                const node = decodeNode(raw);
+                return node ? [[raw.id, node] as [string, GraphNode]] : [];
+              })
+            ),
+            TOPIC
           )
         ),
         fetchAllClaimsAbout: vi.fn(async () => ({
