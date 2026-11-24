@@ -1721,6 +1721,7 @@ function PairedDebateFeedPlayer({
             <DebateEarlyEndLabels
               cue={earlyEndCue}
               names={breakNames}
+              topSlot={topSlot}
               playing={playing}
               clock={{
                 positionMs: livePositionMs,
