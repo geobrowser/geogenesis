@@ -15,7 +15,7 @@ import type { SerializedOp } from './inject-types';
  * The relation is the one that page's section reads:
  * - `target-to-source`: page --property--> source (a News story's, Claim's, Event's or Post's
  *   `Sources`).
- * - `source-to-target`: source --property--> page (a Topic's "Sources & evidence" lists entities
+ * - `source-to-target`: source --property--> page (a Topic's "Evidence" lists entities
  *   whose `Topics` point at the topic).
  */
 export type IngestionLink = {

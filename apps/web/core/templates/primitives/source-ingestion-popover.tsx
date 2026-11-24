@@ -118,7 +118,7 @@ function useIngestionSpace({
 }
 
 /**
- * The `+` on a Sources / Sources & evidence section (GEO-3819). Pasting a link runs the same
+ * The `+` on a Sources / Evidence section (GEO-3819). Pasting a link runs the same
  * ingestion as the space's Add data panel: the assistant opens, imports the page and stages it, and
  * `link` makes it a source of the page the `+` was on.
  *

@@ -22,7 +22,7 @@ export function sourcesIngestionLink(
 }
 
 /**
- * For a Topic, whose "Sources & evidence" lists the entities tagged with it: a pasted source becomes
+ * For a Topic, whose "Evidence" lists the entities tagged with it: a pasted source becomes
  * source --Topics--> topic (GEO-3819).
  */
 export function topicCoverageIngestionLink(
