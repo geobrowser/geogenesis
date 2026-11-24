@@ -106,13 +106,14 @@ function TopicGraph({
         scope={scope}
         overrides={overrides}
         topicName={topic?.name ?? null}
+        // With the navbar gone, close is the way out: the topic page when its space is known, else Explore.
         close={
           topicSpaceId
             ? {
                 href: NavUtils.toEntity(topicSpaceId, topicId),
                 label: `Close the map and go to ${topic?.name ?? 'the topic'}`,
               }
-            : null
+            : { href: NavUtils.toExplore(), label: 'Close the map and go to Explore' }
         }
       />
     </>
