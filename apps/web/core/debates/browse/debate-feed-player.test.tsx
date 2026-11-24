@@ -3671,6 +3671,45 @@ describe('holding the full recordings until the viewer asks (feed bandwidth)', (
     expect(getDefaultStore().get(feedFullPlaybackStartedAtom)).toBe(true);
   });
 
+  it('reports the Play that lifts the hold once, after the recordings attach', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false, posters: stills });
+
+    const attachedWhenReported: boolean[] = [];
+    mocks.control = vi.fn(() => attachedWhenReported.push(mocks.analyticsAttached.at(-1) ?? false));
+    const { getByRole } = render(<DebateFeedPlayer debate={debate} active holdFullPlayback />);
+
+    fireEvent.click(getByRole('button', { name: 'Play debate' }));
+
+    expect(mocks.control).toHaveBeenCalledOnce();
+    expect(mocks.control).toHaveBeenCalledWith('play');
+    expect(attachedWhenReported).toEqual([true]);
+  });
+
+  it('reports a held card’s Play pressed while scrolling in only once it is active', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false, posters: stills });
+    const { getByRole, rerender } = render(<DebateFeedPlayer debate={debate} active={false} holdFullPlayback />);
+
+    fireEvent.click(getByRole('button', { name: 'Play debate' }));
+    expect(mocks.control).not.toHaveBeenCalled();
+
+    rerender(<DebateFeedPlayer debate={debate} active holdFullPlayback />);
+    expect(mocks.control).toHaveBeenCalledOnce();
+    expect(mocks.control).toHaveBeenCalledWith('play');
+  });
+
+  it('reports the Play from a tap on a held card’s video, after the recordings attach', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false, posters: stills });
+    const attachedWhenReported: boolean[] = [];
+    mocks.control = vi.fn(() => attachedWhenReported.push(mocks.analyticsAttached.at(-1) ?? false));
+    const { getAllByRole } = render(<DebateFeedPlayer debate={debate} active holdFullPlayback />);
+
+    fireEvent.click(getAllByRole('button', { name: 'Pause or play' })[0]);
+
+    expect(mocks.control).toHaveBeenCalledOnce();
+    expect(mocks.control).toHaveBeenCalledWith('play');
+    expect(attachedWhenReported).toEqual([true]);
+  });
+
   it('keeps a Play tap while scrolling into view and starts only once active', () => {
     const fixture = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false, posters: stills });
     mocks.controller = fixture;
