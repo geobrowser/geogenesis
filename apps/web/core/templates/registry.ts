@@ -31,6 +31,11 @@ export interface EntityTemplateDefinition {
   /**
    * Whether the template keeps its custom shell when the user toggles edit mode,
    * rather than falling back to the generic block/property editor.
+   *
+   * False for every template (GEO-3819): editing any templated entity, Claim and Topic included,
+   * opens the same entity editor every other entity gets, and leaving edit mode returns to the
+   * template. A template is a read surface, so editors get one editor everywhere rather than a
+   * custom edit view per type.
    */
   readonly keepInEditMode: boolean;
   /**
@@ -75,7 +80,7 @@ export const ENTITY_TEMPLATE_REGISTRY: readonly EntityTemplateDefinition[] = [
     id: 'claim',
     label: 'Claim',
     typeIds: [TEMPLATE_ONTOLOGY.CLAIM_TYPE_ID],
-    keepInEditMode: true,
+    keepInEditMode: false,
     requiresSpaceCheck: false,
     requiresV2Flag: false,
     contentMaxWidth: 840,
@@ -84,7 +89,7 @@ export const ENTITY_TEMPLATE_REGISTRY: readonly EntityTemplateDefinition[] = [
     id: 'topic',
     label: 'Topic',
     typeIds: [TEMPLATE_ONTOLOGY.TOPIC_TYPE_ID],
-    keepInEditMode: true,
+    keepInEditMode: false,
     requiresSpaceCheck: false,
     requiresV2Flag: false,
     contentMaxWidth: 1180,
