@@ -1,5 +1,7 @@
 import { normId } from '~/core/utils/norm-id';
 
+import { parseGraphFilterOverrides } from './graph-filter';
+
 /** The back stack's URL param: previous centres, oldest first. */
 export const GRAPH_TRAIL_PARAM = 'trail';
 
@@ -49,9 +51,14 @@ export function historyFromUrl(centreId: string, params: Pick<URLSearchParams, '
   return { centreId: centre, back: back.slice(-GRAPH_HISTORY_LIMIT) };
 }
 
-/** The URL for `history`, keeping every other param (topic, space, filters) as it is. */
+/**
+ * The URL for `history`, keeping every other param (topic, space, filters) as it is. A one-kind
+ * `kinds` is the chip a shared link opened on, read once: hops leave it behind, so a reload or a
+ * copied address doesn't bring back a chip the viewer has since left.
+ */
 export function graphHistoryHref(history: GraphHistory, params: URLSearchParams): string {
   const next = new URLSearchParams(params);
+  if (parseGraphFilterOverrides(next).chip) next.delete('kinds');
   if (history.back.length > 0) next.set(GRAPH_TRAIL_PARAM, history.back.join(','));
   else next.delete(GRAPH_TRAIL_PARAM);
   const query = next.toString();

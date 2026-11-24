@@ -17,7 +17,8 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { EntityAvatar } from './entity-avatar';
 import { NeighbourGroups, type PanelClaim } from './panel-sections';
 
-export type EntityPanelEmptyMessages = { relationships: string; claims: string; description: string };
+/** `claims` null: claims aren't asked for here (a chip other than Claims), so there's nothing to report. */
+export type EntityPanelEmptyMessages = { relationships: string; claims: string | null; description: string };
 
 export function typeNames(entity: { types: Array<{ name: string | null }> }): string[] {
   return [...new Set(entity.types.map(type => type.name).filter((name): name is string => Boolean(name)))];
@@ -113,7 +114,8 @@ export function EntityPanel({
   );
 }
 
-const NO_CLAIMS_ASKED: ClaimsState = {
+/** No claims asked about the centre: nothing loading, nothing to report. */
+export const NO_CLAIMS_ASKED: ClaimsState = {
   isLoading: false,
   isError: false,
   hasNextPage: false,

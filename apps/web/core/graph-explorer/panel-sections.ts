@@ -4,7 +4,7 @@ import { normId } from '~/core/utils/norm-id';
 import { type ClaimBand, MIN_RESPONSES_FOR_BAND, agreePercent, claimBand } from './claim-band';
 import type { GraphNode } from './fetch-graph-neighbourhood';
 import type { GraphKind } from './graph-kinds';
-import type { GraphSelection } from './select-graph';
+import type { GraphKindFilter, GraphSelection } from './select-graph';
 import type { Spoke } from './spokes';
 import type { SummarisedClaim } from './topic-claims-summary';
 
@@ -100,6 +100,19 @@ export function latestNews(nodes: Iterable<GraphNode>, limit = OVERVIEW_ROWS) {
   return [...byId.values()].sort((a, b) => b.time - a.time).slice(0, limit);
 }
 
+function spokeKind(spoke: Spoke, nodes: ReadonlyMap<string, GraphNode>): GraphKind {
+  return nodes.get(normId(spoke.entity.id))?.kind ?? 'other';
+}
+
+/** The spokes a chip keeps in the panel, as the map keeps its nodes: all of them, or one kind's. */
+export function spokesOfKind(
+  spokes: Spoke[],
+  nodes: ReadonlyMap<string, GraphNode>,
+  kindFilter: GraphKindFilter
+): Spoke[] {
+  return kindFilter === 'all' ? spokes : spokes.filter(spoke => spokeKind(spoke, nodes) === kindFilter);
+}
+
 export type NeighbourGroup = { kind: GraphKind; spokes: Array<{ spoke: Spoke; node: GraphNode | undefined }> };
 
 /** Neighbours grouped by kind in PANEL_KIND_ORDER; a spoke with no known node is Other. */
@@ -107,7 +120,7 @@ export function groupByKind(spokes: readonly Spoke[], nodes: ReadonlyMap<string,
   const groups = new Map<GraphKind, NeighbourGroup['spokes']>();
   for (const spoke of spokes) {
     const node = nodes.get(normId(spoke.entity.id));
-    const kind = node?.kind ?? 'other';
+    const kind = spokeKind(spoke, nodes);
     groups.set(kind, [...(groups.get(kind) ?? []), { spoke, node }]);
   }
   return PANEL_KIND_ORDER.flatMap(kind => {
