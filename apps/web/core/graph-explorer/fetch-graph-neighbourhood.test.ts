@@ -230,7 +230,7 @@ describe('hop documents', () => {
       const sent = Object.keys(hop1Variables(CENTRE, filter));
       const hop1 = [
         hop1CentreDocument,
-        ...filter.kinds.map(kind => hop1KindDocument(kind, on, filter.spaceIds !== null)),
+        ...filter.kinds.map(kind => hop1KindDocument(kind, on, filter.spaceIds !== undefined)),
       ].map(declared);
       // Each request declares a subset of the hop's variables, and together they use every one.
       for (const names of hop1) expect(sent).toEqual(expect.arrayContaining(names));
@@ -451,6 +451,16 @@ describe('fetchHop1', () => {
     expect(hop.centre?.id).toBe(CENTRE);
     expect(hop.neighbours.map(({ node }) => node.name)).toEqual(['A story']);
     expect(hop.failedKinds).toEqual(['ent']);
+  });
+
+  it('asks people relation first when the filter has no space scope', async () => {
+    respond({
+      ent: async () => ({ ent_out: { nodes: [] }, ent_in: { nodes: [{ ...edge, id: 'r1', fromEntity: person }] } }),
+    });
+    const hop = await fetchHop1(CENTRE, resolveGraphFilter(null, { kinds: ['ent', 'story'] }));
+    const queries = api.request.mock.calls.map(([options]) => print(options.query)).join('\n');
+    expect(queries).not.toContain('entitiesConnection');
+    expect(hop.neighbours.map(({ node }) => node.name)).toEqual(['Ada', 'A story']);
   });
 
   it('fails when the centre fails, or every kind does', async () => {

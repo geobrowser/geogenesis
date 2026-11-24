@@ -410,7 +410,7 @@ export function decodeHop1(response: Hop1Response, centreId: string, kinds: read
  */
 export async function fetchHop1(centreId: string, filter: GraphFilter, signal?: AbortSignal): Promise<GraphHop1> {
   const lensed = lensTopicFor(filter) !== null;
-  const scoped = filter.spaceIds !== null;
+  const scoped = filter.spaceIds !== undefined;
   const variables = hop1Variables(centreId, filter);
   const request = <T>(query: TypedDocumentNode<T, Record<string, unknown>>) =>
     Effect.runPromise(
