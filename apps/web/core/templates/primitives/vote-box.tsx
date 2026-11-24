@@ -25,6 +25,13 @@ export interface VoteBoxProps {
  */
 export function VoteBox({ prompt, split, control, className }: VoteBoxProps) {
   const { userVote, countSummary, hint, impactNote, disabled, onVote, onClear } = control;
+  // Pressing the filled button takes the vote back, so the buttons alone can change or clear it.
+  // Phones rely on that: they drop the "You agreed. Change" line, which only repeated the filled
+  // button (GEO-3837).
+  const press = (choice: 'agree' | 'disagree') => {
+    if (userVote === choice && onClear) onClear();
+    else onVote(choice);
+  };
 
   return (
     <section
@@ -45,7 +52,8 @@ export function VoteBox({ prompt, split, control, className }: VoteBoxProps) {
       >
         {split.rows.length > 0 && (
           <div className="min-w-0">
-            <SplitBars rows={split.rows} density="full" />
+            {/* Stacked (phones), the filled button below already shows the viewer's side (GEO-3837). */}
+            <SplitBars rows={split.rows} density="full" userLabelClassName="hidden @[680px]:inline" />
           </div>
         )}
 
@@ -63,7 +71,7 @@ export function VoteBox({ prompt, split, control, className }: VoteBoxProps) {
               type="button"
               disabled={disabled}
               aria-pressed={userVote === 'agree'}
-              onClick={() => onVote('agree')}
+              onClick={() => press('agree')}
               className={cx(
                 'inline-flex h-9 cursor-pointer items-center justify-center gap-1.5 rounded-full border px-3.5 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50',
                 userVote === 'agree'
@@ -79,7 +87,7 @@ export function VoteBox({ prompt, split, control, className }: VoteBoxProps) {
               type="button"
               disabled={disabled}
               aria-pressed={userVote === 'disagree'}
-              onClick={() => onVote('disagree')}
+              onClick={() => press('disagree')}
               className={cx(
                 'inline-flex h-9 cursor-pointer items-center justify-center gap-1.5 rounded-full border px-3.5 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50',
                 userVote === 'disagree'
@@ -106,7 +114,7 @@ export function VoteBox({ prompt, split, control, className }: VoteBoxProps) {
           </div>
 
           {userVote && (
-            <div className="flex items-center gap-2.5 text-[14.5px] text-grey-04">
+            <div className="hidden items-center gap-2.5 text-[14.5px] text-grey-04 @[680px]:flex">
               <span className="font-medium text-text">{userVote === 'agree' ? 'You agreed.' : 'You disagreed.'}</span>
               {onClear && (
                 <button

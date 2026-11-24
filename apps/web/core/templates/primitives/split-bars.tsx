@@ -12,12 +12,14 @@ export interface SplitBarsProps {
   /** Compact mode fits inside cards/rows; full mode shows voter counts and taller tracks. */
   density?: 'compact' | 'full';
   className?: string;
+  /** Classes for the full rows' "You: Agree" label, e.g. to hide it where the vote shows elsewhere. */
+  userLabelClassName?: string;
 }
 
 /**
  * Horizontal per-community agreement (or helpfulness) bars sized to Geo's Calibre typography scale.
  */
-export function SplitBars({ rows, density = 'compact', className }: SplitBarsProps) {
+export function SplitBars({ rows, density = 'compact', className, userLabelClassName }: SplitBarsProps) {
   if (rows.length === 0) return null;
 
   const isFull = density === 'full';
@@ -105,7 +107,12 @@ export function SplitBars({ rows, density = 'compact', className }: SplitBarsPro
               {/* Full density only: the compact grid's last column is 36px, so the label spilled over the
                   bar and the next column (GEO-3819). Compact rows sit beside pills that show the vote. */}
               {isFull && row.userLabel && (
-                <span className="rounded-md bg-grey-01 px-2 py-0.5 text-[13px] font-medium text-text">
+                <span
+                  className={cx(
+                    'rounded-md bg-grey-01 px-2 py-0.5 text-[13px] font-medium text-text',
+                    userLabelClassName
+                  )}
+                >
                   {row.userLabel}
                 </span>
               )}
