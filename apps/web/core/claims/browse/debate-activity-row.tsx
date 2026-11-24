@@ -5,6 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { useEntityCommentCounts } from '~/core/comments/use-entity-comment-counts';
+import { rememberDebateFullReturnOnClick } from '~/core/debates/browse/debate-full-return';
 import { useClaimTimings } from '~/core/debates/use-claim-timings';
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
 import { countFor } from '~/core/hooks/batched-counts';
@@ -129,6 +130,8 @@ export function DebateActivityRow({
   // already leads with the claim, so it degrades to roughly the right sentence.
   const headline = claimText ?? debate.name ?? 'Debate';
   const debateHref = NavUtils.toEntity(spaceId, debate.id);
+  // Where × on the debate's full screen comes back to (GEO-3833).
+  const onDebateLinkClick = rememberDebateFullReturnOnClick(debateHref);
 
   // Below the thumbnail rather than `avatarBottomInRowPx`: this row's left column is a keyframe, not
   // an avatar, so its own height is where the spine starts.
@@ -178,6 +181,7 @@ export function DebateActivityRow({
             // 540 × 820, so a 16:9 tile would letterbox every still it ever showed.
             <Link
               href={debateHref}
+              onClick={onDebateLinkClick}
               data-entity-side-panel-full-page
               aria-label={`Watch ${debaterLine ?? headline}`}
               className="relative block w-full shrink-0 overflow-hidden rounded-md bg-grey-01"
@@ -209,6 +213,7 @@ export function DebateActivityRow({
               // from a claim row does not expect the one below it to leave the page.
               <Link
                 href={debateHref}
+                onClick={onDebateLinkClick}
                 data-entity-side-panel-full-page
                 aria-label={`Watch ${debaterLine}`}
                 className={cx(PAGE_DENSITY.nameClass, 'min-w-0 truncate text-text no-underline hover:underline')}
@@ -272,6 +277,7 @@ export function DebateActivityRow({
             />
             <Link
               href={debateHref}
+              onClick={onDebateLinkClick}
               data-entity-side-panel-full-page
               className={cx(PAGE_DENSITY.metaClass, 'text-ctaPrimary no-underline hover:underline')}
             >

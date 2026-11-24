@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import { safeInternalHref } from '~/core/debates/debate-return-navigation';
 import { ID } from '~/core/id';
+import { isModifiedClick } from '~/core/utils/is-modified-click';
 import { readSession, removeSession, writeSession } from '~/core/utils/session-storage';
 
 /**
@@ -56,6 +57,17 @@ export function rememberDebateFullReturn(to: string, from: string = currentHref(
   if (!target || !origin) return;
   const stored: Stored = { from: origin, to: pathOf(target), at: Date.now() };
   writeSession(KEY, JSON.stringify(stored));
+}
+
+/**
+ * The click handler for an in-app link to a debate's page: records the way in on a plain click. Every
+ * such link takes it, so × goes back to wherever the viewer opened the debate from — the Explore card,
+ * a claim's Debates list, an activity row, a claim's timecode, the end card's next debate.
+ */
+export function rememberDebateFullReturnOnClick(to: string) {
+  return (event: React.MouseEvent) => {
+    if (!isModifiedClick(event)) rememberDebateFullReturn(to);
+  };
 }
 
 export type DebateFullCloseTarget = { kind: 'back' } | { kind: 'push'; href: string };

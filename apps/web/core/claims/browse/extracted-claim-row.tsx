@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { rememberDebateFullReturnOnClick } from '~/core/debates/browse/debate-full-return';
 import { useOpenDebaterProfile } from '~/core/debates/browse/use-open-debater-profile';
 import { formatTimecode, isAssertableMoment } from '~/core/debates/claim-timing';
 import { debateSeekSeconds, withDebateTimecode } from '~/core/debates/debate-timecode';
@@ -196,6 +197,8 @@ export function ExtractedClaimRow({
           {timecodeHref ? (
             <Link
               href={timecodeHref}
+              // Where × on the debate's full screen comes back to (GEO-3833).
+              onClick={rememberDebateFullReturnOnClick(timecodeHref)}
               data-entity-side-panel-full-page
               // The label says what pressing it does, because "12:04" on its own reads as a fact
               // about the claim rather than as a control.

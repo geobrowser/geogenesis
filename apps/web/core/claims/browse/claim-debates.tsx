@@ -6,6 +6,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { rememberDebateFullReturnOnClick } from '~/core/debates/browse/debate-full-return';
 import {
   DEBATE_CLAIMS_PROPERTY_ID,
   DEBATE_OPPOSED_BY_PROPERTY_ID,
@@ -299,6 +300,8 @@ export function DebateRow({
   return (
     <Link
       href={NavUtils.toEntity(spaceId, debate.id)}
+      // Where × on the debate's full screen comes back to (GEO-3833).
+      onClick={rememberDebateFullReturnOnClick(NavUtils.toEntity(spaceId, debate.id))}
       data-entity-side-panel-full-page
       className="flex items-center gap-3 rounded-lg border border-grey-02 bg-white p-3 transition-colors hover:border-grey-03"
     >

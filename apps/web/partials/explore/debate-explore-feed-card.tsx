@@ -9,7 +9,7 @@ import { ActionSurfaceArticle, useActionScope } from '~/core/action-context-prov
 import type { Debate } from '~/core/debates/api';
 import { DebateClaimFooter } from '~/core/debates/browse/debate-claim-footer';
 import { DebateFeedPlayer } from '~/core/debates/browse/debate-feed-player';
-import { rememberDebateFullReturn } from '~/core/debates/browse/debate-full-return';
+import { rememberDebateFullReturnOnClick } from '~/core/debates/browse/debate-full-return';
 import { DebateInteractionBar } from '~/core/debates/browse/debate-interaction-bar';
 import { DEBATE_FEED_HOLDS_FULL_PLAYBACK } from '~/core/debates/browse/feed-full-playback';
 import { useInlinePlaybackUnavailable } from '~/core/debates/browse/inline-playback';
@@ -27,7 +27,6 @@ import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 import { useNearViewport } from '~/core/hooks/use-near-viewport';
 import { ID } from '~/core/id';
 import { useCoveredByMobileSheet } from '~/core/state/mobile-sheet-cover';
-import { isModifiedClick } from '~/core/utils/is-modified-click';
 import { NavUtils } from '~/core/utils/utils';
 
 import { FullscreenLink } from '~/design-system/fullscreen-link';
@@ -461,11 +460,7 @@ export function DebateExploreFeedCard({
                     href={NavUtils.toEntity(item.spaceId, item.entityId)}
                     // Where × on the full screen comes back to (GEO-3833). A modified click opens a
                     // tab, which has nothing to go back to.
-                    onClick={event => {
-                      if (!isModifiedClick(event)) {
-                        rememberDebateFullReturn(NavUtils.toEntity(item.spaceId, item.entityId));
-                      }
-                    }}
+                    onClick={rememberDebateFullReturnOnClick(NavUtils.toEntity(item.spaceId, item.entityId))}
                     entityId={item.entityId}
                     spaceId={item.spaceId}
                     ariaLabel="Watch this debate full screen"

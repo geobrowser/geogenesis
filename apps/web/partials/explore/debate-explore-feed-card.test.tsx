@@ -431,6 +431,22 @@ describe('DebateExploreFeedCard', () => {
   });
 
   // GEO-3280. The feed's lead debate arrives with its stills, so the card paints them at once.
+  it('records the way into the full screen on a plain click, for its × (GEO-3833)', () => {
+    window.sessionStorage.removeItem('geo:debate-full-return');
+    renderCard();
+    const expand = screen.getByRole('link', { name: 'Watch this debate full screen' });
+    expand.addEventListener('click', event => event.preventDefault());
+    // A modified click opens a tab, which has no page behind it to go back to.
+    fireEvent.click(expand, { metaKey: true });
+    expect(window.sessionStorage.getItem('geo:debate-full-return')).toBeNull();
+    fireEvent.click(expand);
+    const stored = JSON.parse(window.sessionStorage.getItem('geo:debate-full-return') ?? 'null');
+    expect(stored).toMatchObject({
+      from: `${window.location.pathname}${window.location.search}`,
+      to: expect.stringMatching(/^\/space\/space-1\/[0-9a-f]{32}$/),
+    });
+  });
+
   it("paints the feed's stills in place of the placeholders until the player takes over", () => {
     const posters = { slot1: 'https://chat.test/still-1', slot2: 'https://chat.test/still-2' };
     const { container } = renderCard({ item: { ...item, debatePosters: posters } });
