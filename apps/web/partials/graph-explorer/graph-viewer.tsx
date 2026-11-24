@@ -11,7 +11,7 @@ import { shareGraph } from '~/core/graph-explorer/graph-share';
 import { type GraphHistory, goBack, recentre } from '~/core/graph-explorer/history';
 import { DESKTOP_GRAPH_CAPS, type GraphKindFilter, PHONE_GRAPH_CAPS } from '~/core/graph-explorer/select-graph';
 import { SKELETON_SELECTION } from '~/core/graph-explorer/skeleton-graph';
-import { type Spoke, buildSpokes, entitySpaceId } from '~/core/graph-explorer/spokes';
+import { buildSpokes, entitySpaceId } from '~/core/graph-explorer/spokes';
 import { useClaimsAbout, useGraphNeighbourhood, usePrefetchHop1 } from '~/core/graph-explorer/use-graph-explorer';
 import { useMediaQuery } from '~/core/hooks/use-media-query';
 import { useQueryEntity } from '~/core/sync/use-store';
@@ -19,12 +19,13 @@ import { normId } from '~/core/utils/norm-id';
 
 import { Skeleton } from '~/design-system/skeleton';
 
-import { ClaimActions, KindCounts, TopicClaimsSummary } from './connections/centre-summary';
+import { ClaimActions, TopicClaimsSummary } from './connections/centre-summary';
 import { ConnectionsStage, PHONE_QUERY } from './connections/connections-view';
 import { GraphSearch } from './connections/graph-search';
 import { GraphTopBar } from './connections/graph-top-bar';
 import { claimsEmptyMessage, descriptionEmptyMessage, relationshipsEmptyMessage } from './empty-states';
-import { EntityPanel, type EntityPanelTab } from './entity-panel';
+import { EntityPanel } from './entity-panel';
+import { TopicOverview } from './panel-sections';
 
 /**
  * The Connections view: a top bar, the 3D map of the centre's neighbourhood and a panel about the
@@ -49,7 +50,6 @@ export function GraphViewer({
   close?: { href: string; label: string } | null;
 }) {
   const filter = React.useMemo(() => (scope ? resolveGraphFilter(scope, overrides) : null), [scope, overrides]);
-  const [tab, setTab] = React.useState<EntityPanelTab>('details');
   const [kindFilter, setKindFilter] = React.useState<GraphKindFilter>('all');
   // Names of entities already seen, for "Back to X" and the trail before a hop is refetched.
   const [names, setNames] = React.useState<Record<string, string>>({});
@@ -91,6 +91,16 @@ export function GraphViewer({
     [centreId, filter, hop1, topicSpaceId]
   );
 
+  const hop1Nodes = React.useMemo(
+    () => new Map(hop1?.centre?.id === centreId ? hop1.neighbours.map(({ node }) => [normId(node.id), node]) : []),
+    [centreId, hop1]
+  );
+  // Dated news can come from hop 1 or from the map's second ring.
+  const loadedNodes = React.useMemo(
+    () => [...hop1Nodes.values(), ...(neighbourhood.selection?.nodes.map(entry => entry.node) ?? [])],
+    [hop1Nodes, neighbourhood.selection]
+  );
+
   React.useEffect(() => {
     const centreName = hop1?.centre?.id === centreId ? hop1.centre.name : null;
     if (!centreName) return;
@@ -104,7 +114,6 @@ export function GraphViewer({
     },
     [history, onNavigate]
   );
-  const select = React.useCallback((spoke: Spoke) => goTo(spoke.entity.id, spoke.entity.name), [goTo]);
   const selectNode = React.useCallback(
     (node: GraphNode) => {
       // A chip that would hide the new centre gives way, as in the design.
@@ -222,20 +231,31 @@ export function GraphViewer({
     if (claimSpaceId) summary = <ClaimActions claimId={centreId} spaceId={claimSpaceId} />;
     else if (centreId === hubId)
       summary = (
-        <TopicClaimsSummary
-          topicId={centreId}
-          filter={filter}
-          topicSpaceId={topicSpaceId}
-          onOpenClaim={id => goTo(id, null)}
-        />
+        <>
+          <TopicClaimsSummary
+            topicId={centreId}
+            filter={filter}
+            topicSpaceId={topicSpaceId}
+            onOpenClaim={id => goTo(id, null)}
+          />
+          <TopicOverview
+            topicId={centreId}
+            filter={filter}
+            topicSpaceId={topicSpaceId}
+            selection={selection}
+            nodes={loadedNodes}
+            onOpen={goTo}
+          />
+        </>
       );
-    const counts = <KindCounts neighbours={hop1.neighbours} moreKinds={hop1.moreKinds} />;
 
     return (
       <EntityPanel
         centre={centre}
         centreSpaceId={centreSpaceId}
+        topicSpaceId={topicSpaceId}
         spokes={spokes}
+        nodes={hop1Nodes}
         claimPages={claimPages}
         claimsState={{
           isLoading: claims.isLoading,
@@ -244,22 +264,15 @@ export function GraphViewer({
           isFetchingNextPage: claims.isFetchingNextPage,
           fetchNextPage: () => void claims.fetchNextPage(),
         }}
-        tab={tab}
-        onTabChange={setTab}
-        onSelect={select}
-        truncated={hop1.moreKinds.length > 0}
+        onOpen={goTo}
+        moreKinds={hop1.moreKinds}
         emptyMessages={{
           relationships: relationshipsEmptyMessage(filter),
           claims: claimsEmptyMessage(filter, topicName),
           description: descriptionEmptyMessage(centreSpaceId),
         }}
         showClaims={rawCentre.kind !== 'claim'}
-        summary={
-          <>
-            {summary}
-            {counts}
-          </>
-        }
+        summary={summary}
       />
     );
   }

@@ -11,7 +11,7 @@ import {
   TOPIC_TYPE_ID,
   UNNAMED_SUBTOPIC_PROPERTY_ID,
 } from './ontology';
-import { buildSpokes, entitySpaceId, groupSpokesByLabel, relationLabel } from './spokes';
+import { buildSpokes, entitySpaceId, relationLabel } from './spokes';
 
 // Ranking by id order keeps these tests independent of the real space ranking table.
 vi.mock('~/core/utils/space/space-ranking', () => ({
@@ -225,8 +225,8 @@ describe('buildSpokes node space', () => {
   });
 });
 
-describe('groupSpokesByLabel', () => {
-  it('lists a neighbour under every label it has', () => {
+describe('spoke labels', () => {
+  it('keeps every label a neighbour has, outgoing first', () => {
     const both = entity('b'.repeat(32), 'Both', [TOPIC_TYPE_ID]);
     const spokes = buildSpokes(
       hop([
@@ -236,6 +236,6 @@ describe('groupSpokesByLabel', () => {
       CENTRE,
       filter
     );
-    expect(groupSpokesByLabel(spokes).map(group => group.label)).toEqual(['Subtopic', 'Related to']);
+    expect(spokes.map(spoke => spoke.labels)).toEqual([['Subtopic', 'Related to']]);
   });
 });

@@ -6,9 +6,7 @@ import cx from 'classnames';
 
 import { ActionContextProvider } from '~/core/action-context-provider';
 import { CLAIM_BAND_LABELS, type ClaimBand } from '~/core/graph-explorer/claim-band';
-import type { GraphNode } from '~/core/graph-explorer/fetch-graph-neighbourhood';
 import type { GraphFilter } from '~/core/graph-explorer/graph-filter';
-import { GRAPH_KINDS, GRAPH_KIND_LABELS, type GraphKind } from '~/core/graph-explorer/graph-kinds';
 import { MAX_TOPIC_CLAIMS, summaryPercent } from '~/core/graph-explorer/topic-claims-summary';
 import { useTopicClaimsSummary } from '~/core/graph-explorer/use-graph-explorer';
 import { NavUtils } from '~/core/utils/utils';
@@ -19,36 +17,6 @@ import { Skeleton } from '~/design-system/skeleton';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
 import { BAND_SWATCHES } from './node-card';
-
-/** How many of each kind link to the centre in scope; `+` where the per-kind page was full. */
-export function KindCounts({
-  neighbours,
-  moreKinds,
-}: {
-  neighbours: ReadonlyArray<{ node: GraphNode }>;
-  moreKinds: readonly GraphKind[];
-}) {
-  const counts = new Map<GraphKind, Set<string>>();
-  for (const { node } of neighbours) counts.set(node.kind, (counts.get(node.kind) ?? new Set()).add(node.id));
-  const kinds = GRAPH_KINDS.filter(kind => counts.has(kind));
-  if (kinds.length === 0) return null;
-  return (
-    <section aria-label="Connected here" className="flex flex-col gap-2">
-      <h3 className="text-footnote text-grey-04 uppercase">Connected here</h3>
-      <ul className="flex flex-wrap gap-2">
-        {kinds.map(kind => (
-          <li key={kind} className="rounded-full bg-grey-01 px-3 py-1 text-metadata text-text">
-            <span className="font-medium tabular-nums">
-              {counts.get(kind)!.size}
-              {moreKinds.includes(kind) ? '+' : ''}
-            </span>{' '}
-            {GRAPH_KIND_LABELS[kind]}
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
 
 /** The topic's claims by agreement in its space, from real responses, stated as sparse as it is. */
 export function TopicClaimsSummary({

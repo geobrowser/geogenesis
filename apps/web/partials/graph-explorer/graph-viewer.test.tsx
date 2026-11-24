@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import * as React from 'react';
@@ -92,12 +93,10 @@ vi.mock('~/core/responses/use-claim-response-summaries', () => ({
   useClaimResponseSummaryBatch: () => ({ isSuccess: true, isPlaceholderData: false, isError: false }),
 }));
 vi.mock('~/core/claims/browse/claim-response-summary', () => ({
+  CLAIM_RESPONSE_OBJECT_TYPE: 0,
   useClaimResponseSummary: () => ({ isLoading: false, hasCounts: false, positive: 0, negative: 0 }),
 }));
 vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({ EntityVoteButtons: () => <div /> }));
-vi.mock('./graph-claim-row', () => ({
-  GraphClaimRow: ({ claim }: { claim: { name: string } }) => <li>{claim.name}</li>,
-}));
 vi.mock('~/core/utils/space/space-ranking', () => ({
   getTopRankedSpaceId: (ids: string[]) => ids[0] ?? null,
 }));
@@ -208,7 +207,12 @@ function Viewer({
   ...props
 }: Omit<React.ComponentProps<typeof GraphViewer>, 'history' | 'onNavigate'> & { start: string }) {
   const [history, setHistory] = React.useState(() => startGraphHistory(start));
-  return <GraphViewer {...props} history={history} onNavigate={setHistory} />;
+  const [client] = React.useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }));
+  return (
+    <QueryClientProvider client={client}>
+      <GraphViewer {...props} history={history} onNavigate={setHistory} />
+    </QueryClientProvider>
+  );
 }
 
 const scope = { spaceIds: [SPACE], topicId: null, topicSpaceId: null } as const;
@@ -242,10 +246,9 @@ describe('GraphViewer', () => {
     expect(screen.queryByRole('button', { name: /^Back to/ })).toBeNull();
   });
 
-  it('shows the description, and an honest empty Claims tab', () => {
+  it('shows the description, and says honestly that there are no claims', () => {
     render(<Viewer start={TOPIC} scope={scope} />);
     expect(screen.getByText('A topic.')).toBeTruthy();
-    fireEvent.click(screen.getByRole('tab', { name: 'Claims (0)' }));
     expect(screen.getByText('No claims in this topic’s spaces are linked to this yet.')).toBeTruthy();
   });
 
@@ -267,7 +270,7 @@ describe('GraphViewer', () => {
       fetchNextPage: vi.fn(),
     });
     render(<Viewer start={TOPIC} scope={scope} />);
-    fireEvent.click(screen.getByRole('tab', { name: 'Claims (1+)' }));
+    expect(screen.getByRole('heading', { name: 'Claims · 1+' })).toBeTruthy();
     expect(screen.getByText('Hamas must disarm')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Show more claims' })).toBeTruthy();
   });
@@ -316,7 +319,6 @@ describe('GraphViewer', () => {
         topicName="Israel-Gaza war"
       />
     );
-    fireEvent.click(screen.getByRole('tab', { name: 'Claims (0)' }));
     expect(screen.getByText('No claims about this in Israel-Gaza war yet.')).toBeTruthy();
   });
 
@@ -333,7 +335,6 @@ describe('GraphViewer', () => {
       expect.objectContaining({ topicLensId: TOPIC, spaceSource: 'all' }),
       null
     );
-    fireEvent.click(screen.getByRole('tab', { name: 'Claims (0)' }));
     expect(screen.getByText('No claims about this in Israel-Gaza war yet.')).toBeTruthy();
   });
 
@@ -390,8 +391,8 @@ describe('GraphViewer', () => {
       centre: base.selection!.nodes[0].node,
     });
     render(<Viewer start={TOPIC} scope={scope} />);
-    fireEvent.click(screen.getByRole('tab', { name: 'Relationships (2)' }));
-    expect(screen.getByText('A news story')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'News · 1' })).toBeTruthy();
+    expect(screen.getAllByText('A news story').length).toBeGreaterThan(0);
   });
 
   it('says a cut-short topic summary is a lower bound', () => {
@@ -415,13 +416,14 @@ describe('GraphViewer', () => {
     expect(screen.queryByText(/No claims about this topic/)).toBeNull();
   });
 
-  it('has no Claims tab when the centre is itself a claim', () => {
+  it('lists no claims about a centre that is itself a claim', () => {
     hooks.hopFor.mockImplementation(() => ({
       ...hops[TOPIC],
       centre: { ...hops[TOPIC].centre!, types: [{ id: CLAIM_TYPE_ID, name: 'Claim' }] },
     }));
     render(<Viewer start={TOPIC} scope={scope} />);
-    expect(screen.getByRole('tab', { name: 'Details' })).toBeTruthy();
-    expect(screen.queryByRole('tab', { name: /^Claims/ })).toBeNull();
+    expect(screen.getByText('A topic.')).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: /^Claims/ })).toBeNull();
+    expect(screen.queryByText(/No claims/)).toBeNull();
   });
 });

@@ -1,32 +1,50 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { describe, expect, it } from 'vitest';
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { GraphNode } from '~/core/graph-explorer/fetch-graph-neighbourhood';
+import type { NeighbourGroup } from '~/core/graph-explorer/panel-sections';
 
-import { ClaimsTab } from './entity-panel';
+import { panelClaims } from './entity-panel';
 
-afterEach(cleanup);
-
-const state = (hasNextPage: boolean) => ({
-  isLoading: false,
-  isError: false,
-  hasNextPage,
-  isFetchingNextPage: false,
-  fetchNextPage: vi.fn(),
+const id = (n: number) => String(n).padStart(32, '0');
+const claimNode = (n: number, spaceId: string): GraphNode => ({
+  id: id(n),
+  name: `Claim ${n}`,
+  spaceIds: [spaceId],
+  namedSpaceIds: [spaceId],
+  placedSpaceIds: [],
+  types: [],
+  image: null,
+  kind: 'claim',
+  typeRank: 0,
+  date: null,
+  agrees: 0,
+  disagrees: 0,
 });
+const linked = (nodes: GraphNode[], label: string): NeighbourGroup[] => [
+  {
+    kind: 'claim',
+    spokes: nodes.map(node => ({
+      spoke: { entity: node, labels: [label], edgeSpaceIds: [], nodeSpaceId: null, hasOutgoing: true },
+      node,
+    })),
+  },
+];
 
-describe('ClaimsTab', () => {
-  it('keeps paging when the loaded pages decode to no claims but more pages exist', () => {
-    const more = state(true);
-    render(<ClaimsTab pages={[[], []]} state={more} emptyMessage="No claims about this." />);
-    expect(screen.getByText('None of the claims loaded so far can be shown here.')).toBeTruthy();
-    expect(screen.queryByText('No claims about this.')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Show more claims' }));
-    expect(more.fetchNextPage).toHaveBeenCalled();
+describe('panelClaims', () => {
+  it('lists claims about the centre, then linked ones in their own space, each once with its relation', () => {
+    const about = { id: id(1), name: 'About', spaceId: 'a' };
+    const nodes = [claimNode(1, 'a'), claimNode(2, 'b')];
+    const claims = panelClaims([[about]], linked(nodes, 'Supporting argument'), new Map(nodes.map(n => [n.id, n])));
+    expect(claims).toEqual([
+      { ...about, relation: 'Supporting argument' },
+      { id: id(2), name: 'Claim 2', spaceId: 'b', relation: 'Supporting argument' },
+    ]);
   });
 
-  it('says there are none only once there are no more pages', () => {
-    render(<ClaimsTab pages={[[]]} state={state(false)} emptyMessage="No claims about this." />);
-    expect(screen.getByText('No claims about this.')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Show more claims' })).toBeNull();
+  it('gives a claim centre its related claims without asking about it', () => {
+    const nodes = [claimNode(3, 'c')];
+    expect(panelClaims([], linked(nodes, 'Opposing argument'), new Map(nodes.map(n => [n.id, n])))).toEqual([
+      { id: id(3), name: 'Claim 3', spaceId: 'c', relation: 'Opposing argument' },
+    ]);
   });
 });

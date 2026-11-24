@@ -2,48 +2,10 @@
 
 import * as React from 'react';
 
-import { ActionContextProvider } from '~/core/action-context-provider';
-import type { ClaimAbout } from '~/core/graph-explorer/claims-about';
 import {
   ClaimResponseBatchBoundary,
   useClaimResponseSummaryBatch,
 } from '~/core/responses/use-claim-response-summaries';
-
-import { GraphClaimRow } from './graph-claim-row';
-
-/**
- * Claims about the centre, with their response counts loaded in one batch per page and claim space
- * rather than per row. A page is its own batch so loading more never resets rows already shown.
- */
-export function GraphClaimList({ pages }: { pages: ClaimAbout[][] }) {
-  return (
-    <ul className="flex flex-col gap-2">
-      {pages.map((claims, index) => (
-        <ClaimPage
-          key={index}
-          claims={claims}
-          offset={pages.slice(0, index).reduce((total, page) => total + page.length, 0)}
-        />
-      ))}
-    </ul>
-  );
-}
-
-function ClaimPage({ claims, offset }: { claims: ClaimAbout[]; offset: number }) {
-  const { status, batches } = useClaimSpaceBatches(claims);
-  return (
-    <>
-      {batches}
-      {claims.map((claim, index) => (
-        <ClaimBatchRow key={claim.id} status={status[claim.spaceId] ?? 'pending'}>
-          <ActionContextProvider value={{ list_id: 'graph_explorer_claims', item_position: offset + index + 1 }}>
-            <GraphClaimRow claim={claim} />
-          </ActionContextProvider>
-        </ClaimBatchRow>
-      ))}
-    </>
-  );
-}
 
 export type ClaimBatchStatus = 'pending' | 'ready' | 'failed';
 

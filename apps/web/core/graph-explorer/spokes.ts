@@ -127,16 +127,3 @@ export function buildSpokes(
       nodeSpaceId: entitySpaceId(spoke.entity, filter.spaceIds, spoke.edgeSpaceIds[0] ?? null, topicSpaceId),
     }));
 }
-
-/** Labels grouped for the Relationships tab, in first-seen order. */
-export function groupSpokesByLabel(spokes: readonly Spoke[]): Array<{ label: string; spokes: Spoke[] }> {
-  const groups = new Map<string, Spoke[]>();
-  for (const spoke of spokes) {
-    for (const label of spoke.labels) {
-      const list = groups.get(label) ?? [];
-      list.push(spoke);
-      groups.set(label, list);
-    }
-  }
-  return [...groups.entries()].map(([label, list]) => ({ label, spokes: list }));
-}
