@@ -33,10 +33,8 @@ export function relationLabel(relation: Pick<GraphRelation, 'propertyId' | 'prop
 }
 
 /**
- * The space to read an entity in: `preferredSpaceId` (the route or topic space) when it is named
- * there, as the topic page does; else where it is named inside the filter, ranked; else
- * `entityHomeSpaceId` (named anywhere, then ranked); else `fallbackSpaceId`. A space that only cites
- * it never wins.
+ * Where to read an entity: `preferredSpaceId` if it is named there (the topic page's rule), else its
+ * top-ranked named space in the filter, then anywhere, else `fallbackSpaceId`. Citing never counts.
  */
 export function entitySpaceId(
   entity: { spaceIds: readonly string[]; namedSpaceIds: readonly string[] },
