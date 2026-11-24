@@ -30,6 +30,7 @@ const SOURCE = 'cccccccccccccccccccccccccccccccc';
 const SOURCES_PROP = 'dddddddddddddddddddddddddddddddd';
 const TOPICS_PROP = 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
 const SPACE = 'ffffffffffffffffffffffffffffffff';
+const PERSONAL_SPACE = 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
 
 const storyLink: IngestionLink = {
   targetEntityId: STORY,
@@ -107,6 +108,12 @@ describe('ingestionPromptText', () => {
     expect(text).toContain('setEntityRelation');
   });
 
+  it("names the user's personal space for a non-member's import", () => {
+    const text = ingestionPromptText('https://example.com/a', storyLink, { personalSpace: true });
+    expect(text.startsWith('Please ingest this URL into my personal space and stage the entities')).toBe(true);
+    expect(text).toContain('setEntityRelation');
+  });
+
   it('is the plain ingestion prompt without a link', () => {
     expect(ingestionPromptText('https://example.com/a')).toBe(
       'Please ingest this URL into this space and stage the entities: `https://example.com/a`'
@@ -152,6 +159,20 @@ describe('resolveUrlIngestionSeed with a link', () => {
       url: 'https://example.com/a',
     });
   });
+
+  it("carries the space to write into when it is given (a non-member's personal space)", async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ route: 'chat' }), { status: 200 }))
+    );
+
+    expect(await resolveUrlIngestionSeed('https://example.com/a', 'test', topicLink, PERSONAL_SPACE)).toEqual({
+      mode: 'ingestion',
+      url: 'https://example.com/a',
+      link: topicLink,
+      spaceId: PERSONAL_SPACE,
+    });
+  });
 });
 
 describe('stageIngestionLink', () => {
@@ -185,6 +206,18 @@ describe('stageIngestionLink', () => {
     expect(sync.setRelation).toHaveBeenCalledTimes(1);
     expect(sync.setRelation).toHaveBeenCalledWith(staged);
     expect(staged).toMatchObject({ fromEntity: { id: STORY }, toEntity: { id: SOURCE }, spaceId: SPACE });
+  });
+
+  it("stages the link in the space the import went to, a non-member's personal space", () => {
+    const staged = stageIngestionLink({
+      link: storyLink,
+      primaryEntityId: SOURCE,
+      primaryEntityName: 'Reuters report',
+      spaceId: PERSONAL_SPACE,
+      ops: [],
+    });
+    expect(sync.setRelation).toHaveBeenCalledWith(staged);
+    expect(staged).toMatchObject({ fromEntity: { id: STORY }, toEntity: { id: SOURCE }, spaceId: PERSONAL_SPACE });
   });
 
   it('stages nothing for an enrich of a source the page already lists', () => {

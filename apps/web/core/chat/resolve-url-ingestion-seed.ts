@@ -4,14 +4,16 @@ import type { AssistantSeed } from '~/core/state/chat-store';
 
 /**
  * Classifies a URL and returns the assistant seed for either the inject job
- * path or the chat-driven ingestion fallback.
+ * path or the chat-driven ingestion fallback. `spaceId`, when given, is the space the import writes
+ * into instead of the route's (see `AssistantSeed`).
  */
 export async function resolveUrlIngestionSeed(
   normalizedUrl: string,
   logTag: string,
-  link?: IngestionLink
+  link?: IngestionLink,
+  spaceId?: string
 ): Promise<AssistantSeed> {
-  const linkField = link ? { link } : {};
+  const seedTarget = { ...(link ? { link } : {}), ...(spaceId ? { spaceId } : {}) };
   let classification: ClassifyUrlResponse = { route: 'chat' };
   try {
     const res = await fetch('/api/chat/classify-url', {
@@ -45,7 +47,7 @@ export async function resolveUrlIngestionSeed(
             url: normalizedUrl,
             jobId: body.jobId,
             injectType: classification.type,
-            ...linkField,
+            ...seedTarget,
           };
         }
       } else {
@@ -56,5 +58,5 @@ export async function resolveUrlIngestionSeed(
     }
   }
 
-  return { mode: 'ingestion', url: normalizedUrl, ...linkField };
+  return { mode: 'ingestion', url: normalizedUrl, ...seedTarget };
 }

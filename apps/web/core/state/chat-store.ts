@@ -11,9 +11,13 @@ export const hasSeenAssistantAtom = atomWithStorage('geo:has-seen-assistant', fa
 
 // `link`: the page the link was added from, when it came from a section's `+`; the new source is
 // linked back to it (GEO-3819).
+/**
+ * `spaceId` is the space the import writes into when it isn't the route's: a non-member's Sources `+`
+ * writes into their own personal space (GEO-3819). Absent, the import writes into the route's space.
+ */
 export type AssistantSeed =
-  | { mode: 'ingestion'; url: string; link?: IngestionLink }
-  | { mode: 'inject'; url: string; jobId: string; injectType: InjectType; link?: IngestionLink };
+  | { mode: 'ingestion'; url: string; link?: IngestionLink; spaceId?: string }
+  | { mode: 'inject'; url: string; jobId: string; injectType: InjectType; link?: IngestionLink; spaceId?: string };
 
 // Active in-flight inject job inline UI state. Shared via atom so
 // `chat-messages` can render a custom inline progress UI in place of the

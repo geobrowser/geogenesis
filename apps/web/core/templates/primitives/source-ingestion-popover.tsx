@@ -8,13 +8,24 @@ import * as React from 'react';
 import cx from 'classnames';
 import { useParams, usePathname } from 'next/navigation';
 
-import { ensureSpaceMembershipOutcome } from '~/core/access/request-space-membership';
 import type { IngestionLink } from '~/core/chat/ingestion-link';
+import { pickIngestionSpace } from '~/core/chat/ingestion-space';
 import { ROOT_SPACE } from '~/core/constants';
-import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
+import {
+  type PersonalSpaceIdData,
+  personalSpaceIdQueryKey,
+  usePersonalSpaceId,
+} from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
-import { useUrlIngestionSubmit } from '~/core/hooks/use-url-ingestion-submit';
+import {
+  type IngestionSpaceDecision,
+  useStartUrlIngestion,
+  useUrlIngestionSubmit,
+} from '~/core/hooks/use-url-ingestion-submit';
+import { useQueuedAction } from '~/core/state/pending-actions';
+import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
+import { useAccountReadiness } from '~/core/wallet/account-readiness';
 import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import { useTemplatePopoverContainer } from './entity-overflow-menu';
@@ -32,27 +43,80 @@ function useIngestionSpaceId(): string | null {
   return pathname === '/root' ? ROOT_SPACE : null;
 }
 
+const LOG_TAG = 'TemplateSourcesSection';
+
 /**
- * Joins a signed-in non-member to the space before their link goes to the ingestion, through the
- * same `ensureSpaceMembership` checks an Agree/Disagree vote runs: a DAO space gets a membership
- * request (shown as "Membership pending" wherever the space's Join is), a member or a space with no
- * membership flow goes straight through. The ingestion writes into the space, so unlike a vote it
- * doesn't go ahead when the request fails; resolves false then.
+ * Picks the space a signed-in viewer's import writes into (see `pickIngestionSpace`): the page's
+ * space for someone who can edit it, otherwise their own personal space, with a membership request
+ * sent in the background as after a vote.
+ *
+ * With no personal space yet, it does what a vote does. While one is on its way (being created for
+ * a new account, or still loading for a returning one) the import is queued and started once the
+ * space exists; with none coming it is refused and the form asks them to finish setting up.
  */
-function useJoinSpaceBeforeIngest(spaceId: string | null) {
+function useIngestionSpace({
+  pageSpaceId,
+  link,
+  onNeedsAccount,
+}: {
+  pageSpaceId: string | null;
+  link?: IngestionLink;
+  onNeedsAccount: () => void;
+}) {
   const queryClient = useQueryClient();
   const tx = useSmartAccountTransaction();
-  const { personalSpaceId, isRegistered } = usePersonalSpaceId();
+  const { address } = useAccountReadiness();
+  const { personalSpaceId, isRegistered, isLoading: isPersonalSpaceLoading } = usePersonalSpaceId();
+  const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
+  const startIngestion = useStartUrlIngestion();
 
-  return React.useCallback(async () => {
-    const outcome = await ensureSpaceMembershipOutcome({
-      spaceId,
-      personalSpaceId: isRegistered ? personalSpaceId : null,
+  const { queue: queueImport } = useQueuedAction({
+    id: `source-ingestion:${link?.targetEntityId ?? ''}:${pageSpaceId ?? ''}`,
+    component: 'ai_assistant',
+    label: 'your source',
+    survivesRedirect: false,
+    // The queued URL is the intent. Replayed once the personal space exists, read fresh from the
+    // cache: this closure's view is from before the space was there.
+    run: async (url, { isCurrent }) => {
+      if (!url) return;
+      const fresh = queryClient.getQueryData<PersonalSpaceIdData | null>(personalSpaceIdQueryKey(address));
+      if (!fresh?.isRegistered || !fresh.personalSpaceId) return;
+      const spaceId = await pickIngestionSpace({
+        pageSpaceId,
+        personalSpaceId: fresh.personalSpaceId,
+        tx,
+        queryClient,
+      });
+      if (!isCurrent()) return;
+      await startIngestion({ url, logTag: LOG_TAG, link, spaceId });
+    },
+  });
+
+  return React.useCallback(
+    async (url: string): Promise<IngestionSpaceDecision> => {
+      if (isRegistered && personalSpaceId) {
+        const spaceId = await pickIngestionSpace({ pageSpaceId, personalSpaceId, tx, queryClient });
+        return { kind: 'ingest', spaceId };
+      }
+      if (isAccountSetupPending || isPersonalSpaceLoading) {
+        queueImport(url);
+        return { kind: 'queued' };
+      }
+      onNeedsAccount();
+      return { kind: 'blocked' };
+    },
+    [
+      isRegistered,
+      personalSpaceId,
+      isAccountSetupPending,
+      isPersonalSpaceLoading,
+      pageSpaceId,
       tx,
       queryClient,
-    });
-    return outcome !== 'failed';
-  }, [spaceId, personalSpaceId, isRegistered, tx, queryClient]);
+      queueImport,
+      onNeedsAccount,
+    ]
+  );
 }
 
 /**
@@ -61,8 +125,8 @@ function useJoinSpaceBeforeIngest(spaceId: string | null) {
  * `link` makes it a source of the page the `+` was on.
  *
  * Shown to everyone. Signed out, the press opens the sign-in dialog instead of the form, the way the
- * app's other signed-out write controls do. Signed in but not a member, submitting joins them to the
- * space first (see `useJoinSpaceBeforeIngest`).
+ * app's other signed-out write controls do. Signed in but not a member, the import goes into their
+ * own personal space (see `useIngestionSpace`).
  */
 export function SourceIngestionPopover({
   label,
@@ -96,7 +160,7 @@ export function SourceIngestionPopover({
           promptSignIn();
           return;
         }
-        // Closing unmounts the form, which drops the typed link and any join error with it.
+        // Closing unmounts the form, which drops the typed link and any error with it.
         setOpen(next);
       }}
     >
@@ -144,23 +208,21 @@ export function SourceIngestionPopover({
 }
 
 /**
- * The link form inside the popover. Mounted only while the popover is open, so the join and the
- * ingestion's hooks (which need the app's query client) never run for a closed `+`.
+ * The link form inside the popover. Mounted only while the popover is open, so the space pick and
+ * the ingestion's hooks (which need the app's query client) never run for a closed `+`.
  */
 function SourceIngestionForm({ label, link, onClose }: { label: string; link?: IngestionLink; onClose: () => void }) {
-  const joinSpace = useJoinSpaceBeforeIngest(useIngestionSpaceId());
-  const [joinFailed, setJoinFailed] = React.useState(false);
-  const beforeIngest = React.useCallback(async () => {
-    setJoinFailed(false);
-    const joined = await joinSpace();
-    if (!joined) setJoinFailed(true);
-    return joined;
-  }, [joinSpace]);
+  const [needsAccount, setNeedsAccount] = React.useState(false);
+  const resolveSpace = useIngestionSpace({
+    pageSpaceId: useIngestionSpaceId(),
+    link,
+    onNeedsAccount: React.useCallback(() => setNeedsAccount(true), []),
+  });
   const { url, setUrl, submitting, canSubmit, handleSubmit } = useUrlIngestionSubmit({
-    logTag: 'TemplateSourcesSection',
+    logTag: LOG_TAG,
     onComplete: onClose,
     link,
-    beforeIngest,
+    resolveSpace,
   });
 
   return (
@@ -178,9 +240,9 @@ function SourceIngestionForm({ label, link, onClose }: { label: string; link?: I
         />
       </label>
 
-      {joinFailed && (
+      {needsAccount && (
         <p role="alert" className="m-0 text-[12.5px] text-red-01">
-          Couldn&apos;t join this space, so the link wasn&apos;t added. Try again.
+          Finish setting up your account to add sources.
         </p>
       )}
 

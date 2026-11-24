@@ -56,10 +56,19 @@ export function ingestionLinkInstruction(link: IngestionLink): string {
   return `Then add the main entity you create as a source of ${quoteName(link)} with setEntityRelation (${relation}).`;
 }
 
-/** The message that starts a chat-driven ingestion, with the link-back ask when there is one. */
-export function ingestionPromptText(url: string, link?: IngestionLink | null): string {
+/**
+ * The message that starts a chat-driven ingestion, with the link-back ask when there is one.
+ * `personalSpace` is a non-member's import, which goes into their own space (GEO-3819); the route
+ * names that space to the agent in the Current context.
+ */
+export function ingestionPromptText(
+  url: string,
+  link?: IngestionLink | null,
+  { personalSpace = false }: { personalSpace?: boolean } = {}
+): string {
+  const where = personalSpace ? 'my personal space' : 'this space';
   // Backtick-wrap the URL so markdown doesn't mangle special chars.
-  const base = `Please ingest this URL into this space and stage the entities: \`${url}\``;
+  const base = `Please ingest this URL into ${where} and stage the entities: \`${url}\``;
   return link ? `${base}. ${ingestionLinkInstruction(link)}` : base;
 }
 
