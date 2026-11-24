@@ -229,6 +229,46 @@ describe('RelatedListSection', () => {
     expect(screen.getByText('Key quote from the post.')).toBeInTheDocument();
     expect(document.querySelectorAll('[data-masonry-col]').length).toBeGreaterThan(0);
   });
+
+  it("puts an X post card's date under the author with the handle, not beside the card actions", () => {
+    render(
+      <RelatedListSection
+        section={{
+          id: 'x-sources',
+          title: 'Sources',
+          layout: 'cards',
+          items: [
+            {
+              id: 'tw-2',
+              kind: 'source',
+              kindLabel: 'Post',
+              mediaType: 'tweet',
+              title: 'Rates are going up',
+              publisher: 'Stella Example',
+              authorHandle: '@stella',
+              date: '3 Nov 2026',
+              excerpt: 'Rates are going up.',
+            },
+            {
+              id: 'tw-3',
+              kind: 'source',
+              kindLabel: 'Post',
+              mediaType: 'tweet',
+              title: 'No handle here',
+              publisher: 'Plain Account',
+              date: '4 Nov 2026',
+              excerpt: 'No handle here.',
+            },
+          ],
+        }}
+      />
+    );
+
+    const withHandle = screen.getByText('@stella · 3 Nov 2026');
+    expect(withHandle.parentElement).toHaveTextContent('Stella Example');
+    const dateOnly = screen.getByText('4 Nov 2026');
+    expect(dateOnly.parentElement).toHaveTextContent('Plain Account');
+  });
 });
 
 describe('TemplateBreadcrumb', () => {

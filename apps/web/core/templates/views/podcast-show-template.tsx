@@ -113,7 +113,9 @@ export function PodcastShowTemplate({
           />
 
           <div className="flex min-w-0 flex-1 flex-col gap-2.5">
-            <div className="flex items-start justify-between gap-4">
+            {/* On a phone the actions sit above the title instead of beside it, or they squeeze the title
+                into a column a few words wide (same as the Event header). */}
+            <div className="flex flex-col-reverse gap-2 @[560px]:flex-row @[560px]:items-start @[560px]:justify-between @[560px]:gap-4">
               <div className="flex min-w-0 flex-col gap-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <TemplateBadge tone="podcast">Podcast</TemplateBadge>
@@ -124,7 +126,7 @@ export function PodcastShowTemplate({
                 <h1 className="m-0 text-entityTitle text-pretty text-text">{model.title}</h1>
               </div>
 
-              <div className="flex shrink-0 items-center gap-2 pt-1">
+              <div className="flex shrink-0 items-center gap-2 self-end @[560px]:self-auto @[560px]:pt-1">
                 <EntityContextTogglePill />
                 {headerActions ?? (
                   <EntityOverflowMenu
@@ -153,9 +155,10 @@ export function PodcastShowTemplate({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="m-0 text-mediumTitle font-semibold text-text">Episodes</h2>
 
-          <div className="flex flex-wrap items-center gap-2">
+          {/* The filter shrinks rather than wrapping, so the Rank button stays on its row. */}
+          <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
             {model.episodes.length > 6 && (
-              <label className="relative flex w-full max-w-[240px] items-center">
+              <label className="relative flex w-full max-w-[240px] min-w-0 items-center">
                 <SearchIcon className="pointer-events-none absolute left-3 size-3.5 text-grey-04" />
                 <input
                   type="search"

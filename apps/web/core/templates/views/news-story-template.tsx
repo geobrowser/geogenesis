@@ -133,9 +133,11 @@ export function NewsStoryTemplate({
 
           {/* Editorial header: title first, type/metadata strip below */}
           <header className="flex flex-col gap-3.5">
-            <div className="flex items-start justify-between gap-4">
+            {/* On a phone the actions sit above the title instead of beside it, or they squeeze the title
+                into a column a few words wide (same as the Event header). */}
+            <div className="flex flex-col-reverse gap-2 @[560px]:flex-row @[560px]:items-start @[560px]:justify-between @[560px]:gap-4">
               <h1 className="m-0 text-entityTitle text-pretty text-text">{model.headline}</h1>
-              <div className="flex shrink-0 items-center gap-2 pt-1.5">
+              <div className="flex shrink-0 items-center gap-2 self-end @[560px]:self-auto @[560px]:pt-1.5">
                 <EntityContextTogglePill />
                 {headerActions ?? (
                   <EntityOverflowMenu

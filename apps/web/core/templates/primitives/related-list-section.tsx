@@ -209,13 +209,14 @@ export function RelatedListSection({ section, className }: RelatedListSectionPro
             ))}
 
           {useCards && allItems.length > 2 && (railNav.left || railNav.right) && (
+            // Each arrow's ::after widens its tap target to 32px without changing how it looks.
             <div className="mr-1 flex items-center gap-1.5">
               <button
                 type="button"
                 aria-label={`Scroll ${title.toLowerCase()} left`}
                 disabled={!railNav.left}
                 onClick={() => scrollRailByColumn(-1)}
-                className="inline-grid size-7 cursor-pointer place-items-center rounded-full border border-grey-02 bg-white text-text transition-colors hover:border-text disabled:cursor-default disabled:border-divider disabled:text-grey-03"
+                className="relative inline-grid size-7 cursor-pointer place-items-center rounded-full border border-grey-02 bg-white text-text transition-colors after:absolute after:-inset-0.5 hover:border-text disabled:cursor-default disabled:border-divider disabled:text-grey-03"
               >
                 <ArrowLeftIcon className="size-3.5" />
               </button>
@@ -224,7 +225,7 @@ export function RelatedListSection({ section, className }: RelatedListSectionPro
                 aria-label={`Scroll ${title.toLowerCase()} right`}
                 disabled={!railNav.right}
                 onClick={() => scrollRailByColumn(1)}
-                className="inline-grid size-7 cursor-pointer place-items-center rounded-full border border-grey-02 bg-white text-text transition-colors hover:border-text disabled:cursor-default disabled:border-divider disabled:text-grey-03"
+                className="relative inline-grid size-7 cursor-pointer place-items-center rounded-full border border-grey-02 bg-white text-text transition-colors after:absolute after:-inset-0.5 hover:border-text disabled:cursor-default disabled:border-divider disabled:text-grey-03"
               >
                 <ArrowRightIcon className="size-3.5" />
               </button>
@@ -572,15 +573,18 @@ function RichMediaCard({ item }: { item: EntityLinkRowModel }) {
                   <span className="truncate text-[15px] leading-[19px] font-semibold text-text group-hover/link:text-[#4c1fd4]">
                     {accountName}
                   </span>
-                  {secondaryHandle && (
-                    <span className="truncate text-[13.5px] leading-[17px] text-grey-04">{secondaryHandle}</span>
+                  {/* The date sits under the name with the handle (as on X), not beside the actions,
+                      so a narrow card doesn't cut the name to a few letters. */}
+                  {(secondaryHandle || item.date) && (
+                    <span className="truncate text-[13.5px] leading-[17px] text-grey-04">
+                      {[secondaryHandle, item.date].filter(Boolean).join(' · ')}
+                    </span>
                   )}
                 </div>
               </div>
             </CardClickable>
 
             <div className="flex shrink-0 items-center gap-1">
-              {item.date && <span className="mr-1 text-[14px] text-grey-04">{item.date}</span>}
               {overflow}
               <CardClickable
                 item={item}
