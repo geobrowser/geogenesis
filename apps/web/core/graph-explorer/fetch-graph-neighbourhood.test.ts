@@ -9,6 +9,7 @@ import {
   ENTITY_FIRST,
   GRAPH_REQUEST_TIMEOUT_MS,
   type GraphNode,
+  HOP1_NODES_MIN_MS,
   HOP2_FIRST_TRY_MS,
   type Hop1Side,
   declaredVariables,
@@ -412,11 +413,33 @@ describe('fetchHop1', () => {
     ]);
     for (const call of calls()) {
       expect(Object.keys(call.variables).sort()).toEqual(declaredVariables(call.query).sort());
-      expect(call.timeoutMs).toBe(GRAPH_REQUEST_TIMEOUT_MS);
+      expect(call.timeoutMs).toBeLessThanOrEqual(GRAPH_REQUEST_TIMEOUT_MS);
+      expect(call.timeoutMs).toBeGreaterThan(GRAPH_REQUEST_TIMEOUT_MS - 1_000);
     }
     expect(calls()[3].variables.ids).toEqual([person.id, story.id]);
     expect(hop.neighbours.map(({ node }) => node.name)).toEqual(['Ada', 'A story']);
     expect(hop.failedKinds).toEqual([]);
+  });
+
+  it('gives the nodes what is left of the deadline, and no less than a floor', async () => {
+    vi.useFakeTimers();
+    try {
+      for (const [linksMs, nodesMs] of [
+        [4_000, GRAPH_REQUEST_TIMEOUT_MS - 4_000],
+        [8_500, HOP1_NODES_MIN_MS],
+      ]) {
+        api.request.mockReset();
+        respond({
+          story: () => new Promise(resolve => setTimeout(() => resolve(responses.story({})), linksMs)),
+        });
+        const pending = fetchHop1(CENTRE, filter);
+        await vi.advanceTimersByTimeAsync(linksMs);
+        await pending;
+        expect(calls().at(-1)?.timeoutMs).toBe(nodesMs);
+      }
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('drops a kind that fails and keeps the rest', async () => {

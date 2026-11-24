@@ -31,6 +31,8 @@ export const HOP2_PER_NODE = 6;
 export const CROSS_LINKS_PAGE = 200;
 /** Under the gateway's 15 s limit, so a query it would time out fails here first, once. */
 export const GRAPH_REQUEST_TIMEOUT_MS = 9_000;
+/** The least hop 1's node request gets after slow links. */
+export const HOP1_NODES_MIN_MS = 2_000;
 
 /** Content kinds the topic lens narrows. People, organisations, places and topics are never narrowed. */
 export const LENSED_KINDS: readonly GraphKind[] = ['claim', 'story', 'event', 'src', 'case'];
@@ -135,9 +137,8 @@ function hop2FarEnd(lensed: boolean, other: boolean) {
 }
 
 /**
- * The links around `$id` whose far end matches `farConditions`: ids only. Node fields come in one
- * batched request per hop, so these stay under the API's admission cost floor and run in parallel
- * without holding its expensive-query slots.
+ * Links around `$id` to far ends matching `farConditions`, ids only, so each stays under the API's
+ * expensive-query cost floor. Node fields come in one batched request per hop.
  */
 function linksSelection(
   alias: string,
@@ -408,7 +409,11 @@ export function decodeLinks(
 }
 
 /** The nodes behind `ids`, decoded; hidden and unnamed ones are absent. */
-export async function fetchNodes(ids: readonly string[], signal?: AbortSignal): Promise<Map<string, GraphNode>> {
+export async function fetchNodes(
+  ids: readonly string[],
+  signal?: AbortSignal,
+  timeoutMs = GRAPH_REQUEST_TIMEOUT_MS
+): Promise<Map<string, GraphNode>> {
   const unique = [...new Set(ids.map(normId))];
   if (unique.length === 0) return new Map();
   const response = await Effect.runPromise(
@@ -423,7 +428,7 @@ export async function fetchNodes(ids: readonly string[], signal?: AbortSignal): 
         ...nodeVariables(),
       }),
       signal,
-      timeoutMs: GRAPH_REQUEST_TIMEOUT_MS,
+      timeoutMs,
     })
   );
   const raws = [...(response.claims?.nodes ?? []), ...(response.others?.nodes ?? [])];
@@ -470,6 +475,7 @@ export function decodeHop1(
  * drops out; the centre, the nodes, or every kind failing, or a cancel, fails the hop.
  */
 export async function fetchHop1(centreId: string, filter: GraphFilter, signal?: AbortSignal): Promise<GraphHop1> {
+  const startedAt = Date.now();
   const lensed = lensTopicFor(filter) !== null;
   const scoped = filter.spaceIds !== undefined;
   const variables = hop1Variables(centreId, filter);
@@ -504,9 +510,12 @@ export async function fetchHop1(centreId: string, filter: GraphFilter, signal?: 
       ...readLinks(result.value[`${kind}_${direction}`] as RawLinks, direction),
     }));
   });
+  // The nodes get what is left of the hop's deadline, so a failing hop shows in about 10 s.
+  const left = Math.max(HOP1_NODES_MIN_MS, GRAPH_REQUEST_TIMEOUT_MS - (Date.now() - startedAt));
   const nodes = await fetchNodes(
     sides.flatMap(side => side.links.map(link => link.farId)),
-    signal
+    signal,
+    left
   );
   return { ...decodeHop1(rawCentre, sides, nodes, centreId), failedKinds };
 }
