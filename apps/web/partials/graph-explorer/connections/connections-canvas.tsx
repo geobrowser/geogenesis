@@ -60,6 +60,8 @@ type Engine = {
   /** Distance at the start of a move, eased towards `fit`. */
   distanceFrom: number;
   fit: number;
+  /** The centre and hop-1 targets the fit frames; refitted when the stage resizes. */
+  near: Vec3[];
   userZoom: boolean;
   vy: number;
   vp: number;
@@ -125,6 +127,7 @@ export function ConnectionsCanvas({
     distance: 1000,
     distanceFrom: 1000,
     fit: 1000,
+    near: [],
     userZoom: false,
     vy: 0,
     vp: 0,
@@ -211,8 +214,9 @@ export function ConnectionsCanvas({
     state.hover = null;
     anchors.current.clear();
 
-    const near = selection.nodes.filter(entry => entry.hop < 2).map(entry => target.get(entry.node.id)!);
-    state.fit = fitDistance(near, state.width || 1280, state.height || 860, phone);
+    state.near = selection.nodes.filter(entry => entry.hop < 2).map(entry => target.get(entry.node.id)!);
+    // Before the stage is measured this is a guess; the sizing effect refits once it knows the size.
+    state.fit = fitDistance(state.near, state.width || 1280, state.height || 860, phone);
     state.distanceFrom = state.distance;
     state.anim = { t0: now, duration: reduceMotion ? 0 : MOVE_MS };
     // Each selection, the first included, restarts the idle clock so the spin follows it.
@@ -264,6 +268,11 @@ export function ConnectionsCanvas({
       canvas.height = rect.height * state.dpr;
       canvas.style.width = `${rect.width}px`;
       canvas.style.height = `${rect.height}px`;
+      if (rect.width > 0 && rect.height > 0) {
+        state.fit = fitDistance(state.near, rect.width, rect.height, phone);
+        // A running move eases to the new fit itself; a manual zoom is left alone.
+        if (!state.userZoom && !state.anim) state.distance = state.fit;
+      }
       wake.current();
     };
     resize();

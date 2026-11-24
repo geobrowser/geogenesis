@@ -16,7 +16,27 @@ const motion = vi.hoisted(() => ({ reduce: false }));
 /** IntersectionObserver callbacks, so a test can scroll the stage off-screen. */
 const sight = vi.hoisted(() => ({ callbacks: [] as IntersectionObserverCallback[] }));
 /** ResizeObserver callbacks, so a test can grow a card. */
-const resized = vi.hoisted(() => ({ callbacks: [] as ResizeObserverCallback[] }));
+const resized = vi.hoisted(() => ({
+  callbacks: [] as ResizeObserverCallback[],
+  observed: [] as Array<{ callback: ResizeObserverCallback; target: Element }>,
+}));
+/** Every fit asked for, and the distance the last frame projected at. */
+const view = vi.hoisted(() => ({ fits: [] as Array<{ width: number; height: number; fit: number }>, distance: 0 }));
+vi.mock('~/core/graph-explorer/layout-3d', async importOriginal => {
+  const real = await importOriginal<typeof import('~/core/graph-explorer/layout-3d')>();
+  return {
+    ...real,
+    fitDistance: (...args: Parameters<typeof real.fitDistance>) => {
+      const fit = real.fitDistance(...args);
+      view.fits.push({ width: args[1], height: args[2], fit });
+      return fit;
+    },
+    project: (...args: Parameters<typeof real.project>) => {
+      view.distance = args[1].distance;
+      return real.project(...args);
+    },
+  };
+});
 vi.mock('framer-motion', () => ({ useReducedMotion: () => motion.reduce }));
 vi.mock('~/design-system/prefetch-link', () => ({
   PrefetchLink: ({ children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => <a {...props}>{children}</a>,
@@ -72,10 +92,12 @@ beforeAll(() => {
     disconnect() {}
   } as unknown as typeof IntersectionObserver;
   globalThis.ResizeObserver = class {
-    constructor(callback: ResizeObserverCallback) {
+    constructor(private callback: ResizeObserverCallback) {
       resized.callbacks.push(callback);
     }
-    observe() {}
+    observe(target: Element) {
+      resized.observed.push({ callback: this.callback, target });
+    }
     unobserve() {}
     disconnect() {}
   } as unknown as typeof ResizeObserver;
@@ -87,6 +109,8 @@ beforeAll(() => {
 beforeEach(() => {
   sight.callbacks = [];
   resized.callbacks = [];
+  resized.observed = [];
+  view.fits = [];
   frames = [];
   now = 0;
   motion.reduce = false;
@@ -191,6 +215,38 @@ describe('ConnectionsCanvas', () => {
     runFrames(106_000);
     expect(before).not.toBe('');
     expect(target.style.transform).not.toBe(before);
+  });
+
+  it('fits the measured stage, refits on resize, and leaves a manual zoom alone', () => {
+    motion.reduce = true;
+    const size = { width: 390, height: 600 };
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(
+      () => ({ ...size, x: 0, y: 0, top: 0, left: 0, right: size.width, bottom: size.height }) as DOMRect
+    );
+    render(<Canvas />);
+    runFrames(100);
+    expect(view.fits.at(-1)).toMatchObject({ width: 390, height: 600 });
+    expect(view.distance).toBe(view.fits.at(-1)!.fit);
+
+    const stage = screen.getByTestId('connections-stage');
+    const resizeStage = (width: number, height: number) => {
+      Object.assign(size, { width, height });
+      act(() =>
+        resized.observed
+          .filter(entry => entry.target === stage)
+          .forEach(entry => entry.callback([{ target: stage } as never], {} as never))
+      );
+      runFrames(now + 100);
+    };
+    resizeStage(390, 844);
+    expect(view.fits.at(-1)).toMatchObject({ width: 390, height: 844 });
+    expect(view.distance).toBe(view.fits.at(-1)!.fit);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
+    runFrames(now + 100);
+    const zoomed = view.distance;
+    resizeStage(390, 600);
+    expect(view.distance).toBe(zoomed);
   });
 
   it('sleeps after the idle spin has run its course', () => {
