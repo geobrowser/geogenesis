@@ -58,6 +58,32 @@ const feedSoundInferredAtom = atom(false);
 export type MuteSource = 'explicit' | 'inferred';
 
 /**
+ * The same shared sound preference, for a player that is not built on this hook: the Explore card's
+ * moments reel (GEO-3833). Unmuting one card holds for the next, whichever player draws it.
+ *
+ * `muted` is the preference alone; a player the browser forces muted keeps that to itself, as this
+ * hook's `soundBlocked` does. `muteChosen` is the viewer having pressed Mute, so a tap must not turn
+ * the sound back on.
+ */
+export function useFeedSoundPreference() {
+  const [soundChoice, setSoundChoice] = useAtom(feedSoundChoiceAtom);
+  const [soundInferred, setSoundInferred] = useAtom(feedSoundInferredAtom);
+  const [arrivedByGesture, setArrivedByGesture] = React.useState(false);
+  React.useEffect(() => {
+    if (navigator.userActivation?.hasBeenActive) setArrivedByGesture(true);
+  }, []);
+  const muted = soundChoice === 'default' ? !(soundInferred || arrivedByGesture) : soundChoice === 'muted';
+  const setMuted = React.useCallback(
+    (next: boolean, source: MuteSource = 'explicit') => {
+      if (source === 'explicit') setSoundChoice(next ? 'muted' : 'unmuted');
+      else setSoundInferred(!next);
+    },
+    [setSoundChoice, setSoundInferred]
+  );
+  return { muted, muteChosen: soundChoice === 'muted', setMuted };
+}
+
+/**
  * Drift thresholds for keeping the two recordings in step (GEO-2828).
  *
  * The old code had one threshold — 0.18s — and one response, a hard seek. On MediaRecorder WebM
