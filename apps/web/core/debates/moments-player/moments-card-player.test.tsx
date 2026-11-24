@@ -368,6 +368,26 @@ describe('MomentsCardPlayer', () => {
     });
   });
 
+  it('lets a failed spare go on the pooled path too, so that moment loads again when it is reached', () => {
+    vi.useFakeTimers();
+    mocks.pooled = true;
+    renderPlayer();
+    act(() => playing(videoIn(0)));
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(videoIn(1).getAttribute('src')).toBe(MOMENTS[1]!.clipUrl);
+    act(() => {
+      fireEvent.error(videoIn(1));
+    });
+    // A pooled element ignores an undefined `src` prop, so the player drops the failed source itself.
+    expect(videoIn(1).getAttribute('src')).toBeNull();
+
+    act(() => ended(videoIn(0)));
+    expect(screen.getByRole('button', { name: 'Moment 2 of 3' })).toHaveAttribute('aria-current', 'true');
+    expect(videoIn(1).getAttribute('src')).toBe(MOMENTS[1]!.clipUrl);
+  });
+
   it('reports the list the card is in and its place, from the card’s action scope', () => {
     renderPlayer({}, node => (
       <ActionContextProvider value={{ list_id: 'profile_activity', item_position: 3, feed_arm: 'b' }}>

@@ -15,7 +15,7 @@ import {
   markGestureVideoUnlocked,
   unlockGestureVideo,
 } from '~/core/utils/video/gesture-media-pool';
-import { reattachVideoSource } from '~/core/utils/video/release-video';
+import { reattachVideoSource, releaseVideo } from '~/core/utils/video/release-video';
 import { renderSwappedVideo } from '~/core/utils/video/swapped-video-frame';
 
 import { Avatar } from '~/design-system/avatar';
@@ -376,6 +376,10 @@ function MomentsCardReel({
       const held = slots[slot];
       if (held === null) return;
       attemptsRef.current.set(held, (attemptsRef.current.get(held) ?? 0) + 1);
+      // Drop its source too: a pooled element (iOS) keeps its `src` when the prop goes undefined, so
+      // the same URL coming back would write nothing and never load again.
+      const video = refs[slot].current;
+      if (video) releaseVideo(video);
       setSlots(current => (slot === 0 ? [null, current[1]] : [current[0], null]));
       return;
     }
