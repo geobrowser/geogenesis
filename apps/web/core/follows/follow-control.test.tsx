@@ -8,8 +8,14 @@ import { FollowerCount } from './follow-control';
 describe('FollowerCount', () => {
   afterEach(cleanup);
 
-  it('draws the number beside an icon and reads as "N following"', () => {
+  it('reads "N following" by default', () => {
     const { container } = render(<FollowerCount count={1234} />);
+    expect(container.textContent).toBe('1,234 following');
+    expect(container.querySelector('svg')).toBeNull();
+  });
+
+  it('with icon, draws the number beside an icon and reads as "N following"', () => {
+    const { container } = render(<FollowerCount count={1234} icon />);
 
     expect(screen.getByText('1,234 following')).toHaveClass('sr-only');
     expect(screen.getByText('1,234')).toHaveAttribute('aria-hidden');

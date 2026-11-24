@@ -18,19 +18,37 @@ export function TopicFollowControl({ topic }: { topic: { id: string; name?: stri
 
   return (
     <div className="flex shrink-0 items-center gap-2.5">
-      <FollowerCount count={count} />
+      <FollowerCount count={count} icon />
       <FollowTopicButton topic={topic} variant="compact" />
     </div>
   );
 }
 
 /**
- * A topic's follower count: a person icon and the number, read as "128 following". Nothing at zero
- * or while loading, so a surface never shows a zero or a count that jumps in.
+ * "128 following": the one wording for a topic's follower count, wherever it is drawn. `icon` draws
+ * a person icon and the number instead, for the compact topic header row; it still reads as
+ * "128 following". Nothing at zero or while loading, so a surface never shows a zero or a count
+ * that jumps in.
  */
-export function FollowerCount({ count, className }: { count: number | null; className?: string }) {
+export function FollowerCount({
+  count,
+  icon = false,
+  className,
+}: {
+  count: number | null;
+  icon?: boolean;
+  className?: string;
+}) {
   if (!count) return null;
-  const label = `${count.toLocaleString('en-US')} following`;
+  const number = count.toLocaleString('en-US');
+  if (!icon) {
+    return (
+      <span className={cx('shrink-0 whitespace-nowrap', className)}>
+        <span className="tabular-nums">{number}</span> following
+      </span>
+    );
+  }
+  const label = `${number} following`;
   return (
     <span
       title={label}
@@ -38,7 +56,7 @@ export function FollowerCount({ count, className }: { count: number | null; clas
     >
       <Member />
       <span className="text-text tabular-nums" aria-hidden>
-        {count.toLocaleString('en-US')}
+        {number}
       </span>
       <span className="sr-only">{label}</span>
     </span>
