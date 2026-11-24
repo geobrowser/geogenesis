@@ -325,7 +325,7 @@ describe('DebateClaimFooter app look', () => {
     const results = screen.getByTestId('claim-summary');
     expect(results).toHaveAttribute('data-layout', 'results');
     expect(follows(disagree, results)).toBe(true);
-    expect(follows(results, screen.getByText('Relationships'))).toBe(true);
+    expect(follows(screen.getByText('Relationships'), disagree)).toBe(true);
   });
 
   // Signed out: the vote is on this device only. The note moves from under the pill to under the
