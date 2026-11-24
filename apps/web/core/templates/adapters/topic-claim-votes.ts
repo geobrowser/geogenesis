@@ -94,9 +94,8 @@ function defaultFetchVotePage({ objectIds, first, after, signal }: Parameters<Fe
 }
 
 /**
- * Every Agree / Disagree vote row on these claims, in every space. Walks the cursor to the end: the
- * totals, the Disputed / Accepted split and the viewer's baseline are all derived from these rows,
- * so a capped page would get all of them wrong past it.
+ * Every Agree / Disagree vote row on these claims, in every space, walked to the end of the cursor:
+ * totals, the Disputed / Accepted split and the viewer's baseline all derive from these rows.
  */
 export function fetchMultiSpaceClaimVoteRows({
   objectIds,

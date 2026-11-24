@@ -216,11 +216,8 @@ type TemplateVoteRowsValue = {
 const TemplateVoteRowsContext = React.createContext<TemplateVoteRowsValue | undefined>(undefined);
 
 /**
- * The shared reads for every voting row in a list: geo-chat's rows in one lookup per space, and the
- * on-chain counts and viewer votes in one response batch per space (GEO-3823), as the graph
- * explorer's claim lists do. Wrap the list in it; each `ClaimVoteBinding` inside reads from these
- * instead of asking per row. With no targets (a fixture, or a list of just-proposed claims) it
- * mounts nothing, so those lists never touch geo-chat or the graph.
+ * One geo-chat lookup and one response batch per space for a list's voting rows, read by each
+ * `ClaimVoteBinding` inside. With no targets it mounts nothing.
  */
 export function TemplateVoteRows({
   targets,
