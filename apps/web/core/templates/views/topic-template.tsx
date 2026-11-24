@@ -28,8 +28,6 @@ export interface TopicTemplateProps {
   model: TopicTemplateModel;
   /** Optional header actions slot (e.g. Follow button, overflow menu on live Geo pages). */
   headerActions?: React.ReactNode;
-  /** Optional footer slot (e.g. edit-mode property sheet & backlinks). */
-  footer?: React.ReactNode;
   /** Live GRC-20 persistence & search callbacks. */
   actionCallbacks?: EntityActionCallbacks;
   /** Compact density when rendered inside the narrow entity side panel. */
@@ -49,7 +47,6 @@ export interface TopicTemplateProps {
 export function TopicTemplate({
   model,
   headerActions,
-  footer,
   actionCallbacks,
   compact = false,
   embedded = false,
@@ -292,8 +289,6 @@ export function TopicTemplate({
           )}
         </div>
       )}
-
-      {footer}
     </TemplateShell>
   );
 }

@@ -29,16 +29,6 @@ export interface EntityTemplateDefinition {
    */
   readonly typeIds: readonly string[];
   /**
-   * Whether the template keeps its custom shell when the user toggles edit mode,
-   * rather than falling back to the generic block/property editor.
-   *
-   * False for every template (GEO-3819): editing any templated entity, Claim and Topic included,
-   * opens the same entity editor every other entity gets, and leaving edit mode returns to the
-   * template. A template is a read surface, so editors get one editor everywhere rather than a
-   * custom edit view per type.
-   */
-  readonly keepInEditMode: boolean;
-  /**
    * Whether final selection also depends on the enclosing Space (Person is a profile only when
    * it is the entity of a PERSONAL space).
    */
@@ -84,7 +74,6 @@ export const ENTITY_TEMPLATE_REGISTRY: readonly EntityTemplateDefinition[] = [
     id: 'event',
     label: 'Event',
     typeIds: [TEMPLATE_ONTOLOGY.NEWS_EVENT_TYPE_ID],
-    keepInEditMode: false,
     requiresSpaceCheck: false,
     requiresV2Flag: true,
     contentMaxWidth: 840,
@@ -93,7 +82,6 @@ export const ENTITY_TEMPLATE_REGISTRY: readonly EntityTemplateDefinition[] = [
     id: 'claim',
     label: 'Claim',
     typeIds: [TEMPLATE_ONTOLOGY.CLAIM_TYPE_ID],
-    keepInEditMode: false,
     requiresSpaceCheck: false,
     requiresV2Flag: false,
     contentMaxWidth: 840,
@@ -102,7 +90,6 @@ export const ENTITY_TEMPLATE_REGISTRY: readonly EntityTemplateDefinition[] = [
     id: 'topic',
     label: 'Topic',
     typeIds: [TEMPLATE_ONTOLOGY.TOPIC_TYPE_ID],
-    keepInEditMode: false,
     requiresSpaceCheck: false,
     requiresV2Flag: false,
     contentMaxWidth: 1180,
@@ -111,7 +98,6 @@ export const ENTITY_TEMPLATE_REGISTRY: readonly EntityTemplateDefinition[] = [
     id: 'news-story',
     label: 'News story',
     typeIds: [TEMPLATE_ONTOLOGY.NEWS_STORY_TYPE_ID],
-    keepInEditMode: false,
     requiresSpaceCheck: false,
     requiresV2Flag: true,
     contentMaxWidth: 840,
@@ -120,7 +106,6 @@ export const ENTITY_TEMPLATE_REGISTRY: readonly EntityTemplateDefinition[] = [
     id: 'podcast',
     label: 'Podcast',
     typeIds: [TEMPLATE_ONTOLOGY.PODCAST_TYPE_ID],
-    keepInEditMode: false,
     requiresSpaceCheck: false,
     requiresV2Flag: true,
     contentMaxWidth: 960,
@@ -129,7 +114,6 @@ export const ENTITY_TEMPLATE_REGISTRY: readonly EntityTemplateDefinition[] = [
     id: 'episode',
     label: 'Episode',
     typeIds: [TEMPLATE_ONTOLOGY.EPISODE_TYPE_ID],
-    keepInEditMode: false,
     requiresSpaceCheck: false,
     requiresV2Flag: true,
     contentMaxWidth: 880,
@@ -138,7 +122,6 @@ export const ENTITY_TEMPLATE_REGISTRY: readonly EntityTemplateDefinition[] = [
     id: 'source',
     label: 'Source',
     typeIds: SOURCE_TEMPLATE_TYPE_IDS,
-    keepInEditMode: false,
     requiresSpaceCheck: false,
     requiresV2Flag: true,
     contentMaxWidth: 840,
@@ -147,7 +130,6 @@ export const ENTITY_TEMPLATE_REGISTRY: readonly EntityTemplateDefinition[] = [
     id: 'post',
     label: 'Post',
     typeIds: SOCIAL_POST_TEMPLATE_TYPE_IDS,
-    keepInEditMode: false,
     requiresSpaceCheck: false,
     requiresV2Flag: true,
     contentMaxWidth: 960,
@@ -156,7 +138,6 @@ export const ENTITY_TEMPLATE_REGISTRY: readonly EntityTemplateDefinition[] = [
     id: 'person',
     label: 'Person',
     typeIds: [TEMPLATE_ONTOLOGY.PERSON_TYPE_ID],
-    keepInEditMode: false,
     requiresSpaceCheck: true,
     requiresV2Flag: false,
     contentMaxWidth: 900,

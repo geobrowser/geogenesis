@@ -12,6 +12,7 @@ import { useSpace } from '~/core/hooks/use-space';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 import { useQueryEntity } from '~/core/sync/use-store';
+import { type EntityTemplateId, resolveEntityTemplateFromTypes } from '~/core/templates/registry';
 import {
   LiveClaimTemplateView,
   LiveEventTemplateView,
@@ -97,7 +98,10 @@ function EntityTabsSection({
   spaceId,
   initialTabRelations,
   tabEntities,
-}: Pick<SharedProps, 'entityId' | 'spaceId' | 'initialTabRelations' | 'tabEntities'>) {
+  keepRecordTabSelection,
+}: Pick<SharedProps, 'entityId' | 'spaceId' | 'initialTabRelations' | 'tabEntities'> & {
+  keepRecordTabSelection?: boolean;
+}) {
   return (
     <React.Suspense fallback={null}>
       <EntityTabs
@@ -105,6 +109,7 @@ function EntityTabsSection({
         spaceId={spaceId}
         initialTabRelations={initialTabRelations}
         tabEntities={tabEntities}
+        keepRecordTabSelection={keepRecordTabSelection}
       />
     </React.Suspense>
   );
@@ -150,41 +155,17 @@ function EditorFooter({
 }
 
 /**
- * What the claim and topic views add beneath themselves while editing.
- *
- * The read views leave out the generic page's "Referenced by" list; it is an editor's tool there,
- * so it comes back in edit mode only. Unlike the property toggle it ignores `hideProperties`,
- * matching the generic `EditorFooter`, which shows backlinks in the side panel too.
- */
-function CustomViewEditFooter({
-  entityId,
-  spaceId,
-  hideProperties = false,
-}: {
-  entityId: string;
-  spaceId: string;
-  hideProperties?: boolean;
-}) {
-  return (
-    <>
-      {hideProperties ? null : <ToggleEntityPage id={entityId} spaceId={spaceId} />}
-      <Spacer height={40} />
-      <EntityBacklinks entityId={entityId} />
-    </>
-  );
-}
-
-/**
  * Which custom read view this entity gets, if any.
  *
- * Every custom view, Claim and Topic included, falls through to the generic editor while editing
- * (GEO-3819, `keepInEditMode` is false across the registry), so the custom branches below only
- * ever render in browse mode.
+ * Every custom view falls through to the generic editor while editing, so the custom branches
+ * below only ever render in browse mode.
  *
  * Unscoped, matching how `EntityVoteButtons` reads the same flag. `types` is
  * derived across every space either way, so this is about consistency with the controls the pages
  * render rather than about reaching a type a scoped read would miss.
  */
+const RECORD_VIEW_TEMPLATES: ReadonlySet<EntityTemplateId | undefined> = new Set(['claim', 'topic']);
+
 function useCustomBrowseView(entityId: string, spaceId: string, isEditing: boolean) {
   const { entity, isLoading } = useQueryEntity({ id: entityId });
   const enableV2Templates = useFeatureFlag('entityTemplatesV2');
@@ -206,6 +187,10 @@ function useCustomBrowseView(entityId: string, spaceId: string, isEditing: boole
   );
 
   return {
+    // A Claim or Topic being edited: the views with record tabs (debates, claims...), which come
+    // back on leaving edit mode.
+    isEditingRecordView:
+      isEditing && RECORD_VIEW_TEMPLATES.has(resolveEntityTemplateFromTypes(entity?.types ?? [])?.id),
     customView: customBrowseView({
       entityId,
       entity,
@@ -223,7 +208,11 @@ function useCustomBrowseView(entityId: string, spaceId: string, isEditing: boole
 export function EntityPageBody(props: EntityPageBodyProps) {
   const { entityId, spaceId, initialTabRelations, tabEntities } = props;
   const isEditing = useUserIsEditing(spaceId);
-  const { customView, enableV2Templates, entity } = useCustomBrowseView(entityId, spaceId, isEditing);
+  const { customView, enableV2Templates, entity, isEditingRecordView } = useCustomBrowseView(
+    entityId,
+    spaceId,
+    isEditing
+  );
   const targetEntityType = commentTargetEntityType(entity);
 
   const previewImageUrl = props.variant === 'sidePanel' ? props.previewImageUrl : undefined;
@@ -252,17 +241,13 @@ export function EntityPageBody(props: EntityPageBodyProps) {
   // Claim and Topic both return before the generic EditorFooter, so keeping initialization there
   // makes both custom routes self-blocking. Side panels own their edit intent and do not use this.
   const routeEditInitializer = props.variant === 'route' ? <AutomaticModeToggle /> : null;
-  const customViewFooter = isEditing ? (
-    <CustomViewEditFooter entityId={entityId} spaceId={spaceId} hideProperties={props.hideProperties} />
-  ) : undefined;
 
   if (customView === 'claim') {
     const showClaimMedia = props.variant === 'sidePanel' || props.showCover !== false;
-    const useV2Claim = enableV2Templates && !isEditing;
 
     return (
       <>
-        {showClaimMedia && !useV2Claim ? (
+        {showClaimMedia && !enableV2Templates ? (
           props.variant === 'route' && props.coverSlot ? (
             props.coverSlot
           ) : (
@@ -284,13 +269,12 @@ export function EntityPageBody(props: EntityPageBodyProps) {
           props.coverSlot
         ) : null}
         {routeEditInitializer}
-        {useV2Claim ? (
+        {enableV2Templates ? (
           <LiveClaimTemplateView
             entityId={entityId}
             spaceId={spaceId}
             serverCoverUrl={showClaimMedia && !(props.variant === 'route' && props.coverSlot) ? props.coverUrl : null}
             compact={props.variant === 'sidePanel'}
-            footer={customViewFooter}
           />
         ) : (
           <ClaimPageView
@@ -298,8 +282,6 @@ export function EntityPageBody(props: EntityPageBodyProps) {
             spaceId={spaceId}
             initialTabRelations={initialTabRelations}
             tabEntities={tabEntities}
-            isEditing={isEditing}
-            footer={customViewFooter}
           />
         )}
       </>
@@ -308,11 +290,10 @@ export function EntityPageBody(props: EntityPageBodyProps) {
 
   if (customView === 'topic') {
     const showTopicMedia = props.variant === 'sidePanel' || props.showCover !== false;
-    const useV2Topic = enableV2Templates && !isEditing;
 
     return (
       <>
-        {showTopicMedia && !useV2Topic ? (
+        {showTopicMedia && !enableV2Templates ? (
           props.variant === 'route' && props.coverSlot ? (
             props.coverSlot
           ) : (
@@ -329,13 +310,12 @@ export function EntityPageBody(props: EntityPageBodyProps) {
           props.coverSlot
         ) : null}
         {routeEditInitializer}
-        {useV2Topic ? (
+        {enableV2Templates ? (
           <LiveTopicTemplateView
             entityId={entityId}
             spaceId={spaceId}
             serverCoverUrl={showTopicMedia && !(props.variant === 'route' && props.coverSlot) ? props.coverUrl : null}
             compact={props.variant === 'sidePanel'}
-            footer={customViewFooter}
           />
         ) : (
           <TopicPageView
@@ -343,15 +323,13 @@ export function EntityPageBody(props: EntityPageBodyProps) {
             spaceId={spaceId}
             initialTabRelations={initialTabRelations}
             tabEntities={tabEntities}
-            isEditing={isEditing}
-            footer={customViewFooter}
           />
         )}
       </>
     );
   }
 
-  if (enableV2Templates && !isEditing) {
+  if (enableV2Templates) {
     const showV2Media = props.variant === 'sidePanel' || props.showCover !== false;
     const routeCoverSlot = showV2Media && props.variant === 'route' && props.coverSlot ? props.coverSlot : null;
     const serverCoverUrl = showV2Media && !routeCoverSlot ? props.coverUrl : null;
@@ -367,7 +345,6 @@ export function EntityPageBody(props: EntityPageBodyProps) {
             spaceId={spaceId}
             serverCoverUrl={serverCoverUrl}
             compact={compact}
-            footer={customViewFooter}
           />
         </>
       );
@@ -382,7 +359,6 @@ export function EntityPageBody(props: EntityPageBodyProps) {
             spaceId={spaceId}
             serverCoverUrl={serverCoverUrl}
             compact={compact}
-            footer={customViewFooter}
           />
         </>
       );
@@ -397,7 +373,6 @@ export function EntityPageBody(props: EntityPageBodyProps) {
             spaceId={spaceId}
             serverCoverUrl={serverCoverUrl}
             compact={compact}
-            footer={customViewFooter}
           />
         </>
       );
@@ -412,7 +387,6 @@ export function EntityPageBody(props: EntityPageBodyProps) {
             spaceId={spaceId}
             serverCoverUrl={serverCoverUrl}
             compact={compact}
-            footer={customViewFooter}
           />
         </>
       );
@@ -427,7 +401,6 @@ export function EntityPageBody(props: EntityPageBodyProps) {
             spaceId={spaceId}
             serverCoverUrl={serverCoverUrl}
             compact={compact}
-            footer={customViewFooter}
           />
         </>
       );
@@ -442,7 +415,6 @@ export function EntityPageBody(props: EntityPageBodyProps) {
             spaceId={spaceId}
             serverCoverUrl={serverCoverUrl}
             compact={compact}
-            footer={customViewFooter}
           />
         </>
       );
@@ -480,6 +452,7 @@ export function EntityPageBody(props: EntityPageBodyProps) {
       spaceId={spaceId}
       initialTabRelations={initialTabRelations}
       tabEntities={tabEntities}
+      keepRecordTabSelection={isEditingRecordView}
     />
   );
 

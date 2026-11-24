@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { handleFromSocialUrl, resolvePostAuthor } from './ontology';
+import { handleFromSocialUrl, publicationFromUrl, resolvePostAuthor } from './ontology';
 
 describe('handleFromSocialUrl', () => {
   it.each([
@@ -88,5 +88,26 @@ describe('resolvePostAuthor', () => {
     ['a non-X URL names nobody', { webUrl: 'https://example.com/jack' }, undefined, undefined],
   ])('%s', (_case, inputs, name, handle) => {
     expect(resolvePostAuthor(inputs)).toEqual({ name, handle });
+  });
+});
+
+describe('publicationFromUrl', () => {
+  it.each([
+    ['https://example.co.uk/article', 'Example'],
+    ['https://www.bbc.co.uk/news/world-123', 'Bbc'],
+    ['https://www.abc.net.au/news/1', 'Abc'],
+    ['https://www.japantimes.co.jp/news', 'Japantimes'],
+    ['https://markets.businessinsider.com/news', 'Businessinsider'],
+    ['https://www.nytimes.com/2026/01/01/a.html', 'Nytimes'],
+    ['https://bbc.com/news', 'Bbc'],
+    ['https://go.dev/blog', 'Go'],
+    ['https://blog.example.io/post', 'Example'],
+  ])('names %s as %s', (url, name) => {
+    expect(publicationFromUrl(url)).toBe(name);
+  });
+
+  it('names nothing for a missing or unparseable URL', () => {
+    expect(publicationFromUrl(undefined)).toBeUndefined();
+    expect(publicationFromUrl('not a url')).toBeUndefined();
   });
 });

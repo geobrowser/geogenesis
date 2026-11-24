@@ -1,11 +1,15 @@
-import { ContentIds } from '@geoprotocol/geo-sdk/lite';
-import { renderHook } from '@testing-library/react';
+import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
+import '@testing-library/jest-dom/vitest';
+import { cleanup, fireEvent, render, renderHook, screen, within } from '@testing-library/react';
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Entity, Relation, Value } from '~/core/types';
 
+import type { EntityActionCallbacks } from '../models';
 import { TEMPLATE_ONTOLOGY } from '../ontology';
+import { TEMPLATE_ACTIONS } from '../template-actions';
+import { PostTemplate } from '../views/post-template';
 import { useLiveEventTemplate } from './use-live-event-template';
 import { useLivePostTemplate } from './use-live-post-template';
 
@@ -13,17 +17,21 @@ const state = vi.hoisted(() => ({
   entity: null as Entity | null,
   authorMeta: undefined as { name?: string; handle?: string; avatarUrl?: string | null } | undefined,
   sourceCards: [] as { id: string; title: string; kind: string }[],
+  actions: {} as EntityActionCallbacks,
+  /** The store's values, as `useValues` filters them. */
+  values: [] as Value[],
 }));
 
 vi.mock('~/core/sync/use-store', () => ({
   useQueryEntity: () => ({ entity: state.entity, isLoading: false }),
   useQueryEntities: () => ({ entities: [], isLoading: false }),
+  useValues: ({ selector }: { selector: (v: Value) => boolean }) => state.values.filter(selector),
 }));
 vi.mock('~/core/hooks/use-space', () => ({ useSpace: () => ({ space: null }) }));
 vi.mock('~/core/responses/use-claim-response-summaries', () => ({
   useClaimResponseSummaryBatch: () => ({ data: undefined }),
 }));
-vi.mock('./use-live-entity-actions', () => ({ useLiveEntityActions: () => ({}) }));
+vi.mock('./use-live-entity-actions', () => ({ useLiveEntityActions: () => state.actions }));
 // Viewer personal-space sources (GEO-3819 #3172) read the wallet; these tests have no viewer.
 vi.mock('./use-viewer-sources', () => ({
   useEntityWithViewerSources: ({ entity }: { entity: Entity | null }) => entity,
@@ -74,6 +82,8 @@ beforeEach(() => {
   state.entity = null;
   state.authorMeta = undefined;
   state.sourceCards = [];
+  state.actions = {};
+  state.values = [];
 });
 
 /**
@@ -311,5 +321,89 @@ describe('useLivePostTemplate Sources section', () => {
       items: [],
       ingestionLink: expect.objectContaining({ targetSpaceId: SPACE }),
     });
+  });
+});
+
+describe('useLivePostTemplate community notes', () => {
+  const SHIPPED_ADD_CONTEXT = TEMPLATE_ACTIONS.addContext;
+  beforeEach(() => {
+    TEMPLATE_ACTIONS.addContext = true;
+  });
+  afterEach(() => {
+    TEMPLATE_ACTIONS.addContext = SHIPPED_ADD_CONTEXT;
+    cleanup();
+  });
+
+  function PostHarness() {
+    const { data } = useLivePostTemplate({ entityId: state.entity!.id, spaceId: SPACE });
+    return data ? <PostTemplate model={data} /> : null;
+  }
+
+  const NOTE_ID = 'f1e2d3c4b5a697887766554433221100';
+
+  function noteValue(propertyId: string, text: string): Value {
+    return { ...value(propertyId, text), id: `${NOTE_ID}-${propertyId}`, entity: { id: NOTE_ID, name: null } };
+  }
+
+  /** Like the real callback: the note entity's values and a staged Community notes relation. */
+  function stageNote(draft: { reason: string; body: string; sourceUrl?: string }) {
+    state.values = [
+      noteValue(SystemIds.DESCRIPTION_PROPERTY, draft.reason),
+      ...(draft.sourceUrl ? [noteValue(TEMPLATE_ONTOLOGY.WEB_URL_PROPERTY_ID, draft.sourceUrl)] : []),
+    ];
+    state.entity = {
+      ...state.entity!,
+      relations: [
+        ...state.entity!.relations,
+        { ...relation(TEMPLATE_ONTOLOGY.COMMUNITY_NOTES_PROPERTY_ID, NOTE_ID, draft.body), isLocal: true },
+      ],
+    };
+  }
+
+  it('draws a note added on the page once, with what the draft said', () => {
+    state.entity = entity({
+      name: 'A post',
+      types: [{ id: TEMPLATE_ONTOLOGY.TWEET_TYPE_ID, name: 'Tweet' }],
+    });
+    state.actions = { onAddFlag: (_targetId, draft) => stageNote(draft) };
+
+    const { rerender } = render(<PostHarness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add context note' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Missing context' }));
+    fireEvent.change(screen.getByLabelText(/What do the sources show/i), {
+      target: { value: 'Reverse image search places this footage in a different year.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Submit note' }));
+    // The store's update, which re-renders the page in the app.
+    rerender(<PostHarness />);
+
+    const notes = within(screen.getByRole('region', { name: 'Context notes' }));
+    expect(notes.getAllByText('Reverse image search places this footage in a different year.')).toHaveLength(1);
+    expect(notes.getByText('Missing context')).toBeInTheDocument();
+  });
+
+  it('reads the tag and source from the note entity, the viewer’s draft first', () => {
+    state.entity = entity({
+      name: 'A post',
+      types: [{ id: TEMPLATE_ONTOLOGY.TWEET_TYPE_ID, name: 'Tweet' }],
+      relations: [relation(TEMPLATE_ONTOLOGY.COMMUNITY_NOTES_PROPERTY_ID, 'aaaa0000aaaa0000aaaa0000aaaa0000', 'Older')],
+    });
+    stageNote({ reason: 'Missing context', body: 'Draft text', sourceUrl: 'https://example.com/a' });
+    // The same note's tag in an unrelated space is not this page's.
+    state.values.push({
+      ...noteValue(SystemIds.DESCRIPTION_PROPERTY, 'Other space tag'),
+      id: 'other',
+      spaceId: 'aaaabbbbccccddddeeeeffff00001111',
+    });
+    state.values.reverse();
+
+    const { result } = renderHook(() => useLivePostTemplate({ entityId: state.entity!.id, spaceId: SPACE }));
+
+    expect(
+      result.current.data!.notes.map(note => [note.text, note.tag, note.status, note.sources.map(s => s.href)])
+    ).toEqual([
+      ['Draft text', 'Missing context', 'mine', ['https://example.com/a']],
+      ['Older', 'Community note', 'shown', []],
+    ]);
   });
 });

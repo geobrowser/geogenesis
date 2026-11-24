@@ -17,7 +17,6 @@ export interface LiveTopicTemplateViewProps {
   compact?: boolean;
   /** Embedded inside a Topic Space shell (suppresses duplicate cover/header). */
   embedded?: boolean;
-  footer?: React.ReactNode;
 }
 
 /**
@@ -30,7 +29,6 @@ export function LiveTopicTemplateView({
   serverCoverUrl,
   compact = false,
   embedded = false,
-  footer,
 }: LiveTopicTemplateViewProps) {
   const { data, isLoading, isSectionsLoading, actionCallbacks } = useLiveTopicTemplate({
     entityId,
@@ -73,7 +71,6 @@ export function LiveTopicTemplateView({
           />
         )
       }
-      footer={footer}
     />
   );
 }

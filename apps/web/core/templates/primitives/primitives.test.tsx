@@ -503,6 +503,23 @@ describe('ListRanking header control & workspace', () => {
   });
 });
 
+describe('EntityOverflowMenu trigger', () => {
+  it('widens the small "..." tap target to 32px without changing its 28px look (GEO-3824)', () => {
+    render(
+      <EntityActionProvider>
+        <EntityOverflowMenu target={{ id: 'root-sm', kind: 'Topic', title: 'Small' }} isPageRoot />
+        <EntityOverflowMenu target={{ id: 'root-md', kind: 'Topic', title: 'Medium' }} isPageRoot size="md" />
+      </EntityActionProvider>
+    );
+
+    const small = screen.getByRole('button', { name: 'More actions for Small' });
+    expect(small).toHaveClass('size-7', 'relative', 'after:absolute', 'after:-inset-0.5');
+    const medium = screen.getByRole('button', { name: 'More actions for Medium' });
+    expect(medium).toHaveClass('size-8');
+    expect(medium).not.toHaveClass('after:-inset-0.5');
+  });
+});
+
 describe('Add context and Dispute switch (GEO-3819)', () => {
   const target = { id: 'e-off', kind: 'Claim', title: 'Switched-off claim' };
   const groups = [{ predicate: 'Related actors', items: [{ id: 'i-1', label: 'UN OCHA', kind: 'entity' as const }] }];

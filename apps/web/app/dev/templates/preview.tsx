@@ -328,7 +328,6 @@ function PrimitivesGallery() {
                 <TemplateBadge tone={entry.requiresV2Flag ? 'judgment' : 'agreed'}>
                   {entry.requiresV2Flag ? 'v2 flag' : 'live'}
                 </TemplateBadge>
-                {entry.keepInEditMode && <TemplateBadge tone="neutral">keep in edit</TemplateBadge>}
                 {entry.requiresSpaceCheck && <TemplateBadge tone="neutral">space-scoped</TemplateBadge>}
                 <TemplateBadge tone="neutral">{entry.typeIds.length} type ID(s)</TemplateBadge>
               </div>

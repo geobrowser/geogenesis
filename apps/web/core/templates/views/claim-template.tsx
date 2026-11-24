@@ -53,8 +53,6 @@ export interface ClaimTemplateProps {
   model: ClaimTemplateModel;
   /** Optional header actions slot (e.g. share, overflow menu, history on live Geo pages). */
   headerActions?: React.ReactNode;
-  /** Optional footer slot (e.g. edit-mode property sheet & backlinks). */
-  footer?: React.ReactNode;
   /** Live GRC-20 persistence & search callbacks. */
   actionCallbacks?: EntityActionCallbacks;
   /** Compact density when rendered inside the narrow entity side panel. */
@@ -74,7 +72,6 @@ export interface ClaimTemplateProps {
 export function ClaimTemplate({
   model,
   headerActions,
-  footer,
   actionCallbacks,
   compact = false,
   isLoadingSections = false,
@@ -216,8 +213,6 @@ export function ClaimTemplate({
           />
         </div>
       )}
-
-      {footer}
     </TemplateShell>
   );
 }

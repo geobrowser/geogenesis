@@ -2359,7 +2359,8 @@ export function EntityOverflowMenu({
           className={cx(
             'inline-grid cursor-pointer place-items-center rounded-full border-0 bg-transparent text-grey-04 transition-colors hover:bg-grey-01 hover:text-text',
             open && 'bg-grey-01 text-text',
-            size === 'md' ? 'size-8' : 'size-7'
+            // The small button's ::after widens its tap target to 32px without changing how it looks.
+            size === 'md' ? 'size-8' : 'relative size-7 after:absolute after:-inset-0.5'
           )}
         >
           <MoreHorizontalIcon className="size-4" />
