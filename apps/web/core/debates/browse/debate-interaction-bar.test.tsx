@@ -65,12 +65,6 @@ describe('DebateInteractionBar circles', () => {
     expect(screen.getByRole('button', { name: /Open comments/ })).toHaveAttribute('data-entity-comments-opener', '');
   });
 
-  it('draws translucent white circles on a dark surface', () => {
-    render(<DebateInteractionBar variant="circles" tone="dark" commentCount={0} onComment={vi.fn()} />);
-
-    expect(screen.getByRole('button', { name: /Open comments/ })).toHaveClass('bg-white/22', 'text-white');
-  });
-
   it('leaves the default pills as they were', () => {
     render(<DebateInteractionBar commentCount={3} onComment={vi.fn()} onShare={vi.fn()} />);
 

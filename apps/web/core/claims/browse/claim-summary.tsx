@@ -47,7 +47,6 @@ export function ClaimSummary({
   summary,
   className,
   layout = 'stacked',
-  tone = 'light',
 }: {
   entityId: string;
   spaceId: string;
@@ -63,13 +62,11 @@ export function ClaimSummary({
    * and it is the part that would quietly diverge if this were copied.
    */
   layout?: 'stacked' | 'inline' | 'results';
-  /** `'results'` only: dark draws it white on a dark surface. */
-  tone?: 'light' | 'dark';
 }) {
   const copy = CLAIM_RESPONSE_COPY;
   const tier = claimSummaryTier(summary.total);
 
-  if (layout === 'results') return <ClaimResultsRow summary={summary} tone={tone} className={className} />;
+  if (layout === 'results') return <ClaimResultsRow summary={summary} className={className} />;
 
   // Nothing where the counts never answered, before asking what the tier is.
   //
@@ -155,48 +152,31 @@ const VOTE_COUNT_FORMAT = new Intl.NumberFormat('en-US');
  * vote on a claim nobody else has answered — shows nothing; the "Not counted yet" note under it is
  * the honest reading there.
  */
-function ClaimResultsRow({
-  summary,
-  tone,
-  className,
-}: {
-  summary: ClaimResponseSummary;
-  tone: 'light' | 'dark';
-  className?: string;
-}) {
-  const dark = tone === 'dark';
+function ClaimResultsRow({ summary, className }: { summary: ClaimResponseSummary; className?: string }) {
   const status = summary.isLoading ? 'Loading results…' : !summary.hasCounts ? 'Results unavailable' : null;
   if (!status && summary.total <= 0) return null;
   const percent = summary.percent ?? 0;
 
   return (
     <div data-claim-results="" className={cx('pt-5', className)}>
-      <div
-        className={cx(
-          'flex min-h-[19px] items-center justify-between gap-3 text-[15px] leading-[19px] font-medium',
-          dark ? 'text-white' : 'text-[#151515]'
-        )}
-      >
+      <div className="flex min-h-[19px] items-center justify-between gap-3 text-[15px] leading-[19px] font-medium text-[#151515]">
         {status ? (
           <span>{status}</span>
         ) : (
           <>
             <span className="tabular-nums">{percent}% Agree</span>
-            <span className={cx('tabular-nums', dark ? 'text-white/70' : 'text-[#666]')}>
+            <span className="text-[#666] tabular-nums">
               {VOTE_COUNT_FORMAT.format(summary.total)} {summary.total === 1 ? 'Vote' : 'Votes'}
             </span>
           </>
         )}
       </div>
       <div
-        className={cx('mt-[15px] h-[7px] overflow-hidden rounded-[9px]', dark ? 'bg-white/25' : 'bg-[#e3e3e3]')}
+        className="mt-[15px] h-[7px] overflow-hidden rounded-[9px] bg-[#e3e3e3]"
         role={status ? undefined : 'img'}
         aria-label={status ? undefined : `${percent}% agree`}
       >
-        <div
-          className={cx('h-full rounded-[9px]', dark ? 'bg-white' : 'bg-[#151515]')}
-          style={{ width: `${status ? 0 : percent}%` }}
-        />
+        <div className="h-full rounded-[9px] bg-[#151515]" style={{ width: `${status ? 0 : percent}%` }} />
       </div>
     </div>
   );

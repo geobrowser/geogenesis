@@ -64,12 +64,12 @@ const LINKED_START_HOLD_MS = 8_000;
 /**
  * How wide the debate card's column may get, which with its fixed-ratio media is really a height
  * budget: grow or shrink the media with the viewport while reserving the navbar, the 20px above the
- * card, and the card's chrome under the media — frame, a two-line claim at the debates app's size,
- * the app's 44px vote row and the meta line under it (GEO-3833). That chrome is about 196px: 98 for
- * the claim and its margins, 44 for the vote row, 36 for the meta line and its gap, 16 under it and
- * the frame — 27px more than the 169px the earlier, compact footer measured in Chrome (GEO-3454),
- * which is the 1.4rem added to the budget below. The results row a vote reveals is not reserved, as
- * in the app. The app's row never wraps (its labels give way to the thumbs instead), so the wrapped
+ * card, and the card's chrome under the media — frame, the meta line under the video, a two-line
+ * claim at the debates app's size and the app's 44px vote row (GEO-3833). That chrome is about
+ * 196px: 40 for the meta line and the 16px above it, 94 for the claim and its 20px above and below,
+ * 44 for the vote row, 16 under it and the frame — 27px more than the 169px the earlier, compact
+ * footer measured in Chrome (GEO-3454), which is the 1.4rem added to the budget below. The results
+ * row a vote reveals is not reserved, as in the app. The app's row never wraps (its labels give way to the thumbs instead), so the wrapped
  * budget in `debateCardColumnWidth` only ever narrows a card that was already narrow.
  *
  * Phones get a budget of their own (`--debate-feed-phone-column-width`), since their chrome differs:

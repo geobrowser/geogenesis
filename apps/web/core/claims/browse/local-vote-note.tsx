@@ -14,7 +14,6 @@ export function VoteNote({
   children,
   action,
   announce = false,
-  tone = 'light',
 }: {
   children: React.ReactNode;
   action?: {
@@ -30,15 +29,9 @@ export function VoteNote({
   };
   /** Read out when it appears: for a note about something the page just did, not one already there. */
   announce?: boolean;
-  /** `'dark'` draws it for a dark surface: the debates app's dark full screen (GEO-3833). */
-  tone?: 'light' | 'dark';
 }) {
-  const dark = tone === 'dark';
   return (
-    <p
-      role={announce ? 'status' : undefined}
-      className={cx('mt-1 text-center text-footnote', dark ? 'text-white/70' : 'text-grey-04')}
-    >
+    <p role={announce ? 'status' : undefined} className="mt-1 text-center text-footnote text-grey-04">
       {children}
       {action ? (
         <>
@@ -53,9 +46,8 @@ export function VoteNote({
             data-geo-analytics-label={action.analyticsLabel}
             data-geo-analytics-intent={action.analyticsIntent}
             className={cx(
-              'font-medium underline underline-offset-2',
-              dark ? 'text-white' : 'text-text',
-              action.pending ? 'cursor-progress' : dark ? 'hover:text-white/70' : 'hover:text-grey-04'
+              'font-medium text-text underline underline-offset-2',
+              action.pending ? 'cursor-progress' : 'hover:text-grey-04'
             )}
           >
             {action.label}
@@ -70,10 +62,9 @@ export function VoteNote({
  * Under a pill whose vote is only on this device: it doesn't count yet, and "Save" is the way back
  * to the save sheet after closing it.
  */
-export function LocalVoteNote({ tone = 'light' }: { tone?: 'light' | 'dark' } = {}) {
+export function LocalVoteNote() {
   return (
     <VoteNote
-      tone={tone}
       action={{
         label: 'Save',
         onPress: () => openSaveVotesPrompt('inline_save'),

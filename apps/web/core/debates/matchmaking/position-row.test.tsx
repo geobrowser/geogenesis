@@ -347,15 +347,6 @@ describe('PositionRow app look', () => {
     expect(faces('app')).toBe(0);
   });
 
-  it('draws white outlines on a dark surface', () => {
-    render(
-      <PositionRow positions={[]} responseKind="stance" viewerPosition={false} onRespond={() => {}} look="app-dark" />
-    );
-
-    expect(screen.getByRole('button', { name: 'Agree' })).toHaveClass('border-white/60', 'text-white');
-    expect(screen.getByRole('button', { name: /^Disagree/ })).toHaveClass('border-white');
-  });
-
   it('leaves the default look as it was', () => {
     render(<PositionRow positions={[]} responseKind="stance" viewerPosition={null} onRespond={() => {}} />);
 
