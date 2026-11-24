@@ -33,7 +33,8 @@ const state = vi.hoisted(() => ({
   page: null as Entity | null,
   corpus: [] as Entity[],
   viewerSpaceId: null as string | null,
-  coverage: [] as { entityId: string; spaceId: string; title: string }[],
+  /** `relationSpaceId` is where the source's Topics link was published; defaults to `spaceId`. */
+  coverage: [] as { entityId: string; spaceId: string; title: string; relationSpaceId?: string }[],
   entityReads: [] as { id?: string; spaceId?: string }[],
   infiniteQueries: [] as { queryKey: unknown[]; queryFn: (ctx: { pageParam: string | null }) => Promise<unknown> }[],
   graphqlVariables: [] as Record<string, unknown>[],
@@ -197,16 +198,30 @@ beforeEach(() => {
   mocks.useTopicCoverage
     .mockReset()
     // Rows come back even while disabled, as a cached query's would.
-    .mockImplementation(({ spaceIds }: { spaceIds?: string[] }) => ({
-      page: {
-        rows: state.coverage
-          .filter(row => spaceIds === undefined || spaceIds.includes(row.spaceId))
-          .map(row => ({ ...row, types: [], createdAtSec: 0, description: null, imageUrl: null })),
-        endCursor: null,
-        hasNextPage: false,
-      },
-      isLoading: false,
-    }));
+    .mockImplementation(
+      ({ spaceIds, scopeRelationToSpaces }: { spaceIds?: string[]; scopeRelationToSpaces?: boolean }) => ({
+        page: {
+          rows: state.coverage
+            .filter(row => spaceIds === undefined || spaceIds.includes(row.spaceId))
+            .filter(
+              row =>
+                !scopeRelationToSpaces ||
+                spaceIds === undefined ||
+                spaceIds.includes(row.relationSpaceId ?? row.spaceId)
+            )
+            .map(({ relationSpaceId: _relationSpaceId, ...row }) => ({
+              ...row,
+              types: [],
+              createdAtSec: 0,
+              description: null,
+              imageUrl: null,
+            })),
+          endCursor: null,
+          hasNextPage: false,
+        },
+        isLoading: false,
+      })
+    );
 });
 
 describe('Claim template', () => {
@@ -351,6 +366,8 @@ describe('Topic template', () => {
       { entityId: 'r1', spaceId: SPACE, title: 'Source here' },
       { entityId: 'r2', spaceId: OTHER, title: 'Source elsewhere' },
       { entityId: 'r3', spaceId: VIEWER, title: 'Source the viewer added' },
+      // In the viewed space, but tagged with this topic only in another space.
+      { entityId: 'r4', spaceId: SPACE, relationSpaceId: OTHER, title: 'Source tagged elsewhere' },
     ];
   }
 
@@ -364,6 +381,16 @@ describe('Topic template', () => {
     expect(model.timelineHighlights?.map(item => item.title)).toEqual(['Event here']);
     expect(model.sections?.[0]?.items.map(item => item.title)).toEqual(['Source here']);
     expect(mocks.useTopicConnectionCounts).toHaveBeenCalledWith([PAGE], { spaceId: SPACE });
+  });
+
+  it('reads coverage by where the Topics relation was published, not only where the source lives', async () => {
+    topicCorpus();
+    state.viewerSpaceId = VIEWER;
+    renderHook(() => useLiveTopicTemplate({ entityId: PAGE, spaceId: SPACE }));
+
+    const [pageRead, viewerRead] = mocks.useTopicCoverage.mock.calls.slice(-2).map(call => call[0]);
+    expect(pageRead).toMatchObject({ spaceIds: [SPACE], scopeRelationToSpaces: true });
+    expect(viewerRead).toMatchObject({ spaceIds: [VIEWER], scopeRelationToSpaces: true, enabled: true });
   });
 
   it('keeps the viewer’s own personal-space sources for that viewer', async () => {

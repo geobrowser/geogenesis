@@ -55,7 +55,12 @@ import {
   resolveTemplateImageUrl,
 } from '../ontology';
 import { topicCoverageIngestionLink } from './source-ingestion-links';
-import { CLAIM_STANCE_VOTE_KIND, activeStanceVotes, aggregateClaimVotes, baselineVoteFor } from './topic-claim-votes';
+import {
+  activeStanceVotes,
+  aggregateClaimVotes,
+  baselineVoteFor,
+  fetchMultiSpaceClaimVoteRows,
+} from './topic-claim-votes';
 import { resolveDebateStillSrc, useDebateParticipantsBatch } from './use-debate-participants-batch';
 import { useInitialHydrationGate } from './use-initial-hydration-gate';
 import { useLiveEntityActions } from './use-live-entity-actions';
@@ -64,41 +69,6 @@ import { useViewerSpaceId, useViewerTopicSources } from './use-viewer-sources';
 const LIVE_CLAIMS_LIMIT = 40;
 const LIVE_COVERAGE_LIMIT = 12;
 const NO_COVERAGE_ROWS: TopicCoveragePage['rows'] = [];
-
-const MULTI_SPACE_CLAIM_VOTES_QUERY = parse(/* GraphQL */ `
-  query MultiSpaceClaimVotes($objectIds: [UUID!]!, $voteKind: Int!) {
-    userVotesConnection(
-      first: 1000
-      filter: {
-        objectType: { is: 0 }
-        voteKind: { is: $voteKind }
-        voteType: { in: [0, 1] }
-        objectId: { in: $objectIds }
-      }
-    ) {
-      nodes {
-        userId
-        objectId
-        spaceId
-        voteType
-        voteKind
-      }
-    }
-  }
-`) as TypedDocumentNode<
-  {
-    userVotesConnection?: {
-      nodes?: Array<{
-        userId: string;
-        objectId: string;
-        spaceId: string;
-        voteType: number;
-        voteKind: number;
-      }> | null;
-    } | null;
-  },
-  { objectIds: string[]; voteKind: number }
->;
 
 interface TweetAuthorMetadata {
   name?: string;
@@ -397,9 +367,11 @@ export function useLiveTopicTemplate({
     spaceIds,
   });
 
+  // Sources the viewed space both holds and tagged with this Topic itself.
   const coverage = useTopicCoverage({
     topicId: entityId,
     spaceIds,
+    scopeRelationToSpaces: true,
     first: LIVE_COVERAGE_LIMIT,
   });
 
@@ -411,6 +383,7 @@ export function useLiveTopicTemplate({
   const viewerCoverage = useTopicCoverage({
     topicId: entityId,
     spaceIds: viewerSpaceId ? [viewerSpaceId] : undefined,
+    scopeRelationToSpaces: true,
     first: LIVE_COVERAGE_LIMIT,
     enabled: viewerCoverageEnabled,
   });
@@ -584,14 +557,7 @@ export function useLiveTopicTemplate({
     enabled: allVoteClaimIds.length > 0,
     staleTime: 30_000,
     queryFn: async ({ signal }) => {
-      const response = await Effect.runPromise(
-        graphql({
-          query: MULTI_SPACE_CLAIM_VOTES_QUERY,
-          variables: { objectIds: allVoteClaimIds, voteKind: CLAIM_STANCE_VOTE_KIND },
-          decoder: data => data.userVotesConnection?.nodes ?? [],
-          signal,
-        })
-      );
+      const response = await fetchMultiSpaceClaimVoteRows({ objectIds: allVoteClaimIds, signal });
 
       // Agree / Disagree only, once per (claim, space, voter): the counts the Claim page draws.
       const activeVotes = activeStanceVotes(response);

@@ -1,6 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { activeStanceVotes, aggregateClaimVotes, baselineVoteFor } from './topic-claim-votes';
+import {
+  CLAIM_STANCE_VOTE_KIND,
+  type ClaimVoteRow,
+  activeStanceVotes,
+  aggregateClaimVotes,
+  baselineVoteFor,
+  fetchMultiSpaceClaimVoteRows,
+} from './topic-claim-votes';
 
 const CLAIM = 'aaaaaaaa-0000-4000-8000-000000000001';
 const SPACE_X = 'bbbbbbbb-0000-4000-8000-000000000001';
@@ -75,5 +82,37 @@ describe('activeStanceVotes', () => {
     ]);
     const agg = aggregateClaimVotes(votes, null).get(claim)!;
     expect([agg.totalPositive, agg.totalNegative]).toEqual([2, 2]);
+  });
+});
+
+describe('fetchMultiSpaceClaimVoteRows', () => {
+  // 2,500 voters: 1,800 agree and 700 disagree, served 1,000 rows a page. The viewer is last.
+  const rows: ClaimVoteRow[] = Array.from({ length: 2_500 }, (_, index) => ({
+    userId: index === 2_499 ? VIEWER : `voter-${index}`,
+    objectId: CLAIM,
+    spaceId: SPACE_X,
+    voteType: index < 1_800 ? 0 : 1,
+    voteKind: CLAIM_STANCE_VOTE_KIND,
+  }));
+  const fetchPage = vi.fn(async ({ first, after }: { first: number; after: string | undefined }) => {
+    const start = after ? Number(after) : 0;
+    const end = Math.min(start + first, rows.length);
+    return { items: rows.slice(start, end), endCursor: String(end), hasNextPage: end < rows.length };
+  });
+
+  it('counts every vote past the first 1,000, and the viewer baseline in the last page', async () => {
+    const fetched = await fetchMultiSpaceClaimVoteRows({ objectIds: [hex(CLAIM)], fetchPage });
+
+    expect(fetchPage).toHaveBeenCalledTimes(3);
+    expect(fetchPage.mock.calls.map(([args]) => args.after)).toEqual([undefined, '1000', '2000']);
+    const byClaim = aggregateClaimVotes(activeStanceVotes(fetched), VIEWER);
+    expect(byClaim.get(hex(CLAIM))).toMatchObject({ totalPositive: 1_800, totalNegative: 700, viewerVote: 'disagree' });
+    expect(baselineVoteFor(byClaim, CLAIM, SPACE_X)).toBe('disagree');
+  });
+
+  it('asks for nothing without claims', async () => {
+    const empty = vi.fn();
+    await expect(fetchMultiSpaceClaimVoteRows({ objectIds: [], fetchPage: empty })).resolves.toEqual([]);
+    expect(empty).not.toHaveBeenCalled();
   });
 });

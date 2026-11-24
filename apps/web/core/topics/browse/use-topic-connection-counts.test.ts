@@ -59,6 +59,18 @@ describe('topicConnectionCountsDocument', () => {
     expect(scoped.match(/spaceIds: \{overlaps: \$spaceIds\}/g)).toHaveLength(6);
     expect(topicConnectionCountsDocument(2, true)).not.toBe(topicConnectionCountsDocument(2));
   });
+
+  it('scoped, also requires the Topics relation itself to be published in the space', () => {
+    // An entity in the space whose Topics link was published only elsewhere is not the space's.
+    expect(print(topicConnectionCountsDocument(1))).not.toContain('spaceId:');
+
+    const scoped = print(topicConnectionCountsDocument(2, true)).replace(/\s+/g, ' ');
+    expect(
+      scoped.match(
+        /relations: \{some: \{typeId: \{is: \$topicsPropertyId\}, toEntityId: \{is: \$topic\d\}, spaceId: \{in: \$spaceIds\}\}\}/g
+      )
+    ).toHaveLength(6);
+  });
 });
 
 describe('decodeTopicConnectionCounts', () => {

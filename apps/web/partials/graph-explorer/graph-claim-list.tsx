@@ -19,7 +19,10 @@ export function ClaimBatchRow({ status, children }: { status: ClaimBatchStatus; 
 }
 
 /** One response batch per claim space; `batches` must be rendered for them to run. */
-export function useClaimSpaceBatches(claims: ReadonlyArray<{ id: string; spaceId: string }>) {
+export function useClaimSpaceBatches(
+  claims: ReadonlyArray<{ id: string; spaceId: string }>,
+  { responderMetadata = true }: { responderMetadata?: boolean } = {}
+) {
   const [status, setStatus] = React.useState<Record<string, ClaimBatchStatus>>({});
   const onStatus = React.useCallback(
     (spaceId: string, value: ClaimBatchStatus) =>
@@ -29,7 +32,13 @@ export function useClaimSpaceBatches(claims: ReadonlyArray<{ id: string; spaceId
   const bySpace = new Map<string, string[]>();
   for (const claim of claims) bySpace.set(claim.spaceId, [...(bySpace.get(claim.spaceId) ?? []), claim.id]);
   const batches = [...bySpace].map(([spaceId, claimIds]) => (
-    <SpaceBatch key={spaceId} spaceId={spaceId} claimIds={claimIds} onStatus={onStatus} />
+    <SpaceBatch
+      key={spaceId}
+      spaceId={spaceId}
+      claimIds={claimIds}
+      responderMetadata={responderMetadata}
+      onStatus={onStatus}
+    />
   ));
   return { status, batches };
 }
@@ -37,10 +46,12 @@ export function useClaimSpaceBatches(claims: ReadonlyArray<{ id: string; spaceId
 function SpaceBatch({
   spaceId,
   claimIds,
+  responderMetadata,
   onStatus,
 }: {
   spaceId: string;
   claimIds: string[];
+  responderMetadata: boolean;
   onStatus: (spaceId: string, status: ClaimBatchStatus) => void;
 }) {
   const key = claimIds.join(',');
@@ -48,7 +59,7 @@ function SpaceBatch({
     () => key.split(',').map(entityId => ({ entityId, responseKind: 'stance' as const })),
     [key]
   );
-  const batch = useClaimResponseSummaryBatch({ spaceId, targets, enabled: true });
+  const batch = useClaimResponseSummaryBatch({ spaceId, targets, enabled: true, responderMetadata });
   const status: ClaimBatchStatus = batch.isError
     ? 'failed'
     : batch.isSuccess && !batch.isPlaceholderData
