@@ -319,6 +319,37 @@ describe('useGraphExplorerSession', () => {
     expect(named('graph_explorer_left').map(({ props }) => props.exit)).toEqual(['page_hidden']);
   });
 
+  it('sends one left for beforeunload followed by pagehide and the unmount', () => {
+    const { result, unmount } = renderHook(() => useGraphExplorerSession(init));
+    result.current!.opened('ready', layout);
+    window.dispatchEvent(new Event('beforeunload'));
+    expect(named('graph_explorer_left').map(({ props }) => props.exit)).toEqual(['page_hidden']);
+    window.dispatchEvent(new Event('pagehide'));
+    unmount();
+    expect(named('graph_explorer_left').map(({ props }) => props.exit)).toEqual(['page_hidden']);
+  });
+
+  it('starts a new session on a back/forward cache restore after beforeunload', () => {
+    const { result, unmount } = renderHook(() => useGraphExplorerSession(init));
+    const first = result.current!;
+    first.opened('ready', layout);
+    window.dispatchEvent(new Event('beforeunload'));
+    window.dispatchEvent(new Event('pagehide'));
+    const show = new Event('pageshow');
+    Object.defineProperty(show, 'persisted', { value: true });
+    act(() => {
+      window.dispatchEvent(show);
+    });
+    const second = result.current!;
+    expect(second.id).not.toBe(first.id);
+    second.opened('ready', layout);
+    unmount();
+    expect(named('graph_explorer_left').map(({ props }) => [props.graph_session_id, props.exit])).toEqual([
+      [first.id, 'page_hidden'],
+      [second.id, 'navigated'],
+    ]);
+  });
+
   it('sends navigated on an unmount without pagehide', () => {
     const { result, unmount } = renderHook(() => useGraphExplorerSession(init));
     result.current!.opened('ready', layout);
