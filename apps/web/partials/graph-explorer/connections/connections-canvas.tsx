@@ -369,12 +369,7 @@ export function ConnectionsCanvas({
       const measure = (id: string, element: HTMLElement) => {
         let box = anchors.current.get(id);
         if (!box) {
-          box = {
-            anchor: anchorY(element),
-            width: element.offsetWidth,
-            height: element.offsetHeight,
-            card: element.querySelector('[data-card]') !== null,
-          };
+          box = measureBox(element);
           anchors.current.set(id, box);
         }
         return box;
@@ -913,6 +908,16 @@ export function overlapShare(a: Rect, b: Rect): number {
 
 function clampDistance(distance: number) {
   return Math.max(MIN_DISTANCE, Math.min(MAX_DISTANCE, distance));
+}
+
+/** A node's box as drawn now; `card` is whether it shows a share card (a failed card is a circle again). */
+export function measureBox(element: HTMLElement): Box {
+  return {
+    anchor: anchorY(element),
+    width: element.offsetWidth,
+    height: element.offsetHeight,
+    card: element.querySelector('[data-card]') !== null,
+  };
 }
 
 /** An entity anchors on its image, everything else on its middle. */

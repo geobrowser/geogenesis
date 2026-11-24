@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { GraphNode } from '~/core/graph-explorer/fetch-graph-neighbourhood';
 import { getImagePath } from '~/core/utils/utils';
 
+import { measureBox } from './connections/connections-canvas';
 import { NodeCard } from './connections/node-card';
 import { CentreHeader } from './entity-panel';
 
@@ -134,5 +135,23 @@ describe('the card URL', () => {
       expect(panel.querySelector('img')).toBeNull();
       cleanup();
     }
+  });
+});
+
+describe('the map layout reading a node', () => {
+  it('sees a share card while one is drawn, and a circle once it fails or there is none', () => {
+    const { container } = render(
+      <NodeCard node={debate()} hop={1} isCentre={false} phone={false} claimSpaceId={null} />
+    );
+    const node = container.firstElementChild as HTMLElement;
+    expect(measureBox(node).card).toBe(true);
+    fireEvent.error(node.querySelector('[data-card] img')!);
+    expect(measureBox(node).card).toBe(false);
+    cleanup();
+
+    const { container: none } = render(
+      <NodeCard node={debate({ card: null })} hop={1} isCentre={false} phone={false} claimSpaceId={null} />
+    );
+    expect(measureBox(none.firstElementChild as HTMLElement).card).toBe(false);
   });
 });
