@@ -49,7 +49,15 @@ export function LiveClaimTemplateView({
       actionCallbacks={actionCallbacks}
       compact={compact}
       isLoadingSections={isSectionsLoading}
-      headerActions={<EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable={false} compact={compact} />}
+      headerActions={
+        <EntityPageActions
+          entityId={entityId}
+          spaceId={spaceId}
+          isVoteable={false}
+          compact={compact}
+          variant="template"
+        />
+      }
     />
   );
 }

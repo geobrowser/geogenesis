@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -160,5 +160,34 @@ describe('EntityPageActions', () => {
     render(<EntityPageActions entityId="entity-1" spaceId="space-1" />);
 
     expect(screen.queryByRole('link', { name: 'Create new entity' })).toBeNull();
+  });
+
+  describe('on entity templates (GEO-3837)', () => {
+    it('puts a graph link where history was, opening this entity in this space', () => {
+      render(<EntityPageActions entityId="entity-1" spaceId="space-1" variant="template" />);
+
+      const graph = screen.getByRole('link', { name: 'Explore graph' });
+      expect(graph).toHaveAttribute('href', '/explore/graph/entity-1?topic=entity-1&space=space-1');
+      expect(graph).toHaveAttribute('data-geo-analytics-label', 'Explore graph');
+      expect(screen.queryByTestId('history')).toBeNull();
+      expectInDocumentOrder([graph, screen.getByTestId('context-menu')]);
+    });
+
+    it('hands version history to the menu, fetching only while it is open', () => {
+      render(<EntityPageActions entityId="entity-1" spaceId="space-1" variant="template" />);
+
+      expect(mocks.contextMenu?.versionHistory).toBeTypeOf('function');
+      expect(mocks.historyArgs).toMatchObject({ entityId: 'entity-1', spaceId: 'space-1', enabled: false });
+
+      act(() => (mocks.contextMenu?.onVersionHistoryOpenChange as (open: boolean) => void)(true));
+      expect(mocks.historyArgs).toMatchObject({ enabled: true });
+    });
+
+    it('keeps history beside the menu on ordinary entity pages', () => {
+      render(<EntityPageActions entityId="entity-1" spaceId="space-1" />);
+
+      expect(screen.queryByRole('link', { name: 'Explore graph' })).toBeNull();
+      expect(mocks.contextMenu?.versionHistory).toBeUndefined();
+    });
   });
 });
