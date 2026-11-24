@@ -66,4 +66,64 @@ describe('inlineOgImage', () => {
     expect((await inlineOgImage(`${FILEBASE_GATEWAY_READ_PATH}QmA`, 64, 1_000, loop)).src).toBeNull();
     expect(loop).toHaveBeenCalledTimes(2);
   });
+
+  it('rasterises an author PNG data URI and refuses SVG, other types and oversize ones', async () => {
+    const fetchImpl = vi.fn();
+    const ok = await inlineOgImage(`data:image/png;base64,${png.toString('base64')}`, 64, 1_000, fetchImpl);
+    expect(ok.src).toMatch(/^data:image\/jpeg;base64,/);
+
+    const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4"/>').toString('base64');
+    const big = Buffer.alloc(600 * 1024).toString('base64');
+    for (const uri of [
+      `data:image/svg+xml;base64,${svg}`,
+      `data:image/png;base64,${svg}`,
+      'data:image/png,not-base64',
+      `data:image/png;base64,${big}`,
+    ])
+      expect((await inlineOgImage(uri, 64, 1_000, fetchImpl)).src).toBeNull();
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('refuses a body over the cap, by Content-Length or while streaming', async () => {
+    const cancelled = vi.fn();
+    const declared = vi.fn(
+      async () =>
+        new Response(new ReadableStream({ cancel: cancelled }), {
+          status: 200,
+          headers: { 'content-type': 'image/png', 'content-length': String(9 * 1024 * 1024) },
+        })
+    );
+    expect((await inlineOgImage(`${FILEBASE_GATEWAY_READ_PATH}QmA`, 64, 1_000, declared)).src).toBeNull();
+    expect(cancelled).toHaveBeenCalled();
+
+    const chunk = new Uint8Array(1024 * 1024);
+    let sent = 0;
+    const streamed = vi.fn(
+      async () =>
+        new Response(
+          new ReadableStream({
+            pull(controller) {
+              sent++;
+              controller.enqueue(chunk);
+            },
+          }),
+          { status: 200, headers: { 'content-type': 'image/png' } }
+        )
+    );
+    expect((await inlineOgImage(`${FILEBASE_GATEWAY_READ_PATH}QmA`, 64, 1_000, streamed)).src).toBeNull();
+    expect(sent).toBeLessThanOrEqual(10);
+  });
+
+  it('cancels a redirect’s body', async () => {
+    const cancelled = vi.fn();
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(new ReadableStream({ cancel: cancelled }), {
+          status: 302,
+          headers: { location: 'http://127.0.0.1/secret' },
+        })
+    );
+    await inlineOgImage(`${FILEBASE_GATEWAY_READ_PATH}QmA`, 64, 1_000, fetchImpl);
+    expect(cancelled).toHaveBeenCalled();
+  });
 });

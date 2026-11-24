@@ -84,12 +84,12 @@ describe('hidden entities', () => {
     toEntity,
   });
 
-  it('asks for the Hidden marker in the explorer’s spaces on every node, at hop 1 and hop 2', () => {
+  it('asks for the Hidden marker in every space on every node, at hop 1 and hop 2', () => {
     const filter = resolveGraphFilter({ spaceIds: ['a'.repeat(32)], topicId: null, topicSpaceId: null });
     for (const document of [hop1Document(filter.kinds, false), hop2Document(['1'.repeat(32)], false, false)]) {
       const printed = print(document).replace(/\s+/g, ' ');
       expect(printed).toContain(
-        'hidden: valuesList( filter: {propertyId: {is: $hiddenPropertyId}, spaceId: {in: $spaceIds}} )'
+        'hidden: valuesList(filter: {propertyId: {is: $hiddenPropertyId}}) { text boolean }'
       );
       expect(declared(document)).toContain('hiddenPropertyId');
     }

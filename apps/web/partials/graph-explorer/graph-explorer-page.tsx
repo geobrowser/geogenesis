@@ -15,7 +15,7 @@ import { useTopicGraphScope } from '~/core/graph-explorer/use-graph-explorer';
 import { useGraphExplorerUnavailable } from '~/core/graph-explorer/use-graph-explorer-active';
 import { useGraphNavigation } from '~/core/graph-explorer/use-graph-navigation';
 import { useHydrated } from '~/core/hooks/use-hydrated';
-import { isHiddenInSpace } from '~/core/moderation/hidden';
+import { isHiddenEntity } from '~/core/moderation/hidden';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { useTopicSpaceScope } from '~/core/topics/use-topic-space-scope';
 import { normId } from '~/core/utils/norm-id';
@@ -89,8 +89,8 @@ function TopicGraph({
           null
         )
       : null);
-  // A topic hidden in its space keeps its name off the page; the map shows it as not in the graph.
-  const topicName = topic && !isHiddenInSpace(topic, topicSpaceId) ? topic.name : null;
+  // A hidden topic keeps its name off the page; the map shows it as not in the graph.
+  const topicName = topic && !isHiddenEntity(topic) ? topic.name : null;
   const scope = useTopicGraphScope(routeSpaceId, topicId, topicSpaceId);
   const session = useGraphExplorerSession({
     entityId,

@@ -149,9 +149,8 @@ export function decodeClaimsAbout(response: ClaimsAboutResponse, requestedSpaceI
       requestedSpaceId ? normId(requestedSpaceId) : null
     );
     if (!spaceId) return [];
-    // Hidden in the space it is read and voted in, as its own page decides.
-    const hidden = (node.hidden ?? []).some(value => normId(value.spaceId) === spaceId && isHiddenMarker(value));
-    return hidden ? [] : [{ id: normId(node.id), name, spaceId }];
+    // Hidden in any space, as on the map.
+    return (node.hidden ?? []).some(isHiddenMarker) ? [] : [{ id: normId(node.id), name, spaceId }];
   });
   return {
     claims,

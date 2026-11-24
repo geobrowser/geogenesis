@@ -40,7 +40,7 @@ describe('decodeClaimsAbout', () => {
     });
   });
 
-  it('drops a claim hidden in the space it is read in, not one hidden elsewhere', () => {
+  it('drops a claim hidden in any space, its read space or another', () => {
     const claim = (id: string, hidden: Array<{ spaceId: string; text: string | null; boolean: boolean | null }>) => ({
       id,
       name: id,
@@ -55,7 +55,8 @@ describe('decodeClaimsAbout', () => {
           nodes: [
             claim('44444444444444444444444444444444', [{ spaceId: SPACE_B, text: null, boolean: true }]),
             claim('55555555555555555555555555555555', [{ spaceId: SPACE_A, text: 'true', boolean: null }]),
-            claim('66666666666666666666666666666666', []),
+            claim('66666666666666666666666666666666', [{ spaceId: SPACE_A, text: 'false', boolean: false }]),
+            claim('77777777777777777777777777777777', []),
           ],
           pageInfo: { hasNextPage: false, endCursor: null },
         },
@@ -63,8 +64,8 @@ describe('decodeClaimsAbout', () => {
       SPACE_B
     );
     expect(page.claims.map(entry => entry.id)).toEqual([
-      '55555555555555555555555555555555',
       '66666666666666666666666666666666',
+      '77777777777777777777777777777777',
     ]);
   });
 

@@ -15,7 +15,7 @@ import { SKELETON_SELECTION } from '~/core/graph-explorer/skeleton-graph';
 import { buildSpokes, entitySpaceId } from '~/core/graph-explorer/spokes';
 import { useClaimsAbout, useGraphNeighbourhood, usePrefetchHop1 } from '~/core/graph-explorer/use-graph-explorer';
 import { useMediaQuery } from '~/core/hooks/use-media-query';
-import { isHiddenInSpace } from '~/core/moderation/hidden';
+import { isHiddenEntity } from '~/core/moderation/hidden';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { normId } from '~/core/utils/norm-id';
 
@@ -165,8 +165,7 @@ export function GraphViewer({
   const { entity: previousEntity } = useQueryEntity({ id: previousId ?? '', enabled: Boolean(previousId) });
   const back = previousId
     ? {
-        // Its space is unknown here, so Hidden in any space keeps the name off.
-        label: `Back to ${names[previousId] ?? (isHiddenInSpace(previousEntity, null) ? null : previousEntity?.name) ?? 'previous'}`,
+        label: `Back to ${names[previousId] ?? (isHiddenEntity(previousEntity) ? null : previousEntity?.name) ?? 'previous'}`,
         onClick: () => {
           analytics?.tag('back', normId(previousId));
           onNavigate(goBack(history));

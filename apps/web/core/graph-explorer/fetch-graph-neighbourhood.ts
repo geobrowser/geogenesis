@@ -81,7 +81,7 @@ const NODE_FIELDS = /* GraphQL */ `
   names: valuesList(filter: { propertyId: { is: $namePropertyId } }) { spaceId text }
   dates: valuesList(filter: { propertyId: { in: $datePropertyIds } }) { datetime date }
   types { id name }
-  hidden: valuesList(filter: { propertyId: { is: $hiddenPropertyId }, spaceId: { in: $spaceIds } }) { text boolean }
+  hidden: valuesList(filter: { propertyId: { is: $hiddenPropertyId } }) { text boolean }
   relationsList(filter: { typeId: { in: [$avatarPropertyId, $coverPropertyId] } }) {
     typeId
     toEntity { valuesList(filter: { propertyId: { is: $imageUrlPropertyId } }) { text } }
@@ -201,7 +201,7 @@ type RawNode = RawEntity & {
   disagrees?: string | number | null;
   placed?: Array<{ spaceId: string }> | null;
   dates?: Array<{ datetime: string | null; date: string | null }> | null;
-  /** Hidden values in the explorer's spaces. */
+  /** Hidden values in every space: a node's link and vote space can be outside the explorer's. */
   hidden?: Array<{ text: string | null; boolean: boolean | null }> | null;
 };
 
@@ -225,8 +225,8 @@ type RawCentre = RawNode & {
 type Hop1Response = { entity: RawCentre | null; [alias: string]: RawConnection | RawCentre | null };
 
 /**
- * Null for a hidden entity (Hidden = true in one of the explorer's spaces), or an unnamed or plumbing
- * neighbour; any other centre is a node.
+ * Null for a hidden entity (Hidden = true in any space), or an unnamed or plumbing neighbour; any
+ * other centre is a node.
  */
 export function decodeNode(raw: RawNode, isCentre = false): GraphNode | null {
   if ((raw.hidden ?? []).some(isHiddenMarker)) return null;

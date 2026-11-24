@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Entity } from '~/core/types';
 
-import { HIDDEN_PROPERTY_ID, isHiddenEntity, isHiddenInSpace, isHiddenMarker } from './hidden';
+import { HIDDEN_PROPERTY_ID, isHiddenEntity, isHiddenMarker } from './hidden';
 
 const value = (propertyId: string, raw: string) =>
   ({
@@ -55,16 +55,5 @@ describe('isHiddenMarker', () => {
     expect(isHiddenMarker('TRUE')).toBe(true);
     expect(isHiddenMarker(true)).toBe(true);
     expect(isHiddenMarker(null)).toBe(false);
-  });
-});
-
-describe('isHiddenInSpace', () => {
-  const S1 = '11111111111111111111111111111111';
-  const inS1 = { ...value(HIDDEN_PROPERTY_ID, 'true'), spaceId: '11111111-1111-1111-1111-111111111111' };
-  it('counts only the marker written in the given space, or in any space with none given', () => {
-    expect(isHiddenInSpace(entity([inS1]), S1)).toBe(true);
-    expect(isHiddenInSpace(entity([inS1]), '2'.repeat(32))).toBe(false);
-    expect(isHiddenInSpace(entity([inS1]), null)).toBe(true);
-    expect(isHiddenInSpace(null, S1)).toBe(false);
   });
 });
