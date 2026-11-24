@@ -86,7 +86,11 @@ describe('buildGraphCardMetadata', () => {
     expect(image.url).toBe(`/explore/graph/${PERSON}/card?topic=${TOPIC}&space=${SPACE}&v=1`);
     expect(image.url).not.toContain('/api/');
     expect([image.width, image.height]).toEqual([1200, 630]);
-    expect(built.twitter).toMatchObject({ card: 'summary_large_image', images: [image.url] });
+    expect(built.twitter).toMatchObject({
+      card: 'summary_large_image',
+      site: '@geobrowser',
+      images: [image.url],
+    });
     expect(built.robots).toEqual({ index: false, follow: true });
   });
 });

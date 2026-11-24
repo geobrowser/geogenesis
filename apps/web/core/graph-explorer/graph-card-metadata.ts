@@ -125,6 +125,14 @@ export function buildGraphCardMetadata(
       description,
       images: [{ url: card, width: 1200, height: 630, type: 'image/jpeg', alt: `Connections map for ${centre.name}` }],
     },
-    twitter: { card: 'summary_large_image', title, description, images: [card] },
+    // Next replaces the layout's `twitter` object rather than merging it, so the handles are repeated.
+    twitter: {
+      card: 'summary_large_image',
+      site: '@geobrowser',
+      creator: '@geobrowser',
+      title,
+      description,
+      images: [card],
+    },
   };
 }
