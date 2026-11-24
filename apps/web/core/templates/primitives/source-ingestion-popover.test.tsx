@@ -23,6 +23,8 @@ const account = vi.hoisted(() => ({
   isRegistered: false,
   isLoading: false,
   isSetupPending: false,
+  /** The account address the readiness store has published; null while it restores. */
+  address: '0x1111111111111111111111111111111111111111' as string | null,
 }));
 const SPACE_ID = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 const PERSONAL_SPACE_ID = 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
@@ -32,7 +34,12 @@ vi.mock('~/core/wallet/auth-hooks', () => ({
   usePrivy: () => ({ authenticated: auth.authenticated, ready: true }),
 }));
 vi.mock('~/core/wallet/account-readiness', () => ({
-  useAccountReadiness: () => ({ state: 'ready', address: ADDRESS }),
+  useAccountReadiness: () => ({ state: account.address ? 'ready' : 'restoring', address: account.address }),
+  publishedAccountAddress: () => account.address,
+  publishedSigningAccount: () => null,
+  waitForSigningAccount: vi.fn(),
+  SignedOutBeforeWriteError: class extends Error {},
+  SigningAccountFailedError: class extends Error {},
 }));
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({
   usePrivySignIn: () => auth.promptSignIn,
@@ -47,7 +54,7 @@ vi.mock('~/core/access/space-access', () => ({
   getSpaceAccessById: membership.access,
 }));
 vi.mock('~/core/hooks/use-personal-space-id', () => ({
-  personalSpaceIdQueryKey: (address: string) => ['personal-space-id', address.toLowerCase()],
+  personalSpaceIdQueryKey: (address: string | null | undefined) => ['personal-space-id', address?.toLowerCase()],
   usePersonalSpaceId: () => ({
     personalSpaceId: account.personalSpaceId,
     isRegistered: account.isRegistered,
@@ -113,6 +120,7 @@ beforeEach(() => {
     isRegistered: true,
     isLoading: false,
     isSetupPending: false,
+    address: ADDRESS,
   });
 });
 
@@ -223,6 +231,38 @@ describe('Sources section +', () => {
       PERSONAL_SPACE_ID
     );
     expect(store.get(isChatOpenAtom)).toBe(true);
+  });
+
+  it('pressed while the account is still restoring, the queued import runs once the account and space arrive', async () => {
+    auth.authenticated = true;
+    canEditPageSpace(false);
+    // Signed in, but the readiness store has no address yet: the personal space reads as loading.
+    Object.assign(account, { personalSpaceId: null, isRegistered: false, isLoading: true, address: null });
+    resolveSeed.mockResolvedValue({ mode: 'ingestion', url: 'https://example.com/story', link });
+    const store = renderSection();
+
+    await submitLink();
+    const queued = store.get(pendingActionsAtom);
+    expect(queued).toHaveLength(1);
+    await waitFor(() => expect(screen.queryByPlaceholderText(/Paste news, podcast, tweet, blog URLs/)).toBeNull());
+
+    // The account restores and its space loads; the press's closure still holds the null address.
+    account.address = ADDRESS;
+    store.queryClient.setQueryData(['personal-space-id', ADDRESS.toLowerCase()], {
+      isRegistered: true,
+      personalSpaceId: PERSONAL_SPACE_ID,
+      personalEntityId: null,
+    });
+    await act(async () => {
+      await queued[0]!.run();
+    });
+
+    expect(resolveSeed).toHaveBeenCalledWith(
+      'https://example.com/story',
+      'TemplateSourcesSection',
+      expect.objectContaining({ targetEntityId: link.targetEntityId }),
+      PERSONAL_SPACE_ID
+    );
   });
 
   it('with no personal space and none on its way, asks them to finish setting up, as a vote does', async () => {

@@ -11,11 +11,8 @@ import { useParams, usePathname } from 'next/navigation';
 import type { IngestionLink } from '~/core/chat/ingestion-link';
 import { pickIngestionSpace } from '~/core/chat/ingestion-space';
 import { ROOT_SPACE } from '~/core/constants';
-import {
-  type PersonalSpaceIdData,
-  personalSpaceIdQueryKey,
-  usePersonalSpaceId,
-} from '~/core/hooks/use-personal-space-id';
+import { readAccountAddress, readRegisteredPersonalSpaceId } from '~/core/hooks/cached-write-identity';
+import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import {
@@ -25,7 +22,6 @@ import {
 } from '~/core/hooks/use-url-ingestion-submit';
 import { useQueuedAction } from '~/core/state/pending-actions';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
-import { useAccountReadiness } from '~/core/wallet/account-readiness';
 import { usePrivy } from '~/core/wallet/auth-hooks';
 
 import { useTemplatePopoverContainer } from './entity-overflow-menu';
@@ -65,7 +61,6 @@ function useIngestionSpace({
 }) {
   const queryClient = useQueryClient();
   const tx = useSmartAccountTransaction();
-  const { address } = useAccountReadiness();
   const { personalSpaceId, isRegistered, isLoading: isPersonalSpaceLoading } = usePersonalSpaceId();
   const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
   const startIngestion = useStartUrlIngestion();
@@ -75,15 +70,19 @@ function useIngestionSpace({
     component: 'ai_assistant',
     label: 'your source',
     survivesRedirect: false,
-    // The queued URL is the intent. Replayed once the personal space exists, read fresh from the
-    // cache: this closure's view is from before the space was there.
+    // The queued URL is the intent. Replayed once the personal space exists. A press's own closure is
+    // from before the space (and maybe the account address) was there, so both are read fresh, the
+    // way vote replays do (`replay-viewer-response.ts`).
     run: async (url, { isCurrent }) => {
       if (!url) return;
-      const fresh = queryClient.getQueryData<PersonalSpaceIdData | null>(personalSpaceIdQueryKey(address));
-      if (!fresh?.isRegistered || !fresh.personalSpaceId) return;
+      const freshPersonalSpaceId = readRegisteredPersonalSpaceId(queryClient, readAccountAddress(), {
+        personalSpaceId,
+        isRegistered,
+      });
+      if (!freshPersonalSpaceId) return;
       const spaceId = await pickIngestionSpace({
         pageSpaceId,
-        personalSpaceId: fresh.personalSpaceId,
+        personalSpaceId: freshPersonalSpaceId,
         tx,
         queryClient,
       });
