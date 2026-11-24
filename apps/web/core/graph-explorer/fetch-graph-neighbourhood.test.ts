@@ -1,3 +1,5 @@
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+
 import { type OperationDefinitionNode, print } from 'graphql';
 import { describe, expect, it } from 'vitest';
 
@@ -57,9 +59,15 @@ describe('decodeNode', () => {
     expect(node?.placedSpaceIds).toEqual(['b'.repeat(32)]);
   });
 
-  it('drops unnamed nodes and types no kind covers', () => {
+  it('drops unnamed and plumbing neighbours, and keeps unlisted types as Other', () => {
     expect(decodeNode(raw('1'.repeat(32), null, [PERSON]))).toBeNull();
-    expect(decodeNode(raw('1'.repeat(32), 'Block', ['f'.repeat(32)]))).toBeNull();
+    expect(decodeNode(raw('1'.repeat(32), 'A page', [SystemIds.PAGE_TYPE]))).toBeNull();
+    expect(decodeNode(raw('1'.repeat(32), 'A new type', ['f'.repeat(32)]))?.kind).toBe('other');
+  });
+
+  it('always makes a centre a node, whatever its type', () => {
+    expect(decodeNode(raw('1'.repeat(32), 'A page', [SystemIds.PAGE_TYPE]), true)?.kind).toBe('other');
+    expect(decodeNode(raw('1'.repeat(32), null, ['f'.repeat(32)]), true)?.kind).toBe('other');
   });
 });
 
@@ -119,7 +127,9 @@ describe('hop documents', () => {
     for (const filter of [lensed, open, narrow]) {
       const on = lensTopicFor(filter) !== null;
       expect(declared(hop1Document(filter.kinds, on))).toEqual(Object.keys(hop1Variables(CENTRE, filter)).sort());
-      expect(declared(hop2Document([CENTRE], on))).toEqual(Object.keys(hop2Variables(filter)).sort());
+      expect(declared(hop2Document([CENTRE], on, filter.kinds.includes('other')))).toEqual(
+        Object.keys(hop2Variables(filter)).sort()
+      );
     }
   });
 
@@ -145,7 +155,7 @@ describe('hop documents', () => {
     expect(hop2.lensedTypeIds).toEqual(expect.arrayContaining([...GRAPH_KIND_TYPE_IDS.claim]));
     expect(hop2.openTypeIds).toEqual(expect.arrayContaining([...GRAPH_KIND_TYPE_IDS.ent]));
     expect(hop2.openTypeIds).not.toEqual(expect.arrayContaining([...GRAPH_KIND_TYPE_IDS.story]));
-    expect(print(hop2Document([CENTRE], true))).toContain('$topicsPropertyId');
+    expect(print(hop2Document([CENTRE], true, true))).toContain('$topicsPropertyId');
   });
 
   it('asks hop 2 for the allowed kinds only, without the lens', () => {

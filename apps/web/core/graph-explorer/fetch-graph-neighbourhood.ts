@@ -17,6 +17,7 @@ import {
   GRAPH_KIND_TYPE_IDS,
   type GraphKind,
   NEWS_EVENT_TYPE_ID,
+  NOT_OTHER_TYPE_IDS,
   PLUMBING_RELATION_TYPE_IDS,
   graphKindOf,
   graphTypeRank,
@@ -112,7 +113,7 @@ function kindConnection(kind: GraphKind, direction: 'in' | 'out', lensed: boolea
       ${self}: { is: $id }
       spaceId: { in: $spaceIds }
       typeId: { notIn: $plumbingPropertyIds }
-      ${end}: { typeIds: { overlaps: $${kind}TypeIds } ${lens} }
+      ${end}: { ${kind === 'other' ? 'not: { typeIds: { overlaps: $otherTypeIds } }' : `typeIds: { overlaps: $${kind}TypeIds } ${lens}`} }
       ${exclude}
     }
   ) {
@@ -178,7 +179,9 @@ export function hop1Variables(centreId: string, filter: GraphFilter) {
     first: HOP1_PER_KIND,
     textPropertyIds: [normId(SystemIds.NAME_PROPERTY), normId(SystemIds.DESCRIPTION_PROPERTY)],
     ...(filter.kinds.includes('claim') ? { newsEventTypeId: NEWS_EVENT_TYPE_ID } : {}),
-    ...Object.fromEntries(filter.kinds.map(kind => [`${kind}TypeIds`, GRAPH_KIND_TYPE_IDS[kind]])),
+    ...Object.fromEntries(
+      filter.kinds.map(kind => [`${kind}TypeIds`, kind === 'other' ? NOT_OTHER_TYPE_IDS : GRAPH_KIND_TYPE_IDS[kind]])
+    ),
     ...(topicId ? topicLensVariables(topicId) : {}),
     ...(topicId && filter.kinds.includes('topic') ? { lensedTypeIds: lensedTypeIds(filter.kinds) } : {}),
     ...nodeVariables(),
@@ -211,11 +214,12 @@ type RawCentre = RawNode & {
 /** `entity` plus one `<kind>_<direction>` connection per kind. */
 type Hop1Response = { entity: RawCentre | null; [alias: string]: RawConnection | RawCentre | null };
 
-export function decodeNode(raw: RawNode): GraphNode | null {
+/** Null for an unnamed or plumbing neighbour; a centre is always a node. */
+export function decodeNode(raw: RawNode, isCentre = false): GraphNode | null {
   const entity = decodeEntity(raw);
   const typeIds = entity.types.map(type => type.id);
-  const kind = graphKindOf(typeIds);
-  if (!kind || !entity.name) return null;
+  const kind = graphKindOf(typeIds) ?? (isCentre ? 'other' : null);
+  if (!kind || (!entity.name && !isCentre)) return null;
   const date = (raw.dates ?? []).map(value => value.datetime ?? value.date).find(Boolean) ?? null;
   return {
     ...entity,
@@ -248,7 +252,7 @@ function decodeConnection(connection: RawConnection, selfId: string, direction: 
 export function decodeHop1(response: Hop1Response, centreId: string, kinds: readonly GraphKind[]): GraphHop1 {
   const id = normId(centreId);
   const rawCentre = response.entity;
-  const centreNode = rawCentre ? decodeNode(rawCentre) : null;
+  const centreNode = rawCentre ? decodeNode(rawCentre, true) : null;
   const centre: GraphNeighbourCentre | null =
     rawCentre && centreNode
       ? {
@@ -283,14 +287,19 @@ export function fetchHop1(centreId: string, filter: GraphFilter, signal?: AbortS
   );
 }
 
-/** Ids go in the document as literals: one alias pair per hop-1 node. Lensed: content must carry the topic. */
-export function hop2Document(ids: readonly string[], lensed: boolean) {
-  const kinds = lensed
-    ? `or: [
-        { typeIds: { overlaps: $openTypeIds }, not: { typeIds: { overlaps: $lensedTypeIds } } }
-        { typeIds: { overlaps: $lensedTypeIds } ${TOPIC_LENS_FILTER} }
-      ]`
-    : 'typeIds: { overlaps: $kindTypeIds }';
+/**
+ * Ids go in the document as literals: one alias pair per hop-1 node. Lensed: content must carry the
+ * topic. `other`: also entities of no listed kind.
+ */
+export function hop2Document(ids: readonly string[], lensed: boolean, other: boolean) {
+  const branches = lensed
+    ? [
+        '{ typeIds: { overlaps: $openTypeIds }, not: { typeIds: { overlaps: $lensedTypeIds } } }',
+        `{ typeIds: { overlaps: $lensedTypeIds } ${TOPIC_LENS_FILTER} }`,
+      ]
+    : ['{ typeIds: { overlaps: $kindTypeIds } }'];
+  if (other) branches.push('{ not: { typeIds: { overlaps: $notOtherTypeIds } } }');
+  const kinds = `or: [${branches.join(' ')}]`;
   const connection = (id: string, index: number, direction: 'in' | 'out') => {
     const self = direction === 'out' ? 'fromEntityId' : 'toEntityId';
     const end = direction === 'out' ? 'toEntity' : 'fromEntity';
@@ -309,6 +318,7 @@ export function hop2Document(ids: readonly string[], lensed: boolean) {
       $spaceIds: [UUID!]
       $plumbingPropertyIds: [UUID!]
       ${lensed ? `$openTypeIds: [UUID!]\n$lensedTypeIds: [UUID!]\n${TOPIC_LENS_VARIABLES}` : '$kindTypeIds: [UUID!]'}
+      ${other ? '$notOtherTypeIds: [UUID!]' : ''}
       $first: Int
       ${NODE_VARIABLES}
     ) {
@@ -332,6 +342,7 @@ export function hop2Variables(filter: GraphFilter) {
     spaceIds: filter.spaceIds ?? null,
     plumbingPropertyIds: PLUMBING_RELATION_TYPE_IDS,
     ...kinds,
+    ...(filter.kinds.includes('other') ? { notOtherTypeIds: NOT_OTHER_TYPE_IDS } : {}),
     first: HOP2_PER_NODE,
     ...nodeVariables(),
   };
@@ -356,7 +367,7 @@ export function fetchHop2(ids: readonly string[], filter: GraphFilter, signal?: 
   if (ids.length === 0) return Promise.resolve({});
   return Effect.runPromise(
     graphql({
-      query: hop2Document(ids, lensTopicFor(filter) !== null),
+      query: hop2Document(ids, lensTopicFor(filter) !== null, filter.kinds.includes('other')),
       decoder: (response: Record<string, RawConnection>) => decodeHop2(response, ids),
       variables: hop2Variables(filter),
       signal,

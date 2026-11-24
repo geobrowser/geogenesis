@@ -62,7 +62,7 @@ function labelSize({ isCentre, phone, hop }: Pick<CardProps, 'isCentre' | 'phone
 /** What a node looks like, by kind. Claims read their space-scoped counts (`claimSpaceId`). */
 export function NodeCard({ claimSpaceId, ...props }: CardProps & { claimSpaceId: string | null }) {
   if (props.node.kind === 'claim' && claimSpaceId) return <ClaimCard {...props} spaceId={claimSpaceId} />;
-  if (props.node.kind === 'ent') return <EntityCard {...props} />;
+  if (props.node.kind === 'ent' || props.node.kind === 'other') return <EntityCard {...props} />;
   if (props.node.kind === 'topic') return <TopicCard {...props} />;
   return <ItemCard {...props} />;
 }

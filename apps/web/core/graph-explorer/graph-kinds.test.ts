@@ -1,3 +1,5 @@
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+
 import { describe, expect, it } from 'vitest';
 
 import { parseGraphFilterOverrides, resolveGraphFilter } from './graph-filter';
@@ -24,9 +26,12 @@ describe('graphKindOf', () => {
     expect(graphKindOf([CLAIM_TYPE_ID])).toBe('claim');
   });
 
-  it('takes the highest-priority kind and ignores types no kind covers', () => {
+  it('takes the highest-priority kind; unlisted types are Other, plumbing is nothing', () => {
     expect(graphKindOf([ARTICLE, CLAIM_TYPE_ID])).toBe('claim');
-    expect(graphKindOf(['f'.repeat(32)])).toBeNull();
+    expect(graphKindOf(['f'.repeat(32)])).toBe('other');
+    expect(graphKindOf([])).toBe('other');
+    expect(graphKindOf([SystemIds.PAGE_TYPE])).toBeNull();
+    expect(graphKindOf([SystemIds.PAGE_TYPE, CLAIM_TYPE_ID])).toBe('claim');
     expect(graphKindOf([ARTICLE.toUpperCase()])).toBe('src');
   });
 });

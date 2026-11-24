@@ -1,3 +1,5 @@
+import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
+
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { AVATAR_PROPERTY_ID, NEWS_STORY_TYPE_ID } from '~/core/constants';
 import {
@@ -16,9 +18,9 @@ import { NEIGHBOUR_KIND_TYPE_IDS } from './ontology';
 
 /**
  * What a node is drawn as, in the product team's priority order: it orders the chips and decides
- * which kinds are kept first when the caps bite.
+ * which kinds are kept first when the caps bite. `other` catches types no kind lists yet, last.
  */
-export const GRAPH_KINDS = ['topic', 'ent', 'claim', 'story', 'event', 'src', 'case'] as const;
+export const GRAPH_KINDS = ['topic', 'ent', 'claim', 'story', 'event', 'src', 'case', 'other'] as const;
 export type GraphKind = (typeof GRAPH_KINDS)[number];
 
 export const GRAPH_KIND_LABELS: Record<GraphKind, string> = {
@@ -29,14 +31,15 @@ export const GRAPH_KIND_LABELS: Record<GraphKind, string> = {
   event: 'Events',
   src: 'Sources',
   case: 'Court cases',
+  other: 'Other',
 };
 
 export const NEWS_EVENT_TYPE_ID = 'bb9a85bd6dc64efd8232e2782cb4b5f8';
 const TIMELINE_TYPE_ID = '3b22262d7919441db1a839eee9c2b3e9';
 
 /**
- * Every testnet Type entity behind each kind, most important first within a kind. Court orders and
- * Interviews have no KG type yet, so they have no entry.
+ * Every testnet Type entity behind each kind, most important first within a kind: the one table a
+ * new type is added to. Court orders and Interviews have no KG type yet, so they have no entry.
  */
 export const GRAPH_KIND_TYPE_IDS: Record<GraphKind, readonly string[]> = {
   topic: NEIGHBOUR_KIND_TYPE_IDS.topic,
@@ -84,14 +87,39 @@ export const GRAPH_KIND_TYPE_IDS: Record<GraphKind, readonly string[]> = {
     'a88271e650ebc833d854f455f12a236d', // Quote
   ],
   case: ['c058821272ef463fa97a93693456c8ba'], // Legal case
+  other: [],
 };
+
+/** Structural types: an entity with one of these and no kind's type is never a node. */
+export const PLUMBING_TYPE_IDS: readonly string[] = [
+  SystemIds.SCHEMA_TYPE,
+  SystemIds.PROPERTY,
+  SystemIds.RELATION_TYPE,
+  SystemIds.DATA_TYPE,
+  SystemIds.PAGE_TYPE,
+  SystemIds.SPACE_TYPE,
+  SystemIds.VIEW_TYPE,
+  SystemIds.TEXT_BLOCK,
+  SystemIds.DATA_BLOCK,
+  SystemIds.IMAGE_BLOCK,
+  SystemIds.VIDEO_BLOCK,
+  ContentIds.TAG_TYPE,
+  'e0fcc66c9e8643f480802469d8a1a93a', // Tag
+].map(normId);
+
+/** What `other` must not overlap: every kind's types and the plumbing types. */
+export const NOT_OTHER_TYPE_IDS: readonly string[] = [
+  ...GRAPH_KINDS.flatMap(kind => GRAPH_KIND_TYPE_IDS[kind]),
+  ...PLUMBING_TYPE_IDS,
+];
+const PLUMBING = new Set(PLUMBING_TYPE_IDS);
 
 const KIND_BY_TYPE = new Map<string, GraphKind>();
 for (const kind of GRAPH_KINDS) for (const id of GRAPH_KIND_TYPE_IDS[kind]) KIND_BY_TYPE.set(id, kind);
 
 /**
  * The node's kind from its types. Topic wins only alone or beside Timeline, since it is often a second
- * type; a News event (also typed Claim) is an event. Null for types no kind covers.
+ * type; a News event (also typed Claim) is an event. Unlisted types are `other`; null only for plumbing.
  */
 export function graphKindOf(typeIds: readonly string[]): GraphKind | null {
   let ids = typeIds.map(normId);
@@ -108,7 +136,8 @@ export function graphKindOf(typeIds: readonly string[]): GraphKind | null {
     )
       best = kind;
   }
-  return best;
+  if (best) return best;
+  return ids.some(id => PLUMBING.has(id)) ? null : 'other';
 }
 
 export function parseGraphKinds(raw: string | null): GraphKind[] | undefined {
