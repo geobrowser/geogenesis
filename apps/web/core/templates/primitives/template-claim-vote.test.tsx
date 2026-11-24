@@ -16,7 +16,6 @@ import {
   ClaimVotePills,
   EntityActionProvider,
   RecentDebatesGallery,
-  SplitBars,
   TemplateClaimVote,
   TemplateVoteRows,
 } from './index';
@@ -488,22 +487,5 @@ describe('list attribution on template votes', () => {
     const group = screen.getByRole('group', { name: `Vote on ${second.title}` });
     fireEvent.click(within(group).getByRole('button', { name: /^Disagree/ }));
     expect(mocks.respond).toHaveBeenCalledWith(false);
-  });
-});
-
-describe('SplitBars user label', () => {
-  const rows = [
-    { id: 'all', label: 'Everyone', color: '#202020', percent: 60, isEveryone: true, userLabel: 'You: Agree' },
-  ];
-
-  it('is left out of compact rows, where it spilled over the bar', () => {
-    render(<SplitBars rows={rows} density="compact" />);
-    expect(screen.queryByText('You: Agree')).toBeNull();
-    expect(screen.getByText('60%')).toBeInTheDocument();
-  });
-
-  it('stays in the full vote box', () => {
-    render(<SplitBars rows={rows} density="full" />);
-    expect(screen.getByText('You: Agree')).toBeInTheDocument();
   });
 });

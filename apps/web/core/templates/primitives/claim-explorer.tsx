@@ -326,8 +326,6 @@ export function ClaimListRow({ rank, claim, isAgreed = false, hideKindOnPhone = 
     claim.split.rows.length > 0 && claim.split.totalVotes !== 0
       ? claim.split.rows.map(row => ({
           ...row,
-          // The vote pills already show the viewer's side.
-          userLabel: undefined,
           voterCount: row.voterCount ?? (claim.split.rows.length === 1 ? claim.split.totalVotes : undefined),
         }))
       : [];

@@ -179,7 +179,7 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     // Vote Agree
     const voteSection = screen.getByRole('region', { name: 'Vote on this claim' });
     fireEvent.click(within(voteSection).getByRole('button', { name: 'Agree' }));
-    expect(screen.getByText('You agreed.')).toBeInTheDocument();
+    expect(within(voteSection).getByRole('button', { name: 'Agree' })).toHaveAttribute('aria-pressed', 'true');
 
     // Navigate from Claim -> Event -> News Story -> Source
     const eventsRegion = screen.getByRole('region', { name: 'Events' });
@@ -1100,7 +1100,7 @@ describe('GEO-3837 phone tidy-ups', () => {
     expect(within(supporting).getByText('Factual').closest('.hidden')).not.toBeNull();
   });
 
-  it('drops the vote box "You:" label and "Change" line on phones, and the buttons take a vote back', () => {
+  it('shows the vote only on the filled button, with no "Change" line, and the buttons take a vote back', () => {
     const onVote = vi.fn();
     const onClear = vi.fn();
     render(
@@ -1109,7 +1109,7 @@ describe('GEO-3837 phone tidy-ups', () => {
           id: 'claim-1',
           title: 'There is no genocide in Gaza',
           kind: 'judgment',
-          split: { ...split(5), rows: [{ ...split(5).rows[0], userLabel: 'You: Disagree' }] },
+          split: split(5),
           voteBox: { userVote: 'disagree', countSummary: '5 votes', onVote, onClear },
           sections: [],
         }}
@@ -1117,8 +1117,10 @@ describe('GEO-3837 phone tidy-ups', () => {
     );
 
     const box = screen.getByRole('region', { name: 'Vote on this claim' });
-    expect(within(box).getByText('You: Disagree')).toHaveClass('hidden', '@[680px]:inline');
-    expect(within(box).getByText('You disagreed.').parentElement).toHaveClass('hidden', '@[680px]:flex');
+    expect(within(box).queryByText(/^You:/)).toBeNull();
+    expect(within(box).queryByText('You disagreed.')).toBeNull();
+    expect(within(box).queryByRole('button', { name: 'Change' })).toBeNull();
+    expect(within(box).getByRole('button', { name: 'Disagree' })).toHaveAttribute('aria-pressed', 'true');
 
     fireEvent.click(within(box).getByRole('button', { name: 'Disagree' }));
     expect(onClear).toHaveBeenCalledTimes(1);

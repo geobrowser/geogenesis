@@ -116,10 +116,11 @@ describe('VoteBox', () => {
     );
 
     expect(screen.getByRole('button', { name: 'Agree' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByText('You agreed.')).toBeInTheDocument();
+    expect(screen.queryByText('You agreed.')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Change' })).toBeNull();
     expect(screen.getByText('Counted in Everyone.')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Change' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Agree' }));
     expect(onClear).toHaveBeenCalledTimes(1);
   });
 });

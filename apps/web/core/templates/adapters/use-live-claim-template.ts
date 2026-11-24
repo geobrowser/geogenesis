@@ -426,7 +426,6 @@ export function useLiveClaimTemplate({
               percent: agreePercent,
               voterCount: summary.total,
               isEveryone: true,
-              userLabel: userVote ? `You: ${userVote === 'agree' ? 'Agree' : 'Disagree'}` : undefined,
             },
           ]
         : [];

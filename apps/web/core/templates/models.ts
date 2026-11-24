@@ -84,8 +84,6 @@ export interface SplitRow {
   voterCount?: number;
   /** Suffix unit, e.g. `'agree'` (default) or `'helpful'`. */
   unit?: string;
-  /** Set when the current user's vote belongs to this row. */
-  userLabel?: string;
   /** True for the top-level space / overall aggregate bar rendered above subspaces. */
   isEveryone?: boolean;
   /** True for subspace bars nested visually beneath the top-level space bar. */

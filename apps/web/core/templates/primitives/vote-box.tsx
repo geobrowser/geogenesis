@@ -25,9 +25,9 @@ export interface VoteBoxProps {
  */
 export function VoteBox({ prompt, split, control, className }: VoteBoxProps) {
   const { userVote, countSummary, hint, impactNote, disabled, onVote, onClear } = control;
-  // Pressing the filled button takes the vote back, so the buttons alone can change or clear it.
-  // Phones rely on that: they drop the "You agreed. Change" line, which only repeated the filled
-  // button (GEO-3837).
+  // Pressing the filled button takes the vote back and the other one switches it, so the buttons
+  // alone change or clear a vote. The filled button is the only "your vote" mark: no "You: Agree"
+  // pill and no "You agreed. Change" line, at any width (GEO-3837).
   const press = (choice: 'agree' | 'disagree') => {
     if (userVote === choice && onClear) onClear();
     else onVote(choice);
@@ -52,8 +52,7 @@ export function VoteBox({ prompt, split, control, className }: VoteBoxProps) {
       >
         {split.rows.length > 0 && (
           <div className="min-w-0">
-            {/* Stacked (phones), the filled button below already shows the viewer's side (GEO-3837). */}
-            <SplitBars rows={split.rows} density="full" userLabelClassName="hidden @[680px]:inline" />
+            <SplitBars rows={split.rows} density="full" />
           </div>
         )}
 
@@ -112,21 +111,6 @@ export function VoteBox({ prompt, split, control, className }: VoteBoxProps) {
               </span>
             )}
           </div>
-
-          {userVote && (
-            <div className="hidden items-center gap-2.5 text-[14.5px] text-grey-04 @[680px]:flex">
-              <span className="font-medium text-text">{userVote === 'agree' ? 'You agreed.' : 'You disagreed.'}</span>
-              {onClear && (
-                <button
-                  type="button"
-                  onClick={onClear}
-                  className="cursor-pointer border-0 bg-transparent p-0 text-[14.5px] font-medium text-ctaPrimary hover:text-ctaHover"
-                >
-                  Change
-                </button>
-              )}
-            </div>
-          )}
 
           {(impactNote || (!userVote && hint)) && (
             <div className="flex flex-col gap-1 text-[13.5px] leading-[19px] text-grey-04">

@@ -204,12 +204,11 @@ function PrimitivesGallery() {
         percent: effectiveAll,
         voterCount: effectiveVotes,
         isEveryone: true,
-        userLabel: userVote ? `You: ${userVote === 'agree' ? 'Agree' : 'Disagree'}` : undefined,
       },
     ];
     const gapPoints = computeSplitGap(rows);
     return { rows, gapPoints, isSplit: isClaimSplit(gapPoints), totalVotes: effectiveVotes };
-  }, [effectiveAll, effectiveVotes, userVote]);
+  }, [effectiveAll, effectiveVotes]);
 
   const leadClaim: ClaimSummaryModel = {
     id: 'demo-contested',

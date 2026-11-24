@@ -1328,7 +1328,6 @@ function computeEffectiveSplit(
 
   const totalVotes = nall + (userVote ? 1 : 0);
   const allPct = userVote ? ((allBase * nall) / 100 + agreedNum) / (totalVotes / 100) : allBase;
-  const userLabel = userVote ? `You: ${userVote === 'agree' ? 'Agree' : 'Disagree'}` : undefined;
 
   const rows = [
     ...(includeEveryone
@@ -1340,7 +1339,6 @@ function computeEffectiveSplit(
             percent: allPct,
             voterCount: totalVotes,
             isEveryone: true,
-            userLabel: userVote && !joinedCommunityId ? userLabel : undefined,
           },
         ]
       : []),
@@ -1351,7 +1349,6 @@ function computeEffectiveSplit(
       percent: ppPct,
       voterCount: ppVotes,
       isSubspace: includeEveryone,
-      userLabel: ppVoted ? userLabel : undefined,
     },
     {
       id: 'pi',
@@ -1360,7 +1357,6 @@ function computeEffectiveSplit(
       percent: piPct,
       voterCount: piVotes,
       isSubspace: includeEveryone,
-      userLabel: piVoted ? userLabel : undefined,
     },
   ];
 
