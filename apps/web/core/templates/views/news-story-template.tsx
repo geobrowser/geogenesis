@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import Link from 'next/link';
 
+import { ID } from '~/core/id';
 import { NavUtils } from '~/core/utils/utils';
 
 import { sourcesIngestionLink } from '../adapters/source-ingestion-links';
@@ -65,26 +66,21 @@ export function NewsStoryTemplate({
   className,
   spaceId,
 }: NewsStoryTemplateProps) {
-  // Only the claims drawn: with groups, the flat list isn't, and a claim added to a group is linked
-  // flat (Related claims), so it would count as listed and vanish.
+  const hasClaimGroups = Boolean(model.claimGroups && model.claimGroups.length > 0);
+  // Flat claims (Notable / Related claims) no group holds. With groups they're drawn as "Other
+  // claims", which is where an added claim lands: it is linked flat, never into a group.
+  const ungroupedClaims = React.useMemo(() => {
+    const grouped = (model.claimGroups ?? []).flatMap(group => group.claims.map(claim => claim.id));
+    return model.reportedClaims.filter(claim => !grouped.some(id => ID.equals(id, claim.id)));
+  }, [model.claimGroups, model.reportedClaims]);
   const listedClaimIds = React.useMemo(
-    () =>
-      (model.claimGroups && model.claimGroups.length > 0
-        ? model.claimGroups.flatMap(group => group.claims)
-        : model.reportedClaims
-      ).map(claim => claim.id),
+    () => [...(model.claimGroups ?? []).flatMap(group => group.claims), ...model.reportedClaims].map(claim => claim.id),
     [model.claimGroups, model.reportedClaims]
   );
-  const addedClaims = usePendingAdds<ClaimSummaryModel & { groupId: string }>(listedClaimIds);
-  const addedClaimsByGroup = React.useMemo(() => {
-    const byGroup: Record<string, ClaimSummaryModel[]> = {};
-    for (const claim of addedClaims.rows) (byGroup[claim.groupId] ??= []).push(claim);
-    return byGroup;
-  }, [addedClaims.rows]);
-  const addClaimTo = (groupId: string, draft: { title: string; kind: ClaimKind; note?: string }) =>
+  const addedClaims = usePendingAdds<ClaimSummaryModel>(listedClaimIds);
+  const addClaim = (draft: { title: string; kind: ClaimKind; note?: string }) =>
     addedClaims.add(
       state => ({
-        groupId,
         title: draft.title,
         kind: draft.kind,
         pending: state.status === 'pending',
@@ -94,8 +90,8 @@ export function NewsStoryTemplate({
       actionCallbacks?.onAddClaim?.(draft)
     );
 
-  const hasClaimGroups = Boolean(model.claimGroups && model.claimGroups.length > 0);
-  const flatClaims = [...(addedClaimsByGroup['flat'] ?? []), ...model.reportedClaims];
+  const flatClaims = [...addedClaims.rows, ...(hasClaimGroups ? ungroupedClaims : model.reportedClaims)];
+  const canAddClaim = Boolean(actionCallbacks?.onAddClaim);
 
   const hasPeople = Boolean(model.relatedPeople && model.relatedPeople.length > 0);
   const hasProjects = Boolean(model.relatedProjects && model.relatedProjects.length > 0);
@@ -285,37 +281,36 @@ export function NewsStoryTemplate({
               {/* Grouped narrative claims (Blocks / Perspectives) — scannable Geo News bulleted reading flow */}
               {hasClaimGroups ? (
                 <div className="flex flex-col gap-8">
-                  {model.claimGroups!.map(group => {
-                    const claims = [...(addedClaimsByGroup[group.id] ?? []), ...group.claims];
-                    return (
-                      <section key={group.id} aria-label={group.title} className="flex flex-col gap-3">
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="flex flex-col gap-1">
-                            <h2 className="m-0 text-mediumTitle font-semibold text-text">{group.title}</h2>
-                            {group.description && (
-                              <p className="m-0 text-[15px] leading-[22px] text-grey-04">{group.description}</p>
-                            )}
-                          </div>
-                          <AddClaimPopover
-                            label={`Add claim to ${group.title}`}
-                            canOpen={actionCallbacks?.canOpenAddForm}
-                            onSubmit={draft => addClaimTo(group.id, draft)}
-                          />
-                        </div>
-                        <NewsClaimBulletList claims={claims} />
-                      </section>
-                    );
-                  })}
+                  {model.claimGroups!.map(group => (
+                    <section key={group.id} aria-label={group.title} className="flex flex-col gap-3">
+                      <div className="flex flex-col gap-1">
+                        <h2 className="m-0 text-mediumTitle font-semibold text-text">{group.title}</h2>
+                        {group.description && (
+                          <p className="m-0 text-[15px] leading-[22px] text-grey-04">{group.description}</p>
+                        )}
+                      </div>
+                      <NewsClaimBulletList claims={group.claims} />
+                    </section>
+                  ))}
+                  {(flatClaims.length > 0 || canAddClaim) && (
+                    <section aria-label="Other claims" className="flex flex-col gap-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <h2 className="m-0 text-mediumTitle font-semibold text-text">Other claims</h2>
+                        <AddClaimPopover
+                          label="Add claim"
+                          canOpen={actionCallbacks?.canOpenAddForm}
+                          onSubmit={addClaim}
+                        />
+                      </div>
+                      <NewsClaimBulletList claims={flatClaims} />
+                    </section>
+                  )}
                 </div>
               ) : flatClaims.length > 0 ? (
                 <section aria-label="Claims" className="flex flex-col gap-3">
                   <div className="flex items-center justify-between gap-3">
                     <h2 className="m-0 text-mediumTitle font-semibold text-text">Claims</h2>
-                    <AddClaimPopover
-                      label="Add claim"
-                      canOpen={actionCallbacks?.canOpenAddForm}
-                      onSubmit={draft => addClaimTo('flat', draft)}
-                    />
+                    <AddClaimPopover label="Add claim" canOpen={actionCallbacks?.canOpenAddForm} onSubmit={addClaim} />
                   </div>
                   <NewsClaimBulletList claims={flatClaims} />
                 </section>

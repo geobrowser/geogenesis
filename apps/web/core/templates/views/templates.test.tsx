@@ -963,41 +963,55 @@ describe('Topic Context & Disputes row with nothing in it (GEO-3819)', () => {
 });
 
 describe('News story Add claim with claim groups (GEO-3836)', () => {
-  it('keeps a claim added to a group on screen after it publishes', async () => {
-    const CLAIM_ID = 'cccccccccccccccccccccccccccccccc';
-    const base = {
-      id: 'story-groups',
-      headline: 'Story with groups',
-      date: 'Nov 20, 2026',
-      summary: 'Summary.',
-      topics: [],
-      relatedPeople: [],
-      relatedProjects: [],
-      relatedEntities: [],
-      sources: [],
-      sections: [],
-      claimGroups: [{ id: 'g-1', title: 'What was said', claims: [] }],
-    };
+  const CLAIM_ID = 'cccccccccccccccccccccccccccccccc';
+  const GROUPED_ID = 'dddddddddddddddddddddddddddddddd';
+  const claim = (id: string, title: string) => ({ id, title, split: { rows: [], isSplit: false } });
+  const base = {
+    id: 'story-groups',
+    headline: 'Story with groups',
+    date: 'Nov 20, 2026',
+    summary: 'Summary.',
+    topics: [],
+    relatedPeople: [],
+    relatedProjects: [],
+    relatedEntities: [],
+    sources: [],
+    sections: [],
+    claimGroups: [{ id: 'g-1', title: 'What was said', claims: [claim(GROUPED_ID, 'Talks resumed')] }],
+  };
+
+  it('adds to Other claims, and the claim is still there after a reload', async () => {
     let settle!: (result: { ok: true; id: string; spaceId: string }) => void;
     const onAddClaim = vi.fn(() => new Promise<never>(resolve => (settle = resolve as never)));
-    const view = (reportedClaims: { id: string; title: string; split: { rows: []; isSplit: boolean } }[]) => (
+    const view = (reportedClaims: ReturnType<typeof claim>[], key = 'a') => (
       <NewsStoryTemplate
+        key={key}
         model={{ ...base, reportedClaims }}
         actionCallbacks={{ onAddClaim, canOpenAddForm: () => true }}
       />
     );
     const { rerender } = render(view([]));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Add claim to What was said' }));
+    // One Add claim: a claim is linked flat, so it can't be added into a group.
+    expect(screen.queryByRole('button', { name: /Add claim to/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Add claim' }));
     const input = screen.getByPlaceholderText(/Write a clear, testable statement/);
     fireEvent.change(input, { target: { value: 'Aid entered on Monday' } });
     fireEvent.submit(input.closest('form') as HTMLFormElement);
     expect(screen.getByText('Publishing…')).toBeInTheDocument();
-
     await React.act(async () => settle({ ok: true, id: CLAIM_ID, spaceId: 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' }));
-    // The publish links it flat (Related claims), which a grouped story doesn't draw.
-    rerender(view([{ id: CLAIM_ID, title: 'Aid entered on Monday', split: { rows: [], isSplit: false } }]));
-    expect(screen.getByText('Aid entered on Monday')).toBeInTheDocument();
+
+    // A reload: a fresh mount whose model carries the claim as a flat (Related claims) link.
+    rerender(view([claim(CLAIM_ID, 'Aid entered on Monday'), claim(GROUPED_ID, 'Talks resumed')], 'b'));
+    const other = screen.getByRole('region', { name: 'Other claims' });
+    expect(within(other).getByText('Aid entered on Monday')).toBeInTheDocument();
+    // A flat claim a group already holds is drawn once, in its group.
+    expect(screen.getAllByText('Talks resumed')).toHaveLength(1);
     expect(screen.queryByText('Publishing…')).toBeNull();
+  });
+
+  it('draws no Other claims section without flat claims or a way to add one', () => {
+    render(<NewsStoryTemplate model={{ ...base, reportedClaims: [] }} />);
+    expect(screen.queryByRole('region', { name: 'Other claims' })).toBeNull();
   });
 });
