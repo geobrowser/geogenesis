@@ -266,10 +266,16 @@ export function useLivePostTemplate({
       mediaAlt: knownAuthor ?? '',
       breadcrumbs,
       claims,
-      // The store is the source of truth: a note added here is already a staged Community notes
-      // relation in `graphNotes`. What the draft said beyond the note's name (its tag, its source)
-      // is kept locally and drawn over that graph note, and goes when the relation does.
-      notes: graphNotes.map(note => localNotes.find(local => ID.equals(local.id, note.id)) ?? note),
+      // A note added here is already a staged Community notes relation in `graphNotes`, which owns
+      // it and its text. The draft's tag and source are kept locally and laid over it, newest first;
+      // they go when the relation does.
+      notes: [
+        ...localNotes.flatMap(local => {
+          const staged = graphNotes.find(note => ID.equals(note.id, local.id));
+          return staged ? [{ ...local, text: staged.text }] : [];
+        }),
+        ...graphNotes.filter(note => !localNotes.some(local => ID.equals(local.id, note.id))),
+      ],
       onAddNote: draft => {
         const noteId = actionCallbacks.onAddFlag?.(entity.id, {
           reason: draft.tag,

@@ -519,16 +519,22 @@ export function useClaimPositionControl({
   const resetResponseIndexing = useResetEntityResponseIndexingSnapshot(target);
   // Publishing before the personal space finishes registering fails, so a press in that window is
   // queued for the runner (`respond`) rather than published or refused.
-  const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
+  const { isPending: isAccountSetupPending, topicId: accountSetupTopicId } = usePendingPersonalSpace();
   const { ready: authReady, authenticated } = useGeoChatAuth();
   // Known to be signed out. Privy reports `authenticated: false` while it is still restoring a
   // session, and a press in that window is a returning account's, not a visitor's to keep on the
   // device — the saver would clear it as somebody else's the moment the session came back.
   const signedOut = authReady && !authenticated;
   // Signed in, the index says there is no personal space, and none is being made: nothing could
-  // publish a press, so it reopens account setup instead (GEO-3822).
+  // publish a press, so it reopens account setup instead (GEO-3822). Not after a setup run failed:
+  // that one recovers through the status bar's retry, as `useOnboarding` does.
   const needsAccountSetup =
-    authReady && authenticated && !isConnected && !isAccountSetupPending && Boolean(hasNoPersonalSpace);
+    authReady &&
+    authenticated &&
+    !isConnected &&
+    !isAccountSetupPending &&
+    !accountSetupTopicId &&
+    Boolean(hasNoPersonalSpace);
   const showOnboarding = useShowOnboarding();
   const queryClient = useQueryClient();
 
@@ -750,12 +756,13 @@ export function useClaimPositionControl({
     if (responseBlockedReason) return responseBlockedReason;
     // Ahead of the rest: it is the only one of these the reader can do nothing about, and naming
     // the side they cannot take yet is the least useful thing to say about a dead control.
+    // Live without waiting on answers, so its title says what a press does.
+    if (needsAccountSetup) return copy.finishSetup;
     if (!answersReady && !isAccountSetupPending) return 'Loading this claim’s responses…';
     // Signed out where a press is kept on this device: the pill does what its label says.
     if (!isConnected && signedOut && allowsSignedOutVotes) {
       return localPosition === position ? RESPONSE_LOCAL_ONLY_COPY : responsePositionLabel(position);
     }
-    if (needsAccountSetup) return copy.finishSetup;
     if (!isConnected && !isAccountSetupPending) return copy.connect;
     if (viewerPosition === position) return position ? copy.removePositive : copy.removeNegative;
     return responsePositionLabel(position);
@@ -763,6 +770,8 @@ export function useClaimPositionControl({
 
   return {
     viewerPosition,
+    /** Signed in with no personal space: a press opens account setup (see `copy.finishSetup`). */
+    needsAccountSetup,
     optimisticPositions,
     respond,
     actionTitle,

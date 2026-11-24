@@ -362,7 +362,9 @@ function Tab({
   const switchesInPage = useSwitchesInPage(href);
 
   const handleClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
-    if (isRepeatTabClick(event, selected)) event.preventDefault();
+    // Selected only through a sub-route (Overview on `/debates`): a click still navigates.
+    const clickNavigatesWhenSelected = Boolean(activeOnSubpaths) && href !== fullPath;
+    if (isRepeatTabClick(event, selected && !clickNavigatesWhenSelected)) event.preventDefault();
     switchTabInPage(event, href, () => onPendingChange(href, true));
   };
 

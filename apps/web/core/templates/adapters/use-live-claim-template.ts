@@ -11,6 +11,7 @@ import { useDebateClaims } from '~/core/debates/hooks';
 import { useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { useSpace } from '~/core/hooks/use-space';
 import { ID } from '~/core/id';
+import { CLAIM_RESPONSE_COPY } from '~/core/responses/entity-response';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import { Entities } from '~/core/utils/entity';
 import { normId } from '~/core/utils/norm-id';
@@ -637,7 +638,10 @@ export function useLiveClaimTemplate({
       voteBox: {
         userVote,
         countSummary,
-        hint: control.responseError ?? state.responseBlockedReason ?? undefined,
+        hint:
+          control.responseError ??
+          state.responseBlockedReason ??
+          (control.needsAccountSetup ? CLAIM_RESPONSE_COPY.finishSetup : undefined),
         disabled: Boolean(state.responseBlockedReason) || !state.isResponseKindResolved,
         onVote: choice => {
           const target = choice === 'agree';

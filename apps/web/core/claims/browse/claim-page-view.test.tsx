@@ -120,12 +120,8 @@ vi.mock('~/partials/entity-page/entity-page-inline-description', () => ({
   EntityPageInlineDescription: () => <div data-testid="editable-description" />,
 }));
 vi.mock('~/partials/entity-page/entity-page-actions', () => ({
-  EntityPageActions: ({ isVoteable, showCreate = true }: { isVoteable?: boolean; showCreate?: boolean }) => (
-    <div
-      data-testid="entity-page-actions"
-      data-voteable={String(Boolean(isVoteable))}
-      data-show-create={String(showCreate)}
-    />
+  EntityPageActions: ({ isVoteable }: { isVoteable?: boolean }) => (
+    <div data-testid="entity-page-actions" data-voteable={String(Boolean(isVoteable))} />
   ),
 }));
 

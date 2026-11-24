@@ -317,6 +317,8 @@ export function EditableTabGroup({
           activeSystemTab: sidePanelTab?.activeSystemTab,
           activeOnSubpaths: tab.activeOnSubpaths,
         })}
+        // Selected only through a sub-route (Overview on `/debates`): a click still navigates.
+        clickNavigatesWhenSelected={Boolean(tab.activeOnSubpaths) && tab.href !== fullPath}
         onSelect={
           sidePanelTab
             ? () =>
@@ -413,11 +415,13 @@ function StaticTab({
   activeRef,
   pendingHref,
   onPendingChange,
+  clickNavigatesWhenSelected = false,
 }: {
   href: string;
   label: string;
   badge?: React.ReactNode;
   active: boolean;
+  clickNavigatesWhenSelected?: boolean;
   onSelect?: () => void;
   onlyWhenNarrow?: boolean;
   activeRef: (element: HTMLElement | null) => void;
@@ -453,7 +457,7 @@ function StaticTab({
       prefetch={!switchesInPage}
       hoverPrefetch={!switchesInPage}
       onClick={event => {
-        if (isRepeatTabClick(event, selected)) event.preventDefault();
+        if (isRepeatTabClick(event, selected && !clickNavigatesWhenSelected)) event.preventDefault();
         switchTabInPage(event, href, () => onPendingChange(href, true));
       }}
     >

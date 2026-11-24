@@ -381,4 +381,31 @@ describe('useLivePostTemplate community notes', () => {
 
     expect(result.current.data!.notes).toEqual([]);
   });
+
+  it('draws the viewer’s note first, with the staged note’s current text', () => {
+    const noteId = 'f1e2d3c4b5a697887766554433221100';
+    state.entity = entity({
+      name: 'A post',
+      types: [{ id: TEMPLATE_ONTOLOGY.TWEET_TYPE_ID, name: 'Tweet' }],
+      relations: [relation(TEMPLATE_ONTOLOGY.COMMUNITY_NOTES_PROPERTY_ID, 'aaaa0000aaaa0000aaaa0000aaaa0000', 'Older')],
+    });
+    state.actions = { onAddFlag: () => noteId };
+
+    const { result, rerender } = renderHook(() => useLivePostTemplate({ entityId: state.entity!.id, spaceId: SPACE }));
+    act(() => result.current.data!.onAddNote!({ tag: 'Missing context', text: 'Draft text', sourceUrl: '' }));
+    // Staged, then renamed in the same session.
+    state.entity = {
+      ...state.entity!,
+      relations: [
+        ...state.entity!.relations,
+        relation(TEMPLATE_ONTOLOGY.COMMUNITY_NOTES_PROPERTY_ID, noteId, 'Edited text'),
+      ],
+    };
+    rerender();
+
+    expect(result.current.data!.notes.map(note => [note.text, note.tag])).toEqual([
+      ['Edited text', 'Missing context'],
+      ['Older', 'Community note'],
+    ]);
+  });
 });

@@ -45,6 +45,8 @@ const mocks = vi.hoisted(() => ({
   authReady: true,
   /** A new account whose personal space is still being created in the background. */
   accountSetupPending: false,
+  /** Set while a setup run is pending, and kept after it fails. */
+  accountSetupTopicId: null as string | null,
   indexing: { status: 'idle', pending: null, runId: null } as {
     status: 'idle' | 'reconciling' | 'delayed' | 'indexed';
     pending: { expectedResponse: 'positive' | 'negative' | null } | null;
@@ -225,7 +227,7 @@ vi.mock('~/core/responses/replay-viewer-response', () => ({
 vi.mock('~/core/hooks/use-onboarding', () => ({ useShowOnboarding: () => mocks.showOnboarding }));
 
 vi.mock('~/core/state/pending-personal-space', () => ({
-  usePendingPersonalSpace: () => ({ isPending: mocks.accountSetupPending }),
+  usePendingPersonalSpace: () => ({ isPending: mocks.accountSetupPending, topicId: mocks.accountSetupTopicId }),
 }));
 
 const SPACE_ID = mocks.spaceId;
@@ -315,6 +317,7 @@ beforeEach(() => {
   mocks.authenticated = true;
   mocks.authReady = true;
   mocks.accountSetupPending = false;
+  mocks.accountSetupTopicId = null;
   queueStore = createStore();
   mocks.indexing = { status: 'idle', pending: null, runId: null };
   mocks.spaceName = 'Crypto';
@@ -1182,6 +1185,23 @@ describe('a signed-in account with no personal space', () => {
     expect(mocks.submitResponse).not.toHaveBeenCalled();
     expect(queued()).toHaveLength(0);
     expect(readLocalVotes().votes).toHaveLength(0);
+  });
+
+  it('says what a press does even while the claim’s answers are loading', () => {
+    renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={noSide} answersReady={false} />);
+
+    expect(screen.getByRole('button', { name: /^Agree/ })).toHaveAttribute(
+      'title',
+      ENTITY_RESPONSE_COPY.stance.finishSetup
+    );
+  });
+
+  it('leaves a failed setup run to its own retry rather than reopening onboarding', () => {
+    mocks.accountSetupTopicId = 'failed-topic';
+    renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={noSide} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^Agree/ }));
+    expect(mocks.showOnboarding).not.toHaveBeenCalled();
   });
 
   it('stays as it was while the personal-space lookup has not answered', () => {

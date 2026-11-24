@@ -28,9 +28,8 @@ type EntityTabsProps = {
   /** Visually separates the first authored tab from the product-owned record tabs. */
   divideBeforeAuthored?: boolean;
   /**
-   * For the generic editor standing in for a templated entity's view. The selection it does not
-   * draw (a record route like `/debates`, or a record tab in the side panel) shows as Overview,
-   * the content being edited, and is kept so leaving edit mode returns to it.
+   * Editing a templated entity: a record tab this bar lacks (e.g. `/debates`) shows as Overview and
+   * is kept, so leaving edit mode returns to it.
    */
   keepRecordTabSelection?: boolean;
 };
