@@ -1,4 +1,5 @@
 import { ID } from '~/core/id';
+import { CLAIM_RESPONSE_KIND, responseKindToVoteKind } from '~/core/responses/entity-response';
 
 import type { VoteChoice } from '../models';
 
@@ -19,6 +20,36 @@ export type ClaimMultiSpaceVotes = {
 
 /** One active vote, already de-duplicated to one per (claim, space, voter). Ids are hex. */
 export type ActiveClaimVote = { objectHex: string; spaceHex: string; userId: string; isPositive: boolean };
+
+/** A `userVotesConnection` row as the Topic page reads it. */
+export type ClaimVoteRow = { userId: string; objectId: string; spaceId: string; voteType: number; voteKind: number };
+
+/** The vote kind an Agree / Disagree on a claim is published as: what the Claim page counts. */
+export const CLAIM_STANCE_VOTE_KIND = responseKindToVoteKind(CLAIM_RESPONSE_KIND);
+
+/**
+ * The Agree / Disagree votes among a claim's vote rows, one per (claim, space, voter).
+ *
+ * A claim also carries votes of other kinds: an upvote (curation) and the retired Verify / Dispute.
+ * Those are not a side, so they are dropped here. Counted as Agree they put the Topic page a vote
+ * ahead of the Claim page ("Bitcoin is a better store of value than gold" read 2/2 against 1/2).
+ */
+export function activeStanceVotes(rows: Iterable<ClaimVoteRow>): ActiveClaimVote[] {
+  const byKey = new Map<string, ActiveClaimVote>();
+  for (const row of rows) {
+    if (row.voteKind !== CLAIM_STANCE_VOTE_KIND) continue;
+    if (row.voteType !== 0 && row.voteType !== 1) continue;
+    const objectHex = ID.uuidToHex(row.objectId);
+    const spaceHex = ID.uuidToHex(row.spaceId);
+    byKey.set(`${objectHex}:${spaceHex}:${row.userId}`, {
+      objectHex,
+      spaceHex,
+      userId: row.userId,
+      isPositive: row.voteType === 0,
+    });
+  }
+  return [...byKey.values()];
+}
 
 /**
  * A Topic page's votes per claim: totals across every space, the split by space, and the viewer's

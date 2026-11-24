@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { aggregateClaimVotes, baselineVoteFor } from './topic-claim-votes';
+import { activeStanceVotes, aggregateClaimVotes, baselineVoteFor } from './topic-claim-votes';
 
 const CLAIM = 'aaaaaaaa-0000-4000-8000-000000000001';
 const SPACE_X = 'bbbbbbbb-0000-4000-8000-000000000001';
@@ -39,5 +39,41 @@ describe('topic claim votes', () => {
       null
     );
     expect(baselineVoteFor(signedOut, CLAIM, SPACE_Y)).toBeNull();
+  });
+});
+
+describe('activeStanceVotes', () => {
+  // The testnet rows for "Bitcoin is a better store of value than gold" (QA, GEO-3819): one upvote
+  // (vote kind 0) beside three Agree / Disagree votes. The Claim page reads 1 agree / 2 disagree.
+  const claim = 'd93135c85a7c414e8bb8919b359d9754';
+  const space = 'c9f267dcb0d270718c2a3c45a64afd32';
+  const rows = [
+    { userId: '4cd9cca5530b69056aead853c8088e7e', objectId: claim, spaceId: space, voteType: 0, voteKind: 0 },
+    { userId: '952badee5fbd4dc3a691159a67a9291b', objectId: claim, spaceId: space, voteType: 0, voteKind: 1 },
+    { userId: 'd034abce49b07859234384a5a66decbd', objectId: claim, spaceId: space, voteType: 1, voteKind: 1 },
+    { userId: 'f3dab79cb5a3d9d1759656dd5361d1c6', objectId: claim, spaceId: space, voteType: 1, voteKind: 1 },
+  ];
+
+  it('counts Agree / Disagree only, as the Claim page does', () => {
+    const agg = aggregateClaimVotes(activeStanceVotes(rows), null).get(claim)!;
+    expect([agg.totalPositive, agg.totalNegative]).toEqual([1, 2]);
+  });
+
+  it("does not take the viewer's upvote or retired Verify for their side", () => {
+    const viewer = '4cd9cca5530b69056aead853c8088e7e';
+    const withRetired = [...rows, { userId: viewer, objectId: claim, spaceId: space, voteType: 0, voteKind: 2 }];
+    const byClaim = aggregateClaimVotes(activeStanceVotes(withRetired), viewer);
+    expect(baselineVoteFor(byClaim, claim, space)).toBeNull();
+  });
+
+  it('keeps one vote per voter per space, and a voter in two spaces counts in each', () => {
+    const other = 'aaaaaaaaaaaa4000800000000000000f';
+    const votes = activeStanceVotes([
+      ...rows,
+      { userId: '952badee5fbd4dc3a691159a67a9291b', objectId: claim, spaceId: space, voteType: 0, voteKind: 1 },
+      { userId: '952badee5fbd4dc3a691159a67a9291b', objectId: claim, spaceId: other, voteType: 0, voteKind: 1 },
+    ]);
+    const agg = aggregateClaimVotes(votes, null).get(claim)!;
+    expect([agg.totalPositive, agg.totalNegative]).toEqual([2, 2]);
   });
 });

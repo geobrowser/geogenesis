@@ -55,7 +55,7 @@ import {
   readEntityTextValue,
   resolveTemplateImageUrl,
 } from '../ontology';
-import { type ActiveClaimVote, aggregateClaimVotes, baselineVoteFor } from './topic-claim-votes';
+import { CLAIM_STANCE_VOTE_KIND, activeStanceVotes, aggregateClaimVotes, baselineVoteFor } from './topic-claim-votes';
 import { resolveDebateStillSrc, useDebateParticipantsBatch } from './use-debate-participants-batch';
 import { useInitialHydrationGate } from './use-initial-hydration-gate';
 import { useLiveEntityActions } from './use-live-entity-actions';
@@ -64,10 +64,15 @@ const LIVE_CLAIMS_LIMIT = 40;
 const LIVE_COVERAGE_LIMIT = 12;
 
 const MULTI_SPACE_CLAIM_VOTES_QUERY = parse(/* GraphQL */ `
-  query MultiSpaceClaimVotes($objectIds: [UUID!]!) {
+  query MultiSpaceClaimVotes($objectIds: [UUID!]!, $voteKind: Int!) {
     userVotesConnection(
       first: 1000
-      filter: { objectType: { is: 0 }, voteType: { in: [0, 1] }, objectId: { in: $objectIds } }
+      filter: {
+        objectType: { is: 0 }
+        voteKind: { is: $voteKind }
+        voteType: { in: [0, 1] }
+        objectId: { in: $objectIds }
+      }
     ) {
       nodes {
         userId
@@ -90,7 +95,7 @@ const MULTI_SPACE_CLAIM_VOTES_QUERY = parse(/* GraphQL */ `
       }> | null;
     } | null;
   },
-  { objectIds: string[] }
+  { objectIds: string[]; voteKind: number }
 >;
 
 interface TweetAuthorMetadata {
@@ -561,28 +566,15 @@ export function useLiveTopicTemplate({
       const response = await Effect.runPromise(
         graphql({
           query: MULTI_SPACE_CLAIM_VOTES_QUERY,
-          variables: { objectIds: allVoteClaimIds },
+          variables: { objectIds: allVoteClaimIds, voteKind: CLAIM_STANCE_VOTE_KIND },
           decoder: data => data.userVotesConnection?.nodes ?? [],
           signal,
         })
       );
 
-      // Deduplicate by (objectId, spaceId, userId) so a single user counts once per space
-      const activeByKey = new Map<string, ActiveClaimVote>();
-      const spaceIdsSet = new Set<string>();
-
-      for (const row of response) {
-        if (row.voteType !== 0 && row.voteType !== 1) continue;
-        const objectHex = ID.uuidToHex(row.objectId);
-        const spaceHex = ID.uuidToHex(row.spaceId);
-        spaceIdsSet.add(spaceHex);
-        activeByKey.set(`${objectHex}:${spaceHex}:${row.userId}`, {
-          objectHex,
-          spaceHex,
-          userId: row.userId,
-          isPositive: row.voteType === 0,
-        });
-      }
+      // Agree / Disagree only, once per (claim, space, voter): the counts the Claim page draws.
+      const activeVotes = activeStanceVotes(response);
+      const spaceIdsSet = new Set(activeVotes.map(vote => vote.spaceHex));
 
       const spaceNameByHex = new Map<string, string>();
       if (spaceIdsSet.size > 0) {
@@ -598,7 +590,7 @@ export function useLiveTopicTemplate({
         }
       }
 
-      const byClaim = aggregateClaimVotes(activeByKey.values(), personalSpaceId);
+      const byClaim = aggregateClaimVotes(activeVotes, personalSpaceId);
 
       return { byClaim, spaceNameByHex };
     },

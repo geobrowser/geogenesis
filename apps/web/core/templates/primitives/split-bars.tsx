@@ -36,7 +36,9 @@ export function SplitBars({ rows, density = 'compact', className }: SplitBarsPro
               'grid items-center',
               isFull
                 ? 'grid-cols-[minmax(122px,156px)_minmax(0,1fr)_auto] gap-3 text-[15px] leading-[20px]'
-                : 'grid-cols-[minmax(108px,128px)_minmax(0,1fr)_36px] gap-2.5 text-[13.5px] leading-[18px]',
+                : // The label gives way before the bar and percentage on a narrow row; at full width it
+                  // still takes up to 128px first.
+                  'grid-cols-[minmax(64px,128px)_minmax(0,1fr)_36px] gap-2.5 text-[13.5px] leading-[18px]',
               row.isEveryone ? 'text-text' : 'text-grey-04'
             )}
           >

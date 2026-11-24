@@ -338,9 +338,15 @@ function RankedClaimRow({ rank, claim, isAgreed }: { rank: number; claim: ClaimS
         </div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-3 pl-10 @[760px]:pl-0">
+      {/* Below 760px the bars take what the row has left, so the percentage, count and "…" fit at
+          phone width rather than running off the card (GEO-3819 QA). */}
+      <div className="flex min-w-0 items-center gap-3 pl-10 @[760px]:shrink-0 @[760px]:pl-0">
         {claim.split.rows.length > 0 ? (
-          <SplitBars rows={claim.split.rows} density="compact" className="w-[264px] shrink-0" />
+          <SplitBars
+            rows={claim.split.rows}
+            density="compact"
+            className="min-w-0 flex-1 @[760px]:w-[264px] @[760px]:flex-none @[760px]:shrink-0"
+          />
         ) : (
           <div className="hidden w-[264px] shrink-0 items-center gap-2 @[760px]:flex">
             <div className="h-[5px] flex-1 overflow-hidden rounded-full bg-grey-01" />
@@ -348,7 +354,7 @@ function RankedClaimRow({ rank, claim, isAgreed }: { rank: number; claim: ClaimS
           </div>
         )}
 
-        <span className="w-[76px] shrink-0 text-right text-[13px] whitespace-nowrap text-grey-04 tabular-nums">
+        <span className="shrink-0 text-right text-[13px] whitespace-nowrap text-grey-04 tabular-nums @[760px]:w-[76px]">
           {voteCountLabel ?? '0 votes'}
         </span>
 
