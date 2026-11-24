@@ -23,7 +23,7 @@ import type { useDebateClaimResponse } from './use-debate-claim-response';
 export function DebateClaimControls({
   claimId,
   spaceId,
-  response: { responseKind, summary, control, isResponseKindResolved },
+  response: { responseKind, summary, control },
   showParticipants,
   endSlot,
   wideEndSlot = false,
@@ -33,13 +33,18 @@ export function DebateClaimControls({
   summaryClassName,
   outline,
   look = 'default',
+  resultsPending = false,
 }: {
   claimId: string;
   spaceId: string;
-  response: Pick<
-    ReturnType<typeof useDebateClaimResponse>,
-    'responseKind' | 'summary' | 'control' | 'isResponseKindResolved'
-  >;
+  response: Pick<ReturnType<typeof useDebateClaimResponse>, 'responseKind' | 'summary' | 'control'>;
+  /**
+   * The `'results'` row reads as loading whatever the counts say. For a host whose claim is still
+   * being read: until it lands the counts hook is held back and reports "not loading, no counts",
+   * the shape of a failed read, while a device vote already shows the row. Only while the read is
+   * in flight — a read that failed or found nothing should say "Results unavailable".
+   */
+  resultsPending?: boolean;
   /** See `PositionRow`: off where the host already shows who voted. */
   showParticipants?: boolean;
   /** Actions drawn at the end of the row, dropping under the pills when the row is narrow. */
@@ -98,12 +103,8 @@ export function DebateClaimControls({
             entityId={claimId}
             spaceId={spaceId}
             responseKind={responseKind}
-            // Held back until the claim's entity arrives, the counts read as failed (no answer, not
-            // loading). A device vote is known before that, so the row would say "Results
-            // unavailable" for a read that has not started; it is on its way, so say that.
-            summary={isResponseKindResolved ? summary : { ...summary, isLoading: true }}
+            summary={resultsPending ? { ...summary, isLoading: true } : summary}
             layout="results"
-            tone={look === 'app-dark' ? 'dark' : 'light'}
             className={summaryClassName}
           />
         ) : null
@@ -117,9 +118,7 @@ export function DebateClaimControls({
           className={summaryClassName}
         />
       ) : null}
-      {appLook && control.localVoteSide != null ? (
-        <LocalVoteNote tone={look === 'app-dark' ? 'dark' : 'light'} />
-      ) : null}
+      {appLook && control.localVoteSide != null ? <LocalVoteNote /> : null}
     </>
   );
 }

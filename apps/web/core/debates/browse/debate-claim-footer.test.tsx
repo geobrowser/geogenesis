@@ -16,12 +16,15 @@ const mocks = vi.hoisted(() => ({
   viewerPosition: null as boolean | null,
   localVoteSide: null as boolean | null,
   summaryLoading: false,
+  // What the claim's graph read returns: the entity, or none with the read in flight or settled.
+  claimRead: 'found' as 'found' | 'pending' | 'missing',
 }));
 
 vi.mock('~/core/sync/use-store', () => ({
   useQueryEntities: ({ enabled }: { enabled: boolean }) => {
     mocks.queryEnabled.push(enabled);
-    return { entities: enabled ? [{ id: 'claim-entity' }] : [], isLoading: false };
+    const found = enabled && mocks.claimRead === 'found';
+    return { entities: found ? [{ id: 'claim-entity' }] : [], isLoading: enabled && mocks.claimRead === 'pending' };
   },
 }));
 
@@ -30,6 +33,7 @@ vi.mock('./use-debate-claim-response', () => ({
     mocks.hookArgs.push(args);
     return {
       responseKind: 'stance',
+      isResponseKindResolved: args.entity != null,
       summary: { isLoading: mocks.summaryLoading },
       control: {
         optimisticPositions: mocks.positions,
@@ -47,8 +51,24 @@ vi.mock('./use-debate-claim-response', () => ({
 
 // Its tiers, bar and responder list have their own suite; here it only has to be placed.
 vi.mock('~/core/claims/browse/claim-summary', () => ({
-  ClaimSummary: ({ entityId, layout, className }: { entityId: string; layout?: string; className?: string }) => (
-    <div data-testid="claim-summary" data-entity={entityId} data-layout={layout} className={className} />
+  ClaimSummary: ({
+    entityId,
+    layout,
+    className,
+    summary,
+  }: {
+    entityId: string;
+    layout?: string;
+    className?: string;
+    summary: { isLoading: boolean };
+  }) => (
+    <div
+      data-testid="claim-summary"
+      data-entity={entityId}
+      data-layout={layout}
+      data-loading={String(summary.isLoading)}
+      className={className}
+    />
   ),
 }));
 
@@ -80,6 +100,7 @@ beforeEach(() => {
   mocks.viewerPosition = null;
   mocks.localVoteSide = null;
   mocks.summaryLoading = false;
+  mocks.claimRead = 'found';
 });
 
 afterEach(cleanup);
@@ -348,5 +369,29 @@ describe('DebateClaimFooter app look', () => {
     expect(screen.getByRole('button', { name: 'Agree' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Agree' })).toHaveClass('h-11');
     expect(screen.getByRole('button', { name: 'Comments (2)' })).toBeEnabled();
+  });
+});
+
+// GEO-3833: a device vote shows the results row before the claim's entity is read. Until that read
+// lands the counts are held back, so the row is told it is loading — but only while it is in
+// flight: a read that failed or found nothing must not say "Loading results…" forever.
+describe('DebateClaimFooter results row before the claim resolves', () => {
+  it.each([
+    ['pending', 'true'],
+    ['missing', 'false'],
+    ['found', 'false'],
+  ] as const)('with the claim read %s, the row reads loading=%s', (claimRead, loading) => {
+    mocks.claimRead = claimRead;
+    mocks.localVoteSide = true;
+    renderFooter({ look: 'app' });
+
+    expect(screen.getByTestId('claim-summary')).toHaveAttribute('data-loading', loading);
+  });
+
+  it('reads as loading on a card that has not asked for its claim yet', () => {
+    mocks.localVoteSide = true;
+    renderFooter({ look: 'app', enabled: false });
+
+    expect(screen.getByTestId('claim-summary')).toHaveAttribute('data-loading', 'true');
   });
 });

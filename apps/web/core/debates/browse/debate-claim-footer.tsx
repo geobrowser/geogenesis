@@ -125,9 +125,9 @@ export function DebateClaimFooter({
 const IGNORE_RESPONSE = () => {};
 
 /**
- * The debates app's claim (`LiveMomentCard.tsx`): 23/27 medium at -0.65px, 24px above and 20px
- * below. Set from here, over whichever heading the host passes, so the explore card's and the full
- * screen's titles — two components with their own links and clamps — take the same metrics. The
+ * The debates app's claim (`LiveMomentCard.tsx`): 23/27 medium at -0.65px, 20px below. 20px above
+ * rather than the app's 24, since Geo's meta row sits between it and the video. Set from here, over
+ * whichever heading the host passes, so the explore card's and the full screen's titles — two components with their own links and clamps — take the same metrics. The
  * hosts' classes carry `!`, and these out-rank them by specificity.
  */
 const APP_TITLE_CLASS_NAME =
@@ -153,7 +153,8 @@ function ClaimPositions({
   // taken in one shows in the other. geo-chat and the graph format ids differently.
   const spaceId = normId(claim.space_id);
   const claimId = normId(claim.claim_entity_id);
-  const { entities } = useQueryEntities({ where: { id: { in: [claimId] } }, first: 1, enabled: live });
+  const claimRead = useQueryEntities({ where: { id: { in: [claimId] } }, first: 1, enabled: live });
+  const entities = claimRead.entities;
   const response = useDebateClaimResponse({
     claimId,
     spaceId,
@@ -177,6 +178,9 @@ function ClaimPositions({
       summaryLayout={appLook ? 'results' : 'inline'}
       summaryClassName={appLook ? undefined : 'claim-card-summary-band'}
       look={appLook ? 'app' : 'default'}
+      // A card that has not asked yet, or whose read is in flight. Once the read settles without the
+      // claim (an error, or nothing on the graph) the row says "Results unavailable".
+      resultsPending={!response.isResponseKindResolved && (!live || claimRead.isLoading)}
     />
   );
 }
