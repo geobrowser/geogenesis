@@ -138,7 +138,7 @@ const item: ExploreFeedItem = {
 
 const READY: DebateMomentsState = {
   status: 'ready',
-  moments: [{ id: 'clip-0' }, { id: 'clip-1' }] as DebateMomentsState['moments'],
+  moments: [{ id: 'clip-0' }, { id: 'clip-1' }] as unknown as DebateMomentsState['moments'],
   slotNames: {},
 };
 
