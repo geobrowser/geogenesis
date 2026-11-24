@@ -351,6 +351,34 @@ describe('DebateMomentsPlayer', () => {
     expect(screen.queryByText('Couldn’t play this debate.')).not.toBeInTheDocument();
   });
 
+  it('steps past a clip that keeps failing, and retries one at the last moment', () => {
+    render(<DebateMomentsPlayer debateId={DEBATE} label="Debate A" moments={MOMENTS} />);
+    const video = videoOf(screen.getByRole('region', { name: 'Debate A' }));
+
+    mocks.play.mockImplementationOnce(() => Promise.reject(new DOMException('', 'NotSupportedError')));
+    mocks.play.mockImplementationOnce(() => Promise.reject(new DOMException('', 'NotSupportedError')));
+
+    fireEvent.error(video);
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    fireEvent.error(video);
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next moment' }));
+    expect(video.src).toContain('/moments/clip-1/content');
+    expect(screen.queryByText('Couldn’t play this moment.')).not.toBeInTheDocument();
+
+    fireEvent.error(video);
+    fireEvent.click(screen.getByRole('button', { name: 'Next moment' }));
+    expect(video.src).toContain('/moments/clip-2/content');
+    fireEvent.error(video);
+    mocks.load.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'Next moment' }));
+    expect(mocks.load.mock.contexts).toContain(video);
+    expect(video.src).toContain('/moments/clip-2/content');
+    fireEvent.error(video);
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+  });
+
   it('reloads a failed full debate from where it failed when the picture is tapped', () => {
     render(<DebateMomentsPlayer debateId={DEBATE} label="Debate B" moments={[]} />);
     const video = videoOf(screen.getByRole('region', { name: 'Debate B' }));

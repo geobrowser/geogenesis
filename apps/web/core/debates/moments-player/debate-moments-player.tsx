@@ -394,7 +394,8 @@ function MomentsStory({
     const atEdge = direction === 1 ? story.index >= story.count - 1 : story.index === 0;
     if (atEdge) {
       // The first card's left edge replays it, as in a story; the last card's right edge holds.
-      if (direction === -1 && failed) {
+      // A failed clip has nowhere to step from here, so either edge reloads it.
+      if (failed) {
         retry();
         return;
       }
