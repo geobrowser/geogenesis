@@ -54,6 +54,8 @@ export function useLiveEventTemplate({
   const relatedClaimsWhere = React.useMemo(
     () => ({
       types: [{ id: { equals: TEMPLATE_ONTOLOGY.CLAIM_TYPE_ID } }],
+      // Only claims in the viewed space.
+      spaces: [{ equals: spaceId }],
       relations: [
         {
           typeOf: { id: { equals: TEMPLATE_ONTOLOGY.RELATED_ENTITIES_PROPERTY_ID } },
@@ -61,7 +63,7 @@ export function useLiveEventTemplate({
         },
       ],
     }),
-    [entityId]
+    [entityId, spaceId]
   );
 
   const { entities: linkedClaims } = useQueryEntities({ where: relatedClaimsWhere, first: 12 });

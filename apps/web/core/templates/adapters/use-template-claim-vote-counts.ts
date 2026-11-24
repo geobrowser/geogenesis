@@ -7,7 +7,6 @@ import * as React from 'react';
 import { Effect } from 'effect';
 
 import { CLAIM_RESPONSE_OBJECT_TYPE } from '~/core/claims/browse/claim-response-summary';
-import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { ID } from '~/core/id';
 import { getEntityResponseCounts } from '~/core/io/queries';
 import { entityResponseCountsQueryKey } from '~/core/responses/entity-response';
@@ -20,7 +19,7 @@ export type ClaimVoteCountTarget = { claimId: string; spaceId: string };
 export type TemplateClaimVoteCounts = {
   /** The claim's stance counts in its vote space, or null until they are known. */
   countsFor: (claimId: string) => ResponseCounts | null;
-  /** What to call a row's split bar: the page's own label in its space, else the vote space's name. */
+  /** What to call a row's split bar: the page's own label in its space, else "Everyone", never another space's name. */
   labelFor: (spaceId: string, pageSpaceLabel: string) => string;
 };
 
@@ -106,19 +105,11 @@ export function useTemplateClaimVoteCounts({
     combine,
   });
 
-  const otherSpaceIds = React.useMemo(() => [...new Set(ownReads.map(target => target.spaceId))], [ownReads]);
-  const { spaces } = useSpacesByIds(otherSpaceIds);
-
-  return React.useMemo(() => {
-    const nameByHex = new Map<string, string>();
-    for (const space of spaces) {
-      const name = space.entity?.name?.trim();
-      if (name) nameByHex.set(ID.uuidToHex(space.id), name);
-    }
-    return {
+  return React.useMemo(
+    () => ({
       countsFor: claimId => countsByClaim.get(ID.uuidToHex(claimId)) ?? null,
-      labelFor: (spaceId, pageSpaceLabel) =>
-        spaceId === pageSpaceId ? pageSpaceLabel : (nameByHex.get(ID.uuidToHex(spaceId)) ?? 'Everyone'),
-    };
-  }, [countsByClaim, pageSpaceId, spaces]);
+      labelFor: (spaceId, pageSpaceLabel) => (spaceId === pageSpaceId ? pageSpaceLabel : 'Everyone'),
+    }),
+    [countsByClaim, pageSpaceId]
+  );
 }

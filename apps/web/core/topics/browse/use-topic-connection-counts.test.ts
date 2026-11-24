@@ -50,6 +50,15 @@ describe('topicConnectionCountsDocument', () => {
     expect(printed).not.toContain('$debateClaimsPropertyId');
     expect(printed).not.toContain('toEntity:');
   });
+
+  it('stays unscoped unless asked, and scopes every bucket when asked', () => {
+    expect(print(topicConnectionCountsDocument(1))).not.toContain('spaceIds');
+
+    const scoped = print(topicConnectionCountsDocument(2, true)).replace(/\s+/g, ' ');
+    expect(scoped).toContain('$spaceIds: [UUID!]');
+    expect(scoped.match(/spaceIds: \{overlaps: \$spaceIds\}/g)).toHaveLength(6);
+    expect(topicConnectionCountsDocument(2, true)).not.toBe(topicConnectionCountsDocument(2));
+  });
 });
 
 describe('decodeTopicConnectionCounts', () => {

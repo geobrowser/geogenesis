@@ -34,11 +34,6 @@ vi.mock('~/core/io/queries', () => ({
     return Effect.succeed(mocks.graph.get(`${entityId}|${spaceId}`) ?? null);
   },
 }));
-vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
-  useSpacesByIds: (ids: string[]) => ({
-    spaces: ids.includes(OTHER_SPACE) ? [{ id: OTHER_SPACE, entity: { name: 'Crypto' } }] : [],
-  }),
-}));
 
 let client: QueryClient;
 const wrapper = ({ children }: { children: React.ReactNode }) => (
@@ -95,7 +90,8 @@ describe('useTemplateClaimVoteCounts (GEO-3819)', () => {
     expect(lastBatch.spaceId).toBe(PAGE_SPACE);
     expect(lastBatch.targets.map(target => target.entityId)).toEqual([HOME_CLAIM]);
 
-    expect(result.current.labelFor(OTHER_SPACE, 'Page space')).toBe('Crypto');
+    // A row voting in another space is never named for it (GEO-3828).
+    expect(result.current.labelFor(OTHER_SPACE, 'Page space')).toBe('Everyone');
     expect(result.current.labelFor(PAGE_SPACE, 'Page space')).toBe('Page space');
   });
 

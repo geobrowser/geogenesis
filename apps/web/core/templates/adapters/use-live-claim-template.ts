@@ -123,9 +123,11 @@ export function useLiveClaimTemplate({
   });
 
   // Incoming stance claims: `<subclaim> --[Supports / Opposes]--> <this claim>` (verified live direction).
+  // Incoming lists hold only entities in the viewed space.
   const incomingSupportsWhere = React.useMemo(
     () => ({
       types: [{ id: { equals: CLAIM_TYPE_ID } }],
+      spaces: [{ equals: spaceId }],
       relations: [
         {
           typeOf: { id: { equals: TEMPLATE_ONTOLOGY.CLAIM_SUPPORTS_PROPERTY_ID } },
@@ -133,11 +135,12 @@ export function useLiveClaimTemplate({
         },
       ],
     }),
-    [entityId]
+    [entityId, spaceId]
   );
   const incomingOpposesWhere = React.useMemo(
     () => ({
       types: [{ id: { equals: CLAIM_TYPE_ID } }],
+      spaces: [{ equals: spaceId }],
       relations: [
         {
           typeOf: { id: { equals: TEMPLATE_ONTOLOGY.CLAIM_OPPOSES_PROPERTY_ID } },
@@ -145,11 +148,12 @@ export function useLiveClaimTemplate({
         },
       ],
     }),
-    [entityId]
+    [entityId, spaceId]
   );
   const incomingQuotesWhere = React.useMemo(
     () => ({
       types: [{ id: { equals: TEMPLATE_ONTOLOGY.QUOTE_TYPE_ID } }],
+      spaces: [{ equals: spaceId }],
       relations: [
         {
           typeOf: { id: { equals: TEMPLATE_ONTOLOGY.CLAIM_SUPPORTS_PROPERTY_ID } },
@@ -157,7 +161,7 @@ export function useLiveClaimTemplate({
         },
       ],
     }),
-    [entityId]
+    [entityId, spaceId]
   );
 
   const [isMounted, setIsMounted] = React.useState(false);

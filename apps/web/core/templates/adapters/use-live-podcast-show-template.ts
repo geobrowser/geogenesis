@@ -79,6 +79,7 @@ const SHOW_EPISODES_QUERY = parse(/* GraphQL */ `
     $episodeTypeId: UUID!
     $podcastPropertyId: UUID!
     $showId: UUID!
+    $spaceIds: [UUID!]
     $avatarPropertyId: UUID!
     $first: Int!
     $after: Cursor
@@ -89,6 +90,7 @@ const SHOW_EPISODES_QUERY = parse(/* GraphQL */ `
       orderBy: [CREATED_AT_DESC, ID_DESC]
       filter: {
         typeIds: { in: [$episodeTypeId] }
+        spaceIds: { overlaps: $spaceIds }
         relations: { some: { typeId: { is: $podcastPropertyId }, toEntityId: { is: $showId } } }
       }
     ) {
@@ -128,6 +130,7 @@ const SHOW_EPISODES_QUERY = parse(/* GraphQL */ `
     episodeTypeId: string;
     podcastPropertyId: string;
     showId: string;
+    spaceIds: string[];
     avatarPropertyId: string;
     first: number;
     after?: string | null;
@@ -249,9 +252,9 @@ export function useLivePodcastShowTemplate({
     return map;
   }, [firstHopById, hostAvatarEntities]);
 
-  // Paginated Episodes belonging to this Podcast Show
+  // Paginated Episodes belonging to this Podcast Show, only those in the viewed space
   const episodesQuery = useInfiniteQuery({
-    queryKey: ['podcast-show-episodes', ID.uuidToHex(entityId)],
+    queryKey: ['podcast-show-episodes', ID.uuidToHex(entityId), ID.uuidToHex(spaceId)],
     enabled: Boolean(entityId),
     initialPageParam: null as string | null,
     staleTime: 60_000,
@@ -263,6 +266,7 @@ export function useLivePodcastShowTemplate({
             episodeTypeId: TEMPLATE_ONTOLOGY.EPISODE_TYPE_ID,
             podcastPropertyId: TEMPLATE_ONTOLOGY.PODCAST_PROPERTY_ID,
             showId: ID.uuidToHex(entityId),
+            spaceIds: [ID.uuidToHex(spaceId)],
             avatarPropertyId: TEMPLATE_ONTOLOGY.AVATAR_PROPERTY_ID,
             first: EPISODES_FETCH_PAGE_SIZE,
             after: pageParam ?? undefined,
