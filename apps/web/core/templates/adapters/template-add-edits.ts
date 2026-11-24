@@ -183,7 +183,7 @@ export function buildClaimEdits(owner: TemplateAddOwner, draft: ClaimDraft, spac
 }
 
 /**
- * The form's free-text date as the stored DATE form (`YYYY-MM-DDT00:00:00.000Z`), or null when it
+ * The form's free-text date as the stored DATETIME form (`YYYY-MM-DDT00:00:00.000Z`), or null when it
  * isn't a date. The calendar day is read in local time, so "18 Nov 2026" stays the 18th everywhere.
  */
 export function toStoredDate(text: string): string | null {
@@ -212,7 +212,8 @@ export function buildEventEdits(owner: TemplateAddOwner, draft: EventDraft, spac
   // A date the publish can't read would fail the whole edit, so unreadable text stays in the summary.
   const summary = [when && !eventDate ? when : null, draft.summary?.trim() || null].filter(Boolean).join('. ');
   if (summary) values.push(value(SystemIds.DESCRIPTION_PROPERTY, 'Description', 'TEXT', summary));
-  if (eventDate) values.push(value(TEMPLATE_ONTOLOGY.EVENT_DATE_PROPERTY_ID, 'Event date', 'DATE', eventDate));
+  // Event date is a DATETIME property: a DATE value is stored where neither the page nor the timeline reads it.
+  if (eventDate) values.push(value(TEMPLATE_ONTOLOGY.EVENT_DATE_PROPERTY_ID, 'Event date', 'DATETIME', eventDate));
 
   const relations = [
     makeLocalRelation({

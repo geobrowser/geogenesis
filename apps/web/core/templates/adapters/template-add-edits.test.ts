@@ -90,12 +90,12 @@ describe('buildClaimEdits', () => {
 });
 
 describe('buildEventEdits', () => {
-  it('stores a readable date as a DATE and tags the topic', () => {
+  it('stores a readable date as a DATETIME and tags the topic', () => {
     const edits = buildEventEdits(owner('topic'), { title: 'Vote', when: '18 Nov 2026', summary: 'Passed' }, SPACE)!;
-    expect(edits.values.map(v => [v.property.id, v.value])).toEqual([
-      [SystemIds.NAME_PROPERTY, 'Vote'],
-      [SystemIds.DESCRIPTION_PROPERTY, 'Passed'],
-      [TEMPLATE_ONTOLOGY.EVENT_DATE_PROPERTY_ID, '2026-11-18T00:00:00.000Z'],
+    expect(edits.values.map(v => [v.property.id, v.property.dataType, v.value])).toEqual([
+      [SystemIds.NAME_PROPERTY, 'TEXT', 'Vote'],
+      [SystemIds.DESCRIPTION_PROPERTY, 'TEXT', 'Passed'],
+      [TEMPLATE_ONTOLOGY.EVENT_DATE_PROPERTY_ID, 'DATETIME', '2026-11-18T00:00:00.000Z'],
     ]);
     expect(edits.relations.map(r => r.toEntity.id)).toEqual([TEMPLATE_ONTOLOGY.NEWS_EVENT_TYPE_ID, PAGE]);
   });
