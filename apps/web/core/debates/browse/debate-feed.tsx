@@ -64,15 +64,17 @@ const LINKED_START_HOLD_MS = 8_000;
 /**
  * How wide the debate card's column may get, which with its fixed-ratio media is really a height
  * budget: grow or shrink the media with the viewport while reserving the navbar, the 20px above the
- * card, and the card's chrome under the media — frame, meta row, a two-line claim, the pill row and
- * the split band. Measured in Chrome (GEO-3454), that chrome is 169px with two claim lines and 17px
- * more under a signed-out vote's "Not counted yet" note, so even then a 900px viewport ends the card
- * about 15px above the fold. Where the card is narrow enough for its actions to wrap, the wrapped
- * row is budgeted too; see `debateCardColumnWidth`.
+ * card, and the card's chrome under the media — frame, a two-line claim at the debates app's size,
+ * the app's 44px vote row and the meta line under it (GEO-3833). That chrome is about 196px: 98 for
+ * the claim and its margins, 44 for the vote row, 36 for the meta line and its gap, 16 under it and
+ * the frame — 27px more than the 169px the earlier, compact footer measured in Chrome (GEO-3454),
+ * which is the 1.4rem added to the budget below. The results row a vote reveals is not reserved, as
+ * in the app. The app's row never wraps (its labels give way to the thumbs instead), so the wrapped
+ * budget in `debateCardColumnWidth` only ever narrows a card that was already narrow.
  *
  * Phones get a budget of their own (`--debate-feed-phone-column-width`), since their chrome differs:
- * the feed's own 44px bar, 12px above and below the card, and the same 169px under the media, so
- * `width ≤ (dvh − 44 − 24 − 169 − 2) / 1.2042 + 2`, i.e. `83dvh − 197px`. `dvh` is what keeps the
+ * the feed's own 44px bar, 12px above and below the card, and the same 196px under the media, so
+ * `width ≤ (dvh − 44 − 24 − 196 − 2) / 1.2042 + 2`, i.e. `83dvh − 219px`. `dvh` is what keeps the
  * card inside the part of the screen a phone browser's toolbars leave. It does not reserve the
  * signed-out note: the item scrolls, so the note is reachable. Phone actions stay on one compact
  * row, so their budget does not subtract the desktop wrapped row. Claims open in the entity panel
@@ -81,8 +83,8 @@ const LINKED_START_HOLD_MS = 8_000;
  */
 const debateColumnStyle = (wrapsBelow: number) =>
   ({
-    '--debate-feed-column-width': `clamp(280px, min(calc(100cqw - 2rem), ${debateCardColumnWidth('82.9dvh - 13.65rem', wrapsBelow)}), 640px)`,
-    '--debate-feed-phone-column-width': 'clamp(240px, calc(83dvh - 197px), calc(100cqw - 2rem))',
+    '--debate-feed-column-width': `clamp(280px, min(calc(100cqw - 2rem), ${debateCardColumnWidth('82.9dvh - 15.05rem', wrapsBelow)}), 640px)`,
+    '--debate-feed-phone-column-width': 'clamp(240px, calc(83dvh - 219px), calc(100cqw - 2rem))',
   }) as React.CSSProperties;
 
 const DEBATE_COLUMN_STYLE = debateColumnStyle(DEBATE_CARD_WRAPS_BELOW);
@@ -755,6 +757,7 @@ function DebateFeedItem({
                 onComment={onOpenComments}
                 onShare={share.onOpen}
                 shareOpen={share.open}
+                variant="circles"
                 overflow={
                   hasMenu ? (
                     <span className="md:hidden">
@@ -765,6 +768,8 @@ function DebateFeedItem({
               />
             }
             wideActions={hasMenu}
+            look="app"
+            className="px-4 pb-4"
           />
         </div>
         {/* `top-full` hangs it just below the debate without taking part in the column's

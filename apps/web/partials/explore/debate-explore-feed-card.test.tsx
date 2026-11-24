@@ -8,7 +8,6 @@ import { Provider, createStore, useAtomValue, useSetAtom } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate } from '~/core/debates/api';
-import { DEBATE_CARD_WRAPS_BELOW, debateCardColumnWidth } from '~/core/debates/browse/debate-card-column-width';
 import { DebateFeedAutoplay, tappedDebateAtom } from '~/core/debates/debate-playback-gate';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { InsideMobileSheet } from '~/core/state/mobile-sheet-cover';
@@ -461,14 +460,16 @@ describe('DebateExploreFeedCard', () => {
     expect(screen.getByText('Fashion').closest('div')).toHaveClass('flex-nowrap', 'overflow-hidden');
     expect(screen.getByTestId('player')).toHaveAttribute('data-reduced-overlays', 'true');
     // Gallery cards own one frame, flush with the row, and follow the gallery's width.
-    expect(container.querySelector('article')).not.toHaveClass('py-4');
+    expect(container.querySelector('article')).not.toHaveClass('py-2');
     expect(container.querySelector('article')).not.toHaveClass('border-b');
     const frame = screen.getByTestId('claim-footer').parentElement;
     expect(frame).toHaveClass('border', 'rounded-lg', 'max-w-full');
-    expect(frame?.style.getPropertyValue('--debate-card-column-width')).toBe('');
+    expect(frame?.style.getPropertyValue('--debate-card-media-width')).toBe('');
+    expect(frame).toHaveAttribute('data-debate-card-surface', 'compact');
+    expect(frame).not.toHaveClass('rounded-[26px]', 'p-4');
     // Gallery cards leave comments and sharing to the full-screen debate.
-    expect(screen.queryByRole('button', { name: /^Comments/ })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Share debate' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Open comments/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Share claim' })).toBeNull();
     expect(screen.getByRole('link', { name: 'Watch this debate full screen' })).toHaveAttribute(
       'href',
       '/space/space-1/fd51f9352063461780397b672b23364c'
@@ -1037,7 +1038,7 @@ describe('DebateExploreFeedCard', () => {
     renderCard();
     intersectAll(0.1);
 
-    expect(screen.getByRole('button', { name: 'Share debate' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Share claim' })).toBeDefined();
 
     expect(screen.queryByTestId('claims-panel')).toBeNull();
     Object.defineProperty(screen.getByTestId('player').closest('article'), 'scrollIntoView', { value: vi.fn() });
@@ -1057,14 +1058,15 @@ describe('DebateExploreFeedCard', () => {
     // Comments and share sit at the end of the claim's Agree/Disagree row, which replaced the
     // debate's up/down vote and its claims count (GEO-3454).
     const footer = screen.getByTestId('claim-footer');
-    const comments = screen.getByRole('button', { name: /^Comments/ });
+    const comments = screen.getByRole('button', { name: /^Open comments/ });
     expect(footer).toContainElement(comments);
-    expect(footer).toContainElement(screen.getByRole('button', { name: 'Share debate' }));
+    expect(footer).toContainElement(screen.getByRole('button', { name: 'Share claim' }));
     expect(screen.queryByRole('button', { name: /^Claims \(/ })).toBeNull();
 
     // The count comes from what the card already has: the feed's comment count, rather than a
     // thread fetch per card.
-    expect(comments.textContent).toBe('3');
+    expect(comments).toHaveAccessibleName('Open comments, 3 comments');
+    expect(comments.textContent).toBe('');
     expect(comments).toHaveAttribute('data-geo-analytics-label', 'Debate comments');
 
     // Marked as an opener so pressing it while the global comments panel is open switches the
@@ -1088,8 +1090,10 @@ describe('DebateExploreFeedCard', () => {
     const player = screen.getByTestId('player');
     expect(player).toHaveAttribute('data-framed', 'true');
     const card = screen.getByTestId('claim-footer').parentElement;
-    expect(card).toHaveClass('overflow-hidden', 'rounded-xl', 'border');
+    expect(card).toHaveClass('rounded-[26px]', 'border', 'border-[#e5e5e5]', 'p-4');
     expect(card).toContainElement(player);
+    // The media is inset in the app's card at the app's 20px radius.
+    expect(player.closest('[data-debate-card-media]')).toHaveClass('rounded-[20px]', 'overflow-hidden');
     expect(screen.getByTestId('claim-footer')).toHaveAttribute('data-claim', watchableDebate().claim.claim_entity_id);
     expect(screen.getByTestId('claim-footer')).toHaveAttribute('data-enabled', 'true');
     // The card's shape says what it is; the fallback card keeps its type tag.
@@ -1099,7 +1103,7 @@ describe('DebateExploreFeedCard', () => {
   it('keeps the claim row and comments while the debate is still loading', () => {
     renderCard();
     expect(screen.getByTestId('claim-footer')).toHaveAttribute('data-claim', 'none');
-    expect(screen.getByRole('button', { name: /^Comments/ })).toBeDefined();
+    expect(screen.getByRole('button', { name: /^Open comments/ })).toBeDefined();
   });
 
   /**
@@ -1107,38 +1111,69 @@ describe('DebateExploreFeedCard', () => {
    * itself — the open question in that ticket's notes. This control is the answer, and it has to
    * stay a real link: the Debate entity's page *is* the full-screen feed anchored to that debate.
    */
-  describe('column width', () => {
-    /** The one element carrying the column budget: the card's single inner column. */
-    const column = (container: HTMLElement) => container.querySelector('article > div') as HTMLElement;
+  // GEO-3833: the debates app's card — capped at 480px, with the media narrowing to keep the vote
+  // row on screen while the claim and the votes keep the card's width.
+  describe('app surface and height fit', () => {
+    const surface = (container: HTMLElement) => container.querySelector('[data-debate-card-surface]') as HTMLElement;
+    const media = (container: HTMLElement) => container.querySelector('[data-debate-card-media]') as HTMLElement;
 
-    it('caps itself at the card width, fitted to the viewport, by default', () => {
+    it('caps the card at 480px and fits the media to the viewport height', () => {
       const { container } = renderCard();
 
-      expect(column(container).className).toContain('max-w-[var(--debate-card-column-width)]');
-      expect(column(container).style.getPropertyValue('--debate-card-column-width')).toBe(
-        `clamp(320px, ${debateCardColumnWidth('83dvh - 228px', DEBATE_CARD_WRAPS_BELOW)}, 560px)`
+      expect(surface(container)).toHaveAttribute('data-debate-card-surface', 'app');
+      expect(surface(container)).toHaveClass(
+        'max-w-[480px]',
+        '[--debate-card-chrome:228px]',
+        'md:[--debate-card-chrome:200px]'
       );
+      expect(surface(container).style.getPropertyValue('--debate-card-media-width')).toBe(
+        'clamp(280px, calc((100svh - 76px - var(--debate-card-chrome)) * 480 / 578), 100%)'
+      );
+      expect(media(container)).toHaveClass('mx-auto', 'w-[var(--debate-card-media-width)]', 'max-w-full');
+      // The claim and the votes are outside the media frame, so they keep the card's full width.
+      expect(media(container)).not.toContainElement(screen.getByTestId('claim-footer'));
     });
 
-    // A phone's `dvh` moves with the browser's toolbars as the page scrolls, so a card capped by it
-    // changed width under the reader. Phones take the feed's width instead.
-    it('drops the viewport budget on phones, so scrolling cannot resize the card', () => {
-      const { container } = renderCard();
-
-      expect(column(container)).toHaveClass('md:max-w-full');
-    });
-
-    it('raises the ceiling to the container under fullWidth without dropping the viewport budget', () => {
-      // `fullWidth` means "this column is already the reading width, don't cap me at 560px". It
-      // used to drop the `max-w` and the budget together, which on the claim page's 840px column
-      // made the card ~1140px tall — so on a 900px viewport the second debater and the claim under
-      // it could not be seen together, which is the one thing the budget guarantees.
+    it('spans the column under fullWidth, with the media still height-fit', () => {
       const { container } = renderCard({ fullWidth: true });
 
-      expect(column(container).className).toContain('max-w-[var(--debate-card-column-width)]');
-      expect(column(container).style.getPropertyValue('--debate-card-column-width')).toBe(
-        `max(320px, min(${debateCardColumnWidth('83dvh - 228px', DEBATE_CARD_WRAPS_BELOW)}, 100%))`
-      );
+      expect(surface(container)).toHaveClass('max-w-full');
+      expect(surface(container)).not.toHaveClass('max-w-[480px]');
+      expect(surface(container).style.getPropertyValue('--debate-card-media-width')).toContain('100svh');
+      expect(media(container)).toHaveClass('w-[var(--debate-card-media-width)]');
+    });
+
+    it('drops the dividers between cards for the app’s gap', () => {
+      const { container } = renderCard();
+
+      expect(container.querySelector('article')).toHaveClass('py-2');
+      expect(container.querySelector('article')).not.toHaveClass('border-b');
+    });
+
+    it('paints the stills with the Agree speaker on top once the debate says which slot that is', () => {
+      const posters = { slot1: 'https://chat.test/still-1', slot2: 'https://chat.test/still-2' };
+      mocks.debateQuery = {
+        data: {
+          ...watchableDebate(),
+          participants: [
+            { participant_slot: 1, position_label: 'Disagree' },
+            { participant_slot: 2, position_label: 'Agree' },
+          ] as unknown as Debate['participants'],
+        },
+        isError: false,
+      };
+      const { container } = renderCard({ item: { ...item, debatePosters: posters } });
+
+      expect(container.querySelector('[data-debate-poster-slot="2"]')).toHaveClass('order-1');
+      expect(container.querySelector('[data-debate-poster-slot="1"]')).toHaveClass('order-2');
+    });
+
+    it('keeps slot 1 on top while the debate is unresolved', () => {
+      const posters = { slot1: 'https://chat.test/still-1', slot2: 'https://chat.test/still-2' };
+      const { container } = renderCard({ item: { ...item, debatePosters: posters } });
+
+      expect(container.querySelector('[data-debate-poster-slot="1"]')).not.toHaveClass('order-2');
+      expect(container.querySelector('[data-debate-poster-slot="2"]')).not.toHaveClass('order-1');
     });
   });
 
@@ -1172,7 +1207,7 @@ describe('DebateExploreFeedCard', () => {
   it('reports the comments panel as expanded without claiming it is a dialog', () => {
     renderCard();
 
-    const comments = screen.getByRole('button', { name: /^Comments/ });
+    const comments = screen.getByRole('button', { name: /^Open comments/ });
     expect(comments.getAttribute('aria-expanded')).toBe('false');
     expect(comments.hasAttribute('aria-haspopup')).toBe(false);
   });
@@ -1184,12 +1219,12 @@ describe('DebateExploreFeedCard', () => {
     renderCard();
     intersectAll(0.1);
 
-    expect(screen.getByRole('button', { name: 'Share debate' }).getAttribute('aria-haspopup')).toBe('dialog');
+    expect(screen.getByRole('button', { name: 'Share claim' }).getAttribute('aria-haspopup')).toBe('dialog');
   });
 
-  it('hides Share while the debate is still loading', () => {
+  it('holds Share disabled while the debate is still loading', () => {
     renderCard();
-    expect(screen.queryByRole('button', { name: /share/i })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Share claim' })).toBeDisabled();
   });
 
   it('shows the Join-space chip to non-members and honors hideJoinButton', () => {
