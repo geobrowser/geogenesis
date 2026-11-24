@@ -31,6 +31,11 @@ export type GraphFilterOverrides = {
   addSpaces?: string[];
   /** `?kinds=ent,claim` narrows the node kinds. */
   kinds?: GraphKind[];
+  /**
+   * `?kinds=claim`, one kind with a chip: the chip the view opens on (what Share hands out), so
+   * everything is still fetched and Everything brings the rest back.
+   */
+  chip?: GraphKind;
   /** `?lens=off` (or the older `?claims=all`) lifts the topic lens. */
   lens?: 'off';
 };
@@ -56,7 +61,8 @@ export function parseGraphFilterOverrides(params: Pick<URLSearchParams, 'get'>):
   }
   if (params.get('lens') === 'off' || params.get('claims') === 'all') overrides.lens = 'off';
   const kinds = parseGraphKinds(params.get('kinds'));
-  if (kinds) overrides.kinds = kinds;
+  if (kinds?.length === 1 && kinds[0] !== 'topic') overrides.chip = kinds[0];
+  else if (kinds) overrides.kinds = kinds;
   return overrides;
 }
 
