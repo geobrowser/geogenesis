@@ -126,6 +126,8 @@ class GraphqlRequestError extends Error {
   readonly response?: any;
   readonly request?: any;
   readonly isAbort: boolean;
+  /** The caller's `timeoutMs` deadline passed. */
+  readonly isTimeout: boolean;
   readonly retryAfterMs?: number;
   readonly retryCategory?: RetryCategory;
   readonly source?: 'api' | 'ingress' | 'unknown';
@@ -142,6 +144,7 @@ class GraphqlRequestError extends Error {
       response?: any;
       request?: any;
       isAbort?: boolean;
+      isTimeout?: boolean;
       retryAfterMs?: number;
       retryCategory?: RetryCategory;
       source?: 'api' | 'ingress' | 'unknown';
@@ -157,6 +160,7 @@ class GraphqlRequestError extends Error {
     this.response = details?.response;
     this.request = details?.request;
     this.isAbort = details?.isAbort ?? false;
+    this.isTimeout = details?.isTimeout ?? false;
     this.retryAfterMs = details?.retryAfterMs;
     this.retryCategory = details?.retryCategory;
     this.source = details?.source;
@@ -258,7 +262,7 @@ function getHeaderValue(headers: unknown, name: string): string | null {
 }
 
 function isRetryableGraphqlError(error: GraphqlRequestError): boolean {
-  if (error.isAbort) {
+  if (error.isAbort || error.isTimeout) {
     return false;
   }
 
@@ -273,9 +277,14 @@ function isRetryableGraphqlError(error: GraphqlRequestError): boolean {
   return error.status === 408 || error.status === 429 || error.status >= 500;
 }
 
+/** With a deadline, a 504 is the gateway's own timeout: the same query times out the same way again. */
+function retryableFor(hasDeadline: boolean) {
+  return (error: GraphqlRequestError) => isRetryableGraphqlError(error) && !(hasDeadline && error.status === 504);
+}
+
 function withRetry<T>(
   operation: Effect.Effect<T, GraphqlRequestError>,
-  context: { operationName?: string; clientRequestId: string }
+  context: { operationName?: string; clientRequestId: string; retryable: (error: GraphqlRequestError) => boolean }
 ): Effect.Effect<T, GraphqlRequestError> {
   const retrySchedule = Schedule.exponential(Duration.millis(BASE_RETRY_DELAY_MS)).pipe(
     Schedule.jittered,
@@ -287,14 +296,14 @@ function withRetry<T>(
 
       return duration;
     }),
-    Schedule.whileInput(isRetryableGraphqlError),
+    Schedule.whileInput(context.retryable),
     Schedule.intersect(Schedule.recurs(MAX_RETRIES))
   );
 
   return Effect.retry(operation, retrySchedule).pipe(
     Effect.tapError(error =>
       Effect.sync(() => {
-        if (isRetryableGraphqlError(error)) {
+        if (context.retryable(error)) {
           const retryLogContext = toGraphqlRetryLogContext(error, context.clientRequestId);
 
           console.warn(
@@ -319,6 +328,28 @@ function withRetry<T>(
   );
 }
 
+/** The caller's signal, also aborted once `timeoutMs` passes. */
+function withDeadline(signal: AbortSignal | undefined, timeoutMs: number | undefined) {
+  if (timeoutMs === undefined) return { signal, timedOut: () => false, clear: () => {} };
+  const controller = new AbortController();
+  let timedOut = false;
+  const forward = () => controller.abort(signal?.reason);
+  if (signal?.aborted) forward();
+  else signal?.addEventListener('abort', forward, { once: true });
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort(new DOMException(`Timed out after ${timeoutMs}ms`, 'TimeoutError'));
+  }, timeoutMs);
+  return {
+    signal: controller.signal,
+    timedOut: () => timedOut,
+    clear: () => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', forward);
+    },
+  };
+}
+
 // Type utilities for extracting types from TypedDocumentNode
 type QueryResult<T> = T extends TypedDocumentNode<infer TResult, any> ? TResult : never;
 type QueryVariables<T> = T extends TypedDocumentNode<any, infer TVariables> ? TVariables : never;
@@ -329,18 +360,26 @@ export function graphql<TDocument extends TypedDocumentNode<any, any>, Decoded>(
   decoder,
   variables,
   signal,
+  timeoutMs,
 }: {
   query: TDocument;
   decoder: (data: QueryResult<TDocument>) => Decoded;
   variables?: QueryVariables<TDocument>;
   signal?: AbortController['signal'];
+  /**
+   * Opt-in deadline for the whole call, retries included. A call past it fails as a timeout, and a
+   * 504 is not retried, so a query the gateway always times out fails once, quickly.
+   */
+  timeoutMs?: number;
 }) {
-  return Effect.gen(function* () {
+  const request = Effect.gen(function* () {
     const clientRequestId = createClientRequestId();
     const operationName = getOperationName(query);
+    const deadline = withDeadline(signal, timeoutMs);
+    yield* Effect.addFinalizer(() => Effect.sync(deadline.clear));
 
     const client = new GraphQLClient(getConfig().api, {
-      signal,
+      signal: deadline.signal,
       headers: {
         'x-request-id': clientRequestId,
         'x-correlation-id': clientRequestId,
@@ -355,6 +394,15 @@ export function graphql<TDocument extends TypedDocumentNode<any, any>, Decoded>(
       },
       catch: error => {
         const errorDetails: any = {};
+
+        if (deadline.timedOut()) {
+          return new GraphqlRequestError(`GraphQL request timed out after ${timeoutMs}ms`, {
+            isTimeout: true,
+            retryCategory: 'transport_timeout',
+            clientRequestId,
+            request: { operationName, url: getConfig().api, clientRequestId },
+          });
+        }
 
         if (error instanceof Error) {
           errorDetails.message = error.message;
@@ -412,6 +460,7 @@ export function graphql<TDocument extends TypedDocumentNode<any, any>, Decoded>(
       withRetry(run, {
         operationName,
         clientRequestId,
+        retryable: retryableFor(timeoutMs !== undefined),
       })
     );
 
@@ -446,4 +495,5 @@ export function graphql<TDocument extends TypedDocumentNode<any, any>, Decoded>(
 
     return decoder(dataResult.right);
   });
+  return Effect.scoped(request);
 }

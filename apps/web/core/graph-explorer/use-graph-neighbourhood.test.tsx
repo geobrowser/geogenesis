@@ -130,3 +130,20 @@ describe('useGraphNeighbourhood across a hop', () => {
     expect(api.fetchHop2).toHaveBeenLastCalledWith([id('p')], other, expect.anything());
   });
 });
+
+describe('useGraphNeighbourhood failures', () => {
+  it('shows a failed hop 1 at once, without retrying it, even under a retrying client', async () => {
+    api.fetchHop1.mockRejectedValue(new Error('timed out'));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: 3, retryDelay: 0 } } });
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(
+      () =>
+        useGraphNeighbourhood({ centreId: id('a'), filter, caps: DESKTOP_GRAPH_CAPS, kindFilter: 'all', hubId: null }),
+      { wrapper }
+    );
+    await waitFor(() => expect(result.current.hop1.isError).toBe(true));
+    expect(api.fetchHop1).toHaveBeenCalledTimes(1);
+  });
+});

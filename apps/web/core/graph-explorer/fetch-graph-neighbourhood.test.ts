@@ -1,16 +1,22 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { type OperationDefinitionNode, print } from 'graphql';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { HIDDEN_PROPERTY_ID } from '~/core/moderation/hidden';
 
 import {
+  ENTITY_FIRST,
+  GRAPH_REQUEST_TIMEOUT_MS,
+  asRelationConnection,
+  declaredVariables,
   decodeCrossLinks,
   decodeHop1,
   decodeHop2,
   decodeNode,
-  hop1Document,
+  fetchHop1,
+  hop1CentreDocument,
+  hop1KindDocument,
   hop1Variables,
   hop2Document,
   hop2Variables,
@@ -18,7 +24,7 @@ import {
   withPlacement,
 } from './fetch-graph-neighbourhood';
 import { resolveGraphFilter } from './graph-filter';
-import { GRAPH_KIND_TYPE_IDS, NEWS_EVENT_TYPE_ID } from './graph-kinds';
+import { GRAPH_KIND_TYPE_IDS, type GraphKind, NEWS_EVENT_TYPE_ID, PLUMBING_RELATION_TYPE_IDS } from './graph-kinds';
 import { CLAIM_TYPE_ID, NEIGHBOUR_KIND_TYPE_IDS, TOPIC_TYPE_ID } from './ontology';
 
 const CENTRE = 'c'.repeat(32);
@@ -34,9 +40,24 @@ const raw = (id: string, name: string | null, typeIds: string[], extra: Record<s
   ...extra,
 });
 
+const api = vi.hoisted(() => ({ request: vi.fn() }));
+vi.mock('~/core/io/graphql-client', async () => {
+  const { Effect } = await import('effect');
+  return {
+    graphql: (options: { query: unknown; variables: unknown; timeoutMs?: number }) =>
+      Effect.tryPromise({ try: () => api.request(options), catch: error => error }),
+  };
+});
+afterEach(() => api.request.mockReset());
+
+/** Every hop-1 request's document, printed together. */
+function printHop1(kinds: readonly GraphKind[], lensed: boolean) {
+  return [hop1CentreDocument, ...kinds.map(kind => hop1KindDocument(kind, lensed))].map(doc => print(doc)).join('\n');
+}
+
 /** The filter of one aliased connection in a printed document. */
 function aliasFilter(document: string, alias: string) {
-  const start = document.indexOf(`${alias}: relationsConnection`);
+  const start = document.indexOf(`${alias}: `);
   return document.slice(start, document.indexOf('nodes {', start));
 }
 
@@ -86,11 +107,13 @@ describe('hidden entities', () => {
 
   it('asks for the Hidden marker in every space on every node, at hop 1 and hop 2', () => {
     const filter = resolveGraphFilter({ spaceIds: ['a'.repeat(32)], topicId: null, topicSpaceId: null });
-    for (const document of [hop1Document(filter.kinds, false), hop2Document(['1'.repeat(32)], false, false)]) {
+    for (const document of [
+      hop1CentreDocument,
+      ...filter.kinds.map(kind => hop1KindDocument(kind, false)),
+      hop2Document(['1'.repeat(32)], false, false),
+    ]) {
       const printed = print(document).replace(/\s+/g, ' ');
-      expect(printed).toContain(
-        'hidden: valuesList(filter: {propertyId: {is: $hiddenPropertyId}}) { text boolean }'
-      );
+      expect(printed).toContain('hidden: valuesList(filter: {propertyId: {is: $hiddenPropertyId}}) { text boolean }');
       expect(declared(document)).toContain('hiddenPropertyId');
     }
     expect(hop1Variables(CENTRE, filter).hiddenPropertyId).toBe(HIDDEN_PROPERTY_ID);
@@ -202,7 +225,11 @@ describe('hop documents', () => {
     const narrow = resolveGraphFilter(null, { kinds: ['ent'] });
     for (const filter of [lensed, open, narrow]) {
       const on = lensTopicFor(filter) !== null;
-      expect(declared(hop1Document(filter.kinds, on))).toEqual(Object.keys(hop1Variables(CENTRE, filter)).sort());
+      const sent = Object.keys(hop1Variables(CENTRE, filter));
+      const hop1 = [hop1CentreDocument, ...filter.kinds.map(kind => hop1KindDocument(kind, on))].map(declared);
+      // Each request declares a subset of the hop's variables, and together they use every one.
+      for (const names of hop1) expect(sent).toEqual(expect.arrayContaining(names));
+      expect([...new Set(hop1.flat())].sort()).toEqual([...sent].sort());
       expect(declared(hop2Document([CENTRE], on, filter.kinds.includes('other')))).toEqual(
         Object.keys(hop2Variables(filter)).sort()
       );
@@ -220,7 +247,7 @@ describe('hop documents', () => {
 
   it('asks every content kind to carry the topic, in both directions and in hop 2, but not people or topics', () => {
     const filter = resolveGraphFilter({ spaceIds: null, topicId: TOPIC, topicSpaceId: null });
-    const hop1 = print(hop1Document(filter.kinds, true));
+    const hop1 = printHop1(filter.kinds, true);
     for (const kind of ['claim', 'story', 'event', 'src', 'case'])
       for (const direction of ['in', 'out'])
         expect(aliasFilter(hop1, `${kind}_${direction}`)).toContain('$topicsPropertyId');
@@ -291,8 +318,8 @@ describe('decodeHop2 and decodeCrossLinks', () => {
 describe('placement', () => {
   it('asks for placement only on claims and the centre', () => {
     const filter = resolveGraphFilter({ spaceIds: ['a'.repeat(32)], topicId: null, topicSpaceId: null });
-    const hop1 = print(hop1Document(filter.kinds, false));
-    const withPlaced = [...hop1.matchAll(/(\w+): relationsConnection[\s\S]*?pageInfo/g)]
+    const hop1 = printHop1(filter.kinds, false);
+    const withPlaced = [...hop1.matchAll(/(\w+): (?:relations|entities)Connection[\s\S]*?pageInfo/g)]
       .filter(match => match[0].includes('placed:'))
       .map(match => match[1]);
     expect(withPlaced).toEqual(['claim_out', 'claim_in']);
@@ -314,5 +341,111 @@ describe('placement', () => {
       new Map([[claim.id, ['b'.repeat(32)]]])
     );
     expect(filled[CENTRE].map(entry => entry.node.placedSpaceIds)).toEqual([['b'.repeat(32)], []]);
+  });
+});
+
+describe('entity-first kinds', () => {
+  const filter = resolveGraphFilter({ spaceIds: ['a'.repeat(32)], topicId: TOPIC, topicSpaceId: null });
+
+  it('asks the sparse incoming kinds for entities that reach the centre, in scope and without plumbing', () => {
+    expect([...ENTITY_FIRST].sort()).toEqual(['ent_in', 'other_in']);
+    for (const [kind, alias] of [
+      ['ent', 'ent_in'],
+      ['other', 'other_in'],
+    ] as const) {
+      const printed = print(hop1KindDocument(kind, true)).replace(/\s+/g, ' ');
+      const filterText = aliasFilter(printed, alias);
+      expect(filterText).toContain(`${alias}: entitiesConnection`);
+      expect(filterText).toContain(
+        'relations: {some: {toEntityId: {is: $id}, spaceId: {in: $spaceIds}, typeId: {notIn: $plumbingPropertyIds}}}'
+      );
+      expect(filterText).toContain('orderBy: [UPDATED_AT_DESC, ID_ASC]');
+      // Its edge is one of the same in-scope links.
+      expect(printed).toContain(
+        'edge: relationsList( first: 1 orderBy: [ID_ASC] filter: {toEntityId: {is: $id}, spaceId: {in: $spaceIds}, typeId: {notIn: $plumbingPropertyIds}} )'
+      );
+      expect(printed).toContain('hidden: valuesList');
+      expect(aliasFilter(printed, alias.replace('_in', '_out'))).toContain('relationsConnection');
+    }
+    expect(aliasFilter(print(hop1KindDocument('ent', true)), 'ent_in')).toContain('$entTypeIds');
+    expect(aliasFilter(print(hop1KindDocument('other', true)), 'other_in')).toMatch(
+      /not: \{\s*typeIds: \{\s*overlaps: \$otherTypeIds/
+    );
+    for (const kind of ['topic', 'claim', 'story', 'event', 'src', 'case'] as const)
+      expect(print(hop1KindDocument(kind, true))).not.toContain('entitiesConnection');
+    expect(hop1Variables(CENTRE, filter).plumbingPropertyIds).toEqual(PLUMBING_RELATION_TYPE_IDS);
+  });
+
+  it('reads an entity-first page as relations, dropping an entity with no edge', () => {
+    const person = raw('1'.repeat(32), 'Ada', [PERSON]);
+    const edge = { id: 'r1', spaceId: 'a'.repeat(32), typeId: 'p'.repeat(32), type: { name: 'Related' } };
+    const connection = asRelationConnection(
+      {
+        nodes: [
+          { ...person, edge: [edge] },
+          { ...raw('2'.repeat(32), 'Bo', [PERSON]), edge: [] },
+        ],
+        pageInfo: { hasNextPage: true },
+      },
+      'in'
+    );
+    expect(connection).toEqual({ nodes: [{ ...edge, fromEntity: person }], pageInfo: { hasNextPage: true } });
+    const centre = { ...raw(CENTRE, 'Topic', [TOPIC_TYPE_ID]), description: null };
+    const hop = decodeHop1({ entity: centre, ent_in: connection }, CENTRE, ['ent']);
+    expect(hop.neighbours.map(({ edge }) => [edge.fromId, edge.toId, edge.propertyName])).toEqual([
+      ['1'.repeat(32), CENTRE, 'Related'],
+    ]);
+    expect(hop.moreKinds).toEqual(['ent']);
+  });
+});
+
+describe('fetchHop1', () => {
+  const filter = resolveGraphFilter(
+    { spaceIds: ['a'.repeat(32)], topicId: null, topicSpaceId: null },
+    { kinds: ['ent', 'story'] }
+  );
+  const centre = { entity: { ...raw(CENTRE, 'Topic', [TOPIC_TYPE_ID]), description: null } };
+  const person = raw('1'.repeat(32), 'Ada', [PERSON]);
+  const story = raw('2'.repeat(32), 'A story', [...GRAPH_KIND_TYPE_IDS.story]);
+  const edge = { id: 'r', spaceId: 'a'.repeat(32), typeId: 'p'.repeat(32), type: null };
+  const responses: Record<string, () => Promise<unknown>> = {
+    GraphNeighbourhoodCentre: async () => centre,
+    ent: async () => ({ ent_out: { nodes: [] }, ent_in: { nodes: [{ ...person, edge: [{ ...edge, id: 'r1' }] }] } }),
+    story: async () => ({ story_out: { nodes: [{ ...edge, id: 'r2', toEntity: story }] }, story_in: { nodes: [] } }),
+  };
+  const respond = (overrides: Partial<typeof responses> = {}) =>
+    api.request.mockImplementation(({ query }: { query: Parameters<typeof print>[0] }) => {
+      const printed = print(query);
+      const key = printed.includes('GraphNeighbourhoodCentre')
+        ? 'GraphNeighbourhoodCentre'
+        : printed.match(/(\w+)_out:/)![1];
+      return { ...responses, ...overrides }[key]!();
+    });
+
+  it('asks for the centre and each kind separately, each with its own variables and a deadline', async () => {
+    respond();
+    const hop = await fetchHop1(CENTRE, filter);
+    expect(api.request).toHaveBeenCalledTimes(3);
+    for (const [options] of api.request.mock.calls as Array<
+      [{ query: Parameters<typeof declaredVariables>[0]; variables: object; timeoutMs: number }]
+    >) {
+      expect(Object.keys(options.variables).sort()).toEqual(declaredVariables(options.query).sort());
+      expect(options.timeoutMs).toBe(GRAPH_REQUEST_TIMEOUT_MS);
+    }
+    expect(hop.neighbours.map(({ node }) => node.name)).toEqual(['Ada', 'A story']);
+  });
+
+  it('drops a kind that fails and keeps the rest', async () => {
+    respond({ ent: () => Promise.reject(new Error('timed out')) });
+    const hop = await fetchHop1(CENTRE, filter);
+    expect(hop.centre?.id).toBe(CENTRE);
+    expect(hop.neighbours.map(({ node }) => node.name)).toEqual(['A story']);
+  });
+
+  it('fails when the centre fails, or every kind does', async () => {
+    respond({ GraphNeighbourhoodCentre: () => Promise.reject(new Error('centre')) });
+    await expect(fetchHop1(CENTRE, filter)).rejects.toThrow('centre');
+    respond({ ent: () => Promise.reject(new Error('ent')), story: () => Promise.reject(new Error('story')) });
+    await expect(fetchHop1(CENTRE, filter)).rejects.toThrow('ent');
   });
 });

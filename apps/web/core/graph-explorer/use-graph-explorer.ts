@@ -68,6 +68,7 @@ export function usePrefetchHop1(filter: GraphFilter | null) {
           queryKey: [...neighbourhoodKey('hop1', filter), entityId],
           queryFn: ({ signal }) => fetchHop1(entityId, filter, signal),
           staleTime: STALE_MS,
+          retry: false,
         });
       }, GRAPH_HOP_PREFETCH_DELAY_MS);
     },
@@ -124,6 +125,8 @@ export function useGraphNeighbourhood({
     queryFn: ({ signal }) => fetchHop1(centreId, filter!, signal),
     enabled: filter !== null,
     staleTime: STALE_MS,
+    // The fetches carry their own deadline; a query that missed it would miss it again.
+    retry: false,
     // The previous graph stays on screen until the next centre's lands, then eases into it.
     placeholderData: keepPreviousData,
   });
@@ -148,6 +151,7 @@ export function useGraphNeighbourhood({
     queryFn: ({ signal }) => fetchHop2(expandIds, filter!, signal),
     enabled: filter !== null && expandIds.length > 0,
     staleTime: STALE_MS,
+    retry: false,
     // Keyed by parent, so a previous ring only fills nodes the new hop 1 shares, until its own lands.
     placeholderData: (previous, previousQuery) =>
       underFilter(previousQuery?.queryKey, filter && neighbourhoodKey('hop2', filter)) ? previous : undefined,
@@ -180,6 +184,7 @@ export function useGraphNeighbourhood({
     queryFn: ({ signal }) => fetchCrossLinks(shownIds, filter!, signal),
     enabled: filter !== null && shownIds.length > 1,
     staleTime: STALE_MS,
+    retry: false,
     // Cross-links are drawn only between shown nodes, so the previous set's are safe until these land.
     placeholderData: (previous, previousQuery) =>
       underFilter(previousQuery?.queryKey, filter && neighbourhoodKey('cross', filter)) ? previous : undefined,
