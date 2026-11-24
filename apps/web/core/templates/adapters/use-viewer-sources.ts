@@ -38,10 +38,8 @@ const VIEWER_LINK_PROPERTY_IDS = [
 ];
 
 /**
- * The page entity with the viewer's personal-space links (`VIEWER_LINK_PROPERTY_IDS`) appended after
- * its own. Only those properties are taken from the viewer's space, and they go last, so the readers
- * that dedupe by target (`readEntityRelations`, `getClaimSources`) keep the page's own link when both
- * spaces have one.
+ * The page entity with the viewer's personal-space `VIEWER_LINK_PROPERTY_IDS` links appended last,
+ * so readers that dedupe by target keep the page's own link when both spaces have one.
  */
 export function withViewerSources(entity: Entity | null, viewerEntity: Entity | null): Entity | null {
   if (!entity || !viewerEntity) return entity;

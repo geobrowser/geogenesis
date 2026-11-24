@@ -23,12 +23,8 @@ import {
 import { useTemplateAddPublish } from './use-template-add-publish';
 
 /**
- * Wires live Geo GRC-20 store mutations (`useMutate`) and fuzzy entity search (`E.findFuzzyPage`)
- * into `EntityActionCallbacks` for the inline `+` popovers and relation deletes in v2 templates.
- *
- * Add claim, Add event and Add quote publish on submit (`useTemplateAddPublish`). The rest (Add
- * context, Dispute, relation deletes) still only stage local edits in the page's space; Add context
- * and Dispute are hidden (`TEMPLATE_ACTIONS`).
+ * `EntityActionCallbacks` for live templates. Add claim / event / quote publish on submit
+ * (`useTemplateAddPublish`); Add context, Dispute and relation deletes only stage local edits.
  */
 export function useLiveEntityActions({
   entityId,

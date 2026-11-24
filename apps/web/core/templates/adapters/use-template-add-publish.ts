@@ -21,11 +21,7 @@ import { usePrivy } from '~/core/wallet/auth-hooks';
 import type { TemplateAddResult } from '../models';
 import { type TemplateAddAction, type TemplateAddOwner, buildTemplateAddEdits } from './template-add-edits';
 
-/**
- * Who publishes a template Add claim / Add event / Add quote straight into the page's space. Editors only: a
- * non-editor member's publish in a DAO space would be a slow proposal waiting on votes, so they,
- * like non-members, publish into their own personal space.
- */
+/** Editors publish template adds into the page's space; everyone else into their personal space. */
 export const TEMPLATE_ADD_WRITERS: PageSpaceWriters = 'editors';
 
 /** Refetches after the indexer has had time to pick the publish up. */
@@ -58,18 +54,9 @@ export function parseTemplateAddIntent(intent: string | undefined): TemplateAddA
 }
 
 /**
- * Publishes a template Add claim / Add event / Add quote (GEO-3836), the way Add source and votes do:
- *
- * - The space comes from `pickWriteSpace` with `TEMPLATE_ADD_WRITERS`.
- * - The new entity and its link to the page are published on submit with no confirm step, and
- *   written to the local store (as published) only once that succeeds, so nothing is ever left
- *   for Review edits.
- * - A viewer whose personal space is still on its way (a new account) has the draft queued and
- *   published once the space exists. A signed-out viewer is sent to sign in; the forms ask first
- *   (`canOpenAddForm`), so the draft is never typed for nothing.
- *
- * Every failure is shown in the status bar: `usePublish` reports its own, and the rest are
- * dispatched here.
+ * Publishes a template add on submit, then writes it to the store already published, so nothing
+ * reaches Review edits. Drafts made while a new account's space is created are queued; every failure
+ * is shown in the status bar (`usePublish` reports its own).
  */
 export function useTemplateAddPublish({ owner, pageSpaceId }: { owner: TemplateAddOwner; pageSpaceId: string }) {
   const { authenticated } = usePrivy();
@@ -178,8 +165,7 @@ export function useTemplateAddPublish({ owner, pageSpaceId }: { owner: TemplateA
     },
   });
 
-  // A queued draft dropped without replaying (a sign-out clears the queue) settles as not added, so
-  // its pending row doesn't wait forever.
+  // A queued draft dropped without replaying (a sign-out clears the queue) settles as not added.
   const wasQueuedRef = React.useRef(false);
   React.useEffect(() => {
     if (isQueued) {

@@ -21,16 +21,8 @@ function normId(id: string) {
 }
 
 /**
- * Rows a template `+` added (GEO-3836), drawn ahead of the list until the list has them itself.
- *
- * `add` draws a pending row at once. When the publish succeeds the row becomes the real entity (its
- * id, its space), and once the refetched list holds that id this row is dropped in favour of the
- * list's. A failed publish drops the row; the failure itself has already been shown.
- *
- * A row the list never picks up stays for as long as the section is mounted: a non-member's
- * addition published to their personal space, where the page's lists don't read.
- *
- * With no publish (a fixture page with no live callbacks), the row is added as it is.
+ * Rows a template `+` added, drawn until the list holds their id: pending, then the published entity,
+ * dropped on failure. Without a publish (fixture pages) the row is added as it is.
  */
 export function usePendingAdds<Row extends { id: string }>(listedIds: readonly string[]) {
   const [rows, setRows] = React.useState<Row[]>([]);
