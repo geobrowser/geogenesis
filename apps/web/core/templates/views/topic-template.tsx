@@ -21,6 +21,7 @@ import {
   TEMPLATE_CARD_SURFACE,
   TemplateBadge,
   TemplateShell,
+  TemplateTitleRow,
 } from '../primitives';
 
 export interface TopicTemplateProps {
@@ -122,24 +123,33 @@ export function TopicTemplate({
         subtopicsNav
       ) : (
         <header className="flex flex-col gap-3.5">
-          <div className="flex items-start justify-between gap-4">
+          <TemplateTitleRow
+            singleLine
+            meta={
+              <>
+                <TemplateBadge tone="neutral">Topic</TemplateBadge>
+                {model.tags?.map(tag => (
+                  <TemplateBadge key={tag} tone="neutral">
+                    {tag}
+                  </TemplateBadge>
+                ))}
+              </>
+            }
+            actions={
+              <>
+                <EntityContextTogglePill />
+                {headerActions ?? (
+                  <EntityOverflowMenu
+                    target={{ id: model.id, kind: 'Topic', title: model.title }}
+                    isPageRoot
+                    size="md"
+                  />
+                )}
+              </>
+            }
+          >
             <h1 className="m-0 text-entityTitle text-pretty text-text">{model.title}</h1>
-            <div className="flex shrink-0 items-center gap-2 pt-1.5">
-              <EntityContextTogglePill />
-              {headerActions ?? (
-                <EntityOverflowMenu target={{ id: model.id, kind: 'Topic', title: model.title }} isPageRoot size="md" />
-              )}
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
-            <TemplateBadge tone="neutral">Topic</TemplateBadge>
-            {model.tags?.map(tag => (
-              <TemplateBadge key={tag} tone="neutral">
-                {tag}
-              </TemplateBadge>
-            ))}
-          </div>
+          </TemplateTitleRow>
 
           {model.lede && (
             <p className="m-0 mt-1 max-w-[780px] text-[16.5px] leading-[25px] text-text/85">{model.lede}</p>

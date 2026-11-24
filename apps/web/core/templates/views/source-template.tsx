@@ -19,6 +19,7 @@ import {
   TemplateBadge,
   TemplateEmptyState,
   TemplateShell,
+  TemplateTitleRow,
   TopicImagePills,
 } from '../primitives';
 
@@ -68,29 +69,33 @@ export function SourceTemplate({
       className={className}
     >
       <header className="flex flex-col gap-3.5">
-        <div className="flex items-start justify-between gap-4">
+        <TemplateTitleRow
+          meta={
+            <>
+              <TemplateBadge tone="source">Source</TemplateBadge>
+              {model.sourceType && <TemplateBadge tone="neutral">{model.sourceType}</TemplateBadge>}
+              {model.tags?.map(tag => (
+                <TemplateBadge key={tag} tone="fact">
+                  {tag}
+                </TemplateBadge>
+              ))}
+            </>
+          }
+          actions={
+            <>
+              <EntityContextTogglePill />
+              {headerActions ?? (
+                <EntityOverflowMenu
+                  target={{ id: model.id, kind: model.sourceType ?? 'Source', title: model.title }}
+                  isPageRoot
+                  size="md"
+                />
+              )}
+            </>
+          }
+        >
           <h1 className="m-0 text-entityTitle text-pretty text-text">{model.title}</h1>
-          <div className="flex shrink-0 items-center gap-2 pt-1.5">
-            <EntityContextTogglePill />
-            {headerActions ?? (
-              <EntityOverflowMenu
-                target={{ id: model.id, kind: model.sourceType ?? 'Source', title: model.title }}
-                isPageRoot
-                size="md"
-              />
-            )}
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <TemplateBadge tone="source">Source</TemplateBadge>
-          {model.sourceType && <TemplateBadge tone="neutral">{model.sourceType}</TemplateBadge>}
-          {model.tags?.map(tag => (
-            <TemplateBadge key={tag} tone="fact">
-              {tag}
-            </TemplateBadge>
-          ))}
-        </div>
+        </TemplateTitleRow>
 
         {model.summary && <p className="m-0 mt-0.5 text-[16.5px] leading-[25px] text-text/85">{model.summary}</p>}
 

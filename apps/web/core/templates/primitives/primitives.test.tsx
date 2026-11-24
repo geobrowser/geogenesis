@@ -22,6 +22,7 @@ import {
   SourceChipList,
   SplitBars,
   TemplateBreadcrumb,
+  TemplateTitleRow,
   VoteBox,
 } from './index';
 
@@ -229,6 +230,46 @@ describe('RelatedListSection', () => {
     expect(screen.getByText('Key quote from the post.')).toBeInTheDocument();
     expect(document.querySelectorAll('[data-masonry-col]').length).toBeGreaterThan(0);
   });
+
+  it("puts an X post card's date under the author with the handle, not beside the card actions", () => {
+    render(
+      <RelatedListSection
+        section={{
+          id: 'x-sources',
+          title: 'Sources',
+          layout: 'cards',
+          items: [
+            {
+              id: 'tw-2',
+              kind: 'source',
+              kindLabel: 'Post',
+              mediaType: 'tweet',
+              title: 'Rates are going up',
+              publisher: 'Stella Example',
+              authorHandle: '@stella',
+              date: '3 Nov 2026',
+              excerpt: 'Rates are going up.',
+            },
+            {
+              id: 'tw-3',
+              kind: 'source',
+              kindLabel: 'Post',
+              mediaType: 'tweet',
+              title: 'No handle here',
+              publisher: 'Plain Account',
+              date: '4 Nov 2026',
+              excerpt: 'No handle here.',
+            },
+          ],
+        }}
+      />
+    );
+
+    const withHandle = screen.getByText('@stella · 3 Nov 2026');
+    expect(withHandle.parentElement).toHaveTextContent('Stella Example');
+    const dateOnly = screen.getByText('4 Nov 2026');
+    expect(dateOnly.parentElement).toHaveTextContent('Plain Account');
+  });
 });
 
 describe('TemplateBreadcrumb', () => {
@@ -246,6 +287,82 @@ describe('TemplateBreadcrumb', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Topic root' }));
     expect(onRoot).toHaveBeenCalledTimes(1);
     expect(screen.getByText('Current claim')).toHaveAttribute('aria-current', 'page');
+  });
+});
+
+describe('TemplateTitleRow', () => {
+  it('puts the title on its own line and the actions on the type row, right of the chips', () => {
+    const { container } = render(
+      <div>
+        <TemplateTitleRow meta={<span>News story</span>} actions={<button type="button">Menu</button>}>
+          <h1>A sentence-long news story title</h1>
+        </TemplateTitleRow>
+      </div>
+    );
+
+    const wrapper = container.firstElementChild!;
+    const heading = screen.getByRole('heading', { name: 'A sentence-long news story title' });
+    const actions = screen.getByRole('button', { name: 'Menu' }).parentElement!;
+    const chips = screen.getByText('News story').parentElement!;
+    const typeRow = actions.parentElement!;
+
+    // The title is a sibling of the type row, not sharing a line with the actions.
+    expect(heading.parentElement).toBe(wrapper);
+    expect(typeRow.parentElement).toBe(wrapper);
+    expect(chips.parentElement).toBe(typeRow);
+    expect(typeRow.firstElementChild).toBe(chips);
+    expect(typeRow.lastElementChild).toBe(actions);
+    expect(typeRow).toHaveClass('flex', 'items-start', 'justify-between');
+    // Chips wrap inside their own column; the actions never shrink and stay one chip line tall.
+    expect(chips).toHaveClass('min-w-0', 'flex-1', 'flex-wrap');
+    expect(actions).toHaveClass('shrink-0', 'h-7', 'ml-auto');
+  });
+
+  it('clips chips that do not fit to keep a single-line row whole', () => {
+    render(
+      <TemplateTitleRow singleLine meta={<span>Topic</span>} actions={<button type="button">Menu</button>}>
+        <h1>Israel-Gaza war</h1>
+      </TemplateTitleRow>
+    );
+
+    const chips = screen.getByText('Topic').parentElement!;
+    expect(chips).toHaveClass('flex-wrap', 'h-7', 'overflow-hidden');
+    expect(screen.getByRole('button', { name: 'Menu' }).parentElement).toHaveClass('shrink-0');
+  });
+
+  it('gives the actions their own right-aligned row when there are no chips', () => {
+    render(
+      <TemplateTitleRow actions={<button type="button">Menu</button>}>
+        <h1>Untyped</h1>
+      </TemplateTitleRow>
+    );
+
+    const actions = screen.getByRole('button', { name: 'Menu' }).parentElement!;
+    expect(actions.parentElement!.children).toHaveLength(1);
+    expect(actions).toHaveClass('ml-auto');
+  });
+});
+
+describe('TemplateBreadcrumb layout', () => {
+  it('keeps the trail on one line, with ancestors truncating before the current page', () => {
+    render(
+      <TemplateBreadcrumb
+        items={[
+          { id: 'space', label: 'A long parent space name', href: '/space/a' },
+          { id: 'claim', label: 'Current claim' },
+        ]}
+      />
+    );
+
+    const nav = screen.getByRole('navigation', { name: 'Breadcrumb' });
+    expect(nav).not.toHaveClass('flex-wrap');
+    expect(screen.getByRole('link', { name: 'A long parent space name' })).toHaveClass(
+      'truncate',
+      'min-w-0',
+      'max-w-[45%]'
+    );
+    expect(screen.getByText('Current claim')).toHaveClass('truncate', 'flex-1', 'basis-0', 'min-w-[40%]');
+    expect(nav.querySelector('svg')).toHaveClass('shrink-0');
   });
 });
 

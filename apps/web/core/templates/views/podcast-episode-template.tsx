@@ -23,6 +23,7 @@ import {
   TEMPLATE_CARD_SURFACE,
   TemplateBadge,
   TemplateShell,
+  TemplateTitleRow,
 } from '../primitives';
 import {
   PodcastArtwork,
@@ -102,16 +103,16 @@ export function PodcastEpisodeTemplate({
           />
 
           <div className="flex min-w-0 flex-1 flex-col gap-2.5">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex min-w-0 flex-col gap-2">
-                <div className="flex flex-wrap items-center gap-2">
+            <TemplateTitleRow
+              meta={
+                <>
                   <TemplateBadge tone="episode">Episode</TemplateBadge>
 
                   {model.show &&
                     (model.show.href ? (
                       <Link
                         href={model.show.href}
-                        className="inline-flex items-center gap-1.5 text-[14.5px] font-semibold text-text no-underline transition-colors hover:text-[#4c1fd4]"
+                        className="inline-flex max-w-full min-w-0 items-center gap-1.5 text-[14.5px] font-semibold text-text no-underline transition-colors hover:text-[#4c1fd4]"
                       >
                         {model.show.artworkUrl && (
                           <PodcastArtwork
@@ -120,39 +121,42 @@ export function PodcastEpisodeTemplate({
                             className="size-5 rounded"
                           />
                         )}
-                        <span>{model.show.name}</span>
+                        <span className="truncate">{model.show.name}</span>
                       </Link>
                     ) : model.show.onSelect ? (
                       <button
                         type="button"
                         onClick={model.show.onSelect}
-                        className="inline-flex cursor-pointer items-center gap-1.5 border-0 bg-transparent p-0 text-[14.5px] font-semibold text-text transition-colors hover:text-[#4c1fd4]"
+                        className="inline-flex max-w-full min-w-0 cursor-pointer items-center gap-1.5 border-0 bg-transparent p-0 text-[14.5px] font-semibold text-text transition-colors hover:text-[#4c1fd4]"
                       >
-                        <span>{model.show.name}</span>
+                        <span className="truncate">{model.show.name}</span>
                       </button>
                     ) : (
-                      <span className="text-[14.5px] font-semibold text-text">{model.show.name}</span>
+                      <span className="max-w-full truncate text-[14.5px] font-semibold text-text">
+                        {model.show.name}
+                      </span>
                     ))}
 
                   {metaParts.length > 0 && (
                     <span className="text-[14px] text-grey-04 tabular-nums">{metaParts.join(' · ')}</span>
                   )}
-                </div>
-
-                <h1 className="m-0 text-entityTitle text-pretty text-text">{model.title}</h1>
-              </div>
-
-              <div className="flex shrink-0 items-center gap-2 pt-1">
-                <EntityContextTogglePill />
-                {headerActions ?? (
-                  <EntityOverflowMenu
-                    target={{ id: model.id, kind: 'Episode', title: model.title }}
-                    isPageRoot
-                    size="md"
-                  />
-                )}
-              </div>
-            </div>
+                </>
+              }
+              actions={
+                <>
+                  <EntityContextTogglePill />
+                  {headerActions ?? (
+                    <EntityOverflowMenu
+                      target={{ id: model.id, kind: 'Episode', title: model.title }}
+                      isPageRoot
+                      size="md"
+                    />
+                  )}
+                </>
+              }
+            >
+              <h1 className="m-0 text-entityTitle text-pretty text-text">{model.title}</h1>
+            </TemplateTitleRow>
 
             <PodcastTopicChips topics={model.topics} />
 

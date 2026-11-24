@@ -268,6 +268,52 @@ export function resolveTemplateImageUrl(raw: string | null | undefined): string 
   return getImagePath(trimmed);
 }
 
+// First path segments on x.com / twitter.com that are app routes, not accounts.
+const RESERVED_X_PATHS =
+  /^(i|home|explore|search|intent|hashtag|status|statuses|share|settings|messages|notifications|compose)$/i;
+
+/** The `@handle` in an x.com / twitter.com post or profile URL; undefined for any other link. */
+export function handleFromSocialUrl(rawUrl: string | null | undefined): string | undefined {
+  if (!rawUrl) return undefined;
+  try {
+    const parsed = new URL(rawUrl.trim());
+    // Only the hosts posts and profiles live on; pic./help./developer. paths are not handles.
+    if (!/^((www|mobile|m)\.)?(x\.com|twitter\.com)$/i.test(parsed.hostname)) return undefined;
+    const segment = parsed.pathname.split('/').filter(Boolean)[0];
+    const handle = segment?.replace(/^@/, '');
+    if (!handle || !/^[A-Za-z0-9_]{1,15}$/.test(handle) || RESERVED_X_PATHS.test(handle)) return undefined;
+    return `@${handle}`;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Who wrote a social post, from what the post entity carries plus the async author lookup
+ * (`fetchPostAuthorMetadata`), in one fixed order so every surface names a post's author the same
+ * way and the name doesn't change when the lookup lands:
+ *
+ * - name: the post's own Authors relation (as loaded, so an unpublished edit shows), then the
+ *   looked-up author name, then the handle. Never the post's own name (a tweet's name is its text).
+ * - handle: the post's own X URL (read with the entity, so there is no wait), then the looked-up
+ *   handle (which adds the author's X property for posts that link elsewhere).
+ *
+ * Either is undefined when nothing names it; each caller picks its own placeholder.
+ */
+export function resolvePostAuthor({
+  relationName,
+  webUrl,
+  lookup,
+}: {
+  relationName?: string | null;
+  webUrl?: string | null;
+  lookup?: { name?: string | null; handle?: string | null } | null;
+}): { name?: string; handle?: string } {
+  const handle = handleFromSocialUrl(webUrl) ?? (lookup?.handle?.trim() || undefined);
+  const name = relationName?.trim() || lookup?.name?.trim() || handle;
+  return { name, handle };
+}
+
 /**
  * Extract all non-sectioned outgoing graph relations on an entity into grouped `Context` rows.
  * Deduplicates by `(predicate, toEntityId)` and excludes structural Geo properties (Types, Cover,

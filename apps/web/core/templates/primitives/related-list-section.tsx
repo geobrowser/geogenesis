@@ -209,13 +209,14 @@ export function RelatedListSection({ section, className }: RelatedListSectionPro
             ))}
 
           {useCards && allItems.length > 2 && (railNav.left || railNav.right) && (
+            // Each arrow's ::after widens its tap target to 32px without changing how it looks.
             <div className="mr-1 flex items-center gap-1.5">
               <button
                 type="button"
                 aria-label={`Scroll ${title.toLowerCase()} left`}
                 disabled={!railNav.left}
                 onClick={() => scrollRailByColumn(-1)}
-                className="inline-grid size-7 cursor-pointer place-items-center rounded-full border border-grey-02 bg-white text-text transition-colors hover:border-text disabled:cursor-default disabled:border-divider disabled:text-grey-03"
+                className="relative inline-grid size-7 cursor-pointer place-items-center rounded-full border border-grey-02 bg-white text-text transition-colors after:absolute after:-inset-0.5 hover:border-text disabled:cursor-default disabled:border-divider disabled:text-grey-03"
               >
                 <ArrowLeftIcon className="size-3.5" />
               </button>
@@ -224,7 +225,7 @@ export function RelatedListSection({ section, className }: RelatedListSectionPro
                 aria-label={`Scroll ${title.toLowerCase()} right`}
                 disabled={!railNav.right}
                 onClick={() => scrollRailByColumn(1)}
-                className="inline-grid size-7 cursor-pointer place-items-center rounded-full border border-grey-02 bg-white text-text transition-colors hover:border-text disabled:cursor-default disabled:border-divider disabled:text-grey-03"
+                className="relative inline-grid size-7 cursor-pointer place-items-center rounded-full border border-grey-02 bg-white text-text transition-colors after:absolute after:-inset-0.5 hover:border-text disabled:cursor-default disabled:border-divider disabled:text-grey-03"
               >
                 <ArrowRightIcon className="size-3.5" />
               </button>
@@ -317,9 +318,19 @@ function estimateCardWeight(item: EntityLinkRowModel): number {
 }
 
 /**
+ * Column widths that fit a whole number of columns in the rail (`100cqw` is the rail's width).
+ *
+ * Fixed pixel widths cut the last visible card at whatever point the page width happened to put
+ * it, often mid-word (GEO-3819). Here two or three columns fill the row exactly, so the next card
+ * starts out of view and the arrows bring it in; on a phone one column takes 84% and the next one
+ * peeks on purpose. `scroll-px-2` on the scroller makes each snap point line up with that grid.
+ */
+const RAIL_COLUMN_WIDTH_CLASS = 'w-[84cqw] @[540px]:w-[calc((100cqw-1rem)/2)] @[1000px]:w-[calc((100cqw-2rem)/3)]';
+
+/**
  * Horizontally scrollable masonry rail:
- * - For 1–3 cards (e.g. News story Sources), renders a single horizontal snap-scroll row of
- *   crisp fixed-width cards.
+ * - For 1–3 cards (e.g. News story Sources), renders a single horizontal snap-scroll row with
+ *   one card per column (widths from `RAIL_COLUMN_WIDTH_CLASS`).
  * - For 4+ cards (e.g. Topic `Sources & evidence`), packs cards into balanced 2-card vertical
  *   masonry columns inside a horizontal snap-scroll strip so tall media cards never leave awkward
  *   vertical whitespace AND users can smoothly swipe or click `←` `→` horizontally through all cards.
@@ -357,22 +368,17 @@ function HorizontalMasonryRail({
     return cols.filter(col => col.length > 0);
   }, [items]);
 
-  const singleRow = items.length <= 3;
-
   return (
     <div className="@container relative">
       <div
         ref={scrollerRef}
-        className="-mx-2 flex snap-x snap-mandatory [scrollbar-width:none] items-start gap-4 overflow-x-auto px-2 py-2 [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+        className="-mx-2 flex snap-x snap-mandatory scroll-px-2 [scrollbar-width:none] items-start gap-4 overflow-x-auto px-2 py-2 [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
       >
         {columns.map((colItems, colIdx) => (
           <div
             key={colItems[0]?.id ?? colIdx}
             data-masonry-col
-            className={cx(
-              'flex shrink-0 snap-start flex-col gap-4',
-              singleRow ? 'w-[min(360px,84cqw)]' : 'w-[min(390px,84cqw)]'
-            )}
+            className={cx('flex shrink-0 snap-start flex-col gap-4', RAIL_COLUMN_WIDTH_CLASS)}
           >
             {colItems.map(item => (
               <RichMediaCard key={item.id} item={item} />
@@ -567,15 +573,18 @@ function RichMediaCard({ item }: { item: EntityLinkRowModel }) {
                   <span className="truncate text-[15px] leading-[19px] font-semibold text-text group-hover/link:text-[#4c1fd4]">
                     {accountName}
                   </span>
-                  {secondaryHandle && (
-                    <span className="truncate text-[13.5px] leading-[17px] text-grey-04">{secondaryHandle}</span>
+                  {/* The date sits under the name with the handle (as on X), not beside the actions,
+                      so a narrow card doesn't cut the name to a few letters. */}
+                  {(secondaryHandle || item.date) && (
+                    <span className="truncate text-[13.5px] leading-[17px] text-grey-04">
+                      {[secondaryHandle, item.date].filter(Boolean).join(' · ')}
+                    </span>
                   )}
                 </div>
               </div>
             </CardClickable>
 
             <div className="flex shrink-0 items-center gap-1">
-              {item.date && <span className="mr-1 text-[14px] text-grey-04">{item.date}</span>}
               {overflow}
               <CardClickable
                 item={item}

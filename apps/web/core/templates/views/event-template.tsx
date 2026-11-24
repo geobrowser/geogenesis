@@ -17,6 +17,7 @@ import {
   TEMPLATE_INTERACTIVE_CARD_SURFACE,
   TemplateBadge,
   TemplateShell,
+  TemplateTitleRow,
 } from '../primitives';
 
 export interface EventTemplateProps {
@@ -51,21 +52,25 @@ export function EventTemplate({
       className={className}
     >
       <header className="flex flex-col gap-3.5">
-        <div className="flex items-start justify-between gap-4">
+        <TemplateTitleRow
+          meta={
+            <>
+              <TemplateBadge tone="event">Event</TemplateBadge>
+              {model.when && <TemplateBadge tone="neutral">{model.when}</TemplateBadge>}
+              {model.storyCountLabel && <TemplateBadge tone="neutral">{model.storyCountLabel}</TemplateBadge>}
+            </>
+          }
+          actions={
+            <>
+              <EntityContextTogglePill />
+              {headerActions ?? (
+                <EntityOverflowMenu target={{ id: model.id, kind: 'Event', title: model.title }} isPageRoot size="md" />
+              )}
+            </>
+          }
+        >
           <h1 className="m-0 text-entityTitle text-pretty text-text">{model.title}</h1>
-          <div className="flex shrink-0 items-center gap-2 pt-1.5">
-            <EntityContextTogglePill />
-            {headerActions ?? (
-              <EntityOverflowMenu target={{ id: model.id, kind: 'Event', title: model.title }} isPageRoot size="md" />
-            )}
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <TemplateBadge tone="event">Event</TemplateBadge>
-          {model.when && <TemplateBadge tone="neutral">{model.when}</TemplateBadge>}
-          {model.storyCountLabel && <TemplateBadge tone="neutral">{model.storyCountLabel}</TemplateBadge>}
-        </div>
+        </TemplateTitleRow>
 
         {model.summary && <p className="m-0 mt-0.5 text-[16.5px] leading-[25px] text-text/85">{model.summary}</p>}
         <EntityInlineContext targetId={model.id} targetTitle={model.title} targetKind="Event" />

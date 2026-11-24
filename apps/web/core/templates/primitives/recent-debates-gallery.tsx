@@ -181,7 +181,7 @@ export function RecentDebatesGallery({
       <div className="@container relative">
         <div
           ref={scrollerRef}
-          className="-mx-2 flex snap-x snap-mandatory [scrollbar-width:none] items-stretch gap-4 overflow-x-auto px-2 py-2 [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+          className="-mx-2 flex snap-x snap-mandatory scroll-px-2 [scrollbar-width:none] items-stretch gap-4 overflow-x-auto px-2 py-2 [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
         >
           {displayDebates.map(debate => (
             <RecentDebateGalleryCard key={debate.id} debate={debate} />
@@ -236,7 +236,7 @@ function RecentDebateGalleryCard({ debate }: { debate: TopicRecentDebateModel })
     <article
       data-debate-gallery-card
       className={cx(
-        'flex w-[min(300px,84cqw)] shrink-0 snap-start flex-col overflow-hidden transition-all duration-200 hover:-translate-y-[1.5px] hover:border-black/[0.06] hover:shadow-[0_18px_40px_-8px_rgba(0,0,0,0.095),0_4px_14px_-2px_rgba(0,0,0,0.04)]',
+        'flex w-[84cqw] shrink-0 snap-start flex-col overflow-hidden transition-all duration-200 hover:-translate-y-[1.5px] hover:border-black/[0.06] hover:shadow-[0_18px_40px_-8px_rgba(0,0,0,0.095),0_4px_14px_-2px_rgba(0,0,0,0.04)] @[540px]:w-[calc((100cqw-1rem)/2)] @[860px]:w-[calc((100cqw-2rem)/3)]',
         TEMPLATE_CARD_SURFACE
       )}
     >
