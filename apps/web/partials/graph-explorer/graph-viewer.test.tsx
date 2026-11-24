@@ -73,7 +73,7 @@ const hooks = vi.hoisted(() => ({
   useGraphNeighbourhood: vi.fn(),
 }));
 
-const EMPTY_SUMMARY = { claims: [], bands: { agreed: 0, contested: 0, rejected: 0 }, truncated: false };
+const EMPTY_SUMMARY = { claims: [], truncated: false };
 const topicSummary = vi.hoisted(() => ({ data: null as unknown }));
 
 vi.mock('~/core/graph-explorer/use-graph-explorer', () => ({
@@ -398,13 +398,12 @@ describe('GraphViewer', () => {
   it('says a cut-short topic summary is a lower bound', () => {
     topicSummary.data = {
       claims: [{ id: 'c', name: 'A claim', spaceId: 's', positive: 3, negative: 0, band: 'agreed' }],
-      bands: { agreed: 1, contested: 0, rejected: 0 },
       truncated: true,
     };
     render(<Viewer start={TOPIC} scope={{ ...scope, topicId: TOPIC, topicSpaceId: SPACE }} />);
     expect(
       screen.getByText(
-        'At least 1 claim about this topic has responses so far; only its first 2,000 claims were counted.'
+        'At least 1 claim with 3+ responses; only its first 2,000 claims were counted.'
       )
     ).toBeTruthy();
   });

@@ -1,15 +1,15 @@
 import { ARTICLE_TYPE_ID } from '~/core/topics/ontology';
 import { normId } from '~/core/utils/norm-id';
 
-import { type ClaimBand, agreePercent, claimBand } from './claim-band';
+import { type ClaimBand, MIN_RESPONSES_FOR_BAND, agreePercent, claimBand } from './claim-band';
 import type { GraphNode } from './fetch-graph-neighbourhood';
 import type { GraphKind } from './graph-kinds';
 import type { GraphSelection } from './select-graph';
 import type { Spoke } from './spokes';
 import type { SummarisedClaim } from './topic-claims-summary';
 
-/** Below this many responses a claim shows its count but no percent or band, as on the share card. */
-export const MIN_RESPONSES_FOR_BAND = 3;
+export { MIN_RESPONSES_FOR_BAND };
+
 export const OVERVIEW_ROWS = 4;
 /** Rows a group shows before "Show all". */
 export const GROUP_ROWS = 6;

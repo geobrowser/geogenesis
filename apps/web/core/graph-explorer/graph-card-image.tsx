@@ -8,9 +8,10 @@ import { ogImageToJpeg } from '~/core/og-jpeg';
 
 import { GeoMark } from '~/design-system/icons/geo-mark';
 
-import { CLAIM_BAND_LABELS, type ClaimBand, agreePercent, claimBand } from './claim-band';
+import { CLAIM_BAND_LABELS, type ClaimBand, MIN_RESPONSES_FOR_BAND, agreePercent, claimBand } from './claim-band';
 import type { GraphKind } from './graph-kinds';
 import type { Counts, GraphCardData, GraphCardNode } from './server/graph-card-data';
+import { claimsHeadline } from './topic-claims-summary';
 
 /**
  * The graph explorer's 1200×630 share card: title and one stat on the left, a crop of the real
@@ -20,7 +21,7 @@ import type { Counts, GraphCardData, GraphCardNode } from './server/graph-card-d
 export const CARD_W = 1200;
 export const CARD_H = 630;
 /** A percent and a band off one or two votes reads as a verdict; below this the card says the count. */
-export const MIN_RESPONSES_FOR_PERCENT = 3;
+export const MIN_RESPONSES_FOR_PERCENT = MIN_RESPONSES_FOR_BAND;
 
 const BAND: Record<ClaimBand, string> = { agreed: '#1e824c', contested: '#b75700', rejected: '#6833ff' };
 const BAND_GLOW: Record<ClaimBand, string> = {
@@ -437,28 +438,19 @@ function Stat({ data }: { data: GraphCardData }) {
     );
   }
   if (summary && summary.claims.length > 0) {
-    // Same threshold as the claims: only claims with enough responses carry a band.
-    const banded = summary.claims.filter(claim => claim.positive + claim.negative >= MIN_RESPONSES_FOR_PERCENT);
-    const bands = { agreed: 0, contested: 0, rejected: 0 };
-    for (const claim of banded) bands[claim.band]++;
-    if (banded.length === 0)
-      return (
-        <span style={{ fontSize: 26, color: '#e6e6e6' }}>
-          {`${summary.claims.length} ${summary.claims.length === 1 ? 'claim has' : 'claims have'} responses so far`}
-        </span>
-      );
+    const headline = claimsHeadline(summary.claims)!;
+    const bands = headline.bands;
+    if (!bands) return <span style={{ fontSize: 26, color: '#e6e6e6' }}>{headline.text}</span>;
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <span style={{ fontSize: 26, color: '#e6e6e6' }}>
-          {`${banded.length} ${banded.length === 1 ? 'claim' : 'claims'} with ${MIN_RESPONSES_FOR_PERCENT}+ responses`}
-        </span>
+        <span style={{ fontSize: 26, color: '#e6e6e6' }}>{headline.text}</span>
         <div style={{ display: 'flex', width: 500, height: 12, borderRadius: 12, overflow: 'hidden' }}>
           {(['agreed', 'contested', 'rejected'] as const)
             .filter(band => bands[band])
             .map(band => (
               <div
                 key={band}
-                style={{ width: (500 * bands[band]) / banded.length, height: 12, background: BAND[band] }}
+                style={{ width: (500 * bands[band]) / headline.banded, height: 12, background: BAND[band] }}
               />
             ))}
         </div>

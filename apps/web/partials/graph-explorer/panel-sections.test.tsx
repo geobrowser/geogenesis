@@ -153,7 +153,6 @@ describe('TopicOverview', () => {
         { id: id(3), name: 'Settled', spaceId: 's', positive: 9, negative: 1, band: 'agreed' },
         { id: id(4), name: 'Too few', spaceId: 's', positive: 1, negative: 1, band: 'contested' },
       ],
-      bands: { agreed: 1, contested: 2, rejected: 0 },
       truncated: false,
     };
     seed(2, 's', 30, 25);
@@ -177,7 +176,6 @@ describe('TopicOverview', () => {
   it('says once that nothing has enough votes, and shows nothing for a topic without responses', () => {
     mocks.summary.data = {
       claims: [{ id: id(4), name: 'Too few', spaceId: 's', positive: 1, negative: 1, band: 'contested' }],
-      bands: { agreed: 0, contested: 1, rejected: 0 },
       truncated: false,
     };
     overview();
@@ -185,7 +183,7 @@ describe('TopicOverview', () => {
     expect(screen.queryByRole('region')).toBeNull();
     cleanup();
 
-    mocks.summary.data = { claims: [], bands: { agreed: 0, contested: 0, rejected: 0 }, truncated: false };
+    mocks.summary.data = { claims: [], truncated: false };
     overview();
     expect(screen.queryByText(/No claim here/)).toBeNull();
     expect(screen.queryByRole('region')).toBeNull();

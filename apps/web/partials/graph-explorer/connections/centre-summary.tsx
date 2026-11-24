@@ -5,9 +5,9 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { ActionContextProvider } from '~/core/action-context-provider';
-import { CLAIM_BAND_LABELS, type ClaimBand } from '~/core/graph-explorer/claim-band';
+import { CLAIM_BAND_LABELS, type ClaimBand, MIN_RESPONSES_FOR_BAND } from '~/core/graph-explorer/claim-band';
 import type { GraphFilter } from '~/core/graph-explorer/graph-filter';
-import { MAX_TOPIC_CLAIMS, summaryPercent } from '~/core/graph-explorer/topic-claims-summary';
+import { MAX_TOPIC_CLAIMS, claimsHeadline, summaryPercent } from '~/core/graph-explorer/topic-claims-summary';
 import { useTopicClaimsSummary } from '~/core/graph-explorer/use-graph-explorer';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -36,12 +36,15 @@ export function TopicClaimsSummary({
   if (summary.isError || !summary.data) {
     return <p className="text-metadata text-grey-04">Couldn’t load how people responded to this topic’s claims.</p>;
   }
-  const { claims, bands, truncated } = summary.data;
+  const { claims, truncated } = summary.data;
+  const headline = claimsHeadline(claims);
   const top = claims[0];
+  const topTotal = top ? top.positive + top.negative : 0;
+  const counted = `only its first ${MAX_TOPIC_CLAIMS.toLocaleString('en-US')} claims were counted`;
   return (
     <section aria-label="How people responded" className="flex flex-col gap-3 rounded-xl bg-grey-01 p-3">
       <h3 className="text-metadataMedium text-text">How people responded</h3>
-      {claims.length === 0 ? (
+      {!headline ? (
         <p className="text-metadata text-grey-04">
           {truncated
             ? `None of the first ${MAX_TOPIC_CLAIMS.toLocaleString('en-US')} claims about this topic have responses yet.`
@@ -50,20 +53,19 @@ export function TopicClaimsSummary({
       ) : (
         <>
           <p className="text-metadata text-grey-04">
-            {truncated ? 'At least ' : claims.length < 10 ? 'Only ' : ''}
-            {claims.length} {claims.length === 1 ? 'claim' : 'claims'} about this topic{' '}
-            {claims.length === 1 ? 'has' : 'have'} responses so far
-            {truncated ? `; only its first ${MAX_TOPIC_CLAIMS.toLocaleString('en-US')} claims were counted.` : '.'}
+            {truncated ? `At least ${headline.text}; ${counted}.` : `${headline.text}.`}
           </p>
-          <ul className="flex flex-col gap-1">
-            {(Object.keys(CLAIM_BAND_LABELS) as ClaimBand[]).map(band => (
-              <li key={band} className="flex items-center gap-2 text-metadata text-text">
-                <i aria-hidden className={cx('block h-[10px] w-[10px] rounded-[3px]', BAND_SWATCHES[band])} />
-                {CLAIM_BAND_LABELS[band]}
-                <span className="ml-auto font-medium tabular-nums">{bands[band]}</span>
-              </li>
-            ))}
-          </ul>
+          {headline.bands && (
+            <ul className="flex flex-col gap-1">
+              {(Object.keys(CLAIM_BAND_LABELS) as ClaimBand[]).map(band => (
+                <li key={band} className="flex items-center gap-2 text-metadata text-text">
+                  <i aria-hidden className={cx('block h-[10px] w-[10px] rounded-[3px]', BAND_SWATCHES[band])} />
+                  {CLAIM_BAND_LABELS[band]}
+                  <span className="ml-auto font-medium tabular-nums">{headline.bands![band]}</span>
+                </li>
+              ))}
+            </ul>
+          )}
           <div className="flex flex-col gap-1 border-t border-grey-02 pt-3">
             <span className="text-footnote text-grey-04 uppercase">Most responses</span>
             <button
@@ -74,8 +76,8 @@ export function TopicClaimsSummary({
               {top.name}
             </button>
             <span className="text-metadata text-grey-04 tabular-nums">
-              {summaryPercent(top)}% agree · {top.positive + top.negative}{' '}
-              {top.positive + top.negative === 1 ? 'response' : 'responses'}
+              {topTotal >= MIN_RESPONSES_FOR_BAND ? `${summaryPercent(top)}% agree · ` : ''}
+              {topTotal} {topTotal === 1 ? 'response' : 'responses'}
             </span>
           </div>
         </>

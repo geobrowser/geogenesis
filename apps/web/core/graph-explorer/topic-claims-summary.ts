@@ -3,7 +3,7 @@ import { type QueryClient, hashKey } from '@tanstack/react-query';
 import { loadClaimResponseSummaryCaches } from '~/core/responses/claim-response-summaries';
 import { entityResponseCountsQueryKey } from '~/core/responses/entity-response';
 
-import { type ClaimBand, agreePercent, claimBand } from './claim-band';
+import { type ClaimBand, MIN_RESPONSES_FOR_BAND, agreePercent, claimBand } from './claim-band';
 import { type ClaimAbout, fetchClaimsAbout } from './claims-about';
 import type { GraphFilter } from './graph-filter';
 
@@ -20,7 +20,6 @@ export type SummarisedClaim = {
 export type TopicClaimsSummary = {
   /** Claims about the topic with at least one response, most responses first. */
   claims: SummarisedClaim[];
-  bands: Record<ClaimBand, number>;
   /** The topic has more claims than were counted, so the counts are lower bounds. */
   truncated: boolean;
 };
@@ -36,7 +35,7 @@ type Counts = { positive: number; negative: number };
 /** Counts as loaded, keyed by `hashKey(claimCountsKey(claim))`: the fallback once the cache drops them. */
 export type LoadedCounts = Record<string, Counts>;
 
-/** Bands and order for the topic's claims, from each claim's counts in its own space. */
+/** The topic's answered claims, most responses first, from each claim's counts in its own space. */
 export function summariseTopicClaims(
   claims: readonly ClaimAbout[],
   countsOf: (claim: ClaimAbout) => Counts | undefined,
@@ -49,9 +48,34 @@ export function summariseTopicClaims(
     if (counts && band) summarised.push({ id: claim.id, name: claim.name, spaceId: claim.spaceId, ...counts, band });
   }
   summarised.sort((a, b) => b.positive + b.negative - (a.positive + a.negative) || a.name.localeCompare(b.name));
-  const bands = { agreed: 0, contested: 0, rejected: 0 };
-  for (const claim of summarised) bands[claim.band]++;
-  return { claims: summarised, bands, truncated };
+  return { claims: summarised, truncated };
+}
+
+export type ClaimsHeadline = {
+  /** "9 claims with 3+ responses", or "17 claims have responses so far" when none reaches 3. */
+  text: string;
+  /** Claims per band among those with MIN_RESPONSES_FOR_BAND responses; null when there are none. */
+  bands: Record<ClaimBand, number> | null;
+  banded: number;
+};
+
+/** The topic's claims in one line, as the panel and the share card both state them; null with none. */
+export function claimsHeadline(claims: readonly SummarisedClaim[]): ClaimsHeadline | null {
+  if (claims.length === 0) return null;
+  const banded = claims.filter(claim => claim.positive + claim.negative >= MIN_RESPONSES_FOR_BAND);
+  if (banded.length === 0)
+    return {
+      text: `${claims.length} ${claims.length === 1 ? 'claim has' : 'claims have'} responses so far`,
+      bands: null,
+      banded: 0,
+    };
+  const bands: Record<ClaimBand, number> = { agreed: 0, contested: 0, rejected: 0 };
+  for (const claim of banded) bands[claim.band]++;
+  return {
+    text: `${banded.length} ${banded.length === 1 ? 'claim' : 'claims'} with ${MIN_RESPONSES_FOR_BAND}+ responses`,
+    bands,
+    banded: banded.length,
+  };
 }
 
 export function summaryPercent(claim: SummarisedClaim) {

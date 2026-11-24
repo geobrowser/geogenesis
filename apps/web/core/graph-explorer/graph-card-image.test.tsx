@@ -1,11 +1,34 @@
 // @vitest-environment node
+import * as React from 'react';
+
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { renderToStaticMarkup } from 'react-dom/server';
 import sharp from 'sharp';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { generateGraphCardResponse, kindChipLabel, placeNodes, responsesSoFar, shownVerdict } from './graph-card-image';
+import { TopicClaimsSummary } from '~/partials/graph-explorer/connections/centre-summary';
+
+import {
+  GraphCard,
+  generateGraphCardResponse,
+  kindChipLabel,
+  placeNodes,
+  responsesSoFar,
+  shownVerdict,
+} from './graph-card-image';
+import type { GraphFilter } from './graph-filter';
 import type { GraphCardData, GraphCardNode } from './server/graph-card-data';
+
+const panel = vi.hoisted(() => ({ summary: undefined as unknown }));
+vi.mock('~/core/graph-explorer/use-graph-explorer', () => ({
+  useTopicClaimsSummary: () => ({ isLoading: false, isError: false, data: panel.summary }),
+}));
+
+const text = (element: React.ReactElement) =>
+  renderToStaticMarkup(element)
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ');
 
 const node = (
   id: string,
@@ -81,7 +104,6 @@ const SHAPES: Record<string, GraphCardData> = {
           { id: 'd', name: 'd', spaceId: 's', positive: 0, negative: 3, band: 'rejected' },
           { id: 'e', name: 'e', spaceId: 's', positive: 1, negative: 0, band: 'agreed' },
         ],
-        bands: { agreed: 2, contested: 1, rejected: 1 },
         truncated: false,
       },
     }
@@ -139,5 +161,56 @@ describe('graph share card', () => {
     expect(kindChipLabel({ kind: 'src', n: 1, more: false })).toBe('1 source');
     expect(kindChipLabel({ kind: 'src', n: 1, more: true })).toBe('1+ sources');
     expect(kindChipLabel({ kind: 'ent', n: 8, more: true })).toBe('8+ people and groups');
+  });
+});
+
+describe('the panel and the card', () => {
+  const both = (data: GraphCardData) => {
+    panel.summary = data.summary;
+    return {
+      card: text(<GraphCard data={data} />),
+      panel: text(
+        <TopicClaimsSummary topicId="t" filter={{} as GraphFilter} topicSpaceId={null} onOpenClaim={() => {}} />
+      ),
+    };
+  };
+
+  it('state the same claims with 3+ responses and the same bands', () => {
+    const { card, panel: shown } = both(SHAPES.topic);
+    for (const line of ['3 claims with 3+ responses']) {
+      expect(card).toContain(line);
+      expect(shown).toContain(line);
+    }
+    for (const [label, n] of [
+      ['widely agreed', 1],
+      ['contested', 1],
+      ['widely rejected', 1],
+    ] as const) {
+      expect(card).toContain(`${n} ${label}`);
+      expect(shown.toLowerCase()).toMatch(new RegExp(`${label} ${n}\\b`));
+    }
+  });
+
+  it('say only how many claims have responses when none has 3, with no bands', () => {
+    const sparse = base(
+      {},
+      {
+        summary: {
+          claims: [
+            { id: 'a', name: 'a', spaceId: 's', positive: 2, negative: 0, band: 'agreed' },
+            { id: 'b', name: 'b', spaceId: 's', positive: 1, negative: 1, band: 'contested' },
+          ],
+          truncated: false,
+        },
+      }
+    );
+    const { card, panel: shown } = both(sparse);
+    expect(card).toContain('2 claims have responses so far');
+    expect(shown).toContain('2 claims have responses so far');
+    expect(card).not.toMatch(/widely agreed/i);
+    expect(shown).not.toMatch(/widely agreed/i);
+    // Most responses keeps its count, without a percent under 3.
+    expect(shown).toContain('2 responses');
+    expect(shown).not.toContain('100% agree');
   });
 });
