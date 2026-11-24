@@ -23,7 +23,7 @@ import type { useDebateClaimResponse } from './use-debate-claim-response';
 export function DebateClaimControls({
   claimId,
   spaceId,
-  response: { responseKind, summary, control },
+  response: { responseKind, summary, control, isResponseKindResolved },
   showParticipants,
   endSlot,
   wideEndSlot = false,
@@ -95,7 +95,10 @@ export function DebateClaimControls({
             entityId={claimId}
             spaceId={spaceId}
             responseKind={responseKind}
-            summary={summary}
+            // Held back until the claim's entity arrives, the counts read as failed (no answer, not
+            // loading). A device vote is known before that, so the row would say "Results
+            // unavailable" for a read that has not started; it is on its way, so say that.
+            summary={isResponseKindResolved ? summary : { ...summary, isLoading: true }}
             layout="results"
             tone={look === 'app-dark' ? 'dark' : 'light'}
             className={summaryClassName}
