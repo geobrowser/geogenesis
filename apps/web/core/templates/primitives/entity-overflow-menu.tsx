@@ -402,15 +402,17 @@ export function AddFormSurface({
   );
 
   if (phone) {
-    // Portaled to the body, above every panel. React still bubbles its clicks to the trigger's
-    // ancestors (a clickable row), so they stop here as the popover's do.
+    // React bubbles the portaled sheet's clicks (backdrop and padding included) to the trigger's
+    // ancestors, so the whole sheet stops them here, as the popover does.
     return (
-      <BottomSheet open={open} onOpenChange={onOpenChange} trigger={trigger} title={label} avoidKeyboard>
-        <div className="flex flex-col gap-3" onClick={stopPropagation} data-testid="add-form-sheet">
-          {header}
-          {children}
-        </div>
-      </BottomSheet>
+      <span className="contents" onClick={stopPropagation}>
+        <BottomSheet open={open} onOpenChange={onOpenChange} trigger={trigger} title={label} avoidKeyboard>
+          <div className="flex flex-col gap-3" data-testid="add-form-sheet">
+            {header}
+            {children}
+          </div>
+        </BottomSheet>
+      </span>
     );
   }
 

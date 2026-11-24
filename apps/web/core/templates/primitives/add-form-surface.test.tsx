@@ -79,6 +79,14 @@ describe('AddFormSurface', () => {
     expect(onRowClick).not.toHaveBeenCalled();
   });
 
+  it('keeps a tap on the backdrop or sheet padding from reaching the row', () => {
+    mockMedia([PHONE, TOUCH]);
+    const { onRowClick } = openClaimForm();
+    fireEvent.click(screen.getByRole('dialog', { name: 'Add claim' }));
+    fireEvent.click(document.querySelector('[data-bottom-sheet-backdrop]')!);
+    expect(onRowClick).not.toHaveBeenCalled();
+  });
+
   it('closes from its own Close button', () => {
     mockMedia([PHONE, TOUCH]);
     openClaimForm();
