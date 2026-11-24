@@ -269,7 +269,9 @@ function ClaimsCarousel({
               onClick={() => onOpenClaims()}
               className={cx(
                 'mr-1 rounded px-1 text-smallButton transition-colors @max-md:hidden',
-                dark ? 'text-white/60 hover:bg-white/10 hover:text-white' : 'text-grey-04 hover:bg-divider hover:text-text'
+                dark
+                  ? 'text-white/60 hover:bg-white/10 hover:text-white'
+                  : 'text-grey-04 hover:bg-divider hover:text-text'
               )}
             >
               See all

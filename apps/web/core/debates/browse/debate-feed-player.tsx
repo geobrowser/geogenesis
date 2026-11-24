@@ -1620,7 +1620,10 @@ function PairedDebateFeedPlayer({
         className={cx(
           full
             ? 'flex min-h-0 flex-1 flex-col'
-            : ['group @container relative flex flex-col overflow-hidden', framed ? null : reducedOverlays ? 'rounded-lg' : 'rounded-xl'],
+            : [
+                'group @container relative flex flex-col overflow-hidden',
+                framed ? null : reducedOverlays ? 'rounded-lg' : 'rounded-xl',
+              ],
           stamped && endCardShown && '[&_[data-debate-end-card]>section]:animate-[fadeIn_250ms_ease-out_both]'
         )}
       >
@@ -1651,106 +1654,106 @@ function PairedDebateFeedPlayer({
           />
         )}
         <FullStage full={full}>
-        <DebaterVideo
-          inert={endCardShown}
-          toggleHidden={refusedPrompt || editorMode}
-          participant={slot1Participant}
-          byline={bylineFor(slot1Participant)}
-          src={slot1Src}
-          poster={slot1Poster}
-          posterFallback={speakerStillContentUrl(debate.id, 1)}
-          posterEager={active || preload}
-          videoRef={slot1VideoRef}
-          cutCanvasRef={cutsCovered ? slot1CanvasRef : undefined}
-          // The next card's raw WebM has to be buffered to arrive playable on every engine. A feed
-          // rendition is a fast-start MP4 that plays from its header, so it waits to be reached.
-          // A Stream slot loads its opening segments, which is what lets it start on arrival.
-          buffer={active || (buffer && !renditions.slot1)}
-          stream={streams?.slot1 ?? false}
-          streamStartSeconds={() => recordingStartSeconds(1)}
-          onStreamFailed={() => void refreshSlotUrl(1, { abandonStream: true })}
-          previewClip={previewNear ? clips.slot1 : null}
-          onPreviewRefused={onPreviewRefused}
-          previewActive={active}
-          previewVideoRef={slot1PreviewRef}
-          onPreviewError={preview.available ? () => preview.refresh(1) : undefined}
-          held={held}
-          // A card waiting for a tap shows its stills over its paused elements, whatever frame they hold.
-          concealed={!pair.mayShow || tapHeld}
-          audible={playing && turnState?.slot === 1 && !betweenTurns}
-          countdown={playing && !announcementShown && displayedTurn?.slot === 1 ? displayedTurn : null}
-          roundBadge={displayedTurn?.slot === 1 ? displayedRoundBadge : null}
-          // Fixed formats retain the top row's crossfade. Open rounds hides both identity rows
-          // and claim corners together, including lists that reach into the announcement's space.
-          cardYield={stamped || topSlot !== 1 ? 0 : (roundCard?.opacity ?? 0)}
-          hideForAnnouncement={announcementShown}
-          stamped={stamped}
-          mutedByUser={mutedByUser}
-          isResuming={isResuming}
-          onPlaybackTick={onPlaybackTick}
-          onPauseTick={onPauseTick}
-          onEmptied={onMediaEmptied}
-          onRecovered={() => resyncSlot(1)}
-          onExhausted={() => void refreshSlotUrl(1)}
-          onToggle={toggleFromVideo}
-          claims={claimsFor(1)}
-          claimsOpen={claimsOpenFor(1)}
-          onClaimsHoverChange={onTileHover(1)}
-          topLeft={topSlot === 1 ? topControls : undefined}
-          scrubber={topSlot === 1 ? undefined : scrubberControl}
-          fill={full}
-          style={tileGrow(1)}
-          toggleLabel={full ? 'Show video controls' : undefined}
-          {...tilePositionProps(1)}
-        />
-        <DebaterVideo
-          inert={endCardShown}
-          toggleHidden={refusedPrompt || editorMode}
-          participant={slot2Participant}
-          byline={bylineFor(slot2Participant)}
-          src={slot2Src}
-          poster={slot2Poster}
-          posterFallback={speakerStillContentUrl(debate.id, 2)}
-          posterEager={active || preload}
-          videoRef={slot2VideoRef}
-          cutCanvasRef={cutsCovered ? slot2CanvasRef : undefined}
-          buffer={active || (buffer && !renditions.slot2)}
-          stream={streams?.slot2 ?? false}
-          streamStartSeconds={() => recordingStartSeconds(2)}
-          onStreamFailed={() => void refreshSlotUrl(2, { abandonStream: true })}
-          previewClip={previewNear ? clips.slot2 : null}
-          onPreviewRefused={onPreviewRefused}
-          previewActive={active}
-          previewVideoRef={slot2PreviewRef}
-          onPreviewError={preview.available ? () => preview.refresh(2) : undefined}
-          held={held}
-          concealed={!pair.mayShow || tapHeld}
-          audible={playing && turnState?.slot === 2 && !betweenTurns}
-          countdown={playing && !announcementShown && displayedTurn?.slot === 2 ? displayedTurn : null}
-          roundBadge={displayedTurn?.slot === 2 ? displayedRoundBadge : null}
-          hideForAnnouncement={announcementShown}
-          cardYield={stamped || topSlot !== 2 ? 0 : (roundCard?.opacity ?? 0)}
-          mutedByUser={mutedByUser}
-          isResuming={isResuming}
-          onPlaybackTick={onPlaybackTick}
-          onPauseTick={onPauseTick}
-          onEmptied={onMediaEmptied}
-          onRecovered={() => resyncSlot(2)}
-          onExhausted={() => void refreshSlotUrl(2)}
-          onToggle={toggleFromVideo}
-          claims={claimsFor(2)}
-          claimsOpen={claimsOpenFor(2)}
-          stamped={stamped}
-          onClaimsHoverChange={onTileHover(2)}
-          {...tilePositionProps(2)}
-          topLeft={topSlot === 2 ? topControls : undefined}
-          scrubber={topSlot === 1 ? scrubberControl : undefined}
-          fill={full}
-          style={tileGrow(2)}
-          toggleLabel={full ? 'Show video controls' : undefined}
-        />
+          <DebaterVideo
+            inert={endCardShown}
+            toggleHidden={refusedPrompt || editorMode}
+            participant={slot1Participant}
+            byline={bylineFor(slot1Participant)}
+            src={slot1Src}
+            poster={slot1Poster}
+            posterFallback={speakerStillContentUrl(debate.id, 1)}
+            posterEager={active || preload}
+            videoRef={slot1VideoRef}
+            cutCanvasRef={cutsCovered ? slot1CanvasRef : undefined}
+            // The next card's raw WebM has to be buffered to arrive playable on every engine. A feed
+            // rendition is a fast-start MP4 that plays from its header, so it waits to be reached.
+            // A Stream slot loads its opening segments, which is what lets it start on arrival.
+            buffer={active || (buffer && !renditions.slot1)}
+            stream={streams?.slot1 ?? false}
+            streamStartSeconds={() => recordingStartSeconds(1)}
+            onStreamFailed={() => void refreshSlotUrl(1, { abandonStream: true })}
+            previewClip={previewNear ? clips.slot1 : null}
+            onPreviewRefused={onPreviewRefused}
+            previewActive={active}
+            previewVideoRef={slot1PreviewRef}
+            onPreviewError={preview.available ? () => preview.refresh(1) : undefined}
+            held={held}
+            // A card waiting for a tap shows its stills over its paused elements, whatever frame they hold.
+            concealed={!pair.mayShow || tapHeld}
+            audible={playing && turnState?.slot === 1 && !betweenTurns}
+            countdown={playing && !announcementShown && displayedTurn?.slot === 1 ? displayedTurn : null}
+            roundBadge={displayedTurn?.slot === 1 ? displayedRoundBadge : null}
+            // Fixed formats retain the top row's crossfade. Open rounds hides both identity rows
+            // and claim corners together, including lists that reach into the announcement's space.
+            cardYield={stamped || topSlot !== 1 ? 0 : (roundCard?.opacity ?? 0)}
+            hideForAnnouncement={announcementShown}
+            stamped={stamped}
+            mutedByUser={mutedByUser}
+            isResuming={isResuming}
+            onPlaybackTick={onPlaybackTick}
+            onPauseTick={onPauseTick}
+            onEmptied={onMediaEmptied}
+            onRecovered={() => resyncSlot(1)}
+            onExhausted={() => void refreshSlotUrl(1)}
+            onToggle={toggleFromVideo}
+            claims={claimsFor(1)}
+            claimsOpen={claimsOpenFor(1)}
+            onClaimsHoverChange={onTileHover(1)}
+            topLeft={topSlot === 1 ? topControls : undefined}
+            scrubber={topSlot === 1 ? undefined : scrubberControl}
+            fill={full}
+            style={tileGrow(1)}
+            toggleLabel={full ? 'Show video controls' : undefined}
+            {...tilePositionProps(1)}
+          />
+          <DebaterVideo
+            inert={endCardShown}
+            toggleHidden={refusedPrompt || editorMode}
+            participant={slot2Participant}
+            byline={bylineFor(slot2Participant)}
+            src={slot2Src}
+            poster={slot2Poster}
+            posterFallback={speakerStillContentUrl(debate.id, 2)}
+            posterEager={active || preload}
+            videoRef={slot2VideoRef}
+            cutCanvasRef={cutsCovered ? slot2CanvasRef : undefined}
+            buffer={active || (buffer && !renditions.slot2)}
+            stream={streams?.slot2 ?? false}
+            streamStartSeconds={() => recordingStartSeconds(2)}
+            onStreamFailed={() => void refreshSlotUrl(2, { abandonStream: true })}
+            previewClip={previewNear ? clips.slot2 : null}
+            onPreviewRefused={onPreviewRefused}
+            previewActive={active}
+            previewVideoRef={slot2PreviewRef}
+            onPreviewError={preview.available ? () => preview.refresh(2) : undefined}
+            held={held}
+            concealed={!pair.mayShow || tapHeld}
+            audible={playing && turnState?.slot === 2 && !betweenTurns}
+            countdown={playing && !announcementShown && displayedTurn?.slot === 2 ? displayedTurn : null}
+            roundBadge={displayedTurn?.slot === 2 ? displayedRoundBadge : null}
+            hideForAnnouncement={announcementShown}
+            cardYield={stamped || topSlot !== 2 ? 0 : (roundCard?.opacity ?? 0)}
+            mutedByUser={mutedByUser}
+            isResuming={isResuming}
+            onPlaybackTick={onPlaybackTick}
+            onPauseTick={onPauseTick}
+            onEmptied={onMediaEmptied}
+            onRecovered={() => resyncSlot(2)}
+            onExhausted={() => void refreshSlotUrl(2)}
+            onToggle={toggleFromVideo}
+            claims={claimsFor(2)}
+            claimsOpen={claimsOpenFor(2)}
+            stamped={stamped}
+            onClaimsHoverChange={onTileHover(2)}
+            {...tilePositionProps(2)}
+            topLeft={topSlot === 2 ? topControls : undefined}
+            scrubber={topSlot === 1 ? scrubberControl : undefined}
+            fill={full}
+            style={tileGrow(2)}
+            toggleLabel={full ? 'Show video controls' : undefined}
+          />
 
-        {/* Straddling the seam between the tiles, which is the one strip of the player that is never
+          {/* Straddling the seam between the tiles, which is the one strip of the player that is never
           a face — and the one place it cannot land on top of the claim stack.
 
           `text-box` trims the line box to the cap-height band, which is what makes the *glyphs*
@@ -1779,200 +1782,200 @@ function PairedDebateFeedPlayer({
           It costs at most 1.8s of caption at the top of a round, and usually none: the cost is
           real only where the render retained speech from before the incoming debater's clock
           started (GEO-2754), which is the one case where they are already talking as it lands. */}
-        {subtitle &&
-          (stamped ? !announcementShown : !roundCard && !breakCue && !endCardShown) &&
-          (!betweenTurns || (stamped && Boolean(breakCue))) &&
-          !refusedPrompt &&
-          !transportVisible &&
-          (!reducedOverlays || (active && playing && mutedByUser)) && (
-            <span
-              data-debate-subtitle
-              style={{
-                ...(stamped ? { opacity: PLAYER_FURNITURE_OPACITY } : undefined),
-                // On the line between the speakers, which moves with the split in the full screen.
-                ...(full ? { top: `${splitFraction * 100}%` } : undefined),
-              }}
-              className={cx(
-                'pointer-events-none absolute top-1/2 left-1/2 z-20 w-max max-w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-sm bg-black/78 px-1.5 py-1.5 text-center text-[1rem] leading-tight text-white',
-                !stamped && '[text-box:trim-both_cap_alphabetic] md:max-w-[90%]',
-                full && 'font-semibold transition-[top] duration-320 ease-out motion-reduce:transition-none'
-              )}
-            >
-              {subtitle}
-            </span>
+          {subtitle &&
+            (stamped ? !announcementShown : !roundCard && !breakCue && !endCardShown) &&
+            (!betweenTurns || (stamped && Boolean(breakCue))) &&
+            !refusedPrompt &&
+            !transportVisible &&
+            (!reducedOverlays || (active && playing && mutedByUser)) && (
+              <span
+                data-debate-subtitle
+                style={{
+                  ...(stamped ? { opacity: PLAYER_FURNITURE_OPACITY } : undefined),
+                  // On the line between the speakers, which moves with the split in the full screen.
+                  ...(full ? { top: `${splitFraction * 100}%` } : undefined),
+                }}
+                className={cx(
+                  'pointer-events-none absolute top-1/2 left-1/2 z-20 w-max max-w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-sm bg-black/78 px-1.5 py-1.5 text-center text-[1rem] leading-tight text-white',
+                  !stamped && '[text-box:trim-both_cap_alphabetic] md:max-w-[90%]',
+                  full && 'font-semibold transition-[top] duration-320 ease-out motion-reduce:transition-none'
+                )}
+              >
+                {subtitle}
+              </span>
+            )}
+
+          {stamped ? (
+            <DebateRoundBanner
+              cue={roundCard}
+              sharedClock
+              playing={playing}
+              clock={{ positionMs: livePositionMs, originMs: playheadMs - (roundCard?.ageMs ?? 0) }}
+            />
+          ) : (
+            <DebateRoundCard cue={roundCard} />
+          )}
+          {!endCardShown && (
+            <>
+              <DebateBreakOverlay
+                cue={breakCue}
+                sharedClock
+                clock={{ positionMs: livePositionMs, originMs: playheadMs - (breakCue?.elapsedMs ?? 0) }}
+                roundTurns={roundTurns}
+                playing={playing}
+              />
+              <DebateEarlyEndLabels
+                cue={earlyEndCue}
+                names={breakNames}
+                topSlot={topSlot}
+                playing={playing}
+                clock={{
+                  positionMs: livePositionMs,
+                  originMs: Math.round(playheadMs - (earlyEndCue?.ageMs ?? 0)),
+                  resetKey: animationSeekKey,
+                }}
+              />
+            </>
           )}
 
-        {stamped ? (
-          <DebateRoundBanner
-            cue={roundCard}
-            sharedClock
-            playing={playing}
-            clock={{ positionMs: livePositionMs, originMs: playheadMs - (roundCard?.ageMs ?? 0) }}
-          />
-        ) : (
-          <DebateRoundCard cue={roundCard} />
-        )}
-        {!endCardShown && (
-          <>
-            <DebateBreakOverlay
-              cue={breakCue}
-              sharedClock
-              clock={{ positionMs: livePositionMs, originMs: playheadMs - (breakCue?.elapsedMs ?? 0) }}
-              roundTurns={roundTurns}
-              playing={playing}
-            />
-            <DebateEarlyEndLabels
-              cue={earlyEndCue}
-              names={breakNames}
-              topSlot={topSlot}
-              playing={playing}
-              clock={{
-                positionMs: livePositionMs,
-                originMs: Math.round(playheadMs - (earlyEndCue?.ageMs ?? 0)),
-                resetKey: animationSeekKey,
-              }}
-            />
-          </>
-        )}
-
-        {/* The replay and resume states are mutually exclusive, so they share one centered control.
+          {/* The replay and resume states are mutually exclusive, so they share one centered control.
           Replay is shown at every width; the ordinary paused control stays mobile-only because
           desktop retains its persistent corner play/pause control while playback is in progress. */}
-        {full && (
-          <DebateFullTransport
-            visible={transportVisible}
-            playing={playing}
-            splitFraction={splitFraction}
-            onTogglePlay={() => {
-              touchTransport();
-              togglePlayback();
-            }}
-            onSkip={skipBy}
-            onFocusChange={setTransportFocused}
-          />
-        )}
+          {full && (
+            <DebateFullTransport
+              visible={transportVisible}
+              playing={playing}
+              splitFraction={splitFraction}
+              onTogglePlay={() => {
+                touchTransport();
+                togglePlayback();
+              }}
+              onSkip={skipBy}
+              onFocusChange={setTransportFocused}
+            />
+          )}
 
-        {((showReplay && !endCardShown && !editorMode) || (showPausedGlyph && !full)) && (
-          <button
-            type="button"
-            aria-label={showReplay ? 'Replay debate' : 'Resume debate'}
-            onClick={showReplay ? () => playFromStart() : () => togglePlayback()}
+          {((showReplay && !endCardShown && !editorMode) || (showPausedGlyph && !full)) && (
+            <button
+              type="button"
+              aria-label={showReplay ? 'Replay debate' : 'Resume debate'}
+              onClick={showReplay ? () => playFromStart() : () => togglePlayback()}
+              className={cx(
+                CENTERED_PLAYBACK_CONTROL_CLASS,
+                'z-30',
+                showReplay ? 'grid [&>svg]:scale-[2]' : 'hidden md:grid'
+              )}
+            >
+              {showReplay ? <RetrySmall /> : <Play />}
+            </button>
+          )}
+
+          {refusedPrompt && (
+            <>
+              {/* Under the names and the corner controls (`z-10`), over the video and its scrim. */}
+              <div
+                aria-hidden
+                data-debate-refused-dim
+                className="pointer-events-none absolute inset-0 z-[5] bg-black/50"
+              />
+              {full ? (
+                // The app's "Tap to play" (`TapToPlay.tsx`): the browser refused, so only a tap starts it.
+                <button
+                  type="button"
+                  data-debate-watch-prompt
+                  onClick={() => togglePlayback()}
+                  className={cx(FULL_PROMPT_CLASS, 'z-30')}
+                >
+                  <Play color="white" />
+                  <span>Tap to play</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  data-debate-watch-prompt
+                  aria-label={lengthLabel ? `Watch the debate · ${lengthLabel}` : 'Watch the debate'}
+                  onClick={() => togglePlayback()}
+                  className="absolute top-1/2 left-1/2 z-30 flex h-14 -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-full bg-white pr-6 pl-4 text-[1.0625rem] leading-none font-medium whitespace-nowrap text-text shadow-card focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                >
+                  <Play />
+                  <span>
+                    Watch the debate
+                    {lengthLabel && <span className="text-grey-04"> · {lengthLabel}</span>}
+                  </span>
+                </button>
+              )}
+            </>
+          )}
+
+          {/* A held card's one control, at every width: nothing plays until it is pressed. */}
+          {held && !full && (
+            <button
+              type="button"
+              aria-label="Play debate"
+              onClick={tapHeld ? playFromTap : startFullPlayback}
+              className={cx(CENTERED_PLAYBACK_CONTROL_CLASS, 'z-30 grid')}
+            >
+              <Play />
+            </button>
+          )}
+          {/* A held page in the full screen keeps the pill's promise, in the dark: nothing plays until
+            it is pressed, and it says how long the debate is. */}
+          {held && full && (
+            <button
+              type="button"
+              data-debate-watch-prompt
+              aria-label={lengthLabel ? `Watch the debate · ${lengthLabel}` : 'Watch the debate'}
+              onClick={tapHeld ? playFromTap : startFullPlayback}
+              className={cx(FULL_PROMPT_CLASS, 'z-30')}
+            >
+              <Play color="white" />
+              <span>
+                Watch the debate
+                {lengthLabel && <span className="text-white/60"> · {lengthLabel}</span>}
+              </span>
+            </button>
+          )}
+
+          {/* Desktop only — mobile already shows the centred paused glyph in this spot. */}
+          <div
+            aria-hidden
+            data-playback-feedback
             className={cx(
               CENTERED_PLAYBACK_CONTROL_CLASS,
-              'z-30',
-              showReplay ? 'grid [&>svg]:scale-[2]' : 'hidden md:grid'
+              'pointer-events-none z-30 grid transition-[opacity,scale] md:hidden',
+              full && 'hidden',
+              stamped ? 'duration-200 ease-out motion-reduce:scale-100 motion-reduce:transition-none' : 'duration-300',
+              flash.visible ? 'scale-100 opacity-100' : stamped ? 'scale-[1.025] opacity-0' : 'scale-110 opacity-0'
             )}
           >
-            {showReplay ? <RetrySmall /> : <Play />}
-          </button>
-        )}
+            {flash.icon === 'pause' ? <Pause /> : <Play />}
+          </div>
 
-        {refusedPrompt && (
-          <>
-            {/* Under the names and the corner controls (`z-10`), over the video and its scrim. */}
-            <div
-              aria-hidden
-              data-debate-refused-dim
-              className="pointer-events-none absolute inset-0 z-[5] bg-black/50"
+          <ActionSurface
+            className="contents"
+            trackImpression={endCardShown}
+            value={{ component: 'debate_end_card', target_id: debate.id, target_type: 'debate' }}
+          >
+            <MeasuredEndCard
+              debate={debate}
+              enabled={active && ready && !reducedOverlays}
+              shown={endCardShown}
+              onOpenClaims={onOpenClaims}
+              onReplay={replayFromEndCard}
+              tone={full ? 'dark' : 'light'}
             />
-            {full ? (
-              // The app's "Tap to play" (`TapToPlay.tsx`): the browser refused, so only a tap starts it.
-              <button
-                type="button"
-                data-debate-watch-prompt
-                onClick={() => togglePlayback()}
-                className={cx(FULL_PROMPT_CLASS, 'z-30')}
-              >
-                <Play color="white" />
-                <span>Tap to play</span>
-              </button>
-            ) : (
-              <button
-                type="button"
-                data-debate-watch-prompt
-                aria-label={lengthLabel ? `Watch the debate · ${lengthLabel}` : 'Watch the debate'}
-                onClick={() => togglePlayback()}
-                className="absolute top-1/2 left-1/2 z-30 flex h-14 -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-full bg-white pr-6 pl-4 text-[1.0625rem] leading-none font-medium whitespace-nowrap text-text shadow-card focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
-              >
-                <Play />
-                <span>
-                  Watch the debate
-                  {lengthLabel && <span className="text-grey-04"> · {lengthLabel}</span>}
-                </span>
-              </button>
-            )}
-          </>
-        )}
+          </ActionSurface>
 
-        {/* A held card's one control, at every width: nothing plays until it is pressed. */}
-        {held && !full && (
-          <button
-            type="button"
-            aria-label="Play debate"
-            onClick={tapHeld ? playFromTap : startFullPlayback}
-            className={cx(CENTERED_PLAYBACK_CONTROL_CLASS, 'z-30 grid')}
-          >
-            <Play />
-          </button>
-        )}
-        {/* A held page in the full screen keeps the pill's promise, in the dark: nothing plays until
-            it is pressed, and it says how long the debate is. */}
-        {held && full && (
-          <button
-            type="button"
-            data-debate-watch-prompt
-            aria-label={lengthLabel ? `Watch the debate · ${lengthLabel}` : 'Watch the debate'}
-            onClick={tapHeld ? playFromTap : startFullPlayback}
-            className={cx(FULL_PROMPT_CLASS, 'z-30')}
-          >
-            <Play color="white" />
-            <span>
-              Watch the debate
-              {lengthLabel && <span className="text-white/60"> · {lengthLabel}</span>}
-            </span>
-          </button>
-        )}
-
-        {/* Desktop only — mobile already shows the centred paused glyph in this spot. */}
-        <div
-          aria-hidden
-          data-playback-feedback
-          className={cx(
-            CENTERED_PLAYBACK_CONTROL_CLASS,
-            'pointer-events-none z-30 grid transition-[opacity,scale] md:hidden',
-            full && 'hidden',
-            stamped ? 'duration-200 ease-out motion-reduce:scale-100 motion-reduce:transition-none' : 'duration-300',
-            flash.visible ? 'scale-100 opacity-100' : stamped ? 'scale-[1.025] opacity-0' : 'scale-110 opacity-0'
+          {error && (
+            <Text
+              as="p"
+              variant="metadata"
+              color="red-01"
+              className={cx('absolute inset-x-0 text-center', full ? 'bottom-3 z-30' : '-bottom-6')}
+            >
+              {error}
+            </Text>
           )}
-        >
-          {flash.icon === 'pause' ? <Pause /> : <Play />}
-        </div>
-
-        <ActionSurface
-          className="contents"
-          trackImpression={endCardShown}
-          value={{ component: 'debate_end_card', target_id: debate.id, target_type: 'debate' }}
-        >
-          <MeasuredEndCard
-            debate={debate}
-            enabled={active && ready && !reducedOverlays}
-            shown={endCardShown}
-            onOpenClaims={onOpenClaims}
-            onReplay={replayFromEndCard}
-            tone={full ? 'dark' : 'light'}
-          />
-        </ActionSurface>
-
-        {error && (
-          <Text
-            as="p"
-            variant="metadata"
-            color="red-01"
-            className={cx('absolute inset-x-0 text-center', full ? 'bottom-3 z-30' : '-bottom-6')}
-          >
-            {error}
-          </Text>
-        )}
         </FullStage>
       </div>
     </ActionSurface>

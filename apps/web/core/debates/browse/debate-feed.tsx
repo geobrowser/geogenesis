@@ -814,7 +814,11 @@ function DebateFeedItem({
             className="shrink-0 px-1"
           />
           {scrollHint?.isVisible && (
-            <DebateScrollHint tone="dark" leaving={scrollHint.isLeaving} className="absolute inset-x-0 top-full mt-0.5" />
+            <DebateScrollHint
+              tone="dark"
+              leaving={scrollHint.isLeaving}
+              className="absolute inset-x-0 top-full mt-0.5"
+            />
           )}
         </div>
         {shareDialog}

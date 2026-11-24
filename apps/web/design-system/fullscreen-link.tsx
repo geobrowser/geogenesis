@@ -57,7 +57,6 @@ export function FullscreenLink({
       entityId={entityId}
       spaceId={spaceId}
       aria-label={ariaLabel}
-      onClick={onClick}
       data-entity-side-panel-full-page={requiresFullPage || undefined}
       aria-disabled={disabled || undefined}
       tabIndex={disabled ? -1 : undefined}
@@ -65,7 +64,7 @@ export function FullscreenLink({
       // Tab and `aria-disabled` only says so — none of them stop an activation that arrives some
       // other way: assistive tech, a programmatic `focus()` and Enter, a synthesized click. The
       // href has to stay for the enabled case, so refusing the navigation is what closes it.
-      onClick={disabled ? event => event.preventDefault() : undefined}
+      onClick={disabled ? event => event.preventDefault() : onClick}
       className={cx(
         'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border-none bg-transparent text-grey-04',
         disabled

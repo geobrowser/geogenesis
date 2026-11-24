@@ -71,7 +71,12 @@ vi.mock('./debate-claim-ticker', () => ({
   ClaimScrubberMarkers: ({ markers, onSeek }: { markers: ClaimMarker[]; onSeek: (ms: number) => void }) => (
     <>
       {markers.map(marker => (
-        <button key={marker.id} type="button" aria-label={`Jump to: ${marker.text}`} onClick={() => onSeek(marker.seekMs)} />
+        <button
+          key={marker.id}
+          type="button"
+          aria-label={`Jump to: ${marker.text}`}
+          onClick={() => onSeek(marker.seekMs)}
+        />
       ))}
     </>
   ),
@@ -226,8 +231,24 @@ describe('the full screen header', () => {
   it("puts the reel's moments on the rail at their words, on the recordings' clock, and seeks there", () => {
     // An edited render: turn 1 starts 30 s later on the recordings than in the render.
     mocks.turnSegments = [
-      { turn_index: 0, participant_slot: 1, output_start_ms: 0, output_end_ms: 30_000, duration_ms: 30_000, source_start_ms: 0, source_end_ms: 30_000 },
-      { turn_index: 1, participant_slot: 2, output_start_ms: 40_000, output_end_ms: 70_000, duration_ms: 30_000, source_start_ms: 70_000, source_end_ms: 100_000 },
+      {
+        turn_index: 0,
+        participant_slot: 1,
+        output_start_ms: 0,
+        output_end_ms: 30_000,
+        duration_ms: 30_000,
+        source_start_ms: 0,
+        source_end_ms: 30_000,
+      },
+      {
+        turn_index: 1,
+        participant_slot: 2,
+        output_start_ms: 40_000,
+        output_end_ms: 70_000,
+        duration_ms: 30_000,
+        source_start_ms: 70_000,
+        source_end_ms: 100_000,
+      },
     ] satisfies DebateMediaTurnSegment[];
     mocks.moments = [
       { id: 'clip-a', debateStartMs: 41_000, cutStartMs: 39_000 },

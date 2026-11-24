@@ -103,7 +103,7 @@ describe('skipTargetSeconds', () => {
     expect(skipTargetSeconds(plain, 119.99, 10)).toBe((120_000 - SKIP_END_MARGIN_MS) / 1000);
   });
 
-  it("counts ten seconds of what plays, across a break the player cuts", () => {
+  it('counts ten seconds of what plays, across a break the player cuts', () => {
     // 40–70 s on the recordings is cut in playback: 35 s + 10 s of play lands at 75 s, not 45 s.
     const cut = playbackTimeline([{ atMs: 40_000, toMs: 70_000 }], 120_000);
     expect(skipTargetSeconds(cut, 35, 10)).toBe(75);
