@@ -56,7 +56,7 @@ import { Z_LAYER_CLASS } from '~/core/z-layers';
 
 import { AssistantSparkle } from '~/design-system/icons/assistant-sparkle';
 
-import { useHideAssistant } from './assistant-visibility';
+import { useHideAssistant, useHideAssistantLauncher } from './assistant-visibility';
 import { ChatPanel } from './chat-panel';
 
 type AssistantSuggestionSource = 'welcome' | 'follow_up';
@@ -206,6 +206,7 @@ export function ChatWidget({ openOnMount = null }: { openOnMount?: string | null
 
   const pathname = usePathname() ?? '';
   const hideAssistant = useHideAssistant();
+  const hideLauncher = useHideAssistantLauncher();
   const params = useParams();
 
   React.useLayoutEffect(() => {
@@ -1180,7 +1181,7 @@ export function ChatWidget({ openOnMount = null }: { openOnMount?: string | null
           onSwitchChat={handleSwitchChat}
           onClearHistory={handleClearHistory}
         />
-      ) : (
+      ) : hideLauncher ? null : (
         <motion.button
           type="button"
           key="fab"

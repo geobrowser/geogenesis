@@ -3,12 +3,14 @@
 import * as React from 'react';
 
 import cx from 'classnames';
+import { useSetAtom } from 'jotai';
 import Link from 'next/link';
 
 import type { BreadcrumbItem, EntityActionCallbacks, EntityContextDataModel } from '../models';
 import { resolveTemplateImageUrl } from '../ontology';
 import { EntityActionProvider } from './entity-overflow-menu';
 import { ChevronRightIcon } from './icons';
+import { entityTemplatePagesOnScreenAtom } from '~/atoms';
 
 /**
  * Shared Geo card surfaces: barely-there border + wide, silky ambient shadow
@@ -254,6 +256,16 @@ export function TemplateShell({
   className?: string;
 }) {
   const resolvedCoverUrl = embedded ? null : resolveTemplateImageUrl(coverUrl);
+
+  // A full entity page (not the side panel or a Space embed) tells the app a template is on screen,
+  // which keeps the assistant's floating button off (GEO-3846).
+  const isFullPage = !compact && !embedded;
+  const setTemplatePagesOnScreen = useSetAtom(entityTemplatePagesOnScreenAtom);
+  React.useEffect(() => {
+    if (!isFullPage) return;
+    setTemplatePagesOnScreen(count => count + 1);
+    return () => setTemplatePagesOnScreen(count => count - 1);
+  }, [isFullPage, setTemplatePagesOnScreen]);
 
   return (
     <EntityActionProvider initialContextByTarget={contextByEntityId} callbacks={actionCallbacks}>

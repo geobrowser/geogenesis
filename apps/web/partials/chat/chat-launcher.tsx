@@ -11,7 +11,7 @@ import { Z_LAYER_CLASS } from '~/core/z-layers';
 
 import { AssistantSparkle } from '~/design-system/icons/assistant-sparkle';
 
-import { useHideAssistant } from './assistant-visibility';
+import { useHideAssistant, useHideAssistantLauncher } from './assistant-visibility';
 
 const loadChatWidget = () => import('~/partials/chat/chat-widget').then(m => ({ default: m.ChatWidget }));
 
@@ -28,6 +28,7 @@ export function ChatLauncher() {
   const isOpen = useAtomValue(isChatOpenAtom);
   const seed = useAtomValue(assistantSeedAtom);
   const hideAssistant = useHideAssistant();
+  const hideLauncher = useHideAssistantLauncher();
   const [trigger, setTrigger] = React.useState<string | null>(null);
   const [loaded, setLoaded] = React.useState(false);
 
@@ -50,7 +51,7 @@ export function ChatLauncher() {
   }, [listening, hideAssistant]);
 
   if (loaded) return <ChatWidget openOnMount={trigger} />;
-  if (hideAssistant) return null;
+  if (hideAssistant || hideLauncher) return null;
 
   const preload = () => void loadChatWidget();
 
