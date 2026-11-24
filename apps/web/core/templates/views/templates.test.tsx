@@ -853,6 +853,28 @@ describe('EventTemplate Sources section (GEO-3819)', () => {
   });
 });
 
+describe('PostTemplate Sources section (GEO-3819)', () => {
+  it('shows "No sources" with an add button when the post has none', () => {
+    render(
+      <PostTemplate
+        model={{
+          id: 'post-no-sources',
+          authorName: 'Someone',
+          platform: 'X',
+          body: 'A post with no sources yet.',
+          claims: [],
+          notes: [],
+          sections: [{ id: 'sources', title: 'Sources', layout: 'cards', emptyText: 'No sources', items: [] }],
+        }}
+      />
+    );
+
+    const sources = screen.getByRole('region', { name: 'Sources' });
+    expect(within(sources).getByText('No sources')).toBeInTheDocument();
+    expect(within(sources).getByRole('button', { name: /add source/i })).toBeInTheDocument();
+  });
+});
+
 describe('Add context and Dispute switched off (GEO-3819 defaults)', () => {
   const story = {
     id: 'story-off',

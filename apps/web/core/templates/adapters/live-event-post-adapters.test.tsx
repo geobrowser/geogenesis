@@ -292,3 +292,24 @@ describe('useLivePostTemplate author card', () => {
     ).toBe('Shashank Joshi');
   });
 });
+
+describe('useLivePostTemplate Sources section', () => {
+  it('keeps an empty Sources section with its "+" when the post has no sources', () => {
+    state.entity = entity({
+      name: 'A post with no sources yet',
+      types: [{ id: TEMPLATE_ONTOLOGY.TWEET_TYPE_ID, name: 'Tweet' }],
+    });
+
+    const model = renderHook(() => useLivePostTemplate({ entityId: state.entity!.id, spaceId: SPACE })).result.current
+      .data!;
+
+    expect(model.sections.find(section => section.id === 'sources')).toEqual({
+      id: 'sources',
+      title: 'Sources',
+      layout: 'cards',
+      emptyText: 'No sources',
+      items: [],
+      ingestionLink: expect.objectContaining({ targetSpaceId: SPACE }),
+    });
+  });
+});

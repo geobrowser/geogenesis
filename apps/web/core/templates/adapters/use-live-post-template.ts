@@ -207,15 +207,15 @@ export function useLivePostTemplate({
       });
     }
 
-    if (hydratedSourceCards.length > 0) {
-      sections.push({
-        id: 'sources',
-        title: 'Sources',
-        layout: 'cards',
-        items: hydratedSourceCards,
-        ingestionLink: sourcesIngestionLink(entity.id, entity.name, spaceId),
-      });
-    }
+    // Always drawn, like the Claim and Event Sources sections: its "+" is how the first source gets added.
+    sections.push({
+      id: 'sources',
+      title: 'Sources',
+      layout: 'cards',
+      emptyText: 'No sources',
+      items: hydratedSourceCards,
+      ingestionLink: sourcesIngestionLink(entity.id, entity.name, spaceId),
+    });
 
     if (topics.length > 0) {
       sections.push({
