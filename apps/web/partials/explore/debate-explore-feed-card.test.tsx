@@ -45,6 +45,12 @@ const mocks = vi.hoisted(() => ({
   endCardReplay: vi.fn(),
   portalledClick: vi.fn(),
   isMobileLayout: false,
+  inlinePlaybackUnavailable: false,
+}));
+
+vi.mock('~/core/debates/browse/inline-playback', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/debates/browse/inline-playback')>()),
+  useInlinePlaybackUnavailable: () => mocks.inlinePlaybackUnavailable,
 }));
 
 vi.mock('~/core/hooks/use-is-mobile-layout', () => ({ useIsMobileLayout: () => mocks.isMobileLayout }));
@@ -250,6 +256,7 @@ beforeEach(() => {
   mocks.mediaQuery = { data: undefined, isError: false };
   mocks.withEndCard = false;
   mocks.isMobileLayout = false;
+  mocks.inlinePlaybackUnavailable = false;
 
   class MockIntersectionObserver implements IntersectionObserver {
     readonly root = null;
@@ -1166,6 +1173,26 @@ describe('DebateExploreFeedCard', () => {
 
       expect(container.querySelector('[data-debate-poster-slot="2"]')).toHaveClass('order-1');
       expect(container.querySelector('[data-debate-poster-slot="1"]')).toHaveClass('order-2');
+    });
+
+    // TikTok plays the server's composite, slot 1 on top, so the stills must not stand Agree-first.
+    it('keeps slot 1 on top where the combined player will take over', () => {
+      mocks.inlinePlaybackUnavailable = true;
+      const posters = { slot1: 'https://chat.test/still-1', slot2: 'https://chat.test/still-2' };
+      mocks.debateQuery = {
+        data: {
+          ...watchableDebate(),
+          participants: [
+            { participant_slot: 1, position_label: 'Disagree' },
+            { participant_slot: 2, position_label: 'Agree' },
+          ] as unknown as Debate['participants'],
+        },
+        isError: false,
+      };
+      const { container } = renderCard({ item: { ...item, debatePosters: posters } });
+
+      expect(container.querySelector('[data-debate-poster-slot="1"]')).not.toHaveClass('order-2');
+      expect(container.querySelector('[data-debate-poster-slot="2"]')).not.toHaveClass('order-1');
     });
 
     it('keeps slot 1 on top while the debate is unresolved', () => {
