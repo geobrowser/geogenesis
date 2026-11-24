@@ -463,6 +463,17 @@ describe('fetchHop1', () => {
     expect(hop.neighbours.map(({ node }) => node.name)).toEqual(['Ada', 'A story']);
   });
 
+  it('rejects rather than resolve partly when the caller cancels', async () => {
+    const controller = new AbortController();
+    respond({
+      ent: () => {
+        controller.abort();
+        return Promise.reject(new DOMException('aborted', 'AbortError'));
+      },
+    });
+    await expect(fetchHop1(CENTRE, filter, controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
+  });
+
   it('fails when the centre fails, or every kind does', async () => {
     respond({ GraphNeighbourhoodCentre: () => Promise.reject(new Error('centre')) });
     await expect(fetchHop1(CENTRE, filter)).rejects.toThrow('centre');

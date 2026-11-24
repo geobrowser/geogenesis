@@ -428,6 +428,8 @@ export async function fetchHop1(centreId: string, filter: GraphFilter, signal?: 
       request(hop1KindDocument(kind, lensed, scoped)).then(response => normaliseKind(response, kind, scoped))
     ),
   ]);
+  // A cancelled hop is not a partial one.
+  if (signal?.aborted) throw signal.reason;
   if (centre.status === 'rejected') throw centre.reason;
   const failed = kinds.find(result => result.status === 'rejected');
   if (failed && kinds.every(result => result.status === 'rejected')) throw failed.reason;
