@@ -16,6 +16,7 @@ import {
   formatClaimKindLabel,
 } from '../models';
 import { TEMPLATE_ACTIONS } from '../template-actions';
+import { DebateVoteButtons } from './debate-vote-buttons';
 import {
   AddContextPopover,
   AddFlagPopover,
@@ -43,10 +44,11 @@ import { SourceChipList } from './source-chip-list';
 import { SplitBars } from './split-bars';
 import { TemplateBadge, type TemplateBadgeTone } from './template-shell';
 
+// Gray for every kind (GEO-3845).
 const PEEK_CLAIM_KIND_TONE: Record<ClaimKind, TemplateBadgeTone> = {
-  fact: 'fact',
-  judgment: 'judgment',
-  'value-judgment': 'value',
+  fact: 'neutral',
+  judgment: 'neutral',
+  'value-judgment': 'neutral',
 };
 
 export interface ContextPeekDrawerProps {
@@ -304,46 +306,20 @@ export function ContextPeekDrawer({ item, canGoBack, backLabel, onBack, onClose 
 
               {item.voteBox && (
                 <div className="flex flex-col gap-2 border-t border-divider pt-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
+                  <div className="flex items-center gap-3">
+                    {/* The debates app's pair (GEO-3845): the held side takes the vote back, no "Change". */}
+                    <DebateVoteButtons
+                      userVote={item.voteBox.userVote}
                       disabled={item.voteBox.disabled}
-                      aria-pressed={item.voteBox.userVote === 'agree'}
-                      onClick={() => item.voteBox?.onVote('agree')}
-                      className={cx(
-                        'inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-[13.5px] font-medium transition-colors',
-                        item.voteBox.userVote === 'agree'
-                          ? 'border-text bg-text text-white'
-                          : 'border-grey-02 bg-white text-text hover:border-text'
-                      )}
-                    >
-                      <ThumbUpIcon className="size-3.5" />
-                      <span>Agree</span>
-                    </button>
-                    <button
-                      type="button"
-                      disabled={item.voteBox.disabled}
-                      aria-pressed={item.voteBox.userVote === 'disagree'}
-                      onClick={() => item.voteBox?.onVote('disagree')}
-                      className={cx(
-                        'inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-[13.5px] font-medium transition-colors',
-                        item.voteBox.userVote === 'disagree'
-                          ? 'border-text bg-text text-white'
-                          : 'border-grey-02 bg-white text-text hover:border-text'
-                      )}
-                    >
-                      <ThumbDownIcon className="size-3.5" />
-                      <span>Disagree</span>
-                    </button>
-                    {item.voteBox.userVote && item.voteBox.onClear && (
-                      <button
-                        type="button"
-                        onClick={item.voteBox.onClear}
-                        className="cursor-pointer border-0 bg-transparent px-1 text-[13.5px] font-medium text-ctaPrimary hover:text-ctaHover"
-                      >
-                        Change
-                      </button>
-                    )}
+                      label="Do you agree?"
+                      onPress={choice => {
+                        const box = item.voteBox;
+                        if (!box) return;
+                        if (box.userVote === choice && box.onClear) box.onClear();
+                        else box.onVote(choice);
+                      }}
+                      className="min-w-0 flex-1"
+                    />
                     {item.voteBox.countSummary && (
                       <span className="ml-auto text-[13.5px] whitespace-nowrap text-grey-04 tabular-nums">
                         {item.voteBox.countSummary}

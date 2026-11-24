@@ -17,6 +17,7 @@ import {
   EntityActionProvider,
   RecentDebatesGallery,
   TemplateClaimVote,
+  type TemplateVoteBinding,
   TemplateVoteRows,
 } from './index';
 
@@ -116,10 +117,23 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
+// The buttons carry no counts (the debates app's don't, GEO-3845), so the binding's counts are read
+// through a probe beside them.
+const withCounts = (title: string) =>
+  function VoteWithCounts(vote: TemplateVoteBinding) {
+    return (
+      <>
+        <ClaimVotePills title={title} vote={vote} />
+        <span data-testid="agree-count">{vote.agreeCount}</span>
+        <span data-testid="disagree-count">{vote.disagreeCount}</span>
+      </>
+    );
+  };
+
 function renderVote(target: ClaimVoteTarget = TARGET, counts: { agree?: number; disagree?: number } = {}) {
   return render(
     <TemplateClaimVote target={target} agreeCount={counts.agree} disagreeCount={counts.disagree}>
-      {vote => <ClaimVotePills title={target.title} vote={vote} />}
+      {withCounts(target.title)}
     </TemplateClaimVote>
   );
 }
@@ -196,31 +210,31 @@ describe('TemplateClaimVote', () => {
       setControl({ viewerPosition: true });
       renderVote({ ...TARGET, baselineVote: 'agree' }, { agree: 10, disagree: 4 });
 
-      expect(within(agreePill()).getByText('10')).toBeInTheDocument();
-      expect(within(disagreePill()).getByText('4')).toBeInTheDocument();
+      expect(screen.getByTestId('agree-count')).toHaveTextContent(/^10$/);
+      expect(screen.getByTestId('disagree-count')).toHaveTextContent(/^4$/);
     });
 
     it('adds a new vote in the target space once, on top of a vote held in another space', () => {
       // Adapter total of 10 includes the viewer's vote in another space; none in this one.
       setControl({ viewerPosition: null });
       const { rerender } = renderVote({ ...TARGET, baselineVote: null }, { agree: 10 });
-      expect(within(agreePill()).getByText('10')).toBeInTheDocument();
+      expect(screen.getByTestId('agree-count')).toHaveTextContent(/^10$/);
       expect(agreePill()).toHaveAttribute('aria-pressed', 'false');
 
       setControl({ viewerPosition: true });
       rerender(
         <TemplateClaimVote target={{ ...TARGET, baselineVote: null }} agreeCount={10}>
-          {vote => <ClaimVotePills title={TARGET.title} vote={vote} />}
+          {withCounts(TARGET.title)}
         </TemplateClaimVote>
       );
-      expect(within(agreePill()).getByText('11')).toBeInTheDocument();
+      expect(screen.getByTestId('agree-count')).toHaveTextContent(/^11$/);
     });
 
     it('switching sides moves the vote from one count to the other', () => {
       setControl({ viewerPosition: false });
       renderVote({ ...TARGET, baselineVote: 'agree' }, { agree: 10, disagree: 4 });
-      expect(within(agreePill()).getByText('9')).toBeInTheDocument();
-      expect(within(disagreePill()).getByText('5')).toBeInTheDocument();
+      expect(screen.getByTestId('agree-count')).toHaveTextContent(/^9$/);
+      expect(screen.getByTestId('disagree-count')).toHaveTextContent(/^5$/);
     });
   });
 
@@ -232,8 +246,8 @@ describe('TemplateClaimVote', () => {
     setControl({ viewerPosition: true });
     renderVote(TARGET, { agree: 99, disagree: 99 });
 
-    expect(within(agreePill()).getByText('7')).toBeInTheDocument();
-    expect(within(disagreePill()).getByText('2')).toBeInTheDocument();
+    expect(screen.getByTestId('agree-count')).toHaveTextContent(/^7$/);
+    expect(screen.getByTestId('disagree-count')).toHaveTextContent(/^2$/);
   });
 
   it("does not count a press twice while the target space's summary already counts it", () => {
@@ -246,8 +260,8 @@ describe('TemplateClaimVote', () => {
     setControl({ viewerPosition: true, isResponsePending: true });
     renderVote(TARGET);
 
-    expect(within(agreePill()).getByText('8')).toBeInTheDocument();
-    expect(within(disagreePill()).getByText('2')).toBeInTheDocument();
+    expect(screen.getByTestId('agree-count')).toHaveTextContent(/^8$/);
+    expect(screen.getByTestId('disagree-count')).toHaveTextContent(/^2$/);
   });
 
   it('tells the adapter once a vote from the row is indexed', () => {
@@ -273,12 +287,50 @@ describe('TemplateClaimVote', () => {
   });
 });
 
-describe('ClaimVotePills layout', () => {
-  it('lets the pair wrap inside a narrow row instead of running past it (GEO-3825)', () => {
-    renderVote();
+describe('ClaimVotePills: the debates app buttons (GEO-3845)', () => {
+  it('draws two equal 44px outlined pills that share the row, with no counts on them', () => {
+    renderVote(TARGET, { agree: 12, disagree: 3 });
     const group = screen.getByRole('group', { name: `Vote on ${TARGET.title}` });
-    expect(group).toHaveClass('flex-wrap');
-    expect(group.parentElement).toHaveClass('max-w-full');
+    expect(group).toHaveClass('w-full');
+    for (const pill of [agreePill(), disagreePill()]) {
+      expect(pill).toHaveClass('h-11', 'rounded-full', 'border', 'bg-transparent', 'flex-1', 'basis-0');
+      expect(pill).not.toHaveTextContent(/\d/);
+    }
+    expect(agreePill()).toHaveAccessibleName('Agree');
+    expect(disagreePill()).toHaveAccessibleName('Disagree');
+  });
+
+  it('marks only the held side: ink border, bold label, filled thumb', () => {
+    setControl({ viewerPosition: false });
+    renderVote();
+    expect(disagreePill()).toHaveAttribute('aria-pressed', 'true');
+    expect(disagreePill()).toHaveClass('border-[#151515]', 'font-bold');
+    expect(disagreePill().querySelector('svg')).toHaveAttribute('data-filled', 'true');
+    expect(agreePill()).toHaveAttribute('aria-pressed', 'false');
+    expect(agreePill()).toHaveClass('border-[#8a8a8a]', 'font-semibold');
+    expect(agreePill().querySelector('svg')).not.toHaveAttribute('data-filled');
+  });
+
+  it('a filled-side press retracts through the local binding; the other side switches', () => {
+    const onVote = vi.fn();
+    const onClearVote = vi.fn();
+    const { rerender } = render(
+      <ClaimVoteBinding userVote="agree" onVote={onVote} onClearVote={onClearVote}>
+        {vote => vote && <ClaimVotePills title={TARGET.title} vote={vote} />}
+      </ClaimVoteBinding>
+    );
+    fireEvent.click(agreePill());
+    expect(onClearVote).toHaveBeenCalledTimes(1);
+    expect(onVote).not.toHaveBeenCalled();
+
+    rerender(
+      <ClaimVoteBinding userVote="agree" onVote={onVote} onClearVote={onClearVote}>
+        {vote => vote && <ClaimVotePills title={TARGET.title} vote={vote} />}
+      </ClaimVoteBinding>
+    );
+    fireEvent.click(disagreePill());
+    expect(onVote).toHaveBeenCalledWith('disagree');
+    expect(onClearVote).toHaveBeenCalledTimes(1);
   });
 });
 

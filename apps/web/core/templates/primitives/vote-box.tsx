@@ -5,7 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import type { SplitBreakdown, VoteControlModel } from '../models';
-import { ThumbDownIcon, ThumbUpIcon } from './icons';
+import { DebateVoteButtons } from './debate-vote-buttons';
 import { SplitBars } from './split-bars';
 import { TEMPLATE_CARD_SURFACE } from './template-shell';
 
@@ -18,7 +18,8 @@ export interface VoteBoxProps {
 }
 
 /**
- * Interactive Agree / Disagree voting card paired with community + overall split bars.
+ * Interactive Agree / Disagree voting card paired with community + overall split bars. The buttons are
+ * the debates app's (GEO-3845), see `debate-vote-buttons.tsx`.
  *
  * Uses a balanced 2-column horizontal layout at desktop widths (bars left, voting controls right)
  * inside a soft-shadow, whisper-border Geo card surface.
@@ -65,38 +66,14 @@ export function VoteBox({ prompt, split, control, className }: VoteBoxProps) {
         >
           <span className="text-[13.5px] font-medium text-grey-04">Do you agree?</span>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
+          <div className="flex items-center gap-3">
+            <DebateVoteButtons
+              userVote={userVote}
               disabled={disabled}
-              aria-pressed={userVote === 'agree'}
-              onClick={() => press('agree')}
-              className={cx(
-                'inline-flex h-9 cursor-pointer items-center justify-center gap-1.5 rounded-full border px-3.5 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50',
-                userVote === 'agree'
-                  ? 'border-text bg-text text-white'
-                  : 'border-grey-02 bg-white text-text hover:border-text'
-              )}
-            >
-              <ThumbUpIcon className="size-3.5" />
-              <span>Agree</span>
-            </button>
-
-            <button
-              type="button"
-              disabled={disabled}
-              aria-pressed={userVote === 'disagree'}
-              onClick={() => press('disagree')}
-              className={cx(
-                'inline-flex h-9 cursor-pointer items-center justify-center gap-1.5 rounded-full border px-3.5 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50',
-                userVote === 'disagree'
-                  ? 'border-text bg-text text-white'
-                  : 'border-grey-02 bg-white text-text hover:border-text'
-              )}
-            >
-              <ThumbDownIcon className="size-3.5" />
-              <span>Disagree</span>
-            </button>
+              label="Do you agree?"
+              onPress={press}
+              className="min-w-0 flex-1"
+            />
 
             {countSummary && (
               // Stacked (phones), the split row right above already gives the count in parentheses, so

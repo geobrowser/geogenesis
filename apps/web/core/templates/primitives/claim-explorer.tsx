@@ -23,10 +23,11 @@ import { ClaimVoteBinding, ClaimVotePills, TemplateVoteRows } from './template-c
 import { TEMPLATE_CARD_SURFACE, TemplateBadge, type TemplateBadgeTone } from './template-shell';
 import { PUBLISHING_LABEL, usePendingAdds } from './use-pending-adds';
 
+// Gray for every kind (GEO-3845): the tag says what kind of claim it is without the loud blue/purple.
 const CLAIM_KIND_TONE: Record<ClaimKind, TemplateBadgeTone> = {
-  fact: 'fact',
-  judgment: 'judgment',
-  'value-judgment': 'value',
+  fact: 'neutral',
+  judgment: 'neutral',
+  'value-judgment': 'neutral',
 };
 
 export interface ClaimExplorerProps {
@@ -329,7 +330,6 @@ export function ClaimListRow({ rank, claim, isAgreed = false, hideKindOnPhone = 
           voterCount: row.voterCount ?? (claim.split.rows.length === 1 ? claim.split.totalVotes : undefined),
         }))
       : [];
-  const phoneKindBadge = hideKindOnPhone ? null : kindBadge;
 
   const phoneMeta: React.ReactNode[] = [];
   if (debateNode) phoneMeta.push(<React.Fragment key="debates">{debateNode}</React.Fragment>);
@@ -353,7 +353,7 @@ export function ClaimListRow({ rank, claim, isAgreed = false, hideKindOnPhone = 
     </span>
   );
 
-  // Below 760px the row is one column: the title with "…" beside it, a meta line (kind, debates), the
+  // Below 760px the row is one column: the title with "…" beside it, a meta line (debates), the
   // vote pills, then the split. ("…" moved up because at 320px it collided with "Disagree 2".) The desktop wrappers turn into `contents` there so the pills
   // and "…" (one instance each) can share a line; at 760px and wider the markup lays out exactly as
   // before (GEO-3819).
@@ -365,27 +365,37 @@ export function ClaimListRow({ rank, claim, isAgreed = false, hideKindOnPhone = 
         </span>
 
         <div className="contents min-w-0 flex-1 flex-col gap-2 @[760px]:flex">
-          <div className="-order-1 min-w-0 flex-1 @[760px]:contents">
-            {claim.href ? (
-              <Link href={claim.href} className="group/claim self-start text-left text-text no-underline">
-                {titleNode}
-              </Link>
-            ) : claim.onSelect ? (
-              <button
-                type="button"
-                onClick={claim.onSelect}
-                className="group/claim cursor-pointer self-start border-0 bg-transparent p-0 text-left text-text"
+          {/* The kind tag leads the row, before the title (GEO-3845); phones drop it unless asked. */}
+          <div className="-order-1 flex min-w-0 flex-1 items-start gap-2">
+            {kindBadge && (
+              <span
+                data-testid="claim-kind-tag"
+                className={cx('-mt-px shrink-0', hideKindOnPhone ? 'hidden @[760px]:inline-flex' : 'inline-flex')}
               >
-                {titleNode}
-              </button>
-            ) : (
-              titleNode
+                {kindBadge}
+              </span>
             )}
+            <div className="min-w-0 flex-1">
+              {claim.href ? (
+                <Link href={claim.href} className="group/claim self-start text-left text-text no-underline">
+                  {titleNode}
+                </Link>
+              ) : claim.onSelect ? (
+                <button
+                  type="button"
+                  onClick={claim.onSelect}
+                  className="group/claim cursor-pointer self-start border-0 bg-transparent p-0 text-left text-text"
+                >
+                  {titleNode}
+                </button>
+              ) : (
+                titleNode
+              )}
+            </div>
           </div>
 
-          {(phoneKindBadge || phoneMeta.length > 0) && (
+          {phoneMeta.length > 0 && (
             <div className="mt-1.5 flex basis-full flex-wrap items-center gap-x-1.5 gap-y-1 text-[13px] text-grey-04 @[760px]:hidden">
-              {phoneKindBadge && <span className="mr-0.5 inline-flex">{phoneKindBadge}</span>}
               {phoneMeta.map((node, i) => (
                 <React.Fragment key={i}>
                   {i > 0 && <span aria-hidden>·</span>}
@@ -395,12 +405,10 @@ export function ClaimListRow({ rank, claim, isAgreed = false, hideKindOnPhone = 
             </div>
           )}
 
-          {(claim.kind || votes || debateLabel || metaParts.length > 0 || youVotedLabel) && (
+          {(votes || debateLabel || metaParts.length > 0 || youVotedLabel) && (
             <div className="contents flex-wrap items-center gap-x-3 gap-y-1.5 @[760px]:flex">
-              {kindBadge && <span className="hidden @[760px]:contents">{kindBadge}</span>}
-
-              {/* 32px tap targets on phones; the desktop pills keep their 28px. */}
-              <div className="mt-2.5 basis-full @[760px]:contents [&_button]:h-8 @[760px]:[&_button]:h-7">
+              {/* The debates app's 44px Agree / Disagree (GEO-3845), across the row on phones. */}
+              <div className="mt-2.5 basis-full @[760px]:contents">
                 <ClaimVoteBinding
                   voteTarget={claim.voteTarget}
                   userVote={claim.userVote}

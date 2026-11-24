@@ -80,6 +80,102 @@ describe('SplitBars', () => {
   });
 });
 
+describe('SplitBars without an "Everyone" label (GEO-3845)', () => {
+  const everyone = { id: 'all', label: 'Everyone', color: '#202020', percent: 80, voterCount: 5, isEveryone: true };
+
+  it('draws the lone Everyone row as its bar and percentage only', () => {
+    const { container } = render(<SplitBars rows={[everyone]} density="full" />);
+    expect(screen.queryByText('Everyone')).toBeNull();
+    expect(screen.getByText('80%')).toBeInTheDocument();
+    expect(screen.getByText('(5)')).toBeInTheDocument();
+    expect(screen.getByRole('meter')).toHaveAttribute('aria-valuenow', '80');
+    // No label column left behind: the bar takes the row.
+    expect(container.querySelector('.grid')).toHaveClass('grid-cols-[minmax(40px,1fr)_auto]');
+  });
+
+  it('keeps space names when other rows are listed, and still drops "Everyone"', () => {
+    render(<SplitBars rows={CONTESTED_SPLIT.rows} density="compact" />);
+    expect(screen.getByText('Community A')).toBeInTheDocument();
+    expect(screen.getByText('Community B')).toBeInTheDocument();
+    expect(screen.queryByText('Everyone')).toBeNull();
+    expect(screen.getAllByRole('meter')).toHaveLength(3);
+  });
+
+  it('keeps a space-named everyone row (the Claim page names its space)', () => {
+    render(<SplitBars rows={[{ ...everyone, label: 'Crypto' }]} density="full" />);
+    expect(screen.getByText('Crypto')).toBeInTheDocument();
+  });
+});
+
+describe('VoteBox: the debates app Agree / Disagree (GEO-3845)', () => {
+  it('draws the two 44px outlined buttons and switches or retracts by press', () => {
+    const onVote = vi.fn();
+    const onClear = vi.fn();
+    render(
+      <VoteBox split={CONTESTED_SPLIT} control={{ userVote: 'disagree', countSummary: '6 votes', onVote, onClear }} />
+    );
+
+    const agree = screen.getByRole('button', { name: 'Agree' });
+    const disagree = screen.getByRole('button', { name: 'Disagree' });
+    expect(screen.getByRole('group', { name: 'Do you agree?' })).toContainElement(agree);
+    for (const button of [agree, disagree]) expect(button).toHaveClass('h-11', 'rounded-full', 'bg-transparent');
+    expect(disagree).toHaveAttribute('aria-pressed', 'true');
+    expect(disagree).toHaveClass('border-[#151515]', 'font-bold');
+    expect(agree).toHaveClass('border-[#8a8a8a]');
+    expect(agree).not.toHaveClass('bg-text');
+
+    fireEvent.click(agree);
+    expect(onVote).toHaveBeenCalledWith('agree');
+    fireEvent.click(disagree);
+    expect(onClear).toHaveBeenCalledTimes(1);
+    expect(onVote).toHaveBeenCalledTimes(1);
+  });
+
+  it('is disabled as a pair', () => {
+    render(
+      <VoteBox
+        split={CONTESTED_SPLIT}
+        control={{ userVote: null, countSummary: '0 votes', disabled: true, onVote: vi.fn() }}
+      />
+    );
+    expect(screen.getByRole('button', { name: 'Agree' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Disagree' })).toBeDisabled();
+  });
+});
+
+describe('ClaimExplorer row kind tag (GEO-3845)', () => {
+  it('is gray and leads the row, before the title', () => {
+    const claims: ClaimSummaryModel[] = [
+      {
+        id: 'kind-1',
+        title: 'A judgment claim',
+        kind: 'judgment',
+        split: { rows: [], isSplit: true, totalVotes: 0 },
+        onVote: vi.fn(),
+      },
+    ];
+    render(
+      <EntityActionProvider>
+        <ClaimExplorer contestedClaims={claims} agreedClaims={[]} />
+      </EntityActionProvider>
+    );
+
+    const tag = screen.getByTestId('claim-kind-tag');
+    expect(tag).toHaveTextContent('Judgment');
+    // Gray (neutral) tone, not the purple judgment one; still hidden below 760px.
+    expect(tag.firstElementChild).toHaveClass('bg-grey-01', 'text-grey-04');
+    expect(tag.firstElementChild).not.toHaveClass('text-purple');
+    expect(tag).toHaveClass('hidden', '@[760px]:inline-flex');
+
+    const title = screen.getByText('A judgment claim');
+    // The tag comes before the title in the row, and before the vote buttons.
+    expect(tag.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const agree = screen.getByRole('button', { name: 'Agree' });
+    expect(tag.compareDocumentPosition(agree) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(tag.parentElement).toContainElement(title);
+  });
+});
+
 describe('VoteBox', () => {
   it('fires vote and clear callbacks and reflects active pressed state', () => {
     const onVote = vi.fn();
