@@ -8,10 +8,8 @@ export type InlinedImage = { src: string | null; timedOut: boolean };
 const MAX_REDIRECTS = 1;
 
 /**
- * An image resized to `size`² and inlined as a JPEG data URI, so Satori never decodes a large
- * original. Only our IPFS gateways are fetched: an author-supplied URL must not make the server
- * reach an arbitrary or internal host. Null on a missing, refused or failed image; `timedOut` when
- * the budget ran out.
+ * The image as a `size`² JPEG data URI, fetched only from our gateways so an author's URL can't
+ * reach other hosts. Null when missing, refused or failed; `timedOut` when the budget ran out.
  */
 export async function inlineOgImage(
   value: string | null | undefined,
