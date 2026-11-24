@@ -4,7 +4,7 @@ import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { Effect } from 'effect';
 import { type DocumentNode, parse, visit } from 'graphql';
 
-import { HIDDEN_PROPERTIES } from '~/core/constants';
+import { HIDDEN_PROPERTIES, OG_IMAGE_PROPERTY } from '~/core/constants';
 import { graphql } from '~/core/io/graphql-client';
 import { AVATAR_PROPERTY_ID, COVER_PROPERTY_ID, IMAGE_URL_PROPERTY_ID } from '~/core/io/subgraph/space-image';
 import { HIDDEN_PROPERTY_ID, isHiddenMarker } from '~/core/moderation/hidden';
@@ -92,8 +92,9 @@ const NODE_FIELDS = /* GraphQL */ `
   dates: valuesList(filter: { propertyId: { in: $datePropertyIds } }) { datetime date }
   types { id name }
   hidden: valuesList(filter: { propertyId: { is: $hiddenPropertyId } }) { text boolean }
-  relationsList(filter: { typeId: { in: [$avatarPropertyId, $coverPropertyId] } }) {
+  relationsList(filter: { typeId: { in: [$avatarPropertyId, $coverPropertyId, $ogImagePropertyId] } }) {
     typeId
+    spaceId
     toEntity { valuesList(filter: { propertyId: { is: $imageUrlPropertyId } }) { text } }
   }
 `;
@@ -195,6 +196,7 @@ const VARIABLE_TYPES: Record<string, string> = {
   namePropertyId: 'UUID!',
   avatarPropertyId: 'UUID!',
   coverPropertyId: 'UUID!',
+  ogImagePropertyId: 'UUID!',
   imageUrlPropertyId: 'UUID!',
 };
 
@@ -281,6 +283,8 @@ function nodeVariables() {
     datePropertyIds: DATE_PROPERTY_IDS,
     avatarPropertyId: AVATAR_PROPERTY_ID,
     coverPropertyId: COVER_PROPERTY_ID,
+    // A debate's share card; it rides on the image relations, so no extra request.
+    ogImagePropertyId: OG_IMAGE_PROPERTY,
     imageUrlPropertyId: IMAGE_URL_PROPERTY_ID,
   };
 }

@@ -1,3 +1,5 @@
+import { OG_IMAGE_PROPERTY } from '~/core/constants';
+import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
 import { AVATAR_PROPERTY_ID, COVER_PROPERTY_ID } from '~/core/io/subgraph/space-image';
 import { normId } from '~/core/utils/norm-id';
 
@@ -10,6 +12,8 @@ export type GraphEntity = {
   types: Array<{ id: string; name: string | null }>;
   /** Avatar, else cover; an `ipfs://` or http URL. */
   image: string | null;
+  /** A debate's share card (its OG Image), drawn in place of `image`. Null or absent for anything else. */
+  card?: string | null;
 };
 
 export type GraphCentreText = { propertyId: string; spaceId: string; text: string };
@@ -42,7 +46,11 @@ export type RawEntity = {
   spaceIds: string[] | null;
   names?: Array<{ spaceId: string; text: string | null }> | null;
   types: Array<{ id: string; name: string | null }> | null;
-  relationsList: Array<{ typeId: string; toEntity: { valuesList: Array<{ text: string | null }> } | null }> | null;
+  relationsList: Array<{
+    typeId: string;
+    spaceId?: string | null;
+    toEntity: { valuesList: Array<{ text: string | null }> } | null;
+  }> | null;
 };
 
 export function imageOf(entity: RawEntity): string | null {
@@ -57,15 +65,32 @@ export function imageOf(entity: RawEntity): string | null {
   return null;
 }
 
+/**
+ * A debate's share card: the Image URL of its OG Image. Other entities can carry an OG Image too, but
+ * only debates are drawn as a card, so they get null. A debate can have a card in more than one space;
+ * one in a space that names it (where the debate lives) wins over any other.
+ */
+export function cardOf(entity: RawEntity, namedSpaceIds: readonly string[] = []): string | null {
+  if (!(entity.types ?? []).some(type => normId(type.id) === DEBATE_TYPE_ID)) return null;
+  const cards = (entity.relationsList ?? []).flatMap(relation => {
+    if (normId(relation.typeId) !== OG_IMAGE_PROPERTY) return [];
+    const url = relation.toEntity?.valuesList.find(value => value.text)?.text;
+    return url ? [{ url, own: relation.spaceId ? namedSpaceIds.includes(normId(relation.spaceId)) : false }] : [];
+  });
+  return (cards.find(card => card.own) ?? cards[0])?.url ?? null;
+}
+
 export function decodeEntity(entity: RawEntity): GraphEntity {
+  const namedSpaceIds = [
+    ...new Set((entity.names ?? []).filter(value => value.text?.trim()).map(value => normId(value.spaceId))),
+  ];
   return {
     id: normId(entity.id),
     name: entity.name?.trim() ? entity.name.trim() : null,
     spaceIds: (entity.spaceIds ?? []).map(normId),
-    namedSpaceIds: [
-      ...new Set((entity.names ?? []).filter(value => value.text?.trim()).map(value => normId(value.spaceId))),
-    ],
+    namedSpaceIds,
     types: entity.types ?? [],
     image: imageOf(entity),
+    card: cardOf(entity, namedSpaceIds),
   };
 }

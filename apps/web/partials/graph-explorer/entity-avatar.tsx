@@ -5,10 +5,20 @@ import * as React from 'react';
 import type { GraphEntity } from '~/core/graph-explorer/graph-entity';
 import { getImagePath, isRenderableImageSrc } from '~/core/utils/utils';
 
-export function entityImageSrc(entity: Pick<GraphEntity, 'image'>): string | null {
-  if (!entity.image) return null;
-  const src = getImagePath(entity.image);
+/** A gateway URL for an image value, or null when it is empty or cannot render as a picture. */
+export function renderableImageSrc(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const src = getImagePath(value);
   return isRenderableImageSrc(src) ? src : null;
+}
+
+export function entityImageSrc(entity: Pick<GraphEntity, 'image'>): string | null {
+  return renderableImageSrc(entity.image);
+}
+
+/** A debate's share card, when it has one that can render. */
+export function entityCardSrc(entity: Pick<GraphEntity, 'card'>): string | null {
+  return renderableImageSrc(entity.card);
 }
 
 export function EntityAvatar({ entity, size }: { entity: Pick<GraphEntity, 'image' | 'name'>; size: number }) {

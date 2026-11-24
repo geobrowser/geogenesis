@@ -48,7 +48,7 @@ type NodeView = {
   /** When it left the selection; it fades out and is removed LEAVE_MS later. */
   died: number;
   entry: SelectedNode;
-  /** Screen offset keeping it clear of the centre, eased frame to frame. */
+  /** Screen offset keeping it clear of the centre and of share cards, eased frame to frame. */
   push: [number, number];
   /** Opacity factor while a nearer card covers it on phone, eased frame to frame. */
   dim: number;
@@ -369,7 +369,7 @@ export function ConnectionsCanvas({
       const measure = (id: string, element: HTMLElement) => {
         let box = anchors.current.get(id);
         if (!box) {
-          box = { anchor: anchorY(element), width: element.offsetWidth, height: element.offsetHeight };
+          box = measureBox(element);
           anchors.current.set(id, box);
         }
         return box;
@@ -411,21 +411,31 @@ export function ConnectionsCanvas({
           moving = true;
         }
         const box = measure(node.id, element);
-        if (centreRect && !isCentre && node.alive) {
-          const rect = rectAt(point.x, point.y, box, scale);
-          const target = clearance(centreRect, rect);
-          const ease = reduceMotion ? 1 : 0.2;
-          if (Math.abs(target[0] - node.push[0]) + Math.abs(target[1] - node.push[1]) > 0.5) moving = true;
-          const eased: [number, number] = [
-            node.push[0] + (target[0] - node.push[0]) * ease,
-            node.push[1] + (target[1] - node.push[1]) * ease,
-          ];
-          // Easing may only move a card around the centre, never across it.
-          node.push = overlaps(centreRect, shifted(rect, eased)) ? target : eased;
-        } else if (isCentre) node.push = [0, 0];
+        if (isCentre) node.push = [0, 0];
+        drawn.push({ node, element, point, box, scale, opacity, isCentre });
+      }
+
+      // Keep nodes off the centre, and off each other where a share card is involved.
+      const pushed = drawn.filter(entry => !entry.isCentre && entry.node.alive);
+      const settled = settlePushes(
+        centreRect,
+        pushed.map(({ node, point, box, scale }) => ({
+          rect: rectAt(point.x, point.y, box, scale),
+          depth: point.depth,
+          card: box.card,
+          push: node.push,
+        })),
+        reduceMotion ? 1 : 0.2
+      );
+      pushed.forEach((entry, i) => {
+        const { target, push } = settled[i];
+        const old = entry.node.push;
+        if (Math.abs(target[0] - old[0]) + Math.abs(target[1] - old[1]) > 0.5) moving = true;
+        entry.node.push = push;
+      });
+      for (const { node, point } of drawn) {
         point.x += node.push[0];
         point.y += node.push[1];
-        drawn.push({ node, element, point, box, scale, opacity, isCentre });
       }
 
       // On phone a card covered by a nearer one fades, so the front one reads.
@@ -804,7 +814,8 @@ function useCanHover() {
   );
 }
 
-type Box = { anchor: number; width: number; height: number };
+/** `card`: the node draws a share card, not a circle. */
+type Box = { anchor: number; width: number; height: number; card: boolean };
 type Rect = { left: number; right: number; top: number; bottom: number };
 
 /** A card's screen rectangle: centred on x, anchored at y, scaled about its anchor. */
@@ -841,6 +852,45 @@ function shifted(rect: Rect, [dx, dy]: [number, number]): Rect {
   return { left: rect.left + dx, right: rect.right + dx, top: rect.top + dy, bottom: rect.bottom + dy };
 }
 
+/** A drawn node's screen box before its push, and the push it had last frame. */
+export type Footprint = { rect: Rect; depth: number; card: boolean; push: [number, number] };
+
+/**
+ * Each node's push for this frame (`push`, eased) and where it is heading (`target`). Every node stays
+ * off the centre. A node also stays off any nearer node when either of the two is a share card: a card
+ * is several times a circle's box, so depth alone no longer keeps neighbours apart. Nearest first, so a
+ * node is kept off where the nodes in front of it end up.
+ */
+export function settlePushes(
+  centre: Rect | null,
+  nodes: readonly Footprint[],
+  ease: number
+): Array<{ target: [number, number]; push: [number, number] }> {
+  const result: Array<{ target: [number, number]; push: [number, number] }> = new Array(nodes.length);
+  const placed: Array<{ rect: Rect; card: boolean }> = [];
+  const order = nodes.map((_, i) => i).sort((a, b) => nodes[a].depth - nodes[b].depth);
+  for (const i of order) {
+    const node = nodes[i];
+    const obstacles = placed.filter(other => other.card || node.card).map(other => other.rect);
+    // The centre goes last, so it always wins.
+    if (centre) obstacles.push(centre);
+    let target: [number, number] = [0, 0];
+    for (const obstacle of obstacles) {
+      const [dx, dy] = clearance(obstacle, shifted(node.rect, target));
+      target = [target[0] + dx, target[1] + dy];
+    }
+    const eased: [number, number] = [
+      node.push[0] + (target[0] - node.push[0]) * ease,
+      node.push[1] + (target[1] - node.push[1]) * ease,
+    ];
+    // Easing may only move a node around another, never across it.
+    const push = obstacles.some(obstacle => overlaps(obstacle, shifted(node.rect, eased))) ? target : eased;
+    result[i] = { target, push };
+    placed.push({ rect: shifted(node.rect, push), card: node.card });
+  }
+  return result;
+}
+
 /** Whether `rect` reaches into `centre`'s margin. */
 export function overlaps(centre: Rect, rect: Rect): boolean {
   const [dx, dy] = clearance(centre, rect);
@@ -858,6 +908,16 @@ export function overlapShare(a: Rect, b: Rect): number {
 
 function clampDistance(distance: number) {
   return Math.max(MIN_DISTANCE, Math.min(MAX_DISTANCE, distance));
+}
+
+/** A node's box as drawn now; `card` is whether it shows a share card (a failed card is a circle again). */
+export function measureBox(element: HTMLElement): Box {
+  return {
+    anchor: anchorY(element),
+    width: element.offsetWidth,
+    height: element.offsetHeight,
+    card: element.querySelector('[data-card]') !== null,
+  };
 }
 
 /** An entity anchors on its image, everything else on its middle. */

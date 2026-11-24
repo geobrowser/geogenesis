@@ -14,7 +14,7 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
-import { EntityAvatar } from './entity-avatar';
+import { EntityAvatar, entityCardSrc } from './entity-avatar';
 import { NeighbourGroups, type PanelClaim } from './panel-sections';
 
 export type EntityPanelEmptyMessages = { relationships: string; claims: string; description: string };
@@ -75,19 +75,7 @@ export function EntityPanel({
 
   return (
     <section aria-label={`About ${centre.name ?? centre.id}`} className="flex min-h-0 flex-col gap-5">
-      <div className="flex items-start gap-3">
-        <EntityAvatar entity={centre} size={48} />
-        <div className="flex min-w-0 flex-col gap-1">
-          <h2 className="text-mediumTitle wrap-break-word text-text">{centre.name ?? centre.id}</h2>
-          <div className="flex flex-wrap gap-1">
-            {typeNames(centre).map(name => (
-              <span key={name} className="rounded border border-grey-02 px-1.5 text-footnote text-grey-04">
-                {name}
-              </span>
-            ))}
-          </div>
-        </div>
-      </div>
+      <CentreHeader key={centre.id} centre={centre} />
 
       <Details
         centre={centre}
@@ -177,6 +165,39 @@ function Details({
           Open page →
         </Link>
       )}
+    </div>
+  );
+}
+
+/** Name, types and picture. A debate's share card sits above the name at full width; if it fails, the avatar returns. */
+export function CentreHeader({ centre }: { centre: GraphCentre }) {
+  const cardSrc = entityCardSrc(centre);
+  const [cardFailed, setCardFailed] = React.useState(false);
+  const showCard = cardSrc !== null && !cardFailed;
+  return (
+    <div className="flex flex-col gap-3">
+      {showCard && (
+        <img
+          src={cardSrc}
+          alt=""
+          data-card
+          className="aspect-[1.91/1] w-full rounded-lg border border-grey-02 bg-grey-01 object-cover"
+          onError={() => setCardFailed(true)}
+        />
+      )}
+      <div className="flex items-start gap-3">
+        {!showCard && <EntityAvatar entity={centre} size={48} />}
+        <div className="flex min-w-0 flex-col gap-1">
+          <h2 className="text-mediumTitle wrap-break-word text-text">{centre.name ?? centre.id}</h2>
+          <div className="flex flex-wrap gap-1">
+            {typeNames(centre).map(name => (
+              <span key={name} className="rounded border border-grey-02 px-1.5 text-footnote text-grey-04">
+                {name}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

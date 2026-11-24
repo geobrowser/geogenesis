@@ -10,7 +10,7 @@ import type { GraphNode } from '~/core/graph-explorer/fetch-graph-neighbourhood'
 import { GRAPH_KIND_TYPE_IDS } from '~/core/graph-explorer/graph-kinds';
 import { normId } from '~/core/utils/norm-id';
 
-import { entityImageSrc } from '../entity-avatar';
+import { entityCardSrc, entityImageSrc } from '../entity-avatar';
 
 export const BAND_STYLES: Record<ClaimBand, string> = {
   agreed: 'bg-[#1e824c] text-white shadow-[0_10px_40px_rgba(30,130,76,.4)]',
@@ -81,38 +81,62 @@ function TopicCard({ node, hop, isCentre, phone }: CardProps) {
   );
 }
 
+/** Share card box (width, height) at about the card's 1.91:1; hop 2 stays small so cards don't crowd the outer ring. */
+function cardSize({ isCentre, phone, hop }: Pick<CardProps, 'isCentre' | 'phone' | 'hop'>): [number, number] {
+  if (isCentre) return phone ? [160, 84] : [240, 126];
+  if (hop === 2) return phone ? [56, 29] : [64, 34];
+  return phone ? [112, 59] : [160, 84];
+}
+
 function EntityCard({ node, hop, isCentre, phone }: CardProps) {
+  const cardSrc = entityCardSrc(node);
   const src = entityImageSrc(node);
+  const [cardFailed, setCardFailed] = React.useState(false);
   const [failed, setFailed] = React.useState(false);
+  const showCard = cardSrc !== null && !cardFailed;
   const size = isCentre ? (phone ? 64 : 84) : hop === 2 ? 28 : phone ? 40 : 52;
-  const width = isCentre
-    ? phone
-      ? 'w-[110px]'
-      : 'w-[150px]'
-    : phone
-      ? 'w-[84px]'
-      : hop === 2
-        ? 'w-[96px]'
-        : 'w-[112px]';
+  const [cardWidth, cardHeight] = cardSize({ isCentre, phone, hop });
+  // The label's width; a card wider than it widens the whole node.
+  const labelWidth = isCentre ? (phone ? 110 : 150) : phone ? 84 : hop === 2 ? 96 : 112;
   return (
-    <span className={cx('flex flex-col items-center gap-1 text-center', width)}>
-      <span
-        data-anchor
-        className="flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#333] text-[#ddd] shadow-[0_0_0_1px_rgba(255,255,255,.18),0_10px_30px_rgba(0,0,0,.5)]"
-        style={{ width: size, height: size, fontSize: Math.round(size * 0.4) }}
-      >
-        {src && !failed ? (
+    <span
+      className="flex flex-col items-center gap-1 text-center"
+      style={{ width: showCard ? Math.max(cardWidth, labelWidth) : labelWidth }}
+    >
+      {showCard ? (
+        <span
+          data-anchor
+          data-card
+          className="block shrink-0 overflow-hidden rounded-lg bg-[#333] shadow-[0_0_0_1px_rgba(255,255,255,.18),0_10px_30px_rgba(0,0,0,.5)]"
+          style={{ width: cardWidth, height: cardHeight }}
+        >
           <img
-            src={src}
+            src={cardSrc}
             alt=""
             draggable={false}
             className="h-full w-full object-cover"
-            onError={() => setFailed(true)}
+            onError={() => setCardFailed(true)}
           />
-        ) : (
-          node.name?.charAt(0).toUpperCase()
-        )}
-      </span>
+        </span>
+      ) : (
+        <span
+          data-anchor
+          className="flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#333] text-[#ddd] shadow-[0_0_0_1px_rgba(255,255,255,.18),0_10px_30px_rgba(0,0,0,.5)]"
+          style={{ width: size, height: size, fontSize: Math.round(size * 0.4) }}
+        >
+          {src && !failed ? (
+            <img
+              src={src}
+              alt=""
+              draggable={false}
+              className="h-full w-full object-cover"
+              onError={() => setFailed(true)}
+            />
+          ) : (
+            node.name?.charAt(0).toUpperCase()
+          )}
+        </span>
+      )}
       <span
         className={cx(LABEL, 'rounded-md bg-white px-2 py-[2px] text-[#151515]', labelSize({ isCentre, phone, hop }))}
       >

@@ -12,7 +12,7 @@ import type { GraphSelection } from '~/core/graph-explorer/select-graph';
 import type { SelectedNode } from '~/core/graph-explorer/select-graph';
 import { SKELETON_SELECTION, isSkeletonNode } from '~/core/graph-explorer/skeleton-graph';
 
-import { ConnectionsCanvas, clearance, nodeScale, overlapShare, overlaps } from './connections-canvas';
+import { ConnectionsCanvas, clearance, nodeScale, overlapShare, overlaps, settlePushes } from './connections-canvas';
 import { GraphSearch, searchNodes } from './graph-search';
 import { GraphTopBar } from './graph-top-bar';
 
@@ -527,6 +527,101 @@ describe('clearance', () => {
   it('counts the margin as touching the centre', () => {
     expect(overlaps(centre, { left: 205, right: 260, top: 110, bottom: 150 })).toBe(true);
     expect(overlaps(centre, { left: 211, right: 260, top: 110, bottom: 150 })).toBe(false);
+  });
+});
+
+describe('settlePushes', () => {
+  const centre = { left: 600, right: 840, top: 400, bottom: 560 };
+  // The topic map at 1440: two hop-1 debate cards (card + label) one above the other, the front one nearer.
+  const front = {
+    rect: { left: 100, right: 292, top: 100, bottom: 250 },
+    depth: -80,
+    push: [0, 0] as [number, number],
+  };
+  const back = { rect: { left: 130, right: 262, top: 215, bottom: 320 }, depth: 40, push: [0, 0] as [number, number] };
+
+  it('keeps a node off a nearer share card, past the margin', () => {
+    const [kept, moved] = settlePushes(
+      centre,
+      [
+        { ...front, card: true },
+        { ...back, card: true },
+      ],
+      1
+    );
+    expect(kept.push).toEqual([0, 0]);
+    expect(moved.push).toEqual([0, 45]);
+    expect(overlaps(front.rect, { ...back.rect, top: back.rect.top + 45, bottom: back.rect.bottom + 45 })).toBe(false);
+  });
+
+  it('keeps a share card off a nearer node that is not a card', () => {
+    const [, moved] = settlePushes(
+      centre,
+      [
+        { ...front, card: false },
+        { ...back, card: true },
+      ],
+      1
+    );
+    expect(moved.push).toEqual([0, 45]);
+  });
+
+  it('leaves two circles where depth puts them, as before cards', () => {
+    const settled = settlePushes(
+      centre,
+      [
+        { ...front, card: false },
+        { ...back, card: false },
+      ],
+      1
+    );
+    expect(settled.map(entry => entry.push)).toEqual([
+      [0, 0],
+      [0, 0],
+    ]);
+  });
+
+  it('decides who moves by depth, not by list order', () => {
+    const [moved, kept] = settlePushes(
+      centre,
+      [
+        { ...back, card: true },
+        { ...front, card: true },
+      ],
+      1
+    );
+    expect(kept.push).toEqual([0, 0]);
+    expect(moved.push).toEqual([0, 45]);
+  });
+
+  it('still keeps every node off the centre, which wins over a card', () => {
+    const nearCentre = {
+      rect: { left: 620, right: 700, top: 540, bottom: 600 },
+      depth: 10,
+      card: false,
+      push: [0, 0] as [number, number],
+    };
+    expect(settlePushes(centre, [nearCentre], 1)[0].push).toEqual([0, 30]);
+  });
+
+  it('eases back once nothing is in the way, but jumps straight off an overlap', () => {
+    const [kept, moved] = settlePushes(
+      centre,
+      [
+        { ...front, card: true, push: [0, 0] },
+        { ...back, card: true, push: [0, 0] },
+      ],
+      0.2
+    );
+    expect(kept.push).toEqual([0, 0]);
+    expect(moved).toEqual({ target: [0, 45], push: [0, 45] });
+    const far = {
+      rect: { left: 1000, right: 1100, top: 0, bottom: 50 },
+      depth: 0,
+      card: true,
+      push: [0, 40] as [number, number],
+    };
+    expect(settlePushes(centre, [far], 0.2)[0]).toEqual({ target: [0, 0], push: [0, 32] });
   });
 });
 

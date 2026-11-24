@@ -3,6 +3,8 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { type OperationDefinitionNode, print } from 'graphql';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { OG_IMAGE_PROPERTY } from '~/core/constants';
+import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
 import { HIDDEN_PROPERTY_ID } from '~/core/moderation/hidden';
 
 import {
@@ -123,6 +125,30 @@ describe('decodeNode', () => {
   it('always makes a centre a node, whatever its type', () => {
     expect(decodeNode(raw('1'.repeat(32), 'A page', [SystemIds.PAGE_TYPE]), true)?.kind).toBe('other');
     expect(decodeNode(raw('1'.repeat(32), null, ['f'.repeat(32)]), true)?.kind).toBe('other');
+  });
+});
+
+describe('share cards', () => {
+  it('asks the centre and every node for the OG Image with the avatar and cover, in the same request', () => {
+    for (const document of [hop1CentreDocument, nodesDocument]) {
+      const printed = print(document).replace(/\s+/g, ' ').replace(/\( /g, '(').replace(/ \)/g, ')');
+      expect(printed).toContain(
+        'relationsList(filter: {typeId: {in: [$avatarPropertyId, $coverPropertyId, $ogImagePropertyId]}}) { typeId spaceId'
+      );
+      expect(declared(document)).toContain('ogImagePropertyId');
+    }
+    expect(hop1Variables(CENTRE, resolveGraphFilter(null)).ogImagePropertyId).toBe(OG_IMAGE_PROPERTY);
+  });
+
+  it('gives a debate node its card', () => {
+    const node = decodeNode(
+      raw('1'.repeat(32), 'A debate', [DEBATE_TYPE_ID], {
+        relationsList: [
+          { typeId: OG_IMAGE_PROPERTY, spaceId: SPACE, toEntity: { valuesList: [{ text: 'ipfs://card' }] } },
+        ],
+      })
+    );
+    expect(node).toMatchObject({ kind: 'other', card: 'ipfs://card', image: null });
   });
 });
 
