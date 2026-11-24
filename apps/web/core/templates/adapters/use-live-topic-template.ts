@@ -19,7 +19,7 @@ import { getSpaces } from '~/core/io/queries';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import { useTopicAncestors } from '~/core/topics/browse/use-topic-ancestors';
 import { useTopicConnectionCounts } from '~/core/topics/browse/use-topic-connection-counts';
-import { useTopicCoverage } from '~/core/topics/browse/use-topic-coverage';
+import { type TopicCoveragePage, useTopicCoverage } from '~/core/topics/browse/use-topic-coverage';
 import { useTopicLinkedEntities } from '~/core/topics/browse/use-topic-linked-entities';
 import { useTopicSpaceScope } from '~/core/topics/use-topic-space-scope';
 import { Entities } from '~/core/utils/entity';
@@ -64,6 +64,7 @@ import { useViewerSpaceId, useViewerTopicSources } from './use-viewer-sources';
 
 const LIVE_CLAIMS_LIMIT = 40;
 const LIVE_COVERAGE_LIMIT = 12;
+const NO_COVERAGE_ROWS: TopicCoveragePage['rows'] = [];
 
 const MULTI_SPACE_CLAIM_VOTES_QUERY = parse(/* GraphQL */ `
   query MultiSpaceClaimVotes($objectIds: [UUID!]!, $voteKind: Int!) {
@@ -406,17 +407,20 @@ export function useLiveTopicTemplate({
   const viewerSpaceId = useViewerSpaceId(spaceId);
   const viewerSpaceInScope =
     spaceIds === undefined || (viewerSpaceId !== null && spaceIds.some(id => ID.equals(id, viewerSpaceId)));
+  const viewerCoverageEnabled = viewerSpaceId !== null && !viewerSpaceInScope;
   const viewerCoverage = useTopicCoverage({
     topicId: entityId,
     spaceIds: viewerSpaceId ? [viewerSpaceId] : undefined,
     first: LIVE_COVERAGE_LIMIT,
-    enabled: viewerSpaceId !== null && !viewerSpaceInScope,
+    enabled: viewerCoverageEnabled,
   });
+  // A disabled query still returns cached or placeholder data: with no viewer space its key is the
+  // unscoped coverage key, so read its rows only while it is enabled.
+  const viewerCoverageRows = viewerCoverageEnabled ? viewerCoverage.page.rows : NO_COVERAGE_ROWS;
   const viewerLocalSources = useViewerTopicSources(entityId, viewerSpaceId);
   const coverageRows = React.useMemo(
-    () =>
-      viewerCoverage.page.rows.length > 0 ? [...coverage.page.rows, ...viewerCoverage.page.rows] : coverage.page.rows,
-    [coverage.page.rows, viewerCoverage.page.rows]
+    () => (viewerCoverageRows.length > 0 ? [...coverage.page.rows, ...viewerCoverageRows] : coverage.page.rows),
+    [coverage.page.rows, viewerCoverageRows]
   );
 
   // Batch-hydrate Tweet / Post author names, @handles, and avatars for Sources & evidence cards
@@ -943,7 +947,7 @@ export function useLiveTopicTemplate({
     }
 
     // After the page's own: the viewer's published personal-space sources, then their staged ones.
-    for (const row of viewerCoverage.page.rows) pushCoverageRow(row);
+    for (const row of viewerCoverageRows) pushCoverageRow(row);
     for (const source of viewerLocalSources) {
       const hex = ID.uuidToHex(source.id);
       if (seenCoverageIds.has(hex)) continue;
@@ -1028,7 +1032,7 @@ export function useLiveTopicTemplate({
     bestNewsQuery.data,
     countsByTopicId,
     coverage.page.rows,
-    viewerCoverage.page.rows,
+    viewerCoverageRows,
     viewerLocalSources,
     debateParticipantsQuery.data,
     entity,
