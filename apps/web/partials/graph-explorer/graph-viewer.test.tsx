@@ -87,6 +87,8 @@ vi.mock('~/core/graph-explorer/use-graph-explorer', () => ({
 vi.mock('~/core/analytics-capture-safely', () => ({ captureSafely: vi.fn() }));
 vi.mock('~/core/hooks/use-media-query', () => ({ useMediaQuery: () => false }));
 vi.mock('~/core/sync/use-store', () => ({ useQueryEntity: () => ({ entity: null, isLoading: false }) }));
+// The open claim's Agree/Disagree has its own suite.
+vi.mock('./connections/graph-claim-position', () => ({ GraphClaimPosition: () => null }));
 vi.mock('~/core/hooks/use-is-mobile-layout', () => ({ useIsMobileLayout: () => false }));
 vi.mock('~/design-system/prefetch-link', () => ({
   PrefetchLink: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,

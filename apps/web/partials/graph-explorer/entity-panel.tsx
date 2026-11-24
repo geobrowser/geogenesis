@@ -62,7 +62,7 @@ export function EntityPanel({
   /** Kinds with more around the centre than were loaded. */
   moreKinds: readonly GraphKind[];
   emptyMessages: EntityPanelEmptyMessages;
-  /** Shown under the description: the vote box, or a topic's summary and overview. */
+  /** The vote box (above the description, for a claim), or a topic's summary and overview (under it). */
   summary?: React.ReactNode;
   /** False for a claim centre, whose related claims are already among its relations. */
   showClaims?: boolean;
@@ -89,13 +89,18 @@ export function EntityPanel({
         </div>
       </div>
 
+      {/* A claim's vote block comes before its description, so Agree and Disagree are on screen
+          without scrolling however long the description runs (GEO-3841). `showClaims` is off for
+          exactly a claim centre. */}
+      {!showClaims && summary}
+
       <Details
         centre={centre}
         centreSpaceId={showClaims ? centreSpaceId : null}
         emptyMessage={emptyMessages.description}
       />
 
-      {summary}
+      {showClaims && summary}
 
       <NeighbourGroups
         groups={groups}

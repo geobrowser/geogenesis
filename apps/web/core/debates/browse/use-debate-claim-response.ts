@@ -41,6 +41,7 @@ export function useDebateClaimResponse({
   row,
   entity,
   savePromptSurface,
+  allowsSignedOutVotes = true,
 }: {
   claimId: string;
   spaceId: string;
@@ -50,6 +51,11 @@ export function useDebateClaimResponse({
   row: DebateClaim | null;
   /** The claim on the graph, which carries the factual flag geo-chat's row would otherwise report. */
   entity: Entity | null;
+  /**
+   * Off for a host that asks a signed-out visitor to sign in before their side is taken, rather than
+   * keeping it on the device (the graph explorer, GEO-3841). The host then handles that press.
+   */
+  allowsSignedOutVotes?: boolean;
 }): ClaimResponseState & { control: ReturnType<typeof useClaimPositionControl> } {
   // Every debate surface draws the claim itself, but a vote kept on this device is saved under this
   // text, and the save sheet's reminder chip needs it (GEO-3437).
@@ -61,7 +67,7 @@ export function useDebateClaimResponse({
     readiness: state.readiness,
     answersReady: state.isResponseKindResolved && state.isViewerResponseResolved,
     responseBlockedReason: state.responseBlockedReason,
-    allowsSignedOutVotes: true,
+    allowsSignedOutVotes,
     offersDebate: false,
     savePromptSurface,
   });
