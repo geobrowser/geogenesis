@@ -117,18 +117,33 @@ export function TemplateTitleRow({
   children,
   meta,
   actions,
+  singleLine = false,
 }: {
   /** The title: an `h1`. */
   children: React.ReactNode;
   /** The type chips and meta shown under the title. */
   meta?: React.ReactNode;
   actions?: React.ReactNode;
+  /**
+   * Keeps the row to one line: chips that don't fit beside the actions drop to a second line, which
+   * is clipped, so whole chips disappear from the end instead of wrapping.
+   */
+  singleLine?: boolean;
 }) {
   return (
     <>
       {children}
       <div className="flex items-start justify-between gap-x-4">
-        {meta && <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1.5">{meta}</div>}
+        {meta && (
+          <div
+            className={cx(
+              'flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1.5',
+              singleLine && 'h-7 overflow-hidden'
+            )}
+          >
+            {meta}
+          </div>
+        )}
         {/* As tall as one chip line (h-7), so the actions center on the first line even when chips wrap. */}
         {actions && <div className="ml-auto flex h-7 shrink-0 items-center gap-2">{actions}</div>}
       </div>

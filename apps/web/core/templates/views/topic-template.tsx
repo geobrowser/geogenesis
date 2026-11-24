@@ -124,6 +124,7 @@ export function TopicTemplate({
       ) : (
         <header className="flex flex-col gap-3.5">
           <TemplateTitleRow
+            singleLine
             meta={
               <>
                 <TemplateBadge tone="neutral">Topic</TemplateBadge>

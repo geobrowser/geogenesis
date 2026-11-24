@@ -318,6 +318,18 @@ describe('TemplateTitleRow', () => {
     expect(actions).toHaveClass('shrink-0', 'h-7', 'ml-auto');
   });
 
+  it('clips chips that do not fit to keep a single-line row whole', () => {
+    render(
+      <TemplateTitleRow singleLine meta={<span>Topic</span>} actions={<button type="button">Menu</button>}>
+        <h1>Israel-Gaza war</h1>
+      </TemplateTitleRow>
+    );
+
+    const chips = screen.getByText('Topic').parentElement!;
+    expect(chips).toHaveClass('flex-wrap', 'h-7', 'overflow-hidden');
+    expect(screen.getByRole('button', { name: 'Menu' }).parentElement).toHaveClass('shrink-0');
+  });
+
   it('gives the actions their own right-aligned row when there are no chips', () => {
     render(
       <TemplateTitleRow actions={<button type="button">Menu</button>}>
