@@ -10,7 +10,7 @@ import type { GraphSelection } from '~/core/graph-explorer/select-graph';
 import type { SelectedNode } from '~/core/graph-explorer/select-graph';
 import { SKELETON_SELECTION, isSkeletonNode } from '~/core/graph-explorer/skeleton-graph';
 
-import { ConnectionsCanvas, clearance, overlapShare } from './connections-canvas';
+import { ConnectionsCanvas, clearance, nodeScale, overlapShare, overlaps } from './connections-canvas';
 import { searchNodes } from './graph-search';
 import { GraphTopBar } from './graph-top-bar';
 
@@ -481,6 +481,11 @@ describe('clearance', () => {
     expect(clearance(centre, { left: 120, right: 180, top: 150, bottom: 190 })).toEqual([0, 20]);
     expect(clearance(centre, { left: 120, right: 180, top: 80, bottom: 105 })).toEqual([0, -15]);
   });
+
+  it('counts the margin as touching the centre', () => {
+    expect(overlaps(centre, { left: 205, right: 260, top: 110, bottom: 150 })).toBe(true);
+    expect(overlaps(centre, { left: 211, right: 260, top: 110, bottom: 150 })).toBe(false);
+  });
 });
 
 describe('overlapShare', () => {
@@ -489,5 +494,16 @@ describe('overlapShare', () => {
     expect(overlapShare(big, { left: 50, right: 70, top: 50, bottom: 70 })).toBe(1);
     expect(overlapShare(big, { left: 90, right: 110, top: 0, bottom: 20 })).toBe(0.5);
     expect(overlapShare(big, { left: 100, right: 120, top: 0, bottom: 20 })).toBe(0);
+  });
+});
+
+describe('nodeScale', () => {
+  it('draws the centre at least full size, larger with depth on desktop and fixed on phone', () => {
+    expect(nodeScale(true, 0, 1.3, false)).toBeCloseTo(1.456);
+    expect(nodeScale(true, 0, 2, false)).toBe(1.5);
+    expect(nodeScale(true, 0, 0.5, false)).toBe(1);
+    expect(nodeScale(true, 0, 2, true)).toBe(1);
+    expect(nodeScale(false, 2, 1, false)).toBeCloseTo(0.95);
+    expect(nodeScale(false, 1, 0.1, true)).toBe(0.3);
   });
 });

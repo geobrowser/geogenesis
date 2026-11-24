@@ -47,7 +47,7 @@ type NodeView = {
   /** When it left the selection; it fades out and is removed LEAVE_MS later. */
   died: number;
   entry: SelectedNode;
-  /** Screen offset keeping it clear of the centre on phone, eased frame to frame. */
+  /** Screen offset keeping it clear of the centre, eased frame to frame. */
   push: [number, number];
   /** Opacity factor while a nearer card covers it on phone, eased frame to frame. */
   dim: number;
@@ -370,10 +370,15 @@ export function ConnectionsCanvas({
       };
       const centreElement = elements.current.get(state.centreId);
       const centrePoint = projected.get(state.centreId);
-      // The centre draws at scale 1 on phone.
+      // Every other node is kept off this box, at the scale the centre is drawn at.
       const centreRect =
-        phone && centreElement && centrePoint
-          ? rectAt(centrePoint.x, centrePoint.y, measure(state.centreId, centreElement), 1)
+        centreElement && centrePoint
+          ? rectAt(
+              centrePoint.x,
+              centrePoint.y,
+              measure(state.centreId, centreElement),
+              nodeScale(true, 0, centrePoint.scale, phone)
+            )
           : null;
 
       const drawn: Array<{
@@ -391,12 +396,7 @@ export function ConnectionsCanvas({
         if (!element || !point) continue;
         const isCentre = node.id === state.centreId;
         const fog = Math.max(0.28, Math.min(1, 1 - (point.depth + 150) / 1100));
-        const base = isCentre ? 1.12 : node.hop === 2 ? 0.95 : 1;
-        const scale = isCentre
-          ? phone
-            ? 1
-            : Math.max(1, Math.min(1.5, point.scale * base))
-          : Math.max(0.3, Math.min(1.2, point.scale * base));
+        const scale = nodeScale(isCentre, node.hop, point.scale, phone);
         let opacity = node.alive ? fog : 0;
         if (hover && node.id !== hover && !neighbours.has(node.id)) opacity *= 0.22;
         if (node.id === hover && node.alive) opacity = 1;
@@ -405,15 +405,18 @@ export function ConnectionsCanvas({
           moving = true;
         }
         const box = measure(node.id, element);
-        if (phone && centreRect && !isCentre && node.alive) {
-          const target = clearance(centreRect, rectAt(point.x, point.y, box, scale));
+        if (centreRect && !isCentre && node.alive) {
+          const rect = rectAt(point.x, point.y, box, scale);
+          const target = clearance(centreRect, rect);
           const ease = reduceMotion ? 1 : 0.2;
           if (Math.abs(target[0] - node.push[0]) + Math.abs(target[1] - node.push[1]) > 0.5) moving = true;
-          node.push = [
+          const eased: [number, number] = [
             node.push[0] + (target[0] - node.push[0]) * ease,
             node.push[1] + (target[1] - node.push[1]) * ease,
           ];
-        } else if (!phone || isCentre) node.push = [0, 0];
+          // Easing may only move a card around the centre, never across it.
+          node.push = overlaps(centreRect, shifted(rect, eased)) ? target : eased;
+        } else if (isCentre) node.push = [0, 0];
         point.x += node.push[0];
         point.y += node.push[1];
         drawn.push({ node, element, point, box, scale, opacity, isCentre });
@@ -803,6 +806,12 @@ function rectAt(x: number, y: number, box: Box, scale: number): Rect {
   };
 }
 
+/** On-screen size: the centre stays at least full size (exactly 1 on phone); others shrink with depth. */
+export function nodeScale(isCentre: boolean, hop: number, depthScale: number, phone: boolean) {
+  if (isCentre) return phone ? 1 : Math.max(1, Math.min(1.5, depthScale * 1.12));
+  return Math.max(0.3, Math.min(1.2, depthScale * (hop === 2 ? 0.95 : 1)));
+}
+
 const CENTRE_MARGIN = 10;
 
 /** The shortest move that takes `rect` off `centre` (plus a margin); none when they don't touch. */
@@ -815,6 +824,16 @@ export function clearance(centre: Rect, rect: Rect): [number, number] {
   const dx = right < left ? right : -left;
   const dy = down < up ? down : -up;
   return Math.abs(dx) < Math.abs(dy) ? [dx, 0] : [0, dy];
+}
+
+function shifted(rect: Rect, [dx, dy]: [number, number]): Rect {
+  return { left: rect.left + dx, right: rect.right + dx, top: rect.top + dy, bottom: rect.bottom + dy };
+}
+
+/** Whether `rect` reaches into `centre`'s margin. */
+export function overlaps(centre: Rect, rect: Rect): boolean {
+  const [dx, dy] = clearance(centre, rect);
+  return dx !== 0 || dy !== 0;
 }
 
 /** How much of the smaller rectangle the two share, 0 to 1. */
