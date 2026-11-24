@@ -17,6 +17,7 @@ import {
   EntityFlagsSection,
   EntityInlineContext,
   EntityOverflowMenu,
+  ExpandableLede,
   GraphConnectionsStrip,
   RecentDebatesGallery,
   RelatedListSection,
@@ -166,9 +167,7 @@ export function TopicTemplate({
             <h1 className="m-0 text-entityTitle text-pretty text-text">{model.title}</h1>
           </TemplateTitleRow>
 
-          {model.lede && (
-            <p className="m-0 mt-1 max-w-[780px] text-[16.5px] leading-[25px] text-text/85">{model.lede}</p>
-          )}
+          {model.lede && <ExpandableLede text={model.lede} className="mt-1" />}
 
           {subtopics.length > 0 && (
             <button

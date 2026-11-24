@@ -5,7 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import type { SourceLibraryGroup, SourceLibraryTemplateModel } from '../models';
-import { RelatedListSection, SearchIcon, TemplateBadge, TemplateShell } from '../primitives';
+import { ExpandableLede, RelatedListSection, SearchIcon, TemplateBadge, TemplateShell } from '../primitives';
 
 export interface SourceLibraryTemplateProps {
   model: SourceLibraryTemplateModel;
@@ -85,7 +85,7 @@ export function SourceLibraryTemplate({ model, headerActions, footer, className 
           {headerActions}
         </div>
         <h1 className="m-0 text-entityTitle text-pretty text-text">{model.title}</h1>
-        {model.lede && <p className="m-0 max-w-[760px] text-[16.5px] leading-[25px] text-text/85">{model.lede}</p>}
+        {model.lede && <ExpandableLede text={model.lede} className="max-w-[760px]" />}
       </header>
 
       {/* Search + group filters */}
