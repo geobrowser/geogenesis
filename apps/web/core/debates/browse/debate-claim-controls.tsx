@@ -111,7 +111,9 @@ export function DebateClaimControls({
           className={summaryClassName}
         />
       ) : null}
-      {appLook && control.localVoteSide != null ? <LocalVoteNote /> : null}
+      {appLook && control.localVoteSide != null ? (
+        <LocalVoteNote tone={look === 'app-dark' ? 'dark' : 'light'} />
+      ) : null}
     </>
   );
 }
