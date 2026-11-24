@@ -53,4 +53,23 @@ describe('useTopicClaimsSummary', () => {
       ['a', 'agreed'],
     ]);
   });
+
+  it('keeps counts the cache has dropped', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    const filter = resolveGraphFilter({ spaceIds: [SPACE], topicId: TOPIC, topicSpaceId: SPACE });
+    const { result } = renderHook(() => useTopicClaimsSummary(TOPIC, filter, SPACE), { wrapper });
+    await waitFor(() => expect(result.current.data?.claims.map(claim => claim.id)).toEqual(['a']));
+    const before = result.current.data;
+
+    // Garbage collection removes 'a'; a vote on 'b' re-runs the summary.
+    act(() => {
+      client.removeQueries({ queryKey: entityResponseCountsQueryKey('a', SPACE, 0, 'stance'), exact: true });
+      client.setQueryData(entityResponseCountsQueryKey('b', SPACE, 0, 'stance'), { positive: 0, negative: 0 });
+    });
+    expect(result.current.data).not.toBe(before);
+    expect(result.current.data?.claims.map(claim => [claim.id, claim.positive])).toEqual([['a', 2]]);
+  });
 });

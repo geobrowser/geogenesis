@@ -244,7 +244,10 @@ export function useTopicClaimsSummary(topicId: string | null, filter: GraphFilte
     if (!listed) return undefined;
     return summariseTopicClaims(
       listed.claims,
-      claim => queryClient.getQueryData<{ positive: number; negative: number }>(claimCountsKey(claim)),
+      claim => {
+        const key = claimCountsKey(claim);
+        return queryClient.getQueryData<{ positive: number; negative: number }>(key) ?? listed.counts[hashKey(key)];
+      },
       listed.truncated
     );
   }, [listed, queryClient, version]);

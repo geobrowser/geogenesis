@@ -1,4 +1,4 @@
-import type { QueryClient } from '@tanstack/react-query';
+import { type QueryClient, hashKey } from '@tanstack/react-query';
 
 import { loadClaimResponseSummaryCaches } from '~/core/responses/claim-response-summaries';
 import { entityResponseCountsQueryKey } from '~/core/responses/entity-response';
@@ -24,6 +24,9 @@ export const MAX_TOPIC_CLAIMS = TOPIC_CLAIMS_PAGE * TOPIC_CLAIMS_PAGES;
 const COUNT_CHUNK = 250;
 
 type Counts = { positive: number; negative: number };
+
+/** Counts as loaded, keyed by `hashKey(claimCountsKey(claim))`: the fallback once the cache drops them. */
+export type LoadedCounts = Record<string, Counts>;
 
 /** Bands and order for the topic's claims, from each claim's counts in its own space. */
 export function summariseTopicClaims(
@@ -70,7 +73,7 @@ export async function fetchTopicClaims({
   queryClient: QueryClient;
   personalSpaceId: string | null;
   signal?: AbortSignal;
-}): Promise<{ claims: ClaimAbout[]; truncated: boolean }> {
+}): Promise<{ claims: ClaimAbout[]; truncated: boolean; counts: LoadedCounts }> {
   const claims: ClaimAbout[] = [];
   let after: string | null = null;
   let truncated = false;
@@ -102,5 +105,11 @@ export async function fetchTopicClaims({
         })
       );
   await Promise.all(loads);
-  return { claims, truncated };
+  // Unobserved count entries are garbage-collected while this result stays cached, so keep a copy.
+  const counts: LoadedCounts = {};
+  for (const claim of claims) {
+    const key = claimCountsKey(claim);
+    counts[hashKey(key)] = queryClient.getQueryData<Counts>(key) ?? { positive: 0, negative: 0 };
+  }
+  return { claims, truncated, counts };
 }
