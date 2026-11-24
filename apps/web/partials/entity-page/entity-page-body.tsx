@@ -177,10 +177,9 @@ function CustomViewEditFooter({
 /**
  * Which custom read view this entity gets, if any.
  *
- * Claims keep their custom surface while editing, matching personal-space profiles: product-owned
- * tabs stay visible and fixed while authored tabs can be managed. `EntityPageBody` appends the
- * property editor beneath the claim surface, so keeping the custom UI does not hide raw fields.
- * Other custom views still fall through to the generic editor.
+ * Every custom view, Claim and Topic included, falls through to the generic editor while editing
+ * (GEO-3819, `keepInEditMode` is false across the registry), so the custom branches below only
+ * ever render in browse mode.
  *
  * Unscoped, matching how `EntityVoteButtons` reads the same flag. `types` is
  * derived across every space either way, so this is about consistency with the controls the pages

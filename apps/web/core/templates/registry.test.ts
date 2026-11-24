@@ -84,8 +84,8 @@ describe('ENTITY_TEMPLATE_REGISTRY', () => {
       'post',
       'person',
     ]);
-    expect(getEntityTemplateDefinition('claim').keepInEditMode).toBe(true);
-    expect(getEntityTemplateDefinition('topic').keepInEditMode).toBe(true);
+    // GEO-3819: editing any templated entity opens the standard entity editor.
+    expect(ENTITY_TEMPLATE_REGISTRY.filter(entry => entry.keepInEditMode)).toEqual([]);
     expect(getEntityTemplateDefinition('person').requiresSpaceCheck).toBe(true);
     expect(isV2EntityTemplateId('claim')).toBe(false);
     expect(isV2EntityTemplateId('news-story')).toBe(true);

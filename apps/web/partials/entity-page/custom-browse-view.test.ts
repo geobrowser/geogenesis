@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { NEWS_STORY_TYPE_ID, TOPIC_TYPE_ID } from '~/core/constants';
+import { ENTITY_TEMPLATE_REGISTRY } from '~/core/templates/registry';
 import { OFFICIAL_DOCUMENT_TYPE_ID } from '~/core/topics/ontology';
 
 import { customBrowseView, needsSpaceForView } from './custom-browse-view';
@@ -108,17 +109,40 @@ describe('customBrowseView', () => {
     expect(view({ entity: { types: [PERSON, CLAIM_TYPE] } })).toBe('claim');
   });
 
-  it('keeps the claim surface while editing', () => {
-    expect(view({ entity: { types: [CLAIM_TYPE] }, isEditing: true })).toBe('claim');
+  /**
+   * GEO-3819: editing a templated entity opens the standard entity editor, Claim and Topic
+   * included, and leaving edit mode gives the template back. Every template in the registry is
+   * covered, with and without the v2 flag, so a new template cannot opt back into a custom editor
+   * without this failing.
+   */
+  it('opens the generic editor for a claim while editing', () => {
+    expect(view({ entity: { types: [CLAIM_TYPE] }, isEditing: true })).toBe('generic');
+    expect(view({ entity: { types: [CLAIM_TYPE] }, isEditing: true, enableV2Templates: true })).toBe('generic');
+  });
+
+  it('opens the generic editor for a topic while editing', () => {
+    expect(view({ entity: { types: [TOPIC_TYPE] }, isEditing: true })).toBe('generic');
+    expect(view({ entity: { types: [TOPIC_TYPE] }, isEditing: true, enableV2Templates: true })).toBe('generic');
   });
 
   it('falls through to the generic page for other custom views while editing', () => {
     expect(view({ isEditing: true })).toBe('generic');
   });
 
-  it('keeps the topic view while editing so authored tabs remain manageable', () => {
-    expect(view({ entity: { types: [TOPIC_TYPE] }, isEditing: true })).toBe('topic');
-  });
+  describe.each(ENTITY_TEMPLATE_REGISTRY.map(entry => [entry.id, entry.typeIds[0]] as const))(
+    'the %s template',
+    (templateId, typeId) => {
+      const entity = { types: [{ id: typeId }] };
+
+      it('renders the template when not editing', () => {
+        expect(view({ entity, enableV2Templates: true, isEditing: false })).toBe(templateId);
+      });
+
+      it('renders the generic editor while editing', () => {
+        expect(view({ entity, enableV2Templates: true, isEditing: true })).toBe('generic');
+      });
+    }
+  );
 
   it('draws nothing until the entity itself is known', () => {
     expect(view({ entity: null, isLoadingEntity: true })).toBe('pending');
