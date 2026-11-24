@@ -1,9 +1,6 @@
 'use client';
 
-import * as React from 'react';
-
 import cx from 'classnames';
-import { useSetAtom } from 'jotai';
 
 import { staticSkeleton } from '~/core/graph-explorer/skeleton-graph';
 
@@ -11,7 +8,6 @@ import { Skeleton } from '~/design-system/skeleton';
 
 import { STAGE_BACKGROUND } from './connections/connections-canvas';
 import { SkeletonNode } from './connections/skeleton-node';
-import { graphExplorerActiveAtom } from '~/atoms';
 
 const DESKTOP_NODES = staticSkeleton(false);
 const PHONE_NODES = staticSkeleton(true);
@@ -63,17 +59,8 @@ export function StaticSkeletonStage() {
   );
 }
 
-/**
- * The explorer's layout with skeletons in it: the route's Suspense fallback and the page before
- * hydration. It holds the app chrome off as the page does, so nothing flashes between them.
- */
+/** The explorer's layout with skeletons in it: the page before hydration, server-rendered. */
 export function GraphExplorerShell() {
-  const setActive = useSetAtom(graphExplorerActiveAtom);
-  React.useLayoutEffect(() => {
-    setActive(true);
-    return () => setActive(false);
-  }, [setActive]);
-
   return (
     <div
       data-testid="graph-explorer-shell"

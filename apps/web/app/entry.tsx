@@ -292,15 +292,74 @@ function DebatesHubGate() {
   return useSticky(isOpen) ? <DebatesHubPanel /> : null;
 }
 
-export function App({ children }: { children: React.ReactNode }) {
-  const [open, setOpen] = React.useState(false);
-  const [mobileBrowseOpen, setMobileBrowseOpen] = React.useState(false);
+/**
+ * The navbar, sidebar and page column. Kept out of `App` so only this re-renders when the path
+ * changes: the graph explorer route has no chrome.
+ */
+function AppChrome({
+  openSearch,
+  search,
+  mobileBrowseOpen,
+  setMobileBrowseOpen,
+  children,
+}: {
+  openSearch: () => void;
+  /** The search dialog, when open. */
+  search: React.ReactNode;
+  mobileBrowseOpen: boolean;
+  setMobileBrowseOpen: (open: boolean) => void;
+  children: React.ReactNode;
+}) {
   const mobileBrowseButtonRef = React.useRef<HTMLButtonElement>(null);
   const navbarRef = React.useRef<HTMLElement>(null);
   const sidebarOpen = useAtomValue(browseSidebarShownAtom);
   const graphExplorerActive = useGraphExplorerActive();
   const fullscreenActive = useAtomValue(rankingFullscreenActiveAtom) || graphExplorerActive;
   const rankingFullscreenFocusTarget = useAtomValue(rankingFullscreenFocusTargetAtom);
+
+  React.useEffect(() => {
+    if (fullscreenActive) setMobileBrowseOpen(false);
+  }, [fullscreenActive, setMobileBrowseOpen]);
+
+  return (
+    <>
+      <div className="mobile:hidden">{!fullscreenActive && <BrowseSidebar />}</div>
+      <div className="flex min-w-0 flex-1 flex-col">
+        {!graphExplorerActive && (
+          <Navbar
+            browseOpen={mobileBrowseOpen && !fullscreenActive}
+            browseButtonRef={mobileBrowseButtonRef}
+            navbarRef={navbarRef}
+            onBrowseClick={() => setMobileBrowseOpen(true)}
+            onSearchClick={openSearch}
+            hideLogo={sidebarOpen && !fullscreenActive}
+            showBrowseButton={!fullscreenActive}
+          />
+        )}
+        <MobileBrowseDrawer
+          open={mobileBrowseOpen && !fullscreenActive}
+          fallbackFocusRef={navbarRef}
+          fullscreenFocusTarget={rankingFullscreenFocusTarget}
+          onOpenChange={setMobileBrowseOpen}
+          triggerRef={mobileBrowseButtonRef}
+        />
+        {search}
+        {/* Directly under the navbar and above the page: a zero-height dock the entity route
+          portals its sticky header into. See `EntityStickyHeaderHost`. The collapsed sidebar
+          leaves a vertical rail across this column with nothing holding the space — the same
+          condition that draws it below. */}
+        <EntityStickyHeaderHost railInset={!sidebarOpen && !fullscreenActive} />
+        <div className={cx('min-w-0 flex-1', !graphExplorerActive && '2xl:px-[2ch]')}>
+          <Main>{children}</Main>
+        </div>
+      </div>
+    </>
+  );
+}
+
+export function App({ children }: { children: React.ReactNode }) {
+  const [open, setOpen] = React.useState(false);
+  const [mobileBrowseOpen, setMobileBrowseOpen] = React.useState(false);
 
   const { isReviewOpen, setIsReviewOpen } = useDiff();
 
@@ -323,10 +382,6 @@ export function App({ children }: { children: React.ReactNode }) {
 
   useKeyboardShortcuts(memoizedShortcuts);
 
-  React.useEffect(() => {
-    if (fullscreenActive) setMobileBrowseOpen(false);
-  }, [fullscreenActive]);
-
   return (
     <DebateMediaSessionProvider>
       {/* Keep mobile content bleed inside the viewport. `clip` preserves document scrolling
@@ -336,36 +391,14 @@ export function App({ children }: { children: React.ReactNode }) {
           <PageViewTracker />
           <LastPageOutsideDebatesTracker />
         </React.Suspense>
-        <div className="mobile:hidden">{!fullscreenActive && <BrowseSidebar />}</div>
-        <div className="flex min-w-0 flex-1 flex-col">
-          {!graphExplorerActive && (
-            <Navbar
-              browseOpen={mobileBrowseOpen && !fullscreenActive}
-              browseButtonRef={mobileBrowseButtonRef}
-              navbarRef={navbarRef}
-              onBrowseClick={() => setMobileBrowseOpen(true)}
-              onSearchClick={() => setOpen(true)}
-              hideLogo={sidebarOpen && !fullscreenActive}
-              showBrowseButton={!fullscreenActive}
-            />
-          )}
-          <MobileBrowseDrawer
-            open={mobileBrowseOpen && !fullscreenActive}
-            fallbackFocusRef={navbarRef}
-            fullscreenFocusTarget={rankingFullscreenFocusTarget}
-            onOpenChange={setMobileBrowseOpen}
-            triggerRef={mobileBrowseButtonRef}
-          />
-          {open && <SearchDialog open onDone={() => setOpen(false)} />}
-          {/* Directly under the navbar and above the page: a zero-height dock the entity route
-              portals its sticky header into. See `EntityStickyHeaderHost`. The collapsed sidebar
-              leaves a vertical rail across this column with nothing holding the space — the same
-              condition that draws it below. */}
-          <EntityStickyHeaderHost railInset={!sidebarOpen && !fullscreenActive} />
-          <div className={cx('min-w-0 flex-1', !graphExplorerActive && '2xl:px-[2ch]')}>
-            <Main>{children}</Main>
-          </div>
-        </div>
+        <AppChrome
+          openSearch={() => setOpen(true)}
+          search={open && <SearchDialog open onDone={() => setOpen(false)} />}
+          mobileBrowseOpen={mobileBrowseOpen}
+          setMobileBrowseOpen={setMobileBrowseOpen}
+        >
+          {children}
+        </AppChrome>
         <SlideUpBodyState />
         <EntitySidePanelGate />
         <PlaybackDiagnostics />

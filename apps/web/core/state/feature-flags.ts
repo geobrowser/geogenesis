@@ -93,7 +93,7 @@ export const featureFlagDefinitions = [
     id: 'graphExplorer',
     label: 'Graph explorer',
     description:
-      'An "Explore graph" link on topic pages, opening a full-screen view of the topic’s knowledge-graph relations and the claims about each entity.',
+      'Shows the entry points to the graph explorer, such as the "Explore graph" link on topic pages. Graph pages themselves open for anyone with a link, like an unlisted video.',
     enabledByDefault: false,
   },
   {

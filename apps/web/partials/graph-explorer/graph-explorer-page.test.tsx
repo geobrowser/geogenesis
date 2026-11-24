@@ -3,19 +3,22 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { GraphExplorerPage } from './graph-explorer-page';
-import { graphExplorerActiveAtom } from '~/atoms';
+import { GraphExplorerNotFound, GraphExplorerPage } from './graph-explorer-page';
+import { graphExplorerUnavailableAtom } from '~/atoms';
 
 const TOPIC = '4ed3162278994f29bde7a6f7cf60e28e';
 const SPACE = '89bd89bf28ff8a0963faf92a8c905e20';
-const flags = vi.hoisted(() => ({ graphExplorer: true, hydrated: true }));
-const page = vi.hoisted(() => ({ search: '', close: undefined as { href: string; label: string } | null | undefined }));
+const flags = vi.hoisted(() => ({ hydrated: true }));
+const page = vi.hoisted(() => ({
+  search: '',
+  topic: true,
+  close: undefined as { href: string; label: string } | null | undefined,
+}));
 
 vi.mock('next/navigation', () => ({
   usePathname: () => `/explore/graph/${TOPIC}`,
-  useSearchParams: () => new URLSearchParams(`topic=${TOPIC}${page.search}`),
+  useSearchParams: () => new URLSearchParams(`${page.topic ? `topic=${TOPIC}` : ''}${page.search}`),
 }));
-vi.mock('~/core/state/feature-flags', () => ({ useFeatureFlag: () => flags.graphExplorer }));
 vi.mock('~/core/hooks/use-hydrated', () => ({ useHydrated: () => flags.hydrated }));
 vi.mock('~/core/graph-explorer/use-graph-navigation', () => ({ useGraphNavigation: () => vi.fn() }));
 vi.mock('~/core/graph-explorer/use-graph-explorer', () => ({ useTopicGraphScope: () => null }));
@@ -33,9 +36,9 @@ vi.mock('./graph-viewer', () => ({
 
 let store: ReturnType<typeof createStore>;
 beforeEach(() => {
-  flags.graphExplorer = true;
   flags.hydrated = true;
   page.search = '';
+  page.topic = true;
   page.close = undefined;
   store = createStore();
 });
@@ -49,12 +52,11 @@ const renderPage = () =>
   );
 
 describe('GraphExplorerPage', () => {
-  it('takes the screen while mounted and gives the app chrome back on leaving', () => {
-    const { unmount } = renderPage();
+  // Like an unlisted video: the flag only hides the entry points, so it isn't read here at all.
+  it('opens for anyone with a link and keeps the app chrome off', () => {
+    renderPage();
     expect(screen.getByTestId('viewer')).toBeTruthy();
-    expect(store.get(graphExplorerActiveAtom)).toBe(true);
-    unmount();
-    expect(store.get(graphExplorerActiveAtom)).toBe(false);
+    expect(store.get(graphExplorerUnavailableAtom)).toBe(false);
   });
 
   it('always has a way out: the topic in its space, else Explore', () => {
@@ -67,23 +69,36 @@ describe('GraphExplorerPage', () => {
     expect(page.close?.href).toContain(TOPIC);
   });
 
-  it('renders the explorer shell and skeleton before hydration, whatever the flag', () => {
-    flags.graphExplorer = false;
+  it('renders the explorer shell and skeleton before hydration', () => {
     flags.hydrated = false;
     renderPage();
     expect(screen.getByTestId('graph-explorer-shell')).toBeTruthy();
     expect(screen.getByTestId('graph-skeleton-stage').getAttribute('aria-busy')).toBe('true');
     expect(document.querySelectorAll('[data-skeleton-node]').length).toBeGreaterThan(10);
-    expect(screen.queryByText('Not available yet')).toBeNull();
     expect(screen.queryByTestId('viewer')).toBeNull();
-    expect(store.get(graphExplorerActiveAtom)).toBe(true);
+    expect(store.get(graphExplorerUnavailableAtom)).toBe(false);
   });
 
-  it('is not available with the flag off, and keeps the app chrome', () => {
-    flags.graphExplorer = false;
-    renderPage();
+  it('is not available without a topic, and gives the app chrome back until it leaves', () => {
+    page.topic = false;
+    const { unmount } = renderPage();
     expect(screen.getByRole('heading', { name: 'Not available yet' })).toBeTruthy();
     expect(screen.queryByTestId('viewer')).toBeNull();
-    expect(store.get(graphExplorerActiveAtom)).toBe(false);
+    expect(store.get(graphExplorerUnavailableAtom)).toBe(true);
+    unmount();
+    expect(store.get(graphExplorerUnavailableAtom)).toBe(false);
+  });
+});
+
+describe('GraphExplorerNotFound', () => {
+  it('gives the app chrome back with a way out', () => {
+    render(
+      <Provider store={store}>
+        <GraphExplorerNotFound />
+      </Provider>
+    );
+    expect(screen.getByRole('heading', { name: 'Nothing to show' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Go to Explore' }).getAttribute('href')).toBe('/explore');
+    expect(store.get(graphExplorerUnavailableAtom)).toBe(true);
   });
 });

@@ -4,16 +4,15 @@ import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
-import { useSetAtom } from 'jotai';
 import { usePathname, useSearchParams } from 'next/navigation';
 
 import { parseGraphFilterOverrides } from '~/core/graph-explorer/graph-filter';
 import { historyFromUrl } from '~/core/graph-explorer/history';
 import { entitySpaceId, namedSpaceIds } from '~/core/graph-explorer/spokes';
 import { useTopicGraphScope } from '~/core/graph-explorer/use-graph-explorer';
+import { useGraphExplorerUnavailable } from '~/core/graph-explorer/use-graph-explorer-active';
 import { useGraphNavigation } from '~/core/graph-explorer/use-graph-navigation';
 import { useHydrated } from '~/core/hooks/use-hydrated';
-import { useFeatureFlag } from '~/core/state/feature-flags';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { useTopicSpaceScope } from '~/core/topics/use-topic-space-scope';
 import { normId } from '~/core/utils/norm-id';
@@ -23,10 +22,9 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { GraphExplorerShell } from './graph-explorer-shell';
 import { GraphViewer } from './graph-viewer';
-import { graphExplorerActiveAtom } from '~/atoms';
 
 /**
- * Full-screen while mounted: the app drops its navbar and sidebar, so the explorer sits in flow and
+ * Full-screen: its route has no navbar or sidebar, so the explorer sits in flow and
  * body portals open over it. Desktop scrolls the panel only; narrower screens scroll the whole view.
  */
 export function GraphExplorerPage({ entityId: routeEntityId }: { entityId: string }) {
@@ -44,19 +42,9 @@ export function GraphExplorerPage({ entityId: routeEntityId }: { entityId: strin
   // Everything below reads client stores (entity store, viewer's spaces), so it renders after hydration.
   const hydrated = useHydrated();
 
-  // A soft gate: flags live in localStorage.
-  const enabled = useFeatureFlag('graphExplorer');
-  const shows = hydrated && enabled && topicId !== null;
-  const setActive = useSetAtom(graphExplorerActiveAtom);
-  React.useLayoutEffect(() => {
-    if (!shows) return;
-    setActive(true);
-    return () => setActive(false);
-  }, [setActive, shows]);
-
-  // Flags are unknown until hydration: show the explorer's skeleton, then the page or the flag-off note.
+  // Open to anyone with a link; the flag only hides the entry points. Only the global mode is unbuilt.
+  if (topicId === null) return <NotAvailable />;
   if (!hydrated) return <GraphExplorerShell />;
-  if (!shows) return <NotAvailable flagOff={!enabled} />;
   return (
     <div className="flex h-[100dvh] flex-col overflow-hidden bg-white md:h-auto md:min-h-[100dvh] md:overflow-visible">
       <TopicGraph
@@ -122,14 +110,29 @@ function TopicGraph({
   );
 }
 
-function NotAvailable({ flagOff }: { flagOff: boolean }) {
+function NotAvailable() {
+  useGraphExplorerUnavailable();
   return (
     <div className="flex min-h-[60vh] flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
       <h1 className="text-mediumTitle text-text">Not available yet</h1>
       <p className="max-w-[420px] text-body text-grey-04">
-        {flagOff
-          ? 'The graph explorer isn’t open to everyone yet.'
-          : 'The graph explorer opens from a topic for now. Open a topic and choose Explore graph.'}
+        The graph explorer opens from a topic for now. Open a topic and choose Explore graph.
+      </p>
+      <Link href="/explore" className="text-metadataMedium text-text underline-offset-2 hover:underline">
+        Go to Explore
+      </Link>
+    </div>
+  );
+}
+
+/** A graph link whose id is not an entity id: the app's chrome comes back with a way out. */
+export function GraphExplorerNotFound() {
+  useGraphExplorerUnavailable();
+  return (
+    <div className="flex min-h-[60vh] flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
+      <h1 className="text-mediumTitle text-text">Nothing to show</h1>
+      <p className="max-w-[420px] text-body text-grey-04">
+        This link doesn’t point to anything in the knowledge graph.
       </p>
       <Link href="/explore" className="text-metadataMedium text-text underline-offset-2 hover:underline">
         Go to Explore
