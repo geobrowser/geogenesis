@@ -1,22 +1,21 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { clearLocalVotes, readLocalVotes } from '~/core/state/local-votes';
+import { openSaveVotesPrompt } from '~/core/state/save-votes-prompt';
 
 import { ClaimActions } from './centre-summary';
 
 const mocks = vi.hoisted(() => ({
   entities: [] as Array<{ id: string; name: string }>,
   authenticated: true,
-  controlArgs: [] as Array<Record<string, unknown>>,
-  respond: vi.fn(),
-  queuePosition: vi.fn(),
-  cancelQueuedPosition: vi.fn(),
-  promptSignIn: vi.fn(),
-  viewerPosition: null as boolean | null,
-  summaryOrder: [] as string[],
+  submitResponse: vi.fn(),
+  indexedViewerDirection: null as 'positive' | 'negative' | null,
 }));
 
 vi.mock('~/core/sync/use-store', () => ({
@@ -33,31 +32,20 @@ vi.mock('~/core/claims/browse/claim-response-summary', async importOriginal => (
     positive: 5,
     negative: 2,
     total: 7,
-    indexedViewerDirection: null,
+    indexedViewerDirection: mocks.indexedViewerDirection,
   }),
 }));
 
-// The real derivation above it (`useDebateClaimResponse`, `useClaimResponseState`) and the real
-// pills; only the control that publishes is stubbed, and it reports what it was built with.
-vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', async importOriginal => ({
-  ...(await importOriginal<typeof import('~/core/debates/matchmaking/matchmaking-claim-card')>()),
-  useClaimPositionControl: (args: Record<string, unknown>) => {
-    mocks.controlArgs.push(args);
-    const signedOut = !mocks.authenticated;
-    return {
-      optimisticPositions: [],
-      viewerPosition: mocks.viewerPosition,
-      respond: mocks.respond,
-      actionTitle: () => '',
-      responseError: null,
-      localVoteSide: null,
-      isResponseSubmitting: false,
-      // As the real control: signed out, only a host that keeps votes on the device lets a press through.
-      canRespond: Boolean(args.answersReady) && (!signedOut || Boolean(args.allowsSignedOutVotes)),
-      queuePosition: mocks.queuePosition,
-      cancelQueuedPosition: mocks.cancelQueuedPosition,
-    };
-  },
+// Everything from the hook down to the pills is real, including the signed-out device vote; only
+// the publish and the session are stubbed.
+vi.mock('~/core/hooks/use-entity-vote', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/hooks/use-entity-vote')>()),
+  useEntityResponse: () => ({
+    submitResponse: mocks.submitResponse,
+    submitResponseAsync: vi.fn(),
+    isConnected: mocks.authenticated,
+    personalSpaceId: mocks.authenticated ? 'personal-space' : null,
+  }),
 }));
 
 vi.mock('~/core/debates/hooks', async importOriginal => ({
@@ -65,9 +53,15 @@ vi.mock('~/core/debates/hooks', async importOriginal => ({
   useGeoChatAuth: () => ({ ready: true, authenticated: mocks.authenticated }),
 }));
 
-vi.mock('~/core/hooks/use-privy-sign-in', () => ({
-  usePrivySignIn: () => mocks.promptSignIn,
+vi.mock('~/core/hooks/use-profiles-by-space-ids', () => ({
+  useProfilesBySpaceIds: () => ({ profilesBySpaceId: new Map() }),
 }));
+
+vi.mock('~/core/state/save-votes-prompt', async importOriginal => {
+  const actual = await importOriginal<typeof import('~/core/state/save-votes-prompt')>();
+  return { ...actual, openSaveVotesPrompt: vi.fn() };
+});
+vi.mock('~/core/analytics-operations', () => ({ recordAction: vi.fn() }));
 
 vi.mock('~/core/claims/browse/claim-summary', async importOriginal => ({
   ...(await importOriginal<typeof import('~/core/claims/browse/claim-summary')>()),
@@ -86,19 +80,23 @@ const CLAIM_ID = '01a20ecb8a617470b7e66de9ba5d82e8';
 const SPACE_ID = 'a19c345ab9866679b001d7d2138d88a1';
 
 function renderActions() {
-  return render(<ClaimActions claimId={CLAIM_ID} spaceId={SPACE_ID} />);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const ui = () => (
+    <QueryClientProvider client={client}>
+      <ClaimActions claimId={CLAIM_ID} spaceId={SPACE_ID} />
+    </QueryClientProvider>
+  );
+  const view = render(ui());
+  return { ...view, rerender: () => view.rerender(ui()) };
 }
 
 beforeEach(() => {
   mocks.entities = [{ id: CLAIM_ID, name: 'There’s no genocide in Gaza' }];
   mocks.authenticated = true;
-  mocks.controlArgs.length = 0;
-  mocks.respond.mockReset();
-  mocks.queuePosition.mockReset();
-  mocks.cancelQueuedPosition.mockReset();
-  mocks.promptSignIn.mockReset();
-  mocks.promptSignIn.mockReturnValue({ id: 'attempt-1' });
-  mocks.viewerPosition = null;
+  mocks.submitResponse.mockReset();
+  mocks.indexedViewerDirection = null;
+  vi.mocked(openSaveVotesPrompt).mockClear();
+  clearLocalVotes();
 });
 
 afterEach(cleanup);
@@ -108,12 +106,11 @@ describe('the open claim’s Agree and Disagree', () => {
     renderActions();
 
     const agree = screen.getByRole('button', { name: 'Agree' });
-    const disagree = screen.getByRole('button', { name: 'Disagree' });
     const split = screen.getByTestId('claim-summary');
     expect(split).toHaveTextContent('5 of 7 agree');
     // The split reads first, then the buttons that change it.
     expect(split.compareDocumentPosition(agree) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(disagree).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Disagree' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Open the claim →' })).toBeInTheDocument();
   });
 
@@ -121,28 +118,23 @@ describe('the open claim’s Agree and Disagree', () => {
   // resolves and the buttons would stay disabled for good. Most of the map's spaces have no row.
   it('is pressable with no geo-chat row once the claim’s entity has loaded', () => {
     renderActions();
-
     expect(screen.getByRole('button', { name: 'Agree' })).toBeEnabled();
-    expect(mocks.controlArgs.at(-1)).toMatchObject({ answersReady: true, offersDebate: false });
   });
 
   it('waits for the claim’s entity before taking a side', () => {
     mocks.entities = [];
     renderActions();
-
     expect(screen.getByRole('button', { name: 'Agree' })).toBeDisabled();
   });
 
-  it('publishes the side pressed and draws it as the viewer’s', () => {
+  it('publishes the side pressed and draws the viewer’s side as selected', () => {
     const { rerender } = renderActions();
 
     fireEvent.click(screen.getByRole('button', { name: 'Agree' }));
-    expect(mocks.respond).toHaveBeenCalledWith(true);
-    fireEvent.click(screen.getByRole('button', { name: 'Disagree' }));
-    expect(mocks.respond).toHaveBeenCalledWith(false);
+    expect(mocks.submitResponse).toHaveBeenCalledWith('positive', expect.anything());
 
-    mocks.viewerPosition = true;
-    rerender(<ClaimActions claimId={CLAIM_ID} spaceId={SPACE_ID} />);
+    mocks.indexedViewerDirection = 'positive';
+    rerender();
     expect(screen.getByRole('button', { name: /^Agree.*your response/ })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: 'Disagree' })).toHaveAttribute('aria-pressed', 'false');
   });
@@ -155,47 +147,20 @@ describe('the open claim’s Agree and Disagree', () => {
     expect(agree).toHaveAttribute('data-geo-analytics-intent', 'graph_explorer_action');
   });
 
-  describe('signed out', () => {
-    beforeEach(() => {
-      mocks.authenticated = false;
-    });
+  // Preston, 24 Nov: as the thumbs and the claim page do — kept on the device, then the save sheet.
+  it('signed out, keeps the side on this device, draws it as selected and opens the save sheet', () => {
+    mocks.authenticated = false;
+    renderActions();
 
-    // Preston, 24 Nov: sign in first, then the vote is cast; never a vote kept on this device.
-    it('opens sign-in and holds the side for after it, rather than voting on this device', () => {
-      renderActions();
-
-      expect(mocks.controlArgs.at(-1)).toMatchObject({ allowsSignedOutVotes: false });
-      const agree = screen.getByRole('button', { name: 'Agree' });
-      expect(agree).toBeEnabled();
-      fireEvent.click(agree);
-
-      expect(mocks.promptSignIn).toHaveBeenCalledTimes(1);
-      expect(mocks.promptSignIn.mock.calls[0][0]).toMatchObject({
-        list_id: 'graph_explorer_centre',
-        component: 'claim_position_control',
-        auth_control: 'stance_positive',
-        auth_intent: 'vote',
-        auth_continuation: 'queued',
-      });
-      expect(mocks.queuePosition).toHaveBeenCalledWith(true);
-      expect(mocks.respond).not.toHaveBeenCalled();
-    });
-
-    it('withdraws the held side when sign-in is dismissed', () => {
-      renderActions();
-
+    act(() => {
       fireEvent.click(screen.getByRole('button', { name: 'Disagree' }));
-      expect(mocks.queuePosition).toHaveBeenCalledWith(false);
-      mocks.promptSignIn.mock.calls[0][1].onCancel();
-      expect(mocks.cancelQueuedPosition).toHaveBeenCalled();
     });
 
-    it('waits for the claim’s entity before offering sign-in', () => {
-      mocks.entities = [];
-      renderActions();
-
-      fireEvent.click(screen.getByRole('button', { name: 'Agree' }));
-      expect(mocks.promptSignIn).not.toHaveBeenCalled();
-    });
+    expect(mocks.submitResponse).not.toHaveBeenCalled();
+    expect(readLocalVotes().votes).toEqual([
+      expect.objectContaining({ entityId: CLAIM_ID, spaceId: SPACE_ID, direction: 'negative' }),
+    ]);
+    expect(screen.getByRole('button', { name: /^Disagree.*your response/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(openSaveVotesPrompt).toHaveBeenCalledTimes(1);
   });
 });

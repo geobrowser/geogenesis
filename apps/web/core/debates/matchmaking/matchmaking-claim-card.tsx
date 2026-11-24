@@ -762,13 +762,6 @@ export function useClaimPositionControl({
     localVoteSide: signedOut && localPosition !== null ? localPosition : null,
     isConnected,
     /**
-     * Holds a side for the runner to publish once the viewer has an account, as a signed-out press
-     * does on a host that asks for sign-in first (GEO-3841). The pills draw it as the viewer's.
-     */
-    queuePosition,
-    /** Withdraws a held side, for a sign-in the visitor dismissed. */
-    cancelQueuedPosition: queuedPositionAction.cancel,
-    /**
      * The viewer's response is on its way to the chain and not yet indexed. For readers deciding
      * whether to trust the index — not for the pills' presses, which use `isResponseSubmitting`.
      */
