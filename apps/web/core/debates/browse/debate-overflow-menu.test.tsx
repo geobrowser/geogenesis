@@ -76,6 +76,13 @@ function openDialog() {
 }
 
 describe('DebateOverflowMenu (GEO-2785)', () => {
+  it("draws its trigger in the dark full screen's pill, not a white one (GEO-3833)", () => {
+    render(<DebateOverflowMenu debate={debate} tone="dark" />);
+    const trigger = screen.getByRole('button', { name: 'More debate options' });
+    expect([...trigger.classList]).toContain('bg-white/12');
+    expect([...trigger.classList]).not.toContain('bg-white');
+  });
+
   // The host draws the menu on this answer, and makes room for it on the same one.
   it('is not offered to a viewer who is neither a debater nor an editor', () => {
     mocks.viewerUserId = 'user-z';

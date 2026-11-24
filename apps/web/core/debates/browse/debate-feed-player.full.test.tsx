@@ -310,7 +310,8 @@ describe('the stage', () => {
     expect(screen.queryByTestId('claim-stack')).toBeNull();
     expect(screen.queryByRole('button', { name: /Start over/ })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Pause debate' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Unmute' })).toBeTruthy();
+    // The app's sound control's words: the choice is every debate's, not this one's.
+    expect(screen.getByRole('button', { name: 'Unmute all videos' })).toBeTruthy();
   });
 
   it('drops the Open rounds counter too (D12)', () => {
@@ -398,15 +399,34 @@ describe('the transport', () => {
     const { transport, controller } = renderFull({ playing: false, userPaused: true });
     fireEvent.click(within(transport()).getByRole('button', { name: 'Play video' }));
     expect(controller.togglePlayback).toHaveBeenCalledTimes(1);
-    expect(mocks.control).toHaveBeenCalledWith('play');
+    // Told apart from the tile and corner presses, as the app's transport reports it.
+    expect(mocks.control).toHaveBeenCalledWith('play', { input_method: 'play_button' });
+  });
+
+  it('gives a debate muted by default its sound on a tap on the video, as a page tap would', () => {
+    const { tile, controller, transport } = renderFull({ playing: true });
+    fireEvent.click(within(tile(1)).getByRole('button', { name: 'Show video controls' }));
+    expect(controller.setMutedByUser).toHaveBeenCalledWith(false, 'inferred');
+    expect(mocks.control).toHaveBeenCalledWith('unmute', { source: 'page_tap' });
+    expect(transport().dataset.debateTransport).toBe('shown');
   });
 });
 
 describe('prompts', () => {
   it("says the app's Tap to play when the browser refused", () => {
     renderFull({ playing: false, autoplayBlocked: true });
-    expect(screen.getByRole('button', { name: 'Tap to play' })).toBeTruthy();
+    const prompt = screen.getByRole('button', { name: 'Tap to play' });
+    // The app's solid white pill, not the held page's dark one.
+    expect(prompt.className).toContain('bg-white');
+    expect(prompt.className).not.toContain('bg-black/60');
     expect(screen.queryByText('Watch the debate')).toBeNull();
+  });
+
+  it('starts a refused debate on a tap anywhere on the video, not only on the pill', () => {
+    const { tile, controller } = renderFull({ playing: false, autoplayBlocked: true });
+    // Out of the accessibility tree while the pill is up (the pill is the control), but a tap lands on it.
+    fireEvent.click(tile(2).querySelector<HTMLElement>('button[aria-label="Show video controls"]')!);
+    expect(controller.togglePlayback).toHaveBeenCalledTimes(1);
   });
 
   it('keeps the Watch pill on a held page, dark', () => {

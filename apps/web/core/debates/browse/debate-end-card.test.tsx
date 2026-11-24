@@ -305,4 +305,11 @@ describe('DebateEndCard', () => {
     fireEvent.click(replay);
     expect(onReplay).toHaveBeenCalledTimes(1);
   });
+
+  it("draws replay in the dark full screen's pill, not a white one (GEO-3833)", () => {
+    render(<DebateEndCard card={cardFixture()} onReplay={vi.fn()} tone="dark" />);
+    const replay = screen.getByRole('button', { name: 'Replay debate' });
+    expect([...replay.classList]).toContain('bg-white/12');
+    expect([...replay.classList]).not.toContain('bg-white');
+  });
 });

@@ -769,7 +769,7 @@ function DebateFeedItem({
       overflow={
         hasMenu ? (
           <span className="md:hidden">
-            <DebateOverflowMenu debate={debate} canRemove={canRemove} canEditMoments={canEditMoments} />
+            <DebateOverflowMenu debate={debate} canRemove={canRemove} canEditMoments={canEditMoments} tone={tone} />
           </span>
         ) : null
       }

@@ -7,7 +7,6 @@ import cx from 'classnames';
 import { ActionContextProvider } from '~/core/action-context-provider';
 import { ClaimResponders, ClaimSplitBar } from '~/core/claims/browse/claim-summary';
 import { CLAIM_RESPONSE_COPY } from '~/core/responses/entity-response';
-import { isModifiedClick } from '~/core/utils/is-modified-click';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
@@ -18,9 +17,9 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { DebateClaimControls } from './debate-claim-controls';
 import { DebateClaimTickerCard } from './debate-claim-ticker';
-import { rememberDebateFullReturn } from './debate-full-return';
+import { rememberDebateFullReturnOnClick } from './debate-full-return';
 import { Play } from './icons';
-import { PILL_ACTION_CLASS } from './pill-action';
+import { PILL_ACTION_CLASS, PILL_ACTION_DARK_CLASS } from './pill-action';
 import type { EndCardClaims, useDebateEndCard } from './use-debate-end-card';
 import type { NextDebate } from './use-next-debate';
 
@@ -92,7 +91,10 @@ export function DebateEndCard({
                 aria-label="Replay debate"
                 data-end-card-replay
                 onClick={onReplay}
-                className={cx(PILL_ACTION_CLASS, 'shrink-0 gap-1 px-2.5 text-smallButton')}
+                className={cx(
+                  dark ? PILL_ACTION_DARK_CLASS : PILL_ACTION_CLASS,
+                  'shrink-0 gap-1 px-2.5 text-smallButton'
+                )}
               >
                 <RetrySmall />
                 Replay
@@ -365,9 +367,7 @@ function NextDebateLink({ next, dark }: { next: NextDebate; dark: boolean }) {
         spaceId={next.spaceId}
         // Records where the viewer came from, for the full screen's ×. Inside a full screen it is a
         // no-op, so × on the next debate still goes out rather than back here (GEO-3833).
-        onClick={event => {
-          if (!isModifiedClick(event)) rememberDebateFullReturn(href);
-        }}
+        onClick={rememberDebateFullReturnOnClick(href)}
         className={cx(
           'flex items-center gap-3 rounded-lg p-2.5 no-underline transition-colors @max-md:gap-2.5 @max-md:p-2',
           dark ? 'bg-white/8 text-white hover:bg-white/12' : 'bg-grey-01 text-text hover:bg-divider'

@@ -15,3 +15,10 @@ const PILL_SHAPE_CLASS = `flex h-7 items-center rounded-full ${ACTION_SURFACE_CL
  * drawn to match. Layout only — each caller sets its own gap, padding and type.
  */
 export const PILL_ACTION_CLASS = `${PILL_SHAPE_CLASS} ${ACTION_COLOR_CLASS}`;
+
+/**
+ * The same pill on the debate page's dark full screen (GEO-3833): a translucent white surface with
+ * white text, beside the dark vote row's circles and on the dark end card.
+ */
+export const PILL_ACTION_DARK_CLASS =
+  'flex h-7 items-center rounded-full border border-white/15 bg-white/12 text-white/80 transition-colors hover:text-white';

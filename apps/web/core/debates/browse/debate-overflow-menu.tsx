@@ -21,7 +21,7 @@ import { Menu } from '~/design-system/menu';
 import { Text } from '~/design-system/text';
 
 import { EditMomentsMenuItem } from './edit-moments-menu-item';
-import { PILL_ACTION_CLASS } from './pill-action';
+import { PILL_ACTION_CLASS, PILL_ACTION_DARK_CLASS } from './pill-action';
 
 /**
  * Whether the viewer may remove this debate, by geo-chat's rule: a participant, or an editor of the
@@ -51,10 +51,13 @@ export function DebateOverflowMenu({
   debate,
   canRemove = true,
   canEditMoments = false,
+  tone = 'light',
 }: {
   debate: Debate;
   canRemove?: boolean;
   canEditMoments?: boolean;
+  /** `dark` on the debate page's dark full screen (GEO-3833). */
+  tone?: 'light' | 'dark';
 }) {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [confirmOpen, setConfirmOpen] = React.useState(false);
@@ -67,7 +70,7 @@ export function DebateOverflowMenu({
       aria-label="More debate options"
       data-geo-analytics-label="Debate options"
       data-geo-analytics-intent="debate_action"
-      className={cx(PILL_ACTION_CLASS, 'w-7 justify-center px-0')}
+      className={cx(tone === 'dark' ? PILL_ACTION_DARK_CLASS : PILL_ACTION_CLASS, 'w-7 justify-center px-0')}
     >
       <Ellipsis />
     </button>

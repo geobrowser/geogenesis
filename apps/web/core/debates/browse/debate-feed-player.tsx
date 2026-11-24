@@ -485,8 +485,11 @@ function PairedDebateFeedPlayer({
   };
   // The hold is for autoplay. A viewer pressing play has chosen not to wait, so every control that
   // starts playback lets the pair go first.
-  const togglePlayback = (sound: SoundSource | null = mutedByDefault ? 'play' : null) => {
-    measurement.control(playing ? 'pause' : playbackEnded ? 'replay' : 'play');
+  const togglePlayback = (
+    sound: SoundSource | null = mutedByDefault ? 'play' : null,
+    analytics?: Record<string, unknown>
+  ) => {
+    measurement.control(playing ? 'pause' : playbackEnded ? 'replay' : 'play', analytics);
     if (playbackEnded) resetAnimationSeek();
     if (!playing) {
       // A tap outside a feed is a choice about that one debate, not the viewer saying they are here
@@ -1398,8 +1401,15 @@ function PairedDebateFeedPlayer({
       startFullPlayback();
       return;
     }
-    // The full screen's tap shows the app's transport, or puts it away, as the app's does.
+    // The full screen's tap shows the app's transport, or puts it away, as the app's does. The tile
+    // is a button, which the page-wide tap (`useBlockedPageTap`) leaves alone, so it does that tap's
+    // work here first: a refused debate starts, and one muted by default gets its sound.
     if (full) {
+      if (refusedPrompt) {
+        togglePlayback();
+        return;
+      }
+      if (playing && mutedByDefault) unmuteInGesture('page_tap');
       setTransportShown(shown => !shown);
       return;
     }
@@ -1478,7 +1488,8 @@ function PairedDebateFeedPlayer({
                   width alone left the control faded out but tappable there — a tap aimed at
                   play/pause muted the debate instead, with nothing able to bring the control back. */}
         <ControlCircle
-          ariaLabel={mutedByUser ? 'Unmute' : 'Mute'}
+          // The full screen says it as the app's sound control does: the choice is every debate's.
+          ariaLabel={full ? (mutedByUser ? 'Unmute all videos' : 'Mute all videos') : mutedByUser ? 'Unmute' : 'Mute'}
           onClick={() => {
             measurement.control(mutedByUser ? 'unmute' : 'mute');
             // On a refused card, Unmute starts it with sound.
@@ -1849,7 +1860,8 @@ function PairedDebateFeedPlayer({
               splitFraction={splitFraction}
               onTogglePlay={() => {
                 touchTransport();
-                togglePlayback();
+                // Told apart from the tile and corner presses, as the app's transport reports it.
+                togglePlayback(undefined, { input_method: 'play_button' });
               }}
               onSkip={skipBy}
               onFocusChange={setTransportFocused}
@@ -1881,13 +1893,15 @@ function PairedDebateFeedPlayer({
               />
               {full ? (
                 // The app's "Tap to play" (`TapToPlay.tsx`): the browser refused, so only a tap starts it.
+                // A solid white pill, as the app draws it, so it reads as a button over any frame.
                 <button
                   type="button"
                   data-debate-watch-prompt
+                  data-debate-tap-to-play
                   onClick={() => togglePlayback()}
-                  className={cx(FULL_PROMPT_CLASS, 'z-30')}
+                  className={cx(TAP_TO_PLAY_CLASS, 'z-30')}
                 >
-                  <Play color="white" />
+                  <Play />
                   <span>Tap to play</span>
                 </button>
               ) : (
@@ -2003,6 +2017,10 @@ function MeasuredEndCard({
 }
 
 /** The full screen's prompts over the stage: the app's dark pill. */
+/** The app's Tap to play (`TapToPlay.tsx` `PlayPill`): white, ink text at 600. */
+const TAP_TO_PLAY_CLASS =
+  'absolute top-1/2 left-1/2 flex h-14 -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-full bg-white pr-6 pl-4 text-[1.0625rem] leading-none font-semibold whitespace-nowrap text-text shadow-card focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white';
+
 const FULL_PROMPT_CLASS =
   'absolute top-1/2 left-1/2 flex h-14 -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-full bg-black/60 pr-6 pl-4 text-[1.0625rem] leading-none font-medium whitespace-nowrap text-white backdrop-blur-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white';
 
