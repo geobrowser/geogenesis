@@ -41,8 +41,8 @@ describe('inlineOgImage', () => {
   });
 
   it('refuses a redirect off the allowlist, and follows one to another gateway', async () => {
-    const offList = vi.fn(async (url: string) =>
-      url.startsWith(FILEBASE_GATEWAY_READ_PATH) ? redirect('http://127.0.0.1/secret') : image()
+    const offList = vi.fn(async (input: RequestInfo | URL) =>
+      String(input).startsWith(FILEBASE_GATEWAY_READ_PATH) ? redirect('http://127.0.0.1/secret') : image()
     );
     expect(await inlineOgImage(`${FILEBASE_GATEWAY_READ_PATH}QmA`, 64, 1_000, offList)).toEqual({
       src: null,
@@ -50,16 +50,18 @@ describe('inlineOgImage', () => {
     });
     expect(offList).toHaveBeenCalledTimes(1);
 
-    const toGateway = vi.fn(async (url: string) =>
-      url.startsWith(FILEBASE_GATEWAY_READ_PATH) ? redirect(`${LIGHTHOUSE_GATEWAY_READ_PATH}QmA`) : image()
+    const toGateway = vi.fn(async (input: RequestInfo | URL) =>
+      String(input).startsWith(FILEBASE_GATEWAY_READ_PATH) ? redirect(`${LIGHTHOUSE_GATEWAY_READ_PATH}QmA`) : image()
     );
     expect((await inlineOgImage(`${FILEBASE_GATEWAY_READ_PATH}QmA`, 64, 1_000, toGateway)).src).toMatch(/^data:/);
     expect(toGateway).toHaveBeenCalledTimes(2);
   });
 
   it('follows at most one redirect', async () => {
-    const loop = vi.fn(async (url: string) =>
-      redirect(url.includes('QmA') ? `${LIGHTHOUSE_GATEWAY_READ_PATH}QmB` : `${FILEBASE_GATEWAY_READ_PATH}QmA`)
+    const loop = vi.fn(async (input: RequestInfo | URL) =>
+      redirect(
+        String(input).includes('QmA') ? `${LIGHTHOUSE_GATEWAY_READ_PATH}QmB` : `${FILEBASE_GATEWAY_READ_PATH}QmA`
+      )
     );
     expect((await inlineOgImage(`${FILEBASE_GATEWAY_READ_PATH}QmA`, 64, 1_000, loop)).src).toBeNull();
     expect(loop).toHaveBeenCalledTimes(2);
