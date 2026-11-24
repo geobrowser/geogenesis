@@ -338,14 +338,14 @@ function RankedClaimRow({ rank, claim, isAgreed }: { rank: number; claim: ClaimS
         </div>
       </div>
 
-      {/* Below 760px the bars take what the row has left, so the percentage, count and "…" fit at
-          phone width rather than running off the card (GEO-3819 QA). */}
-      <div className="flex min-w-0 items-center gap-3 pl-10 @[760px]:shrink-0 @[760px]:pl-0">
+      {/* Below 760px the bars take a line of their own and the count and "…" wrap under them: one
+          line can't hold a label, a bar, the percentage, the count and "…" at phone width (GEO-3819 QA). */}
+      <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5 pl-10 @[760px]:shrink-0 @[760px]:flex-nowrap @[760px]:pl-0">
         {claim.split.rows.length > 0 ? (
           <SplitBars
             rows={claim.split.rows}
             density="compact"
-            className="min-w-0 flex-1 @[760px]:w-[264px] @[760px]:flex-none @[760px]:shrink-0"
+            className="min-w-0 basis-full @[760px]:w-[264px] @[760px]:shrink-0 @[760px]:basis-auto"
           />
         ) : (
           <div className="hidden w-[264px] shrink-0 items-center gap-2 @[760px]:flex">
