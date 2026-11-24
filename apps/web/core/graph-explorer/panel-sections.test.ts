@@ -5,7 +5,8 @@ import { entityResponseCountsQueryKey } from '~/core/responses/entity-response';
 import { ARTICLE_TYPE_ID } from '~/core/topics/ontology';
 
 import type { GraphEdge, GraphNode } from './fetch-graph-neighbourhood';
-import type { GraphKind } from './graph-kinds';
+import { CONTENT_RELATION_LABELS, GRAPH_KINDS, type GraphKind } from './graph-kinds';
+import { RELATION_LABELS } from './ontology';
 import {
   agreementLine,
   bandTally,
@@ -165,7 +166,12 @@ describe('row labels that repeat the group', () => {
     ],
     ['Topics drops a plural Topics', { kind: 'topic', relations: ['topics'] }, { relation: null, sub: null }],
     [
-      'Topics keeps an incoming relation',
+      'Topics keeps the labels that say how a topic is linked',
+      { kind: 'topic', relations: ['Topic', 'On this topic', 'Subtopic', 'Broader topic'], typeLabel: 'Topic' },
+      { relation: 'On this topic · Subtopic · Broader topic', sub: null },
+    ],
+    [
+      'Topics keeps an incoming fallback label',
       { kind: 'topic', relations: ['Topics (incoming)'], typeLabel: 'Topic' },
       { relation: 'Topics (incoming)', sub: null },
     ],
@@ -207,5 +213,25 @@ describe('row labels that repeat the group', () => {
     ],
   ])('%s', (_, input, expected) => {
     expect(rowLabels(input)).toEqual(expected);
+  });
+
+  it('keeps every real relation label in every group, except the few that name the group', () => {
+    const dropped: Partial<Record<GraphKind, string[]>> = {
+      topic: ['Topic'],
+      story: ['Story', 'Story in'],
+      event: ['Event'],
+      src: ['Source'],
+    };
+    const labels = [...Object.values(RELATION_LABELS), ...Object.values(CONTENT_RELATION_LABELS)].flatMap(l => [
+      l.out,
+      l.in,
+    ]);
+    for (const kind of GRAPH_KINDS)
+      for (const label of new Set(labels))
+        expect([kind, label, rowLabels({ kind, relations: [label] }).relation]).toEqual([
+          kind,
+          label,
+          dropped[kind]?.includes(label) ? null : label,
+        ]);
   });
 });
