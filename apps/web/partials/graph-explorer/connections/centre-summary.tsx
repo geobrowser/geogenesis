@@ -16,6 +16,7 @@ import { Skeleton } from '~/design-system/skeleton';
 
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
+import { ClaimAgreementLine } from '../panel-sections';
 import { BAND_SWATCHES } from './node-card';
 
 /** The topic's claims by agreement in its space, from real responses, stated as sparse as it is. */
@@ -88,7 +89,10 @@ export function ClaimActions({ claimId, spaceId }: { claimId: string; spaceId: s
   return (
     <section aria-label="Respond" className="flex flex-col gap-3 rounded-xl bg-grey-01 p-3">
       <ActionContextProvider value={{ list_id: 'graph_explorer_centre' }}>
-        <EntityVoteButtons entityId={claimId} spaceId={spaceId} responseKind="stance" hideEmptyClaimShare />
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+          <ClaimAgreementLine claimId={claimId} spaceId={spaceId} />
+          <EntityVoteButtons entityId={claimId} spaceId={spaceId} responseKind="stance" hideClaimShare />
+        </div>
       </ActionContextProvider>
       <Link
         href={NavUtils.toEntity(spaceId, claimId)}

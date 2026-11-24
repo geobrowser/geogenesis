@@ -289,6 +289,17 @@ function ClaimRow({
   return <li>{batch ? <ClaimBatchRow status={batch}>{content}</ClaimBatchRow> : content}</li>;
 }
 
+/** "62% agree · 140 votes" from the live counts, with the percent only from 3 votes. */
+export function ClaimAgreementLine({ claimId, spaceId }: { claimId: string; spaceId: string }) {
+  const summary = useClaimResponseSummary(claimId, spaceId, 'stance');
+  const counts = summary.hasCounts ? { positive: summary.positive, negative: summary.negative } : undefined;
+  return (
+    <span className="text-footnote text-grey-04 tabular-nums">
+      {summary.isLoading && !counts ? '…' : (agreementLine(counts) ?? 'Votes unavailable')}
+    </span>
+  );
+}
+
 function ClaimRowContent({ claim, onOpen }: { claim: PanelClaim; onOpen: Open }) {
   const summary = useClaimResponseSummary(claim.id, claim.spaceId, 'stance');
   const counts = summary.hasCounts ? { positive: summary.positive, negative: summary.negative } : undefined;
@@ -313,10 +324,8 @@ function ClaimRowContent({ claim, onOpen }: { claim: PanelClaim; onOpen: Open })
         </span>
       </button>
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 pl-[18px]">
-        <span className="text-footnote text-grey-04 tabular-nums">
-          {summary.isLoading && !counts ? '…' : (agreementLine(counts) ?? 'Votes unavailable')}
-        </span>
-        <EntityVoteButtons entityId={claim.id} spaceId={claim.spaceId} responseKind="stance" hideEmptyClaimShare />
+        <ClaimAgreementLine claimId={claim.id} spaceId={claim.spaceId} />
+        <EntityVoteButtons entityId={claim.id} spaceId={claim.spaceId} responseKind="stance" hideClaimShare />
       </div>
     </div>
   );

@@ -87,6 +87,11 @@ type EntityVoteButtonsProps = {
   nearViewport?: boolean;
   /** Drop a claim's share while nobody has responded, for rows that say "No responses yet" themselves. */
   hideEmptyClaimShare?: boolean;
+  /**
+   * Drop a claim's share label for rows that state the agreement themselves; the responder faces
+   * still open the list of who responded.
+   */
+  hideClaimShare?: boolean;
 };
 
 /**
@@ -118,6 +123,7 @@ function EntityResponseButtons({
   showInlineError = false,
   nearViewport = true,
   hideEmptyClaimShare = false,
+  hideClaimShare = false,
 }: EntityVoteButtonsProps) {
   const getContext = useActionContext('entity_vote_buttons', 'entity', entityId);
   const responseBatch = useClaimResponseBatchState();
@@ -411,7 +417,7 @@ function EntityResponseButtons({
   // thing that could fall out of step.
   const isClaimResponse = queryResponseKind !== 'curation';
   const displayLabel = isClaimResponse ? percentLabel : scoreLabel;
-  const hideLabel = hideEmptyClaimShare && isClaimResponse && effectiveTotal === 0;
+  const hideLabel = isClaimResponse && (hideClaimShare || (hideEmptyClaimShare && effectiveTotal === 0));
 
   // Grey whichever side is held; the filled icon says which one you picked. The thumbs used to rest
   // lighter and darken when picked, and curation got no class at all, pinning its arrows' colour on
