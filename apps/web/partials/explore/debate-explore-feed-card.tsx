@@ -12,6 +12,7 @@ import { DebateFeedPlayer } from '~/core/debates/browse/debate-feed-player';
 import { rememberDebateFullReturn } from '~/core/debates/browse/debate-full-return';
 import { DebateInteractionBar } from '~/core/debates/browse/debate-interaction-bar';
 import { DEBATE_FEED_HOLDS_FULL_PLAYBACK } from '~/core/debates/browse/feed-full-playback';
+import { useInlinePlaybackUnavailable } from '~/core/debates/browse/inline-playback';
 import { DebateShareDialog } from '~/core/debates/browse/lazy-share-dialog';
 import { useDebateShareAction } from '~/core/debates/browse/use-debate-share-action';
 import { compositeTopSlot } from '~/core/debates/composite-top-slot';
@@ -284,7 +285,10 @@ export function DebateExploreFeedCard({
   const debate = debateQuery.data;
   const watchable = debate != null && isWatchableDebate(debate);
   // The stills stand in the order the player will draw, so the speakers do not swap as it takes over.
-  const topSlot = compositeTopSlot(debate?.participants);
+  // Where inline playback is unavailable (TikTok) that player is the combined one, which plays the
+  // server's composite with slot 1 on top and cannot reorder it.
+  const inlineUnavailable = useInlinePlaybackUnavailable();
+  const topSlot = inlineUnavailable ? 1 : compositeTopSlot(debate?.participants);
 
   // Same two-stage gate as the full-screen feed (GEO-2412): both recordings existing doesn't
   // prove the media job produced a playable final video.
