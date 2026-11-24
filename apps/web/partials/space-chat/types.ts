@@ -43,6 +43,10 @@ export type ChatViewComposer =
       placeholder?: string;
       /** Offered after `@`; no picker when absent. */
       mentionCandidates?: ChatViewPerson[];
+      /** Only replies may be sent (GEO-3818): this line shows until a message is picked to reply to. */
+      repliesOnly?: string;
+      /** Slow mode: sending waits until this time (ms since epoch). */
+      cooldownUntil?: number | null;
     }
   /** Signed out: a Log in control. */
   | { kind: 'sign_in'; label: string; onSignIn: () => void }
@@ -59,11 +63,14 @@ export type ChatViewComposer =
 
 /** The strip above the messages. */
 export type ChatViewHeader = {
-  title: string;
+  /** A channel picker on phones (GEO-3818). */
+  title: React.ReactNode;
   /** Who may read and post, or where else the messages show. */
   subtitle: React.ReactNode;
   /** Recent authors, newest first. */
   people: ChatViewAuthor[];
+  /** Controls after the people, such as a channel's Settings. */
+  actions?: React.ReactNode;
 };
 
 export type ChatViewStatus = 'loading' | 'error' | 'ready';

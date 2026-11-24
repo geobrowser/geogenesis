@@ -451,3 +451,24 @@ describe('when a publish fails', () => {
     expect(alert).not.toHaveClass('ml-1');
   });
 });
+
+describe('hideClaimShare', () => {
+  it('drops the share label, leaving the faces to open the list', async () => {
+    const user = userEvent.setup();
+    render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="stance" hideClaimShare />, {
+      wrapper,
+    });
+
+    await waitFor(() => expect(facesTrigger()).not.toBeNull());
+    expect(screen.queryByRole('button', { name: '67%' })).toBeNull();
+    expect(screen.getAllByTitle('View stances')).toHaveLength(1);
+    await user.click(facesTrigger()!);
+    await waitFor(() => expect(facesTrigger()).toHaveAttribute('aria-expanded', 'true'));
+  });
+
+  it('leaves the default render unchanged', async () => {
+    render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="stance" />, { wrapper });
+    await waitFor(() => expect(tallyTrigger()).toBeTruthy());
+    expect(screen.getAllByTitle('View stances')).toHaveLength(2);
+  });
+});

@@ -1,7 +1,7 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 
 import type { ReactNode } from 'react';
 
@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   queryEntityOptions: [] as Record<string, unknown>[],
   countsSpaceIds: [] as string[],
   responseSpaceIds: [] as string[],
+  counts: { positive: 2, negative: 1 },
 }));
 
 vi.mock('~/core/wallet/auth-hooks', () => ({
@@ -65,7 +66,7 @@ vi.mock('~/core/io/queries', () => ({
   // Two up, one down: a curation score reads "1", a claim percentage reads "67%".
   getEntityResponseCounts: (_entityId: string, spaceId: string) => {
     mocks.countsSpaceIds.push(spaceId);
-    return Effect.succeed({ positive: 2, negative: 1 });
+    return Effect.succeed(mocks.counts);
   },
   getEntityResponders: () => Effect.succeed([]),
   getSpaces: () => Effect.succeed([]),
@@ -165,9 +166,9 @@ function plainEntity({ livesIn }: { livesIn: string }) {
   };
 }
 
-function renderButtons() {
+function renderButtons(props: { hideEmptyClaimShare?: boolean } = {}) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(<EntityVoteButtons entityId="claim-1" spaceId={BLOCK_SPACE} />, {
+  return render(<EntityVoteButtons entityId="claim-1" spaceId={BLOCK_SPACE} {...props} />, {
     wrapper: ({ children }: { children: ReactNode }) => (
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     ),
@@ -179,6 +180,7 @@ beforeEach(() => {
   mocks.queryEntityOptions.length = 0;
   mocks.countsSpaceIds.length = 0;
   mocks.responseSpaceIds.length = 0;
+  mocks.counts = { positive: 2, negative: 1 };
 });
 
 afterEach(cleanup);
@@ -345,5 +347,33 @@ describe('EntityVoteButtons on a topic (GEO-3191)', () => {
     });
 
     expect(screen.queryByTestId('follow-button')).toBeNull();
+  });
+});
+
+describe('EntityVoteButtons hideEmptyClaimShare', () => {
+  it('reads 0% on a claim nobody has answered by default', async () => {
+    mocks.entity = claimEntity();
+    mocks.counts = { positive: 0, negative: 0 };
+    renderButtons();
+
+    expect(await screen.findByText('0%')).toBeInTheDocument();
+  });
+
+  it('drops the share while nobody has answered when asked to', async () => {
+    mocks.entity = claimEntity();
+    mocks.counts = { positive: 0, negative: 0 };
+    renderButtons({ hideEmptyClaimShare: true });
+
+    await waitFor(() => expect(mocks.countsSpaceIds).toContain(CLAIM_SPACE));
+    // The default case above shows 0% well within this window.
+    await expect(screen.findByText('0%', undefined, { timeout: 300 })).rejects.toThrow();
+    expect(screen.getAllByRole('button').length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('keeps the share once anyone has answered', async () => {
+    mocks.entity = claimEntity();
+    renderButtons({ hideEmptyClaimShare: true });
+
+    expect(await screen.findByText('67%')).toBeInTheDocument();
   });
 });

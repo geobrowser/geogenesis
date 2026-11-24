@@ -1,10 +1,9 @@
 import * as React from 'react';
 
 import { ImageResponse } from 'next/og';
-import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
 
 import { fitWrappedText, initials, measureTextWidth, seedHue } from '~/core/blocks/ranking/ranking-og-image';
+import { calibreOgFonts } from '~/core/og-fonts';
 
 import { GeoMark } from '~/design-system/icons/geo-mark';
 
@@ -183,23 +182,6 @@ const ORIGIN_EPSILON = 0.01;
 /** Oversized so a rotated rect still covers the block's corners. */
 const SLAB_W = 2000;
 const SLAB_H = 1200;
-
-function readFontData(fileName: string): ArrayBuffer {
-  const candidates = [
-    join(process.cwd(), `public/fonts/${fileName}`),
-    join(process.cwd(), `apps/web/public/fonts/${fileName}`),
-  ];
-  const filePath = candidates.find(candidate => existsSync(candidate));
-  if (!filePath) throw new Error(`Debate OG font file not found: ${fileName}`);
-  const data = readFileSync(filePath);
-  return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer;
-}
-
-// Satori cannot read WOFF2. These TTFs are decompressed copies of the app's Calibre files.
-const debateFonts = [
-  { name: 'Calibre', data: readFontData('calibre-regular.ttf'), weight: 400 as const, style: 'normal' as const },
-  { name: 'Calibre', data: readFontData('calibre-medium.ttf'), weight: 500 as const, style: 'normal' as const },
-];
 
 /**
  * One slab of the white divider, leaning with the panels.
@@ -570,5 +552,5 @@ function Card({ data }: { data: DebateOgCardData }) {
 }
 
 export function generateDebateOgImageResponse(data: DebateOgCardData) {
-  return new ImageResponse(<Card data={data} />, { width: CARD_W, height: CARD_H, fonts: debateFonts });
+  return new ImageResponse(<Card data={data} />, { width: CARD_W, height: CARD_H, fonts: calibreOgFonts });
 }

@@ -5,7 +5,7 @@ import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Main } from './main';
-import { debateFullscreenActiveAtom } from '~/atoms';
+import { debateFullscreenActiveAtom, graphExplorerUnavailableAtom } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({ pathname: '/space/space-1/entity-1' }));
 
@@ -51,6 +51,27 @@ describe('Main', () => {
 
     expect(main).toHaveClass('min-w-0', 'flex-1');
     for (const className of CHROME) expect(main).not.toHaveClass(className);
+  });
+
+  // By path, so the server render and every hydration order agree: the first paint is the explorer.
+  it('drops the chrome on the graph route', () => {
+    mocks.pathname = '/explore/graph/entity-1';
+    const main = renderMain();
+    for (const className of CHROME) expect(main).not.toHaveClass(className);
+  });
+
+  it('gives the chrome back on the graph route when the page is not showing the explorer', () => {
+    mocks.pathname = '/explore/graph/entity-1';
+    store.set(graphExplorerUnavailableAtom, true);
+    expect(renderMain()).toHaveClass(...CHROME);
+  });
+
+  it('keeps the chrome on other routes', () => {
+    for (const pathname of ['/explore/graph', '/explore/graph/entity-1/more', '/space/space-1/entity-1']) {
+      mocks.pathname = pathname;
+      expect(renderMain()).toHaveClass(...CHROME);
+      cleanup();
+    }
   });
 
   it('keeps the chrome off routes that are already full-width', () => {

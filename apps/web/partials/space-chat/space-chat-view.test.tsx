@@ -40,7 +40,7 @@ function renderView(props: Partial<React.ComponentProps<typeof SpaceChatView>> =
     <SpaceChatView
       label="Space chat"
       status="ready"
-      viewerId={ANN}
+      viewer={{ userId: ANN, personId: null }}
       composer={{ kind: 'post', onSend, maxLength: 4000, mentionCandidates: people }}
       messages={[message('1', BEN, { body: `hi <@${ANN}>` })]}
       onReact={onReact}

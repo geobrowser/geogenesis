@@ -4,13 +4,16 @@ import { useFeatureFlag } from '~/core/state/feature-flags';
 
 import { Text } from '~/design-system/text';
 
-import { SpaceChatPanel } from './space-chat-panel';
+import { SpaceChannels } from './space-channels';
 
 export const CHAT_TAB_COPY = {
   off: 'Chat is not available yet.',
 } as const;
 
-/** A space's Chat tab (GEO-3422): the member room, readable by anyone. */
+/**
+ * A space's Chat tab (GEO-3422): its channels (GEO-3818), readable by anyone. With geo-chat's
+ * channels switched off, the list is just #general (and #editors for editors).
+ */
 export function SpaceChatTab({ spaceId }: { spaceId: string }) {
   const enabled = useFeatureFlag('spaceChat');
   if (!enabled) {
@@ -20,9 +23,5 @@ export function SpaceChatTab({ spaceId }: { spaceId: string }) {
       </Text>
     );
   }
-  return (
-    <div className="flex h-[min(70dvh,720px)] min-h-80 flex-col rounded-lg border border-grey-02 bg-white">
-      <SpaceChatPanel spaceId={spaceId} className="min-h-0 flex-1" />
-    </div>
-  );
+  return <SpaceChannels spaceId={spaceId} />;
 }

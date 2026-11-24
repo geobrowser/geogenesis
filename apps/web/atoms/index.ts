@@ -557,6 +557,11 @@ export const rankingFullscreenFocusTargetAtom = atom<HTMLElement | null>(null);
 // than the viewport and lets the feed scroll up under the sticky navbar.
 export const debateFullscreenActiveAtom = atom<boolean>(false);
 
+// The graph explorer route has no app chrome, so the explorer fills the screen in flow under body
+// portals. Set while that route shows something else (an unbuilt mode, a bad link, an error), so the
+// app gives its navbar and sidebar back.
+export const graphExplorerUnavailableAtom = atom<boolean>(false);
+
 export const entitySidePanelWantsEditAtom = atom(false);
 
 export const entitySidePanelPersistEditorAtom = atom<(() => void) | null>(null);

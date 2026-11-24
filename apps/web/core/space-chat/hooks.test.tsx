@@ -259,4 +259,27 @@ describe('useSpaceChatRooms', () => {
     await waitFor(() => expect(mocks.listSpaceChatRooms).toHaveBeenCalledTimes(2));
     focusManager.setFocused(undefined);
   });
+
+  it('polls the channel list every 60s signed out, when asked', async () => {
+    mocks.listSpaceChatRooms.mockReset();
+    mocks.listSpaceChatRooms.mockResolvedValue({ rooms: [], channels_enabled: true });
+    const { result } = renderHook(() => useSpaceChatRooms('space-2', true, { pollSignedOut: true }), { wrapper });
+    await waitFor(() => expect(result.current.data?.channelsEnabled).toBe(true));
+    expect(mocks.listSpaceChatRooms).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(60_001);
+    await waitFor(() => expect(mocks.listSpaceChatRooms).toHaveBeenCalledTimes(2));
+  });
+
+  it('reads one list with archived channels, and takes #general from the live ones', async () => {
+    mocks.listSpaceChatRooms.mockReset();
+    const general = { id: 'g', space_id: 'space-3', kind: 'member', key: 'k', public_dao_space_id: 'p' };
+    mocks.listSpaceChatRooms.mockResolvedValue({
+      rooms: [{ ...general, id: 'old', archived: true }, general],
+      channels_enabled: true,
+    });
+    const { result } = renderHook(() => useSpaceChatRooms('space-3', true), { wrapper });
+    await waitFor(() => expect(result.current.memberRoom?.id).toBe('g'));
+    expect(mocks.listSpaceChatRooms).toHaveBeenCalledTimes(1);
+    expect(mocks.listSpaceChatRooms.mock.calls[0]![3]).toBe(true);
+  });
 });

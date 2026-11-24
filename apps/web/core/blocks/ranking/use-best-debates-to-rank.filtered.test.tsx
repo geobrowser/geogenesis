@@ -3,7 +3,7 @@ import { renderHook, waitFor } from '@testing-library/react';
 
 import * as React from 'react';
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { RecentDebate } from './best-debates-debates';
 import { NO_RANKING_FILTERS, toRankWindow } from './best-debates-ranking-filters';
@@ -44,6 +44,10 @@ function wrapper({ children }: { children: React.ReactNode }) {
 beforeEach(() => {
   mocks.matching.mockReset();
   mocks.recent.mockReset();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe('useBestDebatesToRank under the screen’s filters (GEO-3774)', () => {
@@ -114,6 +118,8 @@ describe('useBestDebatesToRank under the screen’s filters (GEO-3774)', () => {
 
 describe('useBestDebatesToRank ranked matches (GEO-3810)', () => {
   it('without a recorded, debater or claim filter: your whole ranking, of any age, then down ranked', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(nyDayStartMs(TODAY) + 12 * 3_600_000);
     mocks.recent.mockResolvedValue([debate('new', TODAY)]);
     const { result } = renderHook(
       () =>

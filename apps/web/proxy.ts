@@ -48,9 +48,10 @@ import { isPossibleSpacePath, isValidId } from '~/core/utils/space-url';
 export default function proxy(request: NextRequest): NextResponse | Promise<NextResponse> {
   const shared = expandShareLink(request.url);
   if (shared) return NextResponse.redirect(shared, 307);
-  // The matcher only sends `/debate` here for a short share code; a code that does not parse opens
-  // the room as it is.
-  if (request.nextUrl.pathname.startsWith('/debate/')) return NextResponse.next();
+  // The matcher only sends `/debate` and `/explore/graph` here for a short share code; a code that
+  // does not parse opens the page as it is.
+  if (request.nextUrl.pathname.startsWith('/debate/') || request.nextUrl.pathname.startsWith('/explore/'))
+    return NextResponse.next();
 
   const recording = debateRecordingFromPath(request.nextUrl.pathname);
   // A recording link's debate id is checked like the space's: one that cannot exist is rejected as
@@ -183,5 +184,10 @@ export const config = {
   // Lobby share links (`/debate/<id>?si=…`) come here only to expand their short share code
   // (GEO-3485): a share link is copied short, and the analytics runtime only reads the long `utm_*`
   // tags from the URL it lands on, so it is redirected to them before the page loads.
-  matcher: ['/space/:path*', { source: '/debate/:path*', has: [{ type: 'query', key: 'si' }] }],
+  // Graph explorer links (`/explore/graph/<id>?si=…`) are expanded the same way.
+  matcher: [
+    '/space/:path*',
+    { source: '/debate/:path*', has: [{ type: 'query', key: 'si' }] },
+    { source: '/explore/graph/:path*', has: [{ type: 'query', key: 'si' }] },
+  ],
 };
