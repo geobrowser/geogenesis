@@ -6,6 +6,7 @@ import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useActionScope } from '~/core/action-context-provider';
+import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
 
 import type { ClaimSummaryModel, ClaimVoteTarget, SubClaimModel, TopicRecentDebateModel } from '../models';
 import { ClaimTemplate } from '../views/claim-template';
@@ -28,6 +29,9 @@ const mocks = vi.hoisted(() => ({
   useDebateClaimsBySpaces: vi.fn(),
   useClaimResponseState: vi.fn(),
   useClaimPositionControl: vi.fn(),
+  useClaimResponseSummaryBatch: vi.fn(),
+  /** The batch state each row's response state was read under. */
+  batchStates: [] as Array<{ claimId: string; managed: boolean; ready: boolean }>,
   /** The action scope each control was rendered under: what its vote's analytics would carry. */
   scopes: [] as Array<{ claimId: string; list_id?: string; list_section_id?: string; item_position?: number }>,
 }));
@@ -37,7 +41,16 @@ vi.mock('~/core/debates/hooks', () => ({
   useDebateClaimsBySpaces: (...args: unknown[]) => mocks.useDebateClaimsBySpaces(...args),
 }));
 vi.mock('~/core/claims/browse/use-claim-response-state', () => ({
-  useClaimResponseState: (...args: unknown[]) => mocks.useClaimResponseState(...args),
+  useClaimResponseState: (...args: unknown[]) => {
+    // The real summary hook stands its per-row reads down under a managed batch.
+    const batch = useClaimResponseBatchState();
+    mocks.batchStates.push({ claimId: (args[0] as { claimId: string }).claimId, ...batch });
+    return mocks.useClaimResponseState(...args);
+  },
+}));
+vi.mock('~/core/responses/use-claim-response-summaries', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/responses/use-claim-response-summaries')>()),
+  useClaimResponseSummaryBatch: (...args: unknown[]) => mocks.useClaimResponseSummaryBatch(...args),
 }));
 vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
   useClaimPositionControl: (...args: unknown[]) => {
@@ -86,6 +99,10 @@ function setState(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   mocks.scopes = [];
+  mocks.batchStates = [];
+  mocks.useClaimResponseSummaryBatch
+    .mockReset()
+    .mockReturnValue({ isError: false, isSuccess: true, isPlaceholderData: false });
   mocks.respond.mockReset();
   mocks.useDebateClaims.mockReset().mockReturnValue({ data: undefined });
   mocks.useDebateClaimsBySpaces.mockReset().mockReturnValue({ claims: [] });
@@ -283,9 +300,53 @@ describe('TemplateVoteRows', () => {
     expect(rows).toContain(null);
   });
 
+  it('reads counts and viewer votes in one batch per space, not per row', () => {
+    const second: ClaimVoteTarget = { claimId: 'claim-2', spaceId: 'space-1', title: 'Second' };
+    const elsewhere: ClaimVoteTarget = { claimId: 'claim-3', spaceId: 'space-2', title: 'Elsewhere' };
+    const targets = [TARGET, second, elsewhere];
+
+    render(
+      <TemplateVoteRows targets={targets}>
+        {targets.map(target => (
+          <ClaimVoteBinding key={target.claimId} voteTarget={target}>
+            {vote => vote && <ClaimVotePills title={target.title} vote={vote} />}
+          </ClaimVoteBinding>
+        ))}
+      </TemplateVoteRows>
+    );
+
+    const batches = mocks.useClaimResponseSummaryBatch.mock.calls.map(
+      call => call[0] as { spaceId: string; targets: { entityId: string }[]; responderMetadata?: boolean }
+    );
+    const bySpace = new Map(batches.map(batch => [batch.spaceId, batch]));
+    expect([...bySpace.keys()].sort()).toEqual(['space-1', 'space-2']);
+    expect(bySpace.get('space-1')!.targets.map(target => target.entityId)).toEqual(['claim-1', 'claim-2']);
+    expect(bySpace.get('space-2')!.targets.map(target => target.entityId)).toEqual(['claim-3']);
+    // Rows draw no responder faces, so the batch skips them.
+    for (const batch of batches) expect(batch.responderMetadata).toBe(false);
+    // Every row reads under its space's batch, so none asks for its own counts.
+    const last = new Map(mocks.batchStates.map(state => [state.claimId, state]));
+    for (const target of targets) expect(last.get(target.claimId)).toMatchObject({ managed: true, ready: true });
+  });
+
+  it('lets a row read for itself once its space batch fails', () => {
+    mocks.useClaimResponseSummaryBatch.mockReturnValue({ isError: true, isSuccess: false, isPlaceholderData: false });
+
+    render(
+      <TemplateVoteRows targets={[TARGET]}>
+        <ClaimVoteBinding voteTarget={TARGET}>
+          {vote => vote && <ClaimVotePills title={TARGET.title} vote={vote} />}
+        </ClaimVoteBinding>
+      </TemplateVoteRows>
+    );
+
+    expect(mocks.batchStates.at(-1)).toMatchObject({ claimId: 'claim-1', managed: false });
+  });
+
   it('mounts no lookup for a list with nothing to vote on', () => {
     render(<TemplateVoteRows targets={[undefined]}>plain</TemplateVoteRows>);
     expect(mocks.useDebateClaimsBySpaces).not.toHaveBeenCalled();
+    expect(mocks.useClaimResponseSummaryBatch).not.toHaveBeenCalled();
   });
 });
 

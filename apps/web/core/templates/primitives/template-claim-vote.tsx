@@ -11,6 +11,8 @@ import { useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-
 import { ID } from '~/core/id';
 import type { Entity } from '~/core/types';
 
+import { ClaimBatchRow, type ClaimBatchStatus, useClaimSpaceBatches } from '~/partials/graph-explorer/graph-claim-list';
+
 import { type ClaimVoteTarget, type VoteChoice, formatCompactCount } from '../models';
 import { ThumbDownIcon, ThumbUpIcon } from './icons';
 
@@ -203,16 +205,19 @@ function voteRowKey(spaceId: string, claimId: string) {
   return `${ID.uuidToHex(spaceId).toLowerCase()}:${ID.uuidToHex(claimId).toLowerCase()}`;
 }
 
-/** Looks up geo-chat's row for a target; undefined when no list lookup is mounted. */
-const TemplateVoteRowsContext = React.createContext<((target: ClaimVoteTarget) => DebateClaim | null) | undefined>(
-  undefined
-);
+type TemplateVoteRowsValue = {
+  /** geo-chat's row for a target, or null where it has none. */
+  rowFor: (target: ClaimVoteTarget) => DebateClaim | null;
+  /** Where the response batch for a target's space stands. */
+  batchStatusFor: (target: ClaimVoteTarget) => ClaimBatchStatus;
+};
+
+/** The list's shared lookups; undefined when no `TemplateVoteRows` is mounted. */
+const TemplateVoteRowsContext = React.createContext<TemplateVoteRowsValue | undefined>(undefined);
 
 /**
- * geo-chat's rows for every voting row in a list, in one lookup per space rather than one per row
- * (the Related claims gallery does the same). Wrap the list in it; each `ClaimVoteBinding` inside
- * reads its row from here instead of looking itself up. With no targets — a fixture, or a list of
- * just-proposed claims — it mounts nothing, so those lists never touch geo-chat.
+ * One geo-chat lookup and one response batch per space for a list's voting rows, read by each
+ * `ClaimVoteBinding` inside. With no targets it mounts nothing.
  */
 export function TemplateVoteRows({
   targets,
@@ -242,13 +247,28 @@ function TemplateVoteRowsLookup({ signature, children }: { signature: string; ch
   }, [signature]);
 
   const { claims } = useDebateClaimsBySpaces(groups);
-  const rowFor = React.useMemo(() => {
+  const batchClaims = React.useMemo(
+    () => groups.flatMap(({ spaceId, claimIds }) => claimIds.map(id => ({ id, spaceId }))),
+    [groups]
+  );
+  // Rows draw no responder faces, so the batches skip that metadata.
+  const { status, batches } = useClaimSpaceBatches(batchClaims, { responderMetadata: false });
+
+  const value = React.useMemo<TemplateVoteRowsValue>(() => {
     const map = new Map<string, DebateClaim>();
     for (const claim of claims) map.set(voteRowKey(claim.space_id, claim.claim_entity_id), claim);
-    return (target: ClaimVoteTarget) => map.get(voteRowKey(target.spaceId, target.claimId)) ?? null;
-  }, [claims]);
+    return {
+      rowFor: target => map.get(voteRowKey(target.spaceId, target.claimId)) ?? null,
+      batchStatusFor: target => status[target.spaceId] ?? 'pending',
+    };
+  }, [claims, status]);
 
-  return <TemplateVoteRowsContext.Provider value={rowFor}>{children}</TemplateVoteRowsContext.Provider>;
+  return (
+    <TemplateVoteRowsContext.Provider value={value}>
+      {batches}
+      {children}
+    </TemplateVoteRowsContext.Provider>
+  );
 }
 
 /**
@@ -273,14 +293,19 @@ export function ClaimVoteBinding({
   onClearVote?: () => void;
   children: (vote: TemplateVoteBinding | null) => React.ReactNode;
 }) {
-  const rowFor = React.useContext(TemplateVoteRowsContext);
+  const list = React.useContext(TemplateVoteRowsContext);
   if (voteTarget) {
-    const row = rowFor ? rowFor(voteTarget) : undefined;
-    return (
-      <TemplateClaimVote target={voteTarget} agreeCount={agreeCount} disagreeCount={disagreeCount} row={row}>
+    const vote = (
+      <TemplateClaimVote
+        target={voteTarget}
+        agreeCount={agreeCount}
+        disagreeCount={disagreeCount}
+        row={list ? list.rowFor(voteTarget) : undefined}
+      >
         {children}
       </TemplateClaimVote>
     );
+    return list ? <ClaimBatchRow status={list.batchStatusFor(voteTarget)}>{vote}</ClaimBatchRow> : vote;
   }
   return <>{children(localVoteBinding({ userVote, agreeCount, disagreeCount, onVote, onClearVote }))}</>;
 }

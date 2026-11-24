@@ -63,6 +63,10 @@ export function ClaimExplorer({
     [addedByTab.split, contestedClaims]
   );
   const allAgreed = React.useMemo(() => [...addedByTab.agreed, ...agreedClaims], [addedByTab.agreed, agreedClaims]);
+  const voteTargets = React.useMemo(
+    () => [...allContested, ...allAgreed].map(claim => claim.voteTarget),
+    [allAgreed, allContested]
+  );
   const hasContested = allContested.length > 0;
   const hasAgreed = allAgreed.length > 0;
   const showTabs = hasContested && hasAgreed;
@@ -195,8 +199,8 @@ export function ClaimExplorer({
           </div>
         )}
 
-        {/* One geo-chat lookup for the page of rows that vote, rather than one per row. */}
-        <TemplateVoteRows targets={visible.map(claim => claim.voteTarget)}>
+        {/* Both tabs' rows, so switching tab or page keeps the same lookup and batch. */}
+        <TemplateVoteRows targets={voteTargets}>
           <div className="divide-y divide-divider">
             {visible.map((claim, index) => (
               // Names the list, the tab (positions restart on each) and the row on every action taken
