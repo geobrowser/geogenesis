@@ -9,6 +9,8 @@ import { GRAPH_KIND_LABELS } from '~/core/graph-explorer/graph-kinds';
 import type { GraphShareResult } from '~/core/graph-explorer/graph-share';
 import type { GraphKindFilter } from '~/core/graph-explorer/select-graph';
 
+import { ArrowLeft } from '~/design-system/icons/arrow-left';
+import { Close } from '~/design-system/icons/close';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 const ROUND =
@@ -43,7 +45,7 @@ export function GraphTopBar({
     <div className="relative z-[2] flex shrink-0 items-center gap-3 border-b border-[#f0f0f0] bg-white px-4 py-3 md:gap-2 lg:flex-wrap">
       {back ? (
         <button type="button" aria-label={back.label} title={back.label} onClick={back.onClick} className={ROUND}>
-          ←
+          <ArrowLeft />
         </button>
       ) : null}
       <nav
@@ -100,7 +102,7 @@ export function GraphTopBar({
           onClick={() => analytics?.markExit('close')}
           className={cx(ROUND, !share && 'md:ml-auto')}
         >
-          ×
+          <Close />
         </Link>
       )}
     </div>
