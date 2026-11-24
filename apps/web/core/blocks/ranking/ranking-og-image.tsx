@@ -4,14 +4,9 @@ import { ImageResponse } from 'next/og';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import {
-  FILEBASE_GATEWAY_READ_PATH,
-  LIGHTHOUSE_GATEWAY_READ_PATH,
-  PINATA_GATEWAY_READ_PATH,
-  PLACEHOLDER_SPACE_IMAGE,
-} from '~/core/constants';
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { ogImageToJpeg } from '~/core/og-jpeg';
-import { toSatoriImageSrc } from '~/core/og-share-image';
+import { OG_GATEWAY_HOSTS, toSatoriImageSrc } from '~/core/og-share-image';
 
 import { GeoMark } from '~/design-system/icons/geo-mark';
 
@@ -79,25 +74,12 @@ const geistFonts = [
   },
 ];
 
-// Only these hosts (our IPFS gateways) may be fetched by Satori
-const ALLOWED_IMAGE_HOSTS = new Set(
-  [FILEBASE_GATEWAY_READ_PATH, PINATA_GATEWAY_READ_PATH, LIGHTHOUSE_GATEWAY_READ_PATH]
-    .map(base => {
-      try {
-        return new URL(base).host;
-      } catch {
-        return null;
-      }
-    })
-    .filter((host): host is string => Boolean(host))
-);
-
 // next/og (Satori) can only fetch http(s) or data: images. Shared with the entity share-image chain
 // (GEO-2782), which needed the same rule and had grown a second, weaker copy of it. The host set is
 // what stays local: this card composes many third-party images and would rather fetch none than an
 // arbitrary host, while an entity card renders the single image its author chose.
 function toRenderableImageSrc(value: string | null | undefined): string | null {
-  return toSatoriImageSrc(value, ALLOWED_IMAGE_HOSTS);
+  return toSatoriImageSrc(value, OG_GATEWAY_HOSTS);
 }
 
 export function initials(name: string): string {

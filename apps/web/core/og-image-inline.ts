@@ -1,12 +1,17 @@
 import sharp from 'sharp';
 
-import { toSatoriImageSrc } from '~/core/og-share-image';
+import { OG_GATEWAY_HOSTS, toSatoriImageSrc } from '~/core/og-share-image';
 
 export type InlinedImage = { src: string | null; timedOut: boolean };
 
+/** One redirect is followed, and only to another allowed host. */
+const MAX_REDIRECTS = 1;
+
 /**
  * An image resized to `size`² and inlined as a JPEG data URI, so Satori never decodes a large
- * original. Null on a missing or failed image; `timedOut` when the budget ran out.
+ * original. Only our IPFS gateways are fetched: an author-supplied URL must not make the server
+ * reach an arbitrary or internal host. Null on a missing, refused or failed image; `timedOut` when
+ * the budget ran out.
  */
 export async function inlineOgImage(
   value: string | null | undefined,
@@ -14,12 +19,21 @@ export async function inlineOgImage(
   timeoutMs: number,
   fetchImpl: typeof fetch = fetch
 ): Promise<InlinedImage> {
-  const src = toSatoriImageSrc(value);
-  if (!src) return { src: null, timedOut: false };
-  if (src.startsWith('data:')) return { src, timedOut: false };
+  const first = toSatoriImageSrc(value, OG_GATEWAY_HOSTS);
+  if (!first) return { src: null, timedOut: false };
+  if (first.startsWith('data:')) return { src: first, timedOut: false };
+  let src: string = first;
   const signal = AbortSignal.timeout(timeoutMs);
   try {
-    const response = await fetchImpl(src, { signal });
+    let response = await fetchImpl(src, { signal, redirect: 'manual' });
+    for (let hop = 0; isRedirect(response.status); hop++) {
+      const location = response.headers.get('location');
+      const next: string | null =
+        hop < MAX_REDIRECTS && location ? toSatoriImageSrc(new URL(location, src).href, OG_GATEWAY_HOSTS) : null;
+      if (!next || next.startsWith('data:')) return { src: null, timedOut: false };
+      src = next;
+      response = await fetchImpl(src, { signal, redirect: 'manual' });
+    }
     if (!response.ok || !response.headers.get('content-type')?.startsWith('image/')) {
       return { src: null, timedOut: false };
     }
@@ -29,4 +43,8 @@ export async function inlineOgImage(
   } catch {
     return { src: null, timedOut: signal.aborted };
   }
+}
+
+function isRedirect(status: number) {
+  return status >= 300 && status < 400;
 }
