@@ -3,8 +3,9 @@
 import * as React from 'react';
 
 import { ClaimSummary } from '~/core/claims/browse/claim-summary';
+import { LocalVoteNote } from '~/core/claims/browse/local-vote-note';
 import type { DebateActionAnalyticsSurface } from '~/core/debates/matchmaking/hub-analytics';
-import { PositionRow } from '~/core/debates/matchmaking/matchmaking-claim-card';
+import { type PositionLook, PositionRow } from '~/core/debates/matchmaking/matchmaking-claim-card';
 
 import { Text } from '~/design-system/text';
 
@@ -30,6 +31,7 @@ export function DebateClaimControls({
   className,
   summaryLayout,
   summaryClassName,
+  look = 'default',
 }: {
   claimId: string;
   spaceId: string;
@@ -43,10 +45,20 @@ export function DebateClaimControls({
   analyticsSurface?: DebateActionAnalyticsSurface;
   /** On the wrapper of the pills and the error, not on the split. */
   className?: string;
-  /** Draw the claim's split after the pills, in this layout. Omitted: the host draws its own, or none. */
-  summaryLayout?: 'stacked' | 'inline';
+  /**
+   * Draw the claim's split after the pills, in this layout. Omitted: the host draws its own, or none.
+   *
+   * `'results'` is the debates app's row (GEO-3833), drawn only once the viewer holds a side — the
+   * app reveals the count as the answer to a vote, not before it.
+   */
+  summaryLayout?: 'stacked' | 'inline' | 'results';
   summaryClassName?: string;
+  /** See `PositionRow`. The app looks also move "Not counted yet" under the results. */
+  look?: PositionLook;
 }) {
+  const appLook = look !== 'default';
+  const holdsSide = control.viewerPosition !== null || control.localVoteSide != null;
+  const results = summaryLayout === 'results';
   return (
     <>
       <div className={className}>
@@ -63,6 +75,7 @@ export function DebateClaimControls({
           endSlot={endSlot}
           endSlotWraps={endSlot == null ? undefined : wideEndSlot ? 'wide' : 'compact'}
           analyticsSurface={analyticsSurface}
+          look={look}
         />
         {control.responseError ? (
           <div role="alert" className="mt-1.5">
@@ -72,7 +85,19 @@ export function DebateClaimControls({
           </div>
         ) : null}
       </div>
-      {summaryLayout && !summary.isLoading ? (
+      {results ? (
+        holdsSide ? (
+          <ClaimSummary
+            entityId={claimId}
+            spaceId={spaceId}
+            responseKind={responseKind}
+            summary={summary}
+            layout="results"
+            tone={look === 'app-dark' ? 'dark' : 'light'}
+            className={summaryClassName}
+          />
+        ) : null
+      ) : summaryLayout && !summary.isLoading ? (
         <ClaimSummary
           entityId={claimId}
           spaceId={spaceId}
@@ -82,6 +107,7 @@ export function DebateClaimControls({
           className={summaryClassName}
         />
       ) : null}
+      {appLook && control.localVoteSide != null ? <LocalVoteNote /> : null}
     </>
   );
 }

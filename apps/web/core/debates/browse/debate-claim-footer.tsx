@@ -31,6 +31,8 @@ export function DebateClaimFooter({
   title,
   actions,
   wideActions = false,
+  look = 'default',
+  className,
 }: {
   /** The claim being debated, or null while the host has not resolved its debate. */
   claim: Debate['claim'] | null;
@@ -45,7 +47,45 @@ export function DebateClaimFooter({
   actions: React.ReactNode;
   /** `actions` carries a third control beside comments and share; see `PositionRow`'s `endSlotWraps`. */
   wideActions?: boolean;
+  /**
+   * `'app'` is the debates app's card (GEO-3833): the claim at the app's size, then the vote row, then
+   * the results once the viewer has voted, the "Not counted yet" note, and the meta row last — the
+   * app has no meta row, so Geo's goes where it interrupts least. The host gives the padding.
+   */
+  look?: 'default' | 'app';
+  /** On the footer's root. */
+  className?: string;
 }) {
+  if (look === 'app') {
+    return (
+      <div className={className}>
+        <div className={APP_TITLE_CLASS_NAME}>{title}</div>
+        {claim ? (
+          <ClaimPositions
+            key={`${claim.space_id}:${claim.claim_entity_id}`}
+            claim={claim}
+            enabled={enabled}
+            actions={actions}
+            wideActions={wideActions}
+            appLook
+          />
+        ) : (
+          <PositionRow
+            positions={[]}
+            responseKind={CLAIM_RESPONSE_KIND}
+            viewerPosition={null}
+            onRespond={IGNORE_RESPONSE}
+            disabled
+            showParticipants={false}
+            endSlot={actions}
+            look="app"
+          />
+        )}
+        <div className="mt-3">{meta}</div>
+      </div>
+    );
+  }
+
   return (
     <div>
       <div className="flex flex-col gap-1.5 px-3 pt-3">
@@ -83,16 +123,27 @@ export function DebateClaimFooter({
 
 const IGNORE_RESPONSE = () => {};
 
+/**
+ * The debates app's claim (`LiveMomentCard.tsx`): 23/27 medium at -0.65px, 24px above and 20px
+ * below. Set from here, over whichever heading the host passes, so the explore card's and the full
+ * screen's titles — two components with their own links and clamps — take the same metrics. The
+ * hosts' classes carry `!`, and these out-rank them by specificity.
+ */
+const APP_TITLE_CLASS_NAME =
+  'mt-6 mb-5 [&_h2]:text-[23px]! [&_h2]:leading-[27px]! [&_h2]:font-medium! [&_h2]:tracking-[-0.65px]! [&_h2]:text-[#151515]!';
+
 function ClaimPositions({
   claim,
   enabled,
   actions,
   wideActions,
+  appLook = false,
 }: {
   claim: Debate['claim'];
   enabled: boolean;
   actions: React.ReactNode;
   wideActions: boolean;
+  appLook?: boolean;
 }) {
   const [live, setLive] = React.useState(enabled);
   if (enabled && !live) setLive(true);
@@ -121,9 +172,10 @@ function ClaimPositions({
       endSlot={actions}
       wideEndSlot={wideActions}
       analyticsSurface="debate-card"
-      className="p-3"
-      summaryLayout="inline"
-      summaryClassName="claim-card-summary-band"
+      className={appLook ? undefined : 'p-3'}
+      summaryLayout={appLook ? 'results' : 'inline'}
+      summaryClassName={appLook ? undefined : 'claim-card-summary-band'}
+      look={appLook ? 'app' : 'default'}
     />
   );
 }
