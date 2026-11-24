@@ -8,8 +8,8 @@ import { jsonResponse } from '~/app/api/ranking-og/route-utils';
 export const runtime = 'nodejs';
 
 /**
- * The share card for `/explore/graph/{id}?topic&space`. Outside /api/ on purpose: robots.txt
- * disallows /api/, and X shows no image it may not fetch. `v` only busts caches.
+ * The share card for `/explore/graph/{id}?topic&space`. Kept outside /api/, which robots.txt
+ * disallows: X shows no image it may not fetch. `v` only busts caches.
  */
 export async function GET(req: Request, { params }: { params: Promise<{ entityId: string }> }): Promise<Response> {
   const rateLimit = await checkRankingOgIpRateLimit(getClientIp(req));
