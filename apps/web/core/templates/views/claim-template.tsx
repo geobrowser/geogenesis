@@ -5,6 +5,7 @@ import * as React from 'react';
 import Link from 'next/link';
 
 import { ActionContextProvider } from '~/core/action-context-provider';
+import { NavUtils } from '~/core/utils/utils';
 
 import {
   type ClaimKind,
@@ -42,6 +43,7 @@ import {
   VoteBox,
   useListRanking,
 } from '../primitives';
+import { PUBLISHING_LABEL, usePendingAdds } from '../primitives/use-pending-adds';
 
 const CLAIM_KIND_TONE: Record<ClaimKind, TemplateBadgeTone> = {
   fact: 'fact',
@@ -169,7 +171,11 @@ export function ClaimTemplate({
 
           {/* Supporting, Opposing, and Related claims (prominent, with Topic-style vote actions & bars) */}
           {model.subClaims && model.subClaims.length > 0 && (
-            <GroupedSubClaimSections subClaims={model.subClaims} onAddClaim={actionCallbacks?.onAddClaim} />
+            <GroupedSubClaimSections
+              subClaims={model.subClaims}
+              onAddClaim={actionCallbacks?.onAddClaim}
+              canOpenAddForm={actionCallbacks?.canOpenAddForm}
+            />
           )}
 
           {/* Strongest cases */}
@@ -246,13 +252,16 @@ const SUBCLAIMS_PER_PAGE = 6;
 function GroupedSubClaimSections({
   subClaims,
   onAddClaim,
+  canOpenAddForm,
 }: {
   subClaims: readonly SubClaimModel[];
   onAddClaim?: EntityActionCallbacks['onAddClaim'];
+  canOpenAddForm?: EntityActionCallbacks['canOpenAddForm'];
 }) {
-  const [added, setAdded] = React.useState<SubClaimModel[]>([]);
+  const listedIds = React.useMemo(() => subClaims.map(claim => claim.id), [subClaims]);
+  const added = usePendingAdds<SubClaimModel>(listedIds);
   const [pagesBySection, setPagesBySection] = React.useState<Record<string, number>>({});
-  const combined = [...subClaims, ...added];
+  const combined = [...subClaims, ...added.rows];
 
   const sections = [
     {
@@ -286,20 +295,21 @@ function GroupedSubClaimSections({
           section={section}
           page={pagesBySection[section.id] ?? 1}
           onPageChange={next => setPagesBySection(prev => ({ ...prev, [section.id]: next }))}
+          canOpenAddForm={canOpenAddForm}
           onAddClaim={draft => {
-            onAddClaim?.({ ...draft, stance: section.stance });
-            setAdded(prev => [
-              {
-                id: `claim-sub-${Date.now()}`,
+            added.add(
+              state => ({
+                pending: state.status === 'pending',
                 title: draft.title,
                 kind: draft.kind,
                 stance: section.stance,
-                stat: draft.note,
+                stat: state.status === 'pending' ? PUBLISHING_LABEL : draft.note,
                 split: { rows: [], isSplit: false },
                 sources: [],
-              },
-              ...prev,
-            ]);
+                href: state.status === 'published' ? NavUtils.toEntity(state.spaceId, state.id) : undefined,
+              }),
+              onAddClaim?.({ ...draft, stance: section.stance })
+            );
             setPagesBySection(prev => ({ ...prev, [section.id]: 1 }));
           }}
         />
@@ -313,6 +323,7 @@ function SubClaimGroupSection({
   page,
   onPageChange,
   onAddClaim,
+  canOpenAddForm,
 }: {
   section: {
     id: string;
@@ -324,6 +335,7 @@ function SubClaimGroupSection({
   page: number;
   onPageChange: (next: number) => void;
   onAddClaim: (draft: { title: string; kind: ClaimKind; note?: string }) => void;
+  canOpenAddForm?: () => boolean;
 }) {
   const rankingKey = React.useMemo(() => {
     const sig = section.items
@@ -372,7 +384,7 @@ function SubClaimGroupSection({
             onOpen={ranking.open}
             disabled={section.items.length < 2}
           />
-          <AddClaimPopover label={section.addLabel} onSubmit={onAddClaim} />
+          <AddClaimPopover label={section.addLabel} onSubmit={onAddClaim} canOpen={canOpenAddForm} />
         </div>
       </div>
 
@@ -501,7 +513,11 @@ function SubClaimRow({ rank, subClaim }: { rank: number; subClaim: SubClaimModel
           {voteCountLabel}
         </span>
 
-        <EntityOverflowMenu target={{ id: subClaim.id, kind: 'Claim', title: subClaim.title }} />
+        {/* A pending row's id isn't an entity yet; the menu keeps its space but can't be used. */}
+        <EntityOverflowMenu
+          target={{ id: subClaim.id, kind: 'Claim', title: subClaim.title }}
+          className={subClaim.pending ? 'invisible' : undefined}
+        />
       </div>
     </article>
   );

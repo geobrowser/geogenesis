@@ -17,7 +17,6 @@ import {
 } from '../models';
 import { TEMPLATE_ACTIONS } from '../template-actions';
 import {
-  AddClaimPopover,
   AddContextPopover,
   AddFlagPopover,
   InlinePagination,
@@ -450,28 +449,20 @@ const PEEK_ROWS_PER_PAGE = 4;
 const PEEK_PILLS_CAP = 6;
 const PEEK_FLAGS_PER_PAGE = 3;
 
+// No Add claim here: the peeked claim isn't the page's entity, so the page's publish can't link to it.
 function PeekGroupedSubClaims({ subClaims }: { subClaims: readonly SubClaimModel[] }) {
-  const [added, setAdded] = React.useState<SubClaimModel[]>([]);
-  const combined = [...subClaims, ...added];
-
   const groups = [
     {
       label: 'Supporting claims',
-      addLabel: 'Add supporting claim',
-      stance: 'supports' as const,
-      items: combined.filter(c => c.stance === 'supports'),
+      items: subClaims.filter(c => c.stance === 'supports'),
     },
     {
       label: 'Opposing claims',
-      addLabel: 'Add opposing claim',
-      stance: 'opposes' as const,
-      items: combined.filter(c => c.stance === 'opposes'),
+      items: subClaims.filter(c => c.stance === 'opposes'),
     },
     {
       label: 'Related claims',
-      addLabel: 'Add related claim',
-      stance: 'addresses' as const,
-      items: combined.filter(c => c.stance !== 'supports' && c.stance !== 'opposes'),
+      items: subClaims.filter(c => c.stance !== 'supports' && c.stance !== 'opposes'),
     },
   ].filter(group => group.items.length > 0);
 
@@ -481,23 +472,6 @@ function PeekGroupedSubClaims({ subClaims }: { subClaims: readonly SubClaimModel
         <section key={group.label} aria-label={group.label} className="flex flex-col gap-3">
           <div className="flex items-center justify-between gap-2">
             <h4 className="m-0 text-[17px] leading-[22px] font-semibold text-text">{group.label}</h4>
-            <AddClaimPopover
-              label={group.addLabel}
-              onSubmit={draft =>
-                setAdded(prev => [
-                  ...prev,
-                  {
-                    id: `peek-sub-${Date.now()}`,
-                    title: draft.title,
-                    kind: draft.kind,
-                    stance: group.stance,
-                    stat: draft.note,
-                    split: { rows: [], isSplit: false },
-                    sources: [],
-                  },
-                ])
-              }
-            />
           </div>
           <div className="flex flex-col gap-3">
             {group.items.map(subClaim => (

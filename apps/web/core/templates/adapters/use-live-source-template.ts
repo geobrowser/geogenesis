@@ -35,6 +35,7 @@ import { useInitialHydrationGate } from './use-initial-hydration-gate';
 import { useLiveEntityActions } from './use-live-entity-actions';
 import { useTemplateClaimVoteCounts } from './use-template-claim-vote-counts';
 import { useTopicMediaBatch } from './use-topic-media-batch';
+import { useViewerSpaceId } from './use-viewer-sources';
 
 /**
  * Live Geo adapter for `SourceTemplate` (Articles, Official documents, Datasets, Papers).
@@ -46,6 +47,8 @@ import { useTopicMediaBatch } from './use-topic-media-batch';
  * Topic pills with circular avatars, live claim vote splits, Context graph relations, Disputes,
  * and live `useMutate` actions.
  */
+const NO_ENTITIES: Entity[] = [];
+
 export function useLiveSourceTemplate({
   entityId,
   spaceId,
@@ -102,11 +105,34 @@ export function useLiveSourceTemplate({
     first: 24,
     enabled: isMounted,
   });
+  // The viewer's own personal-space claims and quotes citing this source, so a non-editor who added
+  // one from this page sees it (GEO-3836). Disabled signed out or when the page is in their own space.
+  const viewerSpaceId = useViewerSpaceId(spaceId);
+  const viewerCitingClaimsWhere = React.useMemo(
+    () => ({ ...citingClaimsWhere, spaces: [{ equals: normId(viewerSpaceId ?? '') }] }),
+    [citingClaimsWhere, viewerSpaceId]
+  );
+  const { entities: viewerCitingClaims } = useQueryEntities({
+    where: viewerCitingClaimsWhere,
+    first: 24,
+    enabled: isMounted && viewerSpaceId !== null,
+  });
   const { entities: sourceQuotes, isLoading: isQuotesLoading } = useQueryEntities({
     where: quotesWhere,
     first: 12,
     enabled: isMounted,
   });
+  const viewerQuotesWhere = React.useMemo(
+    () => ({ ...quotesWhere, spaces: [{ equals: normId(viewerSpaceId ?? '') }] }),
+    [quotesWhere, viewerSpaceId]
+  );
+  const { entities: viewerQuotesRead } = useQueryEntities({
+    where: viewerQuotesWhere,
+    first: 12,
+    enabled: isMounted && viewerSpaceId !== null,
+  });
+  // A disabled read can still return cached rows, so the viewer's are only taken with a viewer space.
+  const viewerQuotes = viewerSpaceId ? viewerQuotesRead : NO_ENTITIES;
   const { entities: citingStories, isLoading: isStoriesLoading } = useQueryEntities({
     where: citingStoriesWhere,
     first: 8,
@@ -173,7 +199,8 @@ export function useLiveSourceTemplate({
       { id: string; title: string; kind?: ClaimKind; href: string; spaceId: string; entity: Entity | null }
     >();
 
-    for (const claim of citingClaims) {
+    // A disabled read can still return cached rows, so the viewer's are only taken with a viewer space.
+    for (const claim of viewerSpaceId ? [...citingClaims, ...viewerCitingClaims] : citingClaims) {
       if (!claim.name) continue;
       const hex = ID.uuidToHex(claim.id);
       const claimSpace = resolveEntitySpaceId(claim, spaceId);
@@ -207,7 +234,7 @@ export function useLiveSourceTemplate({
     }
 
     return Array.from(byHex.values());
-  }, [citingClaims, hydratedOutgoingClaims, outgoingClaimRelations, spaceId]);
+  }, [citingClaims, hydratedOutgoingClaims, outgoingClaimRelations, spaceId, viewerCitingClaims, viewerSpaceId]);
 
   // Each row's counts in the space it votes in, the counts its pills draw (GEO-3819).
   const voteCountTargets = React.useMemo(
@@ -263,7 +290,7 @@ export function useLiveSourceTemplate({
       { label: 'Type', value: sourceType },
     ];
 
-    const quotes: SourceQuoteModel[] = sourceQuotes
+    const quotes: SourceQuoteModel[] = [...sourceQuotes, ...viewerQuotes]
       .filter(q => Boolean(q.name))
       .map(q => {
         const qAuthors = readEntityRelations(q, TEMPLATE_ONTOLOGY.AUTHORS_PROPERTY_ID)
@@ -387,6 +414,7 @@ export function useLiveSourceTemplate({
     voteCounts,
     serverCoverUrl,
     sourceQuotes,
+    viewerQuotes,
     space?.entity?.name,
     spaceId,
     topicMediaQuery.data,

@@ -680,11 +680,14 @@ export function AddClaimPopover({
   label = 'Add claim',
   placeholder = 'Write a clear, testable statement...',
   onSubmit,
+  canOpen,
   align = 'end',
 }: {
   label?: string;
   placeholder?: string;
   onSubmit: (draft: { title: string; kind: ClaimKind; note?: string }) => void;
+  /** Asked as the form opens; false keeps it shut (see `EntityActionCallbacks.canOpenAddForm`). */
+  canOpen?: () => boolean;
   align?: 'start' | 'center' | 'end';
 }) {
   const [open, setOpen] = React.useState(false);
@@ -710,6 +713,7 @@ export function AddClaimPopover({
       align={align}
       onClose={() => setOpen(false)}
       onOpenChange={next => {
+        if (next && canOpen && !canOpen()) return;
         setOpen(next);
         if (!next) {
           setTitle('');
@@ -801,6 +805,7 @@ export function AddEntityItemPopover({
   tertiaryPlaceholder,
   multilinePrimary = false,
   onSubmit,
+  canOpen,
   align = 'end',
 }: {
   label: string;
@@ -812,6 +817,8 @@ export function AddEntityItemPopover({
   tertiaryPlaceholder?: string;
   multilinePrimary?: boolean;
   onSubmit: (draft: { primary: string; secondary?: string; tertiary?: string }) => void;
+  /** Asked as the form opens; false keeps it shut (see `EntityActionCallbacks.canOpenAddForm`). */
+  canOpen?: () => boolean;
   align?: 'start' | 'center' | 'end';
 }) {
   const [open, setOpen] = React.useState(false);
@@ -841,6 +848,7 @@ export function AddEntityItemPopover({
       align={align}
       onClose={() => setOpen(false)}
       onOpenChange={next => {
+        if (next && canOpen && !canOpen()) return;
         setOpen(next);
         if (!next) {
           setPrimary('');

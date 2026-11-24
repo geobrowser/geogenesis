@@ -1,6 +1,6 @@
 'use client';
 
-import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
@@ -9,57 +9,22 @@ import { ID } from '~/core/id';
 import { E } from '~/core/sync/orm';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
-import type { Entity, Relation } from '~/core/types';
+import type { Entity } from '~/core/types';
 
 import type { EntityActionCallbacks } from '../models';
 import { CANONICAL_PREDICATE_PROPERTY_IDS, TEMPLATE_ONTOLOGY } from '../ontology';
-
-function makeLocalRelation({
-  spaceId,
-  typeId,
-  typeName,
-  fromId,
-  fromName,
-  toId,
-  toName,
-}: {
-  spaceId: string;
-  typeId: string;
-  typeName: string;
-  fromId: string;
-  fromName: string | null;
-  toId: string;
-  toName: string | null;
-}): Relation {
-  return {
-    id: IdUtils.generate(),
-    entityId: IdUtils.generate(),
-    spaceId,
-    position: Position.generate(),
-    renderableType: 'RELATION',
-    isLocal: true,
-    hasBeenPublished: false,
-    isDeleted: false,
-    type: {
-      id: typeId,
-      name: typeName,
-    },
-    fromEntity: {
-      id: fromId,
-      name: fromName,
-    },
-    toEntity: {
-      id: toId,
-      name: toName,
-      value: toId,
-    },
-  };
-}
+import {
+  type ClaimDraft,
+  type EventDraft,
+  type QuoteDraft,
+  type TemplateOwnerKind,
+  makeLocalRelation,
+} from './template-add-edits';
+import { useTemplateAddPublish } from './use-template-add-publish';
 
 /**
- * Wires live Geo GRC-20 store mutations (`useMutate`) and fuzzy entity search (`E.findFuzzyPage`)
- * into `EntityActionCallbacks` so every inline `+` popover and relation delete in v2 templates
- * writes real local ops ready to publish in Geo Genesis.
+ * `EntityActionCallbacks` for live templates. Add claim / event / quote publish on submit
+ * (`useTemplateAddPublish`); Add context, Dispute and relation deletes only stage local edits.
  */
 export function useLiveEntityActions({
   entityId,
@@ -72,7 +37,7 @@ export function useLiveEntityActions({
   entityName: string;
   spaceId: string;
   entity: Entity | null | undefined;
-  ownerKind: 'topic' | 'claim' | 'source' | 'event' | 'news-story' | 'post' | 'podcast' | 'episode';
+  ownerKind: TemplateOwnerKind;
 }): EntityActionCallbacks {
   const { storage } = useMutate();
   const { store } = useSyncEngine();
@@ -241,259 +206,14 @@ export function useLiveEntityActions({
     [entityId, entityName, spaceId, storage.entities.name, storage.relations, storage.values]
   );
 
-  const onAddClaim = React.useCallback(
-    (draft: {
-      title: string;
-      kind: 'fact' | 'judgment' | 'value-judgment';
-      stance?: 'supports' | 'opposes' | 'addresses';
-      note?: string;
-    }) => {
-      const title = draft.title.trim();
-      if (!title) return;
-
-      const claimId = ID.createEntityId();
-      storage.entities.name.set(claimId, spaceId, title);
-      storage.relations.set(
-        makeLocalRelation({
-          spaceId,
-          typeId: SystemIds.TYPES_PROPERTY,
-          typeName: 'Types',
-          fromId: claimId,
-          fromName: title,
-          toId: TEMPLATE_ONTOLOGY.CLAIM_TYPE_ID,
-          toName: 'Claim',
-        })
-      );
-      storage.values.set({
-        entity: { id: claimId, name: title },
-        property: {
-          id: TEMPLATE_ONTOLOGY.CLAIM_IS_FACTUAL_PROPERTY_ID,
-          name: 'Is factual',
-          dataType: 'BOOLEAN',
-        },
-        spaceId,
-        value: draft.kind === 'fact' ? '1' : '0',
-      });
-      if (draft.note?.trim()) {
-        storage.values.set({
-          entity: { id: claimId, name: title },
-          property: {
-            id: SystemIds.DESCRIPTION_PROPERTY,
-            name: 'Description',
-            dataType: 'TEXT',
-          },
-          spaceId,
-          value: draft.note.trim(),
-        });
-      }
-
-      if (ownerKind === 'topic') {
-        storage.relations.set(
-          makeLocalRelation({
-            spaceId,
-            typeId: TEMPLATE_ONTOLOGY.TOPICS_PROPERTY_ID,
-            typeName: 'Topics',
-            fromId: claimId,
-            fromName: title,
-            toId: entityId,
-            toName: entityName,
-          })
-        );
-      } else if (ownerKind === 'claim') {
-        if (draft.stance === 'supports') {
-          storage.relations.set(
-            makeLocalRelation({
-              spaceId,
-              typeId: TEMPLATE_ONTOLOGY.CLAIM_SUPPORTS_PROPERTY_ID,
-              typeName: 'Supports',
-              fromId: claimId,
-              fromName: title,
-              toId: entityId,
-              toName: entityName,
-            })
-          );
-        } else if (draft.stance === 'opposes') {
-          storage.relations.set(
-            makeLocalRelation({
-              spaceId,
-              typeId: TEMPLATE_ONTOLOGY.CLAIM_OPPOSES_PROPERTY_ID,
-              typeName: 'Opposes',
-              fromId: claimId,
-              fromName: title,
-              toId: entityId,
-              toName: entityName,
-            })
-          );
-        } else {
-          storage.relations.set(
-            makeLocalRelation({
-              spaceId,
-              typeId: TEMPLATE_ONTOLOGY.SUBCLAIMS_PROPERTY_ID,
-              typeName: 'Subclaims',
-              fromId: entityId,
-              fromName: entityName,
-              toId: claimId,
-              toName: title,
-            })
-          );
-        }
-      } else if (ownerKind === 'source') {
-        storage.relations.set(
-          makeLocalRelation({
-            spaceId,
-            typeId: TEMPLATE_ONTOLOGY.SOURCES_PROPERTY_ID,
-            typeName: 'Sources',
-            fromId: claimId,
-            fromName: title,
-            toId: entityId,
-            toName: entityName,
-          })
-        );
-      } else if (ownerKind === 'episode') {
-        storage.relations.set(
-          makeLocalRelation({
-            spaceId,
-            typeId: TEMPLATE_ONTOLOGY.NOTABLE_CLAIMS_PROPERTY_ID,
-            typeName: 'Notable claims',
-            fromId: entityId,
-            fromName: entityName,
-            toId: claimId,
-            toName: title,
-          })
-        );
-      } else {
-        storage.relations.set(
-          makeLocalRelation({
-            spaceId,
-            typeId: TEMPLATE_ONTOLOGY.RELATED_CLAIMS_PROPERTY_ID,
-            typeName: 'Related claims',
-            fromId: entityId,
-            fromName: entityName,
-            toId: claimId,
-            toName: title,
-          })
-        );
-      }
-    },
-    [entityId, entityName, ownerKind, spaceId, storage.entities.name, storage.relations, storage.values]
+  const owner = React.useMemo(
+    () => ({ entityId, entityName, ownerKind, spaceId }),
+    [entityId, entityName, ownerKind, spaceId]
   );
-
-  const onAddQuote = React.useCallback(
-    (draft: { text: string; speaker?: string; location?: string }) => {
-      const text = draft.text.trim();
-      if (!text) return;
-
-      const quoteId = ID.createEntityId();
-      storage.entities.name.set(quoteId, spaceId, text);
-      storage.relations.set(
-        makeLocalRelation({
-          spaceId,
-          typeId: SystemIds.TYPES_PROPERTY,
-          typeName: 'Types',
-          fromId: quoteId,
-          fromName: text,
-          toId: TEMPLATE_ONTOLOGY.QUOTE_TYPE_ID,
-          toName: 'Quote',
-        })
-      );
-      const attribution = [draft.speaker?.trim(), draft.location?.trim()].filter(Boolean).join(', ');
-      if (attribution) {
-        storage.values.set({
-          entity: { id: quoteId, name: text },
-          property: {
-            id: SystemIds.DESCRIPTION_PROPERTY,
-            name: 'Description',
-            dataType: 'TEXT',
-          },
-          spaceId,
-          value: attribution,
-        });
-      }
-      if (ownerKind === 'episode') {
-        storage.relations.set(
-          makeLocalRelation({
-            spaceId,
-            typeId: TEMPLATE_ONTOLOGY.QUOTES_PROPERTY_ID,
-            typeName: 'Quotes',
-            fromId: entityId,
-            fromName: entityName,
-            toId: quoteId,
-            toName: text,
-          })
-        );
-      } else {
-        storage.relations.set(
-          makeLocalRelation({
-            spaceId,
-            typeId: TEMPLATE_ONTOLOGY.SOURCES_PROPERTY_ID,
-            typeName: 'Sources',
-            fromId: quoteId,
-            fromName: text,
-            toId: entityId,
-            toName: entityName,
-          })
-        );
-      }
-    },
-    [entityId, entityName, ownerKind, spaceId, storage.entities.name, storage.relations, storage.values]
-  );
-
-  const onAddEvent = React.useCallback(
-    (draft: { title: string; when?: string; summary?: string }) => {
-      const title = draft.title.trim();
-      if (!title) return;
-
-      const eventId = ID.createEntityId();
-      storage.entities.name.set(eventId, spaceId, title);
-      storage.relations.set(
-        makeLocalRelation({
-          spaceId,
-          typeId: SystemIds.TYPES_PROPERTY,
-          typeName: 'Types',
-          fromId: eventId,
-          fromName: title,
-          toId: TEMPLATE_ONTOLOGY.NEWS_EVENT_TYPE_ID,
-          toName: 'News event',
-        })
-      );
-      if (draft.summary?.trim()) {
-        storage.values.set({
-          entity: { id: eventId, name: title },
-          property: {
-            id: SystemIds.DESCRIPTION_PROPERTY,
-            name: 'Description',
-            dataType: 'TEXT',
-          },
-          spaceId,
-          value: draft.summary.trim(),
-        });
-      }
-      if (draft.when?.trim()) {
-        storage.values.set({
-          entity: { id: eventId, name: title },
-          property: {
-            id: TEMPLATE_ONTOLOGY.EVENT_DATE_PROPERTY_ID,
-            name: 'Event date',
-            dataType: 'DATE',
-          },
-          spaceId,
-          value: draft.when.trim(),
-        });
-      }
-      storage.relations.set(
-        makeLocalRelation({
-          spaceId,
-          typeId: TEMPLATE_ONTOLOGY.TOPICS_PROPERTY_ID,
-          typeName: 'Topics',
-          fromId: eventId,
-          fromName: title,
-          toId: entityId,
-          toName: entityName,
-        })
-      );
-    },
-    [entityId, entityName, spaceId, storage.entities.name, storage.relations, storage.values]
-  );
+  const { add, canOpenAddForm } = useTemplateAddPublish({ owner, pageSpaceId: spaceId });
+  const onAddClaim = React.useCallback((draft: ClaimDraft) => add({ kind: 'claim', draft }), [add]);
+  const onAddEvent = React.useCallback((draft: EventDraft) => add({ kind: 'event', draft }), [add]);
+  const onAddQuote = React.useCallback((draft: QuoteDraft) => add({ kind: 'quote', draft }), [add]);
 
   return React.useMemo<EntityActionCallbacks>(
     () => ({
@@ -503,8 +223,9 @@ export function useLiveEntityActions({
       onAddClaim,
       onAddQuote,
       onAddEvent,
+      canOpenAddForm,
       searchEntities,
     }),
-    [onAddClaim, onAddEvent, onAddFlag, onAddQuote, onAddTriple, onDeleteTriple, searchEntities]
+    [canOpenAddForm, onAddClaim, onAddEvent, onAddFlag, onAddQuote, onAddTriple, onDeleteTriple, searchEntities]
   );
 }

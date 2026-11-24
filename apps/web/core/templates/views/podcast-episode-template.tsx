@@ -5,6 +5,8 @@ import * as React from 'react';
 import cx from 'classnames';
 import Link from 'next/link';
 
+import { NavUtils } from '~/core/utils/utils';
+
 import {
   type ClaimSummaryModel,
   type EntityActionCallbacks,
@@ -25,6 +27,7 @@ import {
   TemplateShell,
   TemplateTitleRow,
 } from '../primitives';
+import { PUBLISHING_LABEL, usePendingAdds } from '../primitives/use-pending-adds';
 import {
   PodcastArtwork,
   PodcastExpandableDescription,
@@ -62,8 +65,10 @@ export function PodcastEpisodeTemplate({
   className,
 }: PodcastEpisodeTemplateProps) {
   const [showAllQuotes, setShowAllQuotes] = React.useState(false);
-  const [addedClaims, setAddedClaims] = React.useState<ClaimSummaryModel[]>([]);
-  const [addedQuotes, setAddedQuotes] = React.useState<SourceQuoteModel[]>([]);
+  const listedClaimIds = React.useMemo(() => model.claims.map(claim => claim.id), [model.claims]);
+  const { rows: addedClaims, add: addClaim } = usePendingAdds<ClaimSummaryModel>(listedClaimIds);
+  const listedQuoteIds = React.useMemo(() => model.quotes.map(quote => quote.id), [model.quotes]);
+  const { rows: addedQuotes, add: addQuote } = usePendingAdds<SourceQuoteModel>(listedQuoteIds);
   const [playerOpen, setPlayerOpen] = React.useState(false);
 
   const allClaims = [...addedClaims, ...model.claims];
@@ -201,17 +206,19 @@ export function PodcastEpisodeTemplate({
             <h2 className="m-0 text-mediumTitle font-semibold text-text">Notable claims</h2>
             <AddClaimPopover
               label="Add notable claim"
+              canOpen={actionCallbacks?.canOpenAddForm}
               onSubmit={draft => {
-                actionCallbacks?.onAddClaim?.(draft);
-                setAddedClaims(prev => [
-                  {
-                    id: `ep-claim-${Date.now()}`,
+                addClaim(
+                  state => ({
+                    pending: state.status === 'pending',
                     title: draft.title,
                     kind: draft.kind,
+                    meta: state.status === 'pending' ? [PUBLISHING_LABEL] : undefined,
                     split: { rows: [], isSplit: false },
-                  },
-                  ...prev,
-                ]);
+                    href: state.status === 'published' ? NavUtils.toEntity(state.spaceId, state.id) : undefined,
+                  }),
+                  actionCallbacks?.onAddClaim?.(draft)
+                );
               }}
             />
           </div>
@@ -230,16 +237,17 @@ export function PodcastEpisodeTemplate({
               primaryPlaceholder="Exact quote from the episode…"
               secondaryLabel="Speaker (optional)"
               secondaryPlaceholder="e.g. Guest or host name"
+              canOpen={actionCallbacks?.canOpenAddForm}
               onSubmit={({ primary, secondary }) => {
-                actionCallbacks?.onAddQuote?.({ text: primary, speaker: secondary || undefined });
-                setAddedQuotes(prev => [
-                  {
-                    id: `ep-quote-${Date.now()}`,
+                addQuote(
+                  state => ({
+                    pending: state.status === 'pending',
                     text: primary,
                     speaker: secondary || undefined,
-                  },
-                  ...prev,
-                ]);
+                    location: state.status === 'pending' ? PUBLISHING_LABEL : undefined,
+                  }),
+                  actionCallbacks?.onAddQuote?.({ text: primary, speaker: secondary || undefined })
+                );
               }}
             />
           </div>
@@ -265,7 +273,11 @@ export function PodcastEpisodeTemplate({
                     )}
                     <EntityInlineContext targetId={quote.id} targetTitle={quote.text} targetKind="Quote" />
                   </div>
-                  <EntityOverflowMenu target={{ id: quote.id, kind: 'Quote', title: quote.text }} />
+                  {/* A pending row's id isn't an entity yet; the menu keeps its space but can't be used. */}
+                  <EntityOverflowMenu
+                    target={{ id: quote.id, kind: 'Quote', title: quote.text }}
+                    className={quote.pending ? 'invisible' : undefined}
+                  />
                 </blockquote>
               ))}
             </div>

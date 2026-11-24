@@ -127,6 +127,8 @@ export interface SourceChipModel {
 
 export interface ClaimSummaryModel {
   id: string;
+  /** Added from the page and still publishing: `id` is a placeholder, not an entity yet. */
+  pending?: boolean;
   title: string;
   kind?: ClaimKind;
   split: SplitBreakdown;
@@ -155,6 +157,8 @@ export interface ClaimSummaryModel {
 
 export interface SourceQuoteModel {
   id: string;
+  /** Added from the page and still publishing: `id` is a placeholder, not an entity yet. */
+  pending?: boolean;
   text: string;
   speaker?: string;
   location?: string;
@@ -194,14 +198,30 @@ export interface EntityContextDataModel {
   flags?: readonly EntityFlagModel[];
 }
 
+/**
+ * What a publishing template `+` resolves to: the new entity and the space it was published in, or
+ * why it wasn't. Failures have already been shown to the viewer by then.
+ */
+export type TemplateAddResult = { ok: true; id: string; spaceId: string } | { ok: false; error: string };
+
 /** Optional persistence & live search callbacks for live GRC-20 adapters wired through `TemplateShell`. */
 export interface EntityActionCallbacks {
   onAddTriple?: (targetId: string, predicate: string, values: readonly string[]) => void;
   onDeleteTriple?: (targetId: string, valueId: string) => void;
   onAddFlag?: (targetId: string, draft: { reason: string; body: string; sourceUrl?: string }) => void;
-  onAddClaim?: (draft: { title: string; kind: ClaimKind; stance?: ClaimStance; note?: string }) => void;
-  onAddQuote?: (draft: { text: string; speaker?: string; location?: string }) => void;
-  onAddEvent?: (draft: { title: string; when?: string; summary?: string }) => void;
+  onAddClaim?: (draft: {
+    title: string;
+    kind: ClaimKind;
+    stance?: ClaimStance;
+    note?: string;
+  }) => Promise<TemplateAddResult>;
+  onAddQuote?: (draft: { text: string; speaker?: string; location?: string }) => Promise<TemplateAddResult>;
+  onAddEvent?: (draft: { title: string; when?: string; summary?: string }) => Promise<TemplateAddResult>;
+  /**
+   * Asked as an Add claim / Add event / Add quote form opens. False keeps it shut: a signed-out viewer is shown
+   * the sign-in prompt instead.
+   */
+  canOpenAddForm?: () => boolean;
   /** Optional live Geo entity search for `+` relation popovers; falls back to fixture suggestions when omitted. */
   searchEntities?: (query: string) => Promise<readonly { id: string; name: string }[]>;
 }
@@ -268,6 +288,8 @@ export interface StrongestCaseModel {
  */
 export interface SubClaimModel {
   id: string;
+  /** Added from the page and still publishing: `id` is a placeholder, not an entity yet. */
+  pending?: boolean;
   title: string;
   /** Stored epistemic property on the subclaim (`Factual` vs `Judgment`). */
   kind?: ClaimKind;
@@ -390,6 +412,8 @@ export interface TopicStatModel {
 
 export interface TopicTimelineHighlightModel {
   id: string;
+  /** Added from the page and still publishing: `id` is a placeholder, not an entity yet. */
+  pending?: boolean;
   when: string;
   title: string;
   summary?: string;

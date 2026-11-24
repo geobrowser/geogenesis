@@ -5,6 +5,8 @@ import * as React from 'react';
 import cx from 'classnames';
 import Link from 'next/link';
 
+import { NavUtils } from '~/core/utils/utils';
+
 import type { EntityActionCallbacks, TopicTemplateModel, TopicTimelineHighlightModel } from '../models';
 import {
   AddEntityItemPopover,
@@ -23,6 +25,7 @@ import {
   TemplateShell,
   TemplateTitleRow,
 } from '../primitives';
+import { PUBLISHING_LABEL, usePendingAdds } from '../primitives/use-pending-adds';
 
 export interface TopicTemplateProps {
   model: TopicTemplateModel;
@@ -55,9 +58,13 @@ export function TopicTemplate({
 }: TopicTemplateProps) {
   const contested = model.contestedClaims ?? [];
   const agreed = model.agreedClaims ?? [];
-  const [addedTimelineTurns, setAddedTimelineTurns] = React.useState<TopicTimelineHighlightModel[]>([]);
+  const listedTimelineIds = React.useMemo(
+    () => (model.timelineHighlights ?? []).map(turn => turn.id),
+    [model.timelineHighlights]
+  );
+  const addedTimelineTurns = usePendingAdds<TopicTimelineHighlightModel>(listedTimelineIds);
   const [subtopicsExpanded, setSubtopicsExpanded] = React.useState(false);
-  const timelineHighlights = [...addedTimelineTurns, ...(model.timelineHighlights ?? [])];
+  const timelineHighlights = [...addedTimelineTurns.rows, ...(model.timelineHighlights ?? [])];
   const subtopics = model.subtopics ?? [];
   const visibleSubtopics = subtopicsExpanded ? subtopics : subtopics.slice(0, 10);
   const hiddenSubtopicsCount = Math.max(0, subtopics.length - 10);
@@ -226,21 +233,22 @@ export function TopicTemplate({
                     secondaryPlaceholder="e.g. 18 Nov 2026"
                     tertiaryLabel="Summary (optional)"
                     tertiaryPlaceholder="Brief neutral summary of what happened..."
+                    canOpen={actionCallbacks?.canOpenAddForm}
                     onSubmit={draft => {
-                      actionCallbacks?.onAddEvent?.({
-                        title: draft.primary,
-                        when: draft.secondary,
-                        summary: draft.tertiary,
-                      });
-                      setAddedTimelineTurns(prev => [
-                        {
-                          id: `user-ev-${Date.now()}`,
-                          when: draft.secondary ?? 'Recent',
+                      addedTimelineTurns.add(
+                        state => ({
+                          pending: state.status === 'pending',
+                          when: state.status === 'pending' ? PUBLISHING_LABEL : (draft.secondary ?? 'Recent'),
                           title: draft.primary,
                           summary: draft.tertiary,
-                        },
-                        ...prev,
-                      ]);
+                          href: state.status === 'published' ? NavUtils.toEntity(state.spaceId, state.id) : undefined,
+                        }),
+                        actionCallbacks?.onAddEvent?.({
+                          title: draft.primary,
+                          when: draft.secondary,
+                          summary: draft.tertiary,
+                        })
+                      );
                     }}
                   />
                 </div>
@@ -360,7 +368,11 @@ function TimelineHighlightRow({
             <div className="flex min-w-0 flex-1">{body}</div>
           )}
 
-          <EntityOverflowMenu target={{ id: turn.id, kind: 'Event', title: turn.title }} className="mt-0.5" />
+          {/* A pending row's id isn't an entity yet; the menu keeps its space but can't be used. */}
+          <EntityOverflowMenu
+            target={{ id: turn.id, kind: 'Event', title: turn.title }}
+            className={cx('mt-0.5', turn.pending && 'invisible')}
+          />
         </div>
 
         <EntityInlineContext targetId={turn.id} targetTitle={turn.title} targetKind="Event" className="max-w-[740px]" />
