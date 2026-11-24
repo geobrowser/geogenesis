@@ -1813,13 +1813,15 @@ describe('DebatesBrowseFeed — moments or the full debate', () => {
     expect(screen.getByTestId('reel-debate-1')).toBeInTheDocument();
   });
 
-  it('shows neither player while the moments load', () => {
+  it('holds the full player on its stills, loading nothing, while the moments load', () => {
     mocks.moments = { 'debate-1': { status: 'loading', moments: [] } };
     render(<DebatesBrowseFeed spaceId="space-1" />);
     activateDebate('First claim');
-    expect(screen.queryByTestId('player-debate-1')).toBeNull();
+    const player = screen.getByTestId('player-debate-1');
+    expect(player).toHaveAttribute('data-active', 'false');
+    expect(player).toHaveAttribute('data-release-media', 'true');
+    expect(player).toHaveAttribute('data-preload', 'false');
     expect(screen.queryByTestId('reel-debate-1')).toBeNull();
-    expect(screen.getAllByTestId('debate-feed-media-pending').length).toBeGreaterThan(0);
   });
 
   it('opens the debate a link named on the full debate, with the button to its moments', () => {

@@ -23,6 +23,12 @@ import { entityCommentsPanelAtom, entitySidePanelAtom, openEntitySidePanelAtom }
 // jsdom's with an object that has no getItem — that import takes the suite down before a test runs.
 // The meta row's Join/Follow offer reads the space type and the viewer (GEO-3236); both have their
 // own suites.
+// These cards' debates have no moments here, so they play the two-tile player (GEO-3833); the
+// moments reel and its Moments / Full debate button are covered by their own suites.
+vi.mock('~/core/debates/moments-player/use-debate-moments', () => ({
+  useDebateMoments: () => ({ status: 'ready', moments: [], slotNames: {} }),
+  debateMomentsQueryKey: (id: string) => ['debate-moments', id],
+}));
 vi.mock('~/core/hooks/use-is-personal-space', () => ({ useIsPersonalSpace: () => undefined }));
 vi.mock('~/core/hooks/use-personal-space-id', () => ({
   usePersonalSpaceId: () => ({ personalSpaceId: null, isRegistered: false, isLoading: false }),

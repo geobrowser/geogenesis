@@ -28,6 +28,12 @@ const mocks = vi.hoisted(() => ({
 // Stands in for the claims panel so a test can see whether it is remounted or merely handed a new
 // debate: only a mount appends. Its content has its own suite.
 // Follow (GEO-3236) writes through the account and reads follows; both have their own suites.
+// These cards' debates have no moments here, so they play the two-tile player (GEO-3833); the
+// moments reel and its Moments / Full debate button are covered by their own suites.
+vi.mock('~/core/debates/moments-player/use-debate-moments', () => ({
+  useDebateMoments: () => ({ status: 'ready', moments: [], slotNames: {} }),
+  debateMomentsQueryKey: (id: string) => ['debate-moments', id],
+}));
 vi.mock('~/core/follows/follow-button', () => ({ FollowButton: () => null }));
 vi.mock('~/core/follows/person-follow-counts', () => ({
   usePersonFollowerCount: () => null,

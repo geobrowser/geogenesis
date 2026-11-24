@@ -696,6 +696,8 @@ function DebateFeedItem({
   // video's top right to switch, back on the moments once the card leaves the preload window.
   const media = useDebateMediaMode(debate.id, { enabled: !releaseMedia, initialMode: linked ? 'full' : 'moments' });
   const showReel = media.reel !== null && media.mode === 'moments';
+  // The linked debate starts on the full debate whatever the read says, so it never waits on it.
+  const waitingForMoments = media.pending && !releaseMedia && !linked;
   // The turns put the moment on screen on the recordings' clock for the switch. Cached with the
   // full player's own read.
   const turns = useDebateMedia(debate.id, !releaseMedia && media.reel !== null).data?.turn_segments;
@@ -749,16 +751,7 @@ function DebateFeedItem({
                 : undefined
             }
           >
-            {media.pending && !linked ? (
-              // Until the moments read settles nothing loads the recordings, so the card does not
-              // sign two recordings and then swap them for clips. The reel's and the two tiles'
-              // frames are the same size, so nothing moves when either arrives.
-              <div
-                aria-hidden="true"
-                data-testid="debate-feed-media-pending"
-                className="aspect-480/578 w-full bg-grey-01"
-              />
-            ) : showReel ? (
+            {showReel ? (
               <MomentsCardPlayer
                 debate={debate}
                 moments={media.reel!}
@@ -777,13 +770,15 @@ function DebateFeedItem({
             ) : (
               <DebateFeedPlayer
                 debate={debate}
-                active={active && !yielding}
-                preload={preload}
-                buffer={buffer}
+                // While the moments read is out, the player shows its stills and loads nothing, so
+                // the card does not sign two recordings and then swap them for clips.
+                active={active && !yielding && !waitingForMoments}
+                preload={preload && !waitingForMoments}
+                buffer={buffer && !waitingForMoments}
                 // Chosen with the button, the full debate plays at once and from the moment the
                 // viewer was on: they asked for it.
                 holdFullPlayback={holdFullPlayback && !media.fullChosen}
-                releaseMedia={releaseMedia}
+                releaseMedia={releaseMedia || waitingForMoments}
                 initialSeekSeconds={media.fullChosen ? media.fullStartSeconds : initialSeekSeconds}
                 framed
                 onOpenClaims={onOpenClaims}
