@@ -1,4 +1,4 @@
-import { renderHook } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -220,6 +220,41 @@ describe('graph_explorer_left page context', () => {
     );
   });
 
+  it('keeps the route-derived fields too, and no space_id when the explorer route had none', () => {
+    window.history.replaceState(null, '', `/explore/graph/${GAZA}?topic=${GAZA}`);
+    document.title = 'Graph explorer';
+    const session = startGraphExplorerSession({ ...init, entityId: GAZA, spaceId: null }, now);
+    session.opened('ready', layout);
+    session.interacted({ interaction: 'open_page', value: 'claim', target_id: CLAIM });
+    window.history.replaceState(null, '', `/space/${SPACE}/${CLAIM}?tab=x`);
+    document.title = 'A claim';
+    session.left('unmount');
+
+    // The runtime lays the URL's fields under the event's own and drops undefined ones.
+    const fromDestination = {
+      page_url: window.location.href,
+      page_search: window.location.search,
+      page_name: document.title,
+      space_id: SPACE,
+      page_entity_type: 'space',
+    };
+    const merged = Object.fromEntries(
+      Object.entries({ ...fromDestination, ...named('graph_explorer_left')[0].props }).filter(
+        ([, value]) => value !== undefined
+      )
+    );
+    expect(merged).toEqual(
+      expect.objectContaining({
+        page_url: `${window.location.origin}/explore/graph/${GAZA}?topic=${GAZA}`,
+        page_search: `?topic=${GAZA}`,
+        page_name: 'Graph explorer',
+        page_entity_type: 'entity',
+        page_type: 'graph_explorer',
+      })
+    );
+    expect(merged).not.toHaveProperty('space_id');
+  });
+
   it('keeps it on close, too', () => {
     window.history.replaceState(null, '', `/explore/graph/${GAZA}?topic=${GAZA}`);
     const session = startGraphExplorerSession({ ...init, entityId: GAZA }, now);
@@ -241,6 +276,41 @@ describe('graph_explorer_left page context', () => {
 });
 
 describe('useGraphExplorerSession', () => {
+  it('starts a new session with entry history when the page comes back from the back/forward cache', () => {
+    const { result, unmount } = renderHook(() => useGraphExplorerSession(init));
+    const first = result.current!;
+    first.opened('ready', layout);
+    window.dispatchEvent(new Event('pagehide'));
+    const show = new Event('pageshow');
+    Object.defineProperty(show, 'persisted', { value: true });
+    act(() => {
+      window.dispatchEvent(show);
+    });
+    const second = result.current!;
+    expect(second.id).not.toBe(first.id);
+    second.opened('ready', layout);
+    unmount();
+
+    expect(named('graph_explorer_opened').map(({ props }) => [props.graph_session_id, props.entry])).toEqual([
+      [first.id, expect.any(String)],
+      [second.id, 'history'],
+    ]);
+    expect(named('graph_explorer_opened')[1].props).not.toHaveProperty('ready_ms');
+    expect(named('graph_explorer_left').map(({ props }) => [props.graph_session_id, props.exit])).toEqual([
+      [first.id, 'page_hidden'],
+      [second.id, 'navigated'],
+    ]);
+  });
+
+  it('ignores a pageshow that is not a restore', () => {
+    const { result } = renderHook(() => useGraphExplorerSession(init));
+    const first = result.current!;
+    act(() => {
+      window.dispatchEvent(new Event('pageshow'));
+    });
+    expect(result.current!.id).toBe(first.id);
+  });
+
   it('sends one left for pagehide followed by the unmount', () => {
     const { result, unmount } = renderHook(() => useGraphExplorerSession(init));
     result.current!.opened('ready', layout);

@@ -475,6 +475,22 @@ describe('GraphViewer analytics', () => {
     ]);
   });
 
+  it('opens a new session with entry history when the page is restored from the back/forward cache', () => {
+    const move: React.MutableRefObject<((next: GraphHistory) => void) | null> = { current: null };
+    render(<TrackedViewer move={move} />);
+    window.dispatchEvent(new Event('pagehide'));
+    const show = new Event('pageshow');
+    Object.defineProperty(show, 'persisted', { value: true });
+    React.act(() => {
+      window.dispatchEvent(show);
+    });
+    const opened = events('graph_explorer_opened');
+    expect(opened).toHaveLength(2);
+    expect(opened[1]).toEqual(expect.objectContaining({ entry: 'history', load_outcome: 'ready', entity_id: TOPIC }));
+    expect(opened[1].graph_session_id).not.toBe(opened[0].graph_session_id);
+    expect(events('graph_explorer_left').map(props => props.exit)).toEqual(['page_hidden']);
+  });
+
   it('reports a kind filter change, not a repeat', () => {
     const move: React.MutableRefObject<((next: GraphHistory) => void) | null> = { current: null };
     render(<TrackedViewer move={move} />);

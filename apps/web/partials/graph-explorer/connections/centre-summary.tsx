@@ -34,7 +34,7 @@ export function TopicClaimsSummary({
 }) {
   const summary = useTopicClaimsSummary(topicId, filter, topicSpaceId);
   const analytics = useGraphAnalytics();
-  const seenRef = useSeenFor(1_000, () => analytics?.interacted({ interaction: 'summary_seen' }));
+  const seenRef = useSeenFor(1_000, topicId, () => analytics?.interacted({ interaction: 'summary_seen' }));
   if (summary.isLoading) return <Skeleton className="h-[96px] w-full rounded-lg" />;
   if (summary.isError || !summary.data) {
     return <p className="text-metadata text-grey-04">Couldn’t load how people responded to this topic’s claims.</p>;
@@ -111,28 +111,38 @@ export function ClaimActions({ claimId, spaceId }: { claimId: string; spaceId: s
   );
 }
 
-/** A ref whose element, at least half visible for `ms`, calls `onSeen`. */
-function useSeenFor(ms: number, onSeen: () => void) {
+/**
+ * A ref whose element, at least half visible for `ms`, calls `onSeen`. A pending call is dropped
+ * on unmount and when `key` changes, so it never reports for the next centre.
+ */
+function useSeenFor(ms: number, key: string, onSeen: () => void) {
   const callback = React.useRef(onSeen);
   React.useEffect(() => {
     callback.current = onSeen;
   });
   const observer = React.useRef<IntersectionObserver | null>(null);
-  React.useEffect(() => () => observer.current?.disconnect(), []);
+  const timer = React.useRef<number | undefined>(undefined);
+  const stop = React.useCallback(() => {
+    observer.current?.disconnect();
+    observer.current = null;
+    window.clearTimeout(timer.current);
+  }, []);
+  React.useEffect(() => stop, [stop]);
   return React.useCallback(
     (element: HTMLElement | null) => {
-      observer.current?.disconnect();
+      stop();
       if (!element || typeof IntersectionObserver === 'undefined') return;
-      let timer: number | undefined;
+      // A new key gives a new ref, so the old element is let go and its pending call dropped.
+      void key;
       observer.current = new IntersectionObserver(
         ([entry]) => {
-          window.clearTimeout(timer);
-          if (entry?.isIntersecting) timer = window.setTimeout(() => callback.current(), ms);
+          window.clearTimeout(timer.current);
+          if (entry?.isIntersecting) timer.current = window.setTimeout(() => callback.current(), ms);
         },
         { threshold: 0.5 }
       );
       observer.current.observe(element);
     },
-    [ms]
+    [key, ms, stop]
   );
 }

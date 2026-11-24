@@ -76,10 +76,29 @@ function externalReferrer() {
 
 export type GraphSessionInit = { entityId: string; topicId: string; spaceId: string | null; trailDepth: number };
 
+/**
+ * What the runtime derives from the URL at capture time; undefined drops a value the destination
+ * page's URL would add (`/space/<id>/…` sets space_id).
+ */
+const ROUTE_IDS = {
+  space_id: undefined,
+  story_id: undefined,
+  timeline_id: undefined,
+  episode_id: undefined,
+  source_id: undefined,
+  governance_view_kind: undefined,
+  governance_proposal_id: undefined,
+};
+
 export type GraphExplorerSession = ReturnType<typeof startGraphExplorerSession>;
 
 /** One explorer mount: hops keep it, a reload or a return from another page starts a new one. */
-export function startGraphExplorerSession(init: GraphSessionInit, now: () => number = Date.now) {
+export function startGraphExplorerSession(
+  init: GraphSessionInit,
+  now: () => number = Date.now,
+  /** Restored from the back/forward cache: entry history, and no load to time. */
+  restored = false
+) {
   const mountedAt = now();
   const pathAtMount = window.location.pathname;
   const popstate = mountedAt - lastPopstate <= POPSTATE_MS;
@@ -98,11 +117,18 @@ export function startGraphExplorerSession(init: GraphSessionInit, now: () => num
   let markedExit: GraphExit | null = null;
   let lastOpen: { at: number; kind: 'claim' | 'entity'; target: string } | null = null;
   const once = new Set<string>();
-  /** The explorer's latest page view: `left` can fire after the app moved to another page. */
-  let explorerPage: ReturnType<typeof pageContext> | null = null;
+  /** The explorer's latest page: `left` can fire after the app moved to another page. */
+  let explorerPage: Record<string, unknown> | null = null;
   const notePage = () => {
     const page = pageContext();
-    if (page.page_type === 'graph_explorer') explorerPage = page;
+    if (page.page_type !== 'graph_explorer') return;
+    explorerPage = {
+      ...page,
+      page_url: window.location.href,
+      page_search: window.location.search,
+      page_hash: window.location.hash,
+      page_name: document.title,
+    };
   };
 
   const base = () => ({
@@ -130,26 +156,28 @@ export function startGraphExplorerSession(init: GraphSessionInit, now: () => num
       if (openedAt !== null || ended) return;
       notePage();
       openedAt = now();
-      if (outcome === 'ready') readyMs = Math.round(openedAt - mountedAt);
+      if (outcome === 'ready' && !restored) readyMs = Math.round(openedAt - mountedAt);
       visibleSince = document.visibilityState === 'visible' ? openedAt : null;
       document.addEventListener('visibilitychange', onVisibility);
       const landing = graphShareLanding();
       const share = landing ? { share_id: landing.share_id, method: landing.method } : null;
-      const inApp = takeGraphExplorerEntry();
-      const entry = classifyEntry({
-        share,
-        inApp,
-        navigationType: currentNavigationType(),
-        firstRoute: sessionsThisDocument === 0 && documentPath() === pathAtMount,
-        popstate,
-        externalReferrer: externalReferrer(),
-      });
+      const inApp = restored ? null : takeGraphExplorerEntry();
+      const entry: GraphEntry = restored
+        ? 'history'
+        : classifyEntry({
+            share,
+            inApp,
+            navigationType: currentNavigationType(),
+            firstRoute: sessionsThisDocument === 0 && documentPath() === pathAtMount,
+            popstate,
+            externalReferrer: externalReferrer(),
+          });
       sessionsThisDocument++;
       captureSafely('graph_explorer_opened', {
         ...base(),
         entry,
         load_outcome: outcome,
-        ready_ms: Math.max(0, Math.round(openedAt - mountedAt)),
+        ...(restored ? {} : { ready_ms: Math.max(0, Math.round(openedAt - mountedAt)) }),
         layout: extra.layout,
         trail_depth: extra.trailDepth,
         ...(extra.entityKind ? { entity_kind: extra.entityKind } : {}),
@@ -216,6 +244,7 @@ export function startGraphExplorerSession(init: GraphSessionInit, now: () => num
           ? 'page_hidden'
           : (markedExit ?? (open ? (open.kind === 'claim' ? 'open_claim' : 'open_entity') : 'navigated'));
       captureSafely('graph_explorer_left', {
+        ...ROUTE_IDS,
         ...explorerPage,
         ...base(),
         exit,
@@ -239,18 +268,32 @@ export function useGraphAnalytics() {
   return React.useContext(GraphAnalyticsContext);
 }
 
-/** Starts a session on mount; it leaves on unmount or `pagehide`, whichever comes first. */
+/**
+ * Starts a session on mount; it leaves on unmount or `pagehide`, whichever comes first, and a page
+ * restored from the back/forward cache starts a new one.
+ */
 export function useGraphExplorerSession(init: GraphSessionInit) {
-  const initial = React.useRef(init);
+  const latest = React.useRef(init);
+  React.useEffect(() => {
+    latest.current = init;
+  });
   const [session, setSession] = React.useState<GraphExplorerSession | null>(null);
   React.useEffect(() => {
-    const started = startGraphExplorerSession(initial.current);
-    setSession(started);
-    const hide = () => started.left('page_hidden');
+    let current = startGraphExplorerSession(latest.current);
+    setSession(current);
+    const hide = () => current.left('page_hidden');
+    const show = (event: PageTransitionEvent) => {
+      if (!event.persisted) return;
+      current.left('page_hidden');
+      current = startGraphExplorerSession(latest.current, Date.now, true);
+      setSession(current);
+    };
     window.addEventListener('pagehide', hide);
+    window.addEventListener('pageshow', show);
     return () => {
       window.removeEventListener('pagehide', hide);
-      started.left('unmount');
+      window.removeEventListener('pageshow', show);
+      current.left('unmount');
     };
   }, []);
   return session;
