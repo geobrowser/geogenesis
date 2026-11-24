@@ -10,7 +10,11 @@ export type ClipControl =
 export type ClipTrigger = 'manual' | 'autoplay';
 export type ClipFailureAction = 'retried' | 'skipped' | 'gave_up' | 'refreshed';
 
-/** Where the card is, as the debates app reports its Explore clips, so both apps' clips share one query. */
+/**
+ * Where the card is, as the debates app reports its clips (`playback_surface`, `component`), so both
+ * apps' clips share one query, with the list the card is in (`list_id`), as the app's profile reel
+ * reports `profile_debates`.
+ */
 export type ClipSurface = {
   playback_surface: 'explore';
   component: 'explore_feed_card';
@@ -18,6 +22,12 @@ export type ClipSurface = {
   target_id: string;
   target_type: 'debate';
   item_position?: number;
+  /** The feed version and arm behind the card (GEO-3140), as its other actions carry them. */
+  feed_version?: string;
+  feed_arm?: 'a' | 'b';
+  feed_experiment_id?: string;
+  feed_exploration?: boolean;
+  feed_slot?: 'fresh';
 };
 
 type Viewing = {

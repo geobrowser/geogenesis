@@ -6,10 +6,15 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { useActionScope } from '~/core/action-context-provider';
 import { FollowButton } from '~/core/follows/follow-button';
 import { validateSpaceId } from '~/core/io/rest/validation';
 import { responsePositionLabel } from '~/core/responses/entity-response';
-import { gestureUnlocksEachMediaElement, markGestureVideoUnlocked } from '~/core/utils/video/gesture-media-pool';
+import {
+  gestureUnlocksEachMediaElement,
+  markGestureVideoUnlocked,
+  unlockGestureVideo,
+} from '~/core/utils/video/gesture-media-pool';
 import { reattachVideoSource } from '~/core/utils/video/release-video';
 import { renderSwappedVideo } from '~/core/utils/video/swapped-video-frame';
 
@@ -66,8 +71,6 @@ export type MomentsCardPlayerProps = {
   spaceId?: string;
   /** The debate's turns on both clocks, to open the full screen on the recordings' clock. */
   turns?: readonly DebateMediaTurnSegment[] | null;
-  /** Where the card sits in its list, for the measurement. */
-  itemPosition?: number;
 };
 
 type SlotIndex = 0 | 1;
@@ -110,7 +113,6 @@ function MomentsCardReel({
   entityId,
   spaceId,
   turns,
-  itemPosition,
 }: MomentsCardPlayerProps) {
   const queryClient = useQueryClient();
   const [story, dispatch] = React.useReducer(storyReducer, moments.length, initialStoryState);
@@ -152,19 +154,29 @@ function MomentsCardReel({
   const clipMs = clip.index === index ? clip.ms : 0;
   const clipLengthMs = (clip.index === index ? clip.durationMs : null) ?? moment.durationMs;
 
-  // Measurement, one per card presentation.
-  const itemPositionRef = React.useRef(itemPosition);
-  itemPositionRef.current = itemPosition;
+  // Measurement, one per card presentation. The list and position are the card's own (its feed,
+  // a profile's gallery, a claim's tab) and the feed arm behind it, as its votes and shares report.
+  const scope = useActionScope();
+  const scopeRef = React.useRef(scope);
+  scopeRef.current = scope;
   const [analytics] = React.useState(
     () =>
-      new ClipPlaybackAnalytics(debate.id, (): ClipSurface => ({
-        playback_surface: 'explore',
-        component: 'explore_feed_card',
-        list_id: 'explore',
-        target_id: debate.id,
-        target_type: 'debate',
-        item_position: itemPositionRef.current,
-      }))
+      new ClipPlaybackAnalytics(debate.id, (): ClipSurface => {
+        const scope = scopeRef.current;
+        return {
+          playback_surface: 'explore',
+          component: 'explore_feed_card',
+          list_id: scope.list_id ?? 'explore',
+          target_id: debate.id,
+          target_type: 'debate',
+          item_position: scope.item_position,
+          feed_version: scope.feed_version,
+          feed_arm: scope.feed_arm,
+          feed_experiment_id: scope.feed_experiment_id,
+          feed_exploration: scope.feed_exploration,
+          feed_slot: scope.feed_slot,
+        };
+      })
   );
   React.useEffect(() => () => analytics.dispose(), [analytics]);
 
@@ -194,10 +206,16 @@ function MomentsCardReel({
     analytics.show(moments[index]!, index);
   }, [analytics, moments, index]);
   React.useEffect(() => {
-    const update = () => analytics.setLive(live && document.visibilityState === 'visible');
+    const update = () => analytics.setLive(live && inForeground());
     update();
     document.addEventListener('visibilitychange', update);
-    return () => document.removeEventListener('visibilitychange', update);
+    window.addEventListener('focus', update);
+    window.addEventListener('blur', update);
+    return () => {
+      document.removeEventListener('visibilitychange', update);
+      window.removeEventListener('focus', update);
+      window.removeEventListener('blur', update);
+    };
   }, [analytics, live]);
 
   // The app pauses a card that stops being the one shown and plays the one that becomes it.
@@ -267,6 +285,8 @@ function MomentsCardReel({
   const preloadNext = mountMedia && active && playing && visibleSlot === currentSlot && nextIndex !== null;
   React.useEffect(() => {
     if (!preloadNext || nextIndex === null || slots[spare] === nextIndex) return;
+    // Its preload failed once already: it loads when it is reached, with its one retry used.
+    if (attemptsRef.current.has(nextIndex)) return;
     const timer = window.setTimeout(() => {
       setSlots(current => (spare === 0 ? [nextIndex, current[1]] : [current[0], nextIndex]));
     }, PRELOAD_NEXT_DELAY_MS);
@@ -290,7 +310,7 @@ function MomentsCardReel({
     if (!mountMedia) return;
     const tick = () => {
       const video = refs[currentSlot].current;
-      const inView = live && document.visibilityState === 'visible';
+      const inView = live && inForeground();
       const mediaMs = video ? video.currentTime * 1000 : 0;
       const durationMs = Math.round(
         moment.durationMs ?? (video && Number.isFinite(video.duration) ? video.duration * 1000 : 0)
@@ -349,6 +369,16 @@ function MomentsCardReel({
   };
 
   const onError = (slot: SlotIndex) => {
+    if (slot !== currentSlot) {
+      // The spare failed to preload. An element whose load failed reports nothing more, so leaving
+      // it holding that moment would stall the reel on it. Let it go: the moment loads afresh when
+      // it is reached, and fails over from there (its one retry counted here).
+      const held = slots[slot];
+      if (held === null) return;
+      attemptsRef.current.set(held, (attemptsRef.current.get(held) ?? 0) + 1);
+      setSlots(current => (slot === 0 ? [null, current[1]] : [current[0], null]));
+      return;
+    }
     if (!forSlot(slot)) return;
     const video = refs[slot].current;
     const attempt = attemptsRef.current.get(index) ?? 0;
@@ -384,6 +414,17 @@ function MomentsCardReel({
     analytics.interrupt();
   };
 
+  /**
+   * Inside a tap: give the other element its own grant too, where each element needs one (iOS), so
+   * the reel keeps its sound when it swaps back to it. The app primes both moment players in a sound
+   * tap for the same reason (debates-react-native `primeMomentAudioFromGesture`, GEO-3788).
+   */
+  const grantOtherInTap = () => {
+    if (!pooled) return;
+    const other = refs[currentSlot === 0 ? 1 : 0].current;
+    if (other) unlockGestureVideo(other);
+  };
+
   /** Starts the moment on screen inside the viewer's tap, with sound if they have not chosen mute. */
   const playInTap = (giveSound: boolean) => {
     const video = refs[currentSlot].current;
@@ -397,6 +438,7 @@ function MomentsCardReel({
     start(video);
     // A play inside the tap unlocks the element for sound, for whichever card the pool gives it to next.
     if (!video.paused) markGestureVideoUnlocked(video);
+    grantOtherInTap();
   };
 
   const restart = () => {
@@ -478,6 +520,7 @@ function MomentsCardReel({
       analytics.control('unmute', 'manual');
       sound.setMuted(false, 'explicit');
       setSoundBlocked(false);
+      grantOtherInTap();
       if (!video) return;
       video.muted = false;
       if (blocked) {
@@ -505,6 +548,7 @@ function MomentsCardReel({
       analytics.control('unmute', 'manual', { source: 'page_tap' });
       sound.setMuted(false, 'inferred');
       setSoundBlocked(false);
+      grantOtherInTap();
       const video = refs[currentSlot].current;
       if (video && !video.paused) {
         video.muted = false;
@@ -867,4 +911,9 @@ function PlayGlyph({ size = 20 }: { size?: number }) {
       <path fill="currentColor" d="M7 4L21 12L7 20Z" />
     </svg>
   );
+}
+
+/** In the foreground, by the full player's rule (`usePlaybackAnalytics`): visible and focused. */
+function inForeground() {
+  return document.visibilityState === 'visible' && document.hasFocus();
 }

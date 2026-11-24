@@ -6,6 +6,9 @@ import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ActionContextProvider } from '~/core/action-context-provider';
+import { isGestureVideoUnlocked, resetGestureVideoPoolForTests } from '~/core/utils/video/gesture-media-pool';
+
 import type { Debate } from '../api';
 import type { DebateMoment } from './debate-moments';
 import { MomentsCardPlayer, type MomentsCardPlayerProps } from './moments-card-player';
@@ -84,7 +87,10 @@ const DEBATE = {
   ],
 } as unknown as Debate;
 
-function renderPlayer(overrides: Partial<MomentsCardPlayerProps> = {}) {
+function renderPlayer(
+  overrides: Partial<MomentsCardPlayerProps> = {},
+  wrap: (node: React.ReactNode) => React.ReactNode = node => node
+) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const props: MomentsCardPlayerProps = {
     debate: DEBATE,
@@ -99,9 +105,7 @@ function renderPlayer(overrides: Partial<MomentsCardPlayerProps> = {}) {
     ...overrides,
   };
   const ui = (next: Partial<MomentsCardPlayerProps> = {}) => (
-    <QueryClientProvider client={client}>
-      <MomentsCardPlayer {...props} {...next} />
-    </QueryClientProvider>
+    <QueryClientProvider client={client}>{wrap(<MomentsCardPlayer {...props} {...next} />)}</QueryClientProvider>
   );
   const result = render(ui());
   return { ...result, update: (next: Partial<MomentsCardPlayerProps>) => result.rerender(ui(next)) };
@@ -138,6 +142,8 @@ beforeEach(() => {
   vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(mocks.pause);
   vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(() => null);
+  vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+  resetGestureVideoPoolForTests();
 });
 
 afterEach(() => {
@@ -311,5 +317,96 @@ describe('MomentsCardPlayer', () => {
     const { container } = renderPlayer();
     expect(container.querySelectorAll('[data-feed-video-host]')).toHaveLength(2);
     expect(container.querySelectorAll('video')).toHaveLength(2);
+  });
+
+  it('gives the other element its own sound grant in the tap, so the reel keeps sound when it swaps back', () => {
+    mocks.pooled = true;
+    renderPlayer();
+    act(() => playing(videoIn(0)));
+    fireEvent.click(screen.getByRole('button', { name: 'Next moment' }));
+    act(() => playing(videoIn(1)));
+    // Slot 0 has played moment 1 (muted, from autoplay), so the pool's own tap unlock passes it over.
+    Object.defineProperty(videoIn(0), 'played', { configurable: true, value: { length: 1 } });
+    expect(isGestureVideoUnlocked(videoIn(0))).toBe(false);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Unmute all videos' }));
+    expect(isGestureVideoUnlocked(videoIn(1))).toBe(true);
+    // Moment 3 goes back to slot 0: it was played inside the same tap, which is iOS's grant.
+    expect(mocks.play.mock.contexts).toContain(videoIn(0));
+    expect(isGestureVideoUnlocked(videoIn(0))).toBe(true);
+  });
+
+  it('lets a spare whose preload failed go, so the reel loads that moment afresh and fails over', () => {
+    vi.useFakeTimers();
+    renderPlayer();
+    act(() => playing(videoIn(0)));
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(videoIn(1).getAttribute('src')).toBe(MOMENTS[1]!.clipUrl);
+    act(() => {
+      fireEvent.error(videoIn(1));
+    });
+    expect(videoIn(1).getAttribute('src')).toBeNull();
+    // Not preloaded again while moment 1 plays.
+    act(() => {
+      vi.advanceTimersByTime(3000);
+    });
+    expect(videoIn(1).getAttribute('src')).toBeNull();
+
+    act(() => ended(videoIn(0)));
+    expect(screen.getByRole('button', { name: 'Moment 2 of 3' })).toHaveAttribute('aria-current', 'true');
+    expect(videoIn(1).getAttribute('src')).toBe(MOMENTS[1]!.clipUrl);
+    // Its retry was the preload: a second failure skips on to moment 3 instead of hanging.
+    act(() => {
+      fireEvent.error(videoIn(1));
+    });
+    expect(screen.getByRole('button', { name: 'Moment 3 of 3' })).toHaveAttribute('aria-current', 'true');
+    expect(events('debate_playback_quality').at(-1)).toMatchObject({
+      quality_kind: 'failed',
+      failure_action: 'skipped',
+    });
+  });
+
+  it('reports the list the card is in and its place, from the card’s action scope', () => {
+    renderPlayer({}, node => (
+      <ActionContextProvider value={{ list_id: 'profile_activity', item_position: 3, feed_arm: 'b' }}>
+        {node}
+      </ActionContextProvider>
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Next moment' }));
+    expect(events('debate_playback_control')[0]).toMatchObject({
+      list_id: 'profile_activity',
+      item_position: 3,
+      feed_arm: 'b',
+      asset_kind: 'clip',
+    });
+  });
+
+  it('falls back to the explore list outside any list', () => {
+    renderPlayer();
+    fireEvent.click(screen.getByRole('button', { name: 'Next moment' }));
+    expect(events('debate_playback_control')[0]).toMatchObject({ list_id: 'explore' });
+  });
+
+  it('measures nothing while the window is not focused, as the full player does', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'setInterval', 'clearTimeout', 'clearInterval', 'performance', 'Date'] });
+    vi.mocked(document.hasFocus).mockReturnValue(false);
+    renderPlayer();
+    act(() => playing(videoIn(0)));
+    act(() => {
+      vi.advanceTimersByTime(3000);
+    });
+    expect(events('debate_exposed')).toHaveLength(0);
+    expect(events('debate_moment_ended')).toHaveLength(0);
+
+    vi.mocked(document.hasFocus).mockReturnValue(true);
+    act(() => {
+      window.dispatchEvent(new Event('focus'));
+    });
+    act(() => {
+      vi.advanceTimersByTime(1500);
+    });
+    expect(events('debate_exposed')).toHaveLength(1);
   });
 });
