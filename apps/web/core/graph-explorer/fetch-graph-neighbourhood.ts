@@ -8,6 +8,7 @@ import { HIDDEN_PROPERTIES } from '~/core/constants';
 import { graphql } from '~/core/io/graphql-client';
 import { AVATAR_PROPERTY_ID, COVER_PROPERTY_ID, IMAGE_URL_PROPERTY_ID } from '~/core/io/subgraph/space-image';
 import { HIDDEN_PROPERTY_ID, isHiddenMarker } from '~/core/moderation/hidden';
+import { mapWithConcurrency } from '~/core/utils/map-with-concurrency';
 import { normId } from '~/core/utils/norm-id';
 
 import { TOPIC_LENS_FILTER, topicLensVariables } from './claims-about';
@@ -31,8 +32,8 @@ export const HOP2_PER_NODE = 6;
 export const CROSS_LINKS_PAGE = 200;
 /** Under the gateway's 15 s limit, so a query it would time out fails here first, once. */
 export const GRAPH_REQUEST_TIMEOUT_MS = 9_000;
-/** The least hop 1's node request gets after slow links. */
-export const HOP1_NODES_MIN_MS = 2_000;
+/** The least a hop's node request gets after slow links. */
+export const NODES_MIN_MS = 2_000;
 
 /** Content kinds the topic lens narrows. People, organisations, places and topics are never narrowed. */
 export const LENSED_KINDS: readonly GraphKind[] = ['claim', 'story', 'event', 'src', 'case'];
@@ -414,7 +415,8 @@ export async function fetchNodes(
   signal?: AbortSignal,
   timeoutMs = GRAPH_REQUEST_TIMEOUT_MS
 ): Promise<Map<string, GraphNode>> {
-  const unique = [...new Set(ids.map(normId))];
+  // Sorted, so the API's response cache doesn't depend on link order.
+  const unique = [...new Set(ids.map(normId))].sort();
   if (unique.length === 0) return new Map();
   const response = await Effect.runPromise(
     graphql({
@@ -511,7 +513,7 @@ export async function fetchHop1(centreId: string, filter: GraphFilter, signal?: 
     }));
   });
   // The nodes get what is left of the hop's deadline, so a failing hop shows in about 10 s.
-  const left = Math.max(HOP1_NODES_MIN_MS, GRAPH_REQUEST_TIMEOUT_MS - (Date.now() - startedAt));
+  const left = Math.max(NODES_MIN_MS, GRAPH_REQUEST_TIMEOUT_MS - (Date.now() - startedAt));
   const nodes = await fetchNodes(
     sides.flatMap(side => side.links.map(link => link.farId)),
     signal,
@@ -525,13 +527,16 @@ export async function fetchHop1(centreId: string, filter: GraphFilter, signal?: 
  * walk them all, and is asked again entity first in the rest of the deadline.
  */
 export const HOP2_FIRST_TRY_MS = 3_000;
+/** Hop-2 link requests in flight at once, so one load holds few API connections. */
+export const HOP2_CONCURRENCY = 8;
 
-/** One direction around one hop-1 node. */
+/** One direction around one hop-1 node, within the hop's deadline. */
 function fetchHop2Links(
   id: string,
   direction: 'in' | 'out',
   filter: GraphFilter,
   variables: Record<string, unknown>,
+  deadline: number,
   signal?: AbortSignal
 ) {
   const lensed = lensTopicFor(filter) !== null;
@@ -546,26 +551,39 @@ function fetchHop2Links(
       timeoutMs,
     });
   };
+  const left = () => deadline - Date.now();
+  // Unscoped, entity first is the slower plan, so relation first gets the whole deadline.
+  if (filter.spaceIds === undefined) return Effect.runPromise(ask(false, left()));
   return Effect.runPromise(
-    ask(false, HOP2_FIRST_TRY_MS).pipe(
+    ask(false, Math.min(HOP2_FIRST_TRY_MS, left())).pipe(
       Effect.catchIf(
-        error => error.isTimeout,
-        () => ask(true, GRAPH_REQUEST_TIMEOUT_MS - HOP2_FIRST_TRY_MS)
+        error => error.isTimeout && left() > 0,
+        () => ask(true, left())
       )
     )
   );
 }
 
 /**
- * Each direction around each hop-1 node in parallel, then their nodes, drawn together. A side that
- * fails leaves its node without it; every side or the nodes failing, or a cancel, fails the hop.
+ * Each direction around each hop-1 node, a few at a time, then their nodes, drawn together. A side
+ * that fails or runs out of time leaves its node without it; every side or the nodes failing, or a
+ * cancel, fails the hop.
  */
 export async function fetchHop2(ids: readonly string[], filter: GraphFilter, signal?: AbortSignal) {
   if (ids.length === 0) return {} as GraphHop2;
+  const deadline = Date.now() + GRAPH_REQUEST_TIMEOUT_MS;
   const variables = hop2Variables(filter);
   const sides = ids.flatMap(id => (['out', 'in'] as const).map(direction => ({ id: normId(id), direction })));
-  const results = await Promise.allSettled(
-    sides.map(({ id, direction }) => fetchHop2Links(id, direction, filter, variables, signal))
+  const results = await mapWithConcurrency(sides, HOP2_CONCURRENCY, ({ id, direction }) =>
+    deadline - Date.now() <= 0
+      ? Promise.resolve<PromiseSettledResult<RawLink[]>>({
+          status: 'rejected',
+          reason: new Error('Hop 2 ran out of time'),
+        })
+      : fetchHop2Links(id, direction, filter, variables, deadline, signal).then(
+          (value): PromiseSettledResult<RawLink[]> => ({ status: 'fulfilled', value }),
+          (reason): PromiseSettledResult<RawLink[]> => ({ status: 'rejected', reason })
+        )
   );
   if (signal?.aborted) throw signal.reason;
   const failed = results.find(result => result.status === 'rejected');
@@ -573,7 +591,8 @@ export async function fetchHop2(ids: readonly string[], filter: GraphFilter, sig
   const links = results.map(result => (result.status === 'fulfilled' ? result.value : []));
   const nodes = await fetchNodes(
     links.flat().map(link => link.farId),
-    signal
+    signal,
+    Math.max(NODES_MIN_MS, deadline - Date.now())
   );
   const hop2: GraphHop2 = Object.fromEntries(ids.map(id => [normId(id), []]));
   sides.forEach(({ id, direction }, index) => hop2[id].push(...decodeLinks(links[index], id, direction, nodes)));

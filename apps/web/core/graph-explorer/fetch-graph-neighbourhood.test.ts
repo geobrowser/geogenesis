@@ -9,9 +9,10 @@ import {
   ENTITY_FIRST,
   GRAPH_REQUEST_TIMEOUT_MS,
   type GraphNode,
-  HOP1_NODES_MIN_MS,
+  HOP2_CONCURRENCY,
   HOP2_FIRST_TRY_MS,
   type Hop1Side,
+  NODES_MIN_MS,
   declaredVariables,
   decodeCrossLinks,
   decodeHop1,
@@ -426,7 +427,7 @@ describe('fetchHop1', () => {
     try {
       for (const [linksMs, nodesMs] of [
         [4_000, GRAPH_REQUEST_TIMEOUT_MS - 4_000],
-        [8_500, HOP1_NODES_MIN_MS],
+        [8_500, NODES_MIN_MS],
       ]) {
         api.request.mockReset();
         respond({
@@ -536,24 +537,56 @@ describe('fetchHop2', () => {
   });
 
   it('asks a side again entity first, in the rest of the deadline, when relation first times out', async () => {
-    respond(async (id, direction, entityFirst) => {
-      if (id === A && direction === 'in')
-        return entityFirst
-          ? {
-              hop: {
-                nodes: [
-                  { id: '2'.repeat(32), edge: [{ id: 'r2', spaceId: SPACE, typeId: 'p'.repeat(32), type: null }] },
-                ],
-              },
-            }
-          : Promise.reject(timeout);
+    vi.useFakeTimers();
+    try {
+      respond(async (id, direction, entityFirst) => {
+        if (id === A && direction === 'in')
+          return entityFirst
+            ? {
+                hop: {
+                  nodes: [
+                    { id: '2'.repeat(32), edge: [{ id: 'r2', spaceId: SPACE, typeId: 'p'.repeat(32), type: null }] },
+                  ],
+                },
+              }
+            : new Promise((_, reject) => setTimeout(() => reject(timeout), HOP2_FIRST_TRY_MS));
+        return { hop: { nodes: [] } };
+      });
+      const pending = fetchHop2([A, B], filter);
+      await vi.advanceTimersByTimeAsync(HOP2_FIRST_TRY_MS);
+      const hop2 = await pending;
+      const retried = hop2Calls().filter(call => print(call.query).includes('entitiesConnection'));
+      expect(retried).toHaveLength(1);
+      expect(retried[0].timeoutMs).toBe(GRAPH_REQUEST_TIMEOUT_MS - HOP2_FIRST_TRY_MS);
+      expect(hop2[A].map(({ edge }) => [edge.fromId, edge.toId])).toEqual([['2'.repeat(32), A]]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('asks relation first only, with the whole deadline, without a space scope', async () => {
+    respond(async (id, direction) => {
+      if (id === A && direction === 'in') throw timeout;
       return { hop: { nodes: [] } };
     });
-    const hop2 = await fetchHop2([A, B], filter);
-    const retried = hop2Calls().filter(call => print(call.query).includes('entitiesConnection'));
-    expect(retried).toHaveLength(1);
-    expect(retried[0].timeoutMs).toBe(GRAPH_REQUEST_TIMEOUT_MS - HOP2_FIRST_TRY_MS);
-    expect(hop2[A].map(({ edge }) => [edge.fromId, edge.toId])).toEqual([['2'.repeat(32), A]]);
+    await fetchHop2([A, B], resolveGraphFilter(null));
+    expect(hop2Calls().some(call => print(call.query).includes('entitiesConnection'))).toBe(false);
+    expect(hop2Calls().every(call => call.timeoutMs > GRAPH_REQUEST_TIMEOUT_MS - 1_000)).toBe(true);
+  });
+
+  it('keeps at most a few sides in flight', async () => {
+    let inFlight = 0;
+    let most = 0;
+    respond(async () => {
+      most = Math.max(most, ++inFlight);
+      await new Promise(resolve => setTimeout(resolve, 1));
+      inFlight--;
+      return { hop: { nodes: [] } };
+    });
+    const ids = Array.from({ length: 14 }, (_, n) => n.toString(16).padStart(32, '0'));
+    await fetchHop2(ids, filter);
+    expect(hop2Calls()).toHaveLength(28);
+    expect(most).toBe(HOP2_CONCURRENCY);
   });
 
   it('leaves a node without a side that fails otherwise, without retrying it', async () => {
