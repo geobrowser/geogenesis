@@ -99,6 +99,14 @@ export function PostTemplate({
     >
       <header className="flex flex-col gap-3.5">
         <TemplateTitleRow
+          meta={
+            <>
+              <TemplateBadge tone="post">Post</TemplateBadge>
+              <TemplateBadge tone="neutral">{model.platform}</TemplateBadge>
+              {model.viewsLabel && <TemplateBadge tone="neutral">{model.viewsLabel}</TemplateBadge>}
+              {model.when && <TemplateBadge tone="neutral">{model.when}</TemplateBadge>}
+            </>
+          }
           actions={
             <>
               <EntityContextTogglePill />
@@ -110,12 +118,6 @@ export function PostTemplate({
         >
           <h1 className="m-0 text-entityTitle text-pretty text-text">{postTitle}</h1>
         </TemplateTitleRow>
-        <div className="flex flex-wrap items-center gap-2">
-          <TemplateBadge tone="post">Post</TemplateBadge>
-          <TemplateBadge tone="neutral">{model.platform}</TemplateBadge>
-          {model.viewsLabel && <TemplateBadge tone="neutral">{model.viewsLabel}</TemplateBadge>}
-          {model.when && <TemplateBadge tone="neutral">{model.when}</TemplateBadge>}
-        </div>
       </header>
 
       <div className="grid grid-cols-1 items-start gap-7 @[780px]:grid-cols-[minmax(0,410px)_minmax(0,1fr)]">

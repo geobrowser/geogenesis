@@ -124,6 +124,16 @@ export function TopicTemplate({
       ) : (
         <header className="flex flex-col gap-3.5">
           <TemplateTitleRow
+            meta={
+              <>
+                <TemplateBadge tone="neutral">Topic</TemplateBadge>
+                {model.tags?.map(tag => (
+                  <TemplateBadge key={tag} tone="neutral">
+                    {tag}
+                  </TemplateBadge>
+                ))}
+              </>
+            }
             actions={
               <>
                 <EntityContextTogglePill />
@@ -139,15 +149,6 @@ export function TopicTemplate({
           >
             <h1 className="m-0 text-entityTitle text-pretty text-text">{model.title}</h1>
           </TemplateTitleRow>
-
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
-            <TemplateBadge tone="neutral">Topic</TemplateBadge>
-            {model.tags?.map(tag => (
-              <TemplateBadge key={tag} tone="neutral">
-                {tag}
-              </TemplateBadge>
-            ))}
-          </div>
 
           {model.lede && (
             <p className="m-0 mt-1 max-w-[780px] text-[16.5px] leading-[25px] text-text/85">{model.lede}</p>

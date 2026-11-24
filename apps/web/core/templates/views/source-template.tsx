@@ -70,6 +70,17 @@ export function SourceTemplate({
     >
       <header className="flex flex-col gap-3.5">
         <TemplateTitleRow
+          meta={
+            <>
+              <TemplateBadge tone="source">Source</TemplateBadge>
+              {model.sourceType && <TemplateBadge tone="neutral">{model.sourceType}</TemplateBadge>}
+              {model.tags?.map(tag => (
+                <TemplateBadge key={tag} tone="fact">
+                  {tag}
+                </TemplateBadge>
+              ))}
+            </>
+          }
           actions={
             <>
               <EntityContextTogglePill />
@@ -85,16 +96,6 @@ export function SourceTemplate({
         >
           <h1 className="m-0 text-entityTitle text-pretty text-text">{model.title}</h1>
         </TemplateTitleRow>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <TemplateBadge tone="source">Source</TemplateBadge>
-          {model.sourceType && <TemplateBadge tone="neutral">{model.sourceType}</TemplateBadge>}
-          {model.tags?.map(tag => (
-            <TemplateBadge key={tag} tone="fact">
-              {tag}
-            </TemplateBadge>
-          ))}
-        </div>
 
         {model.summary && <p className="m-0 mt-0.5 text-[16.5px] leading-[25px] text-text/85">{model.summary}</p>}
 

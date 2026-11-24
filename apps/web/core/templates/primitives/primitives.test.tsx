@@ -291,32 +291,62 @@ describe('TemplateBreadcrumb', () => {
 });
 
 describe('TemplateTitleRow', () => {
-  it('stacks the actions above the title below 560px and puts them beside it from 560px', () => {
-    render(
-      <TemplateTitleRow actions={<button type="button">Menu</button>}>
-        <h1>A sentence-long event title</h1>
-      </TemplateTitleRow>
+  it('puts the title on its own line and the actions on the type row, right of the chips', () => {
+    const { container } = render(
+      <div>
+        <TemplateTitleRow meta={<span>News story</span>} actions={<button type="button">Menu</button>}>
+          <h1>A sentence-long news story title</h1>
+        </TemplateTitleRow>
+      </div>
     );
 
+    const wrapper = container.firstElementChild!;
+    const heading = screen.getByRole('heading', { name: 'A sentence-long news story title' });
     const actions = screen.getByRole('button', { name: 'Menu' }).parentElement!;
-    const row = actions.parentElement!;
-    // The actions come after the title in the DOM (reading order) and column-reverse draws them on top.
-    expect(row.lastElementChild).toBe(actions);
-    expect(row.firstElementChild).toBe(screen.getByRole('heading', { name: 'A sentence-long event title' }));
-    expect(row).toHaveClass('flex-col-reverse', '@[560px]:flex-row', '@[560px]:justify-between');
-    expect(actions).toHaveClass('shrink-0', 'self-end', '@[560px]:self-auto', '@[560px]:pt-1.5');
+    const chips = screen.getByText('News story').parentElement!;
+    const typeRow = actions.parentElement!;
+
+    // The title is a sibling of the type row, not sharing a line with the actions.
+    expect(heading.parentElement).toBe(wrapper);
+    expect(typeRow.parentElement).toBe(wrapper);
+    expect(chips.parentElement).toBe(typeRow);
+    expect(typeRow.firstElementChild).toBe(chips);
+    expect(typeRow.lastElementChild).toBe(actions);
+    expect(typeRow).toHaveClass('flex', 'items-start', 'justify-between');
+    // Chips wrap inside their own column; the actions never shrink and stay one chip line tall.
+    expect(chips).toHaveClass('min-w-0', 'flex-1', 'flex-wrap');
+    expect(actions).toHaveClass('shrink-0', 'h-7', 'ml-auto');
   });
 
-  it('takes a different top offset for the actions', () => {
+  it('gives the actions their own right-aligned row when there are no chips', () => {
     render(
-      <TemplateTitleRow actions={<button type="button">Menu</button>} actionsClassName="@[560px]:pt-1">
-        <h1>Show</h1>
+      <TemplateTitleRow actions={<button type="button">Menu</button>}>
+        <h1>Untyped</h1>
       </TemplateTitleRow>
     );
 
     const actions = screen.getByRole('button', { name: 'Menu' }).parentElement!;
-    expect(actions).toHaveClass('@[560px]:pt-1');
-    expect(actions).not.toHaveClass('@[560px]:pt-1.5');
+    expect(actions.parentElement!.children).toHaveLength(1);
+    expect(actions).toHaveClass('ml-auto');
+  });
+});
+
+describe('TemplateBreadcrumb layout', () => {
+  it('keeps the trail on one line, with ancestors truncating before the current page', () => {
+    render(
+      <TemplateBreadcrumb
+        items={[
+          { id: 'space', label: 'A long parent space name', href: '/space/a' },
+          { id: 'claim', label: 'Current claim' },
+        ]}
+      />
+    );
+
+    const nav = screen.getByRole('navigation', { name: 'Breadcrumb' });
+    expect(nav).not.toHaveClass('flex-wrap');
+    expect(screen.getByRole('link', { name: 'A long parent space name' })).toHaveClass('truncate', 'shrink-[999]');
+    expect(screen.getByText('Current claim')).toHaveClass('truncate', 'min-w-0');
+    expect(nav.querySelector('svg')).toHaveClass('shrink-0');
   });
 });
 

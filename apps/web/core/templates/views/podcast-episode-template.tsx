@@ -104,22 +104,8 @@ export function PodcastEpisodeTemplate({
 
           <div className="flex min-w-0 flex-1 flex-col gap-2.5">
             <TemplateTitleRow
-              actionsClassName="@[560px]:pt-1"
-              actions={
+              meta={
                 <>
-                  <EntityContextTogglePill />
-                  {headerActions ?? (
-                    <EntityOverflowMenu
-                      target={{ id: model.id, kind: 'Episode', title: model.title }}
-                      isPageRoot
-                      size="md"
-                    />
-                  )}
-                </>
-              }
-            >
-              <div className="flex min-w-0 flex-col gap-2">
-                <div className="flex flex-wrap items-center gap-2">
                   <TemplateBadge tone="episode">Episode</TemplateBadge>
 
                   {model.show &&
@@ -152,10 +138,22 @@ export function PodcastEpisodeTemplate({
                   {metaParts.length > 0 && (
                     <span className="text-[14px] text-grey-04 tabular-nums">{metaParts.join(' · ')}</span>
                   )}
-                </div>
-
-                <h1 className="m-0 text-entityTitle text-pretty text-text">{model.title}</h1>
-              </div>
+                </>
+              }
+              actions={
+                <>
+                  <EntityContextTogglePill />
+                  {headerActions ?? (
+                    <EntityOverflowMenu
+                      target={{ id: model.id, kind: 'Episode', title: model.title }}
+                      isPageRoot
+                      size="md"
+                    />
+                  )}
+                </>
+              }
+            >
+              <h1 className="m-0 text-entityTitle text-pretty text-text">{model.title}</h1>
             </TemplateTitleRow>
 
             <PodcastTopicChips topics={model.topics} />
