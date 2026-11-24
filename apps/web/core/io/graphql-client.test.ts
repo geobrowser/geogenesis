@@ -64,6 +64,14 @@ describe('graphql timeoutMs', () => {
     expect(transport.request).toHaveBeenCalledTimes(1);
   });
 
+  it('leaves no request in flight once the call has ended', async () => {
+    transport.request.mockImplementation(() => new Promise(() => {}));
+    const result = failure({ timeoutMs: 9_000 });
+    await vi.advanceTimersByTimeAsync(9_000);
+    expect(await result).toMatchObject({ isTimeout: true });
+    expect(transport.signals.at(-1)?.aborted).toBe(true);
+  });
+
   it('does not retry a 504 under a deadline', async () => {
     transport.request.mockRejectedValue(gatewayTimeout());
     const result = failure({ timeoutMs: 9_000 });

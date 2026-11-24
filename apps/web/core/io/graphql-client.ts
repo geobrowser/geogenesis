@@ -343,9 +343,12 @@ function withDeadline(signal: AbortSignal | undefined, timeoutMs: number | undef
   return {
     signal: controller.signal,
     timedOut: () => timedOut,
+    // Runs when the request's scope closes, so a request still in flight is aborted whichever
+    // deadline timer fires first.
     clear: () => {
       clearTimeout(timer);
       signal?.removeEventListener('abort', forward);
+      controller.abort(new DOMException(`Timed out after ${timeoutMs}ms`, 'TimeoutError'));
     },
   };
 }
