@@ -268,15 +268,21 @@ export function resolveTemplateImageUrl(raw: string | null | undefined): string 
   return getImagePath(trimmed);
 }
 
+// First path segments on x.com / twitter.com that are app routes, not accounts.
+const RESERVED_X_PATHS =
+  /^(i|home|explore|search|intent|hashtag|status|statuses|share|settings|messages|notifications|compose)$/i;
+
 /** The `@handle` in an x.com / twitter.com post or profile URL; undefined for any other link. */
 export function handleFromSocialUrl(rawUrl: string | null | undefined): string | undefined {
   if (!rawUrl) return undefined;
   try {
     const parsed = new URL(rawUrl.trim());
-    if (!/(^|\.)(x\.com|twitter\.com)$/i.test(parsed.hostname)) return undefined;
-    const handle = parsed.pathname.split('/').filter(Boolean)[0];
-    if (!handle || /^(i|home|explore|search|intent|hashtag)$/i.test(handle)) return undefined;
-    return handle.startsWith('@') ? handle : `@${handle}`;
+    // Only the hosts posts and profiles live on; pic./help./developer. paths are not handles.
+    if (!/^((www|mobile|m)\.)?(x\.com|twitter\.com)$/i.test(parsed.hostname)) return undefined;
+    const segment = parsed.pathname.split('/').filter(Boolean)[0];
+    const handle = segment?.replace(/^@/, '');
+    if (!handle || !/^[A-Za-z0-9_]{1,15}$/.test(handle) || RESERVED_X_PATHS.test(handle)) return undefined;
+    return `@${handle}`;
   } catch {
     return undefined;
   }
