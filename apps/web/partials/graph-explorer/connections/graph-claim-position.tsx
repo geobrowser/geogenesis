@@ -2,7 +2,6 @@
 
 import * as React from 'react';
 
-import { ClaimSummary } from '~/core/claims/browse/claim-summary';
 import { DebateClaimControls } from '~/core/debates/browse/debate-claim-controls';
 import { useDebateClaimResponse } from '~/core/debates/browse/use-debate-claim-response';
 import { useQueryEntities } from '~/core/sync/use-store';
@@ -29,16 +28,20 @@ export function GraphClaimPosition({ claimId, spaceId }: { claimId: string; spac
   });
 
   return (
-    <div className="flex flex-col gap-3">
-      {!response.summary.isLoading ? (
-        <ClaimSummary
-          entityId={claimId}
-          spaceId={spaceId}
-          responseKind={response.responseKind}
-          summary={response.summary}
-        />
-      ) : null}
-      <DebateClaimControls claimId={claimId} spaceId={spaceId} response={response} analyticsSurface="graph-explorer" />
+    // The box is grey, so the split's responder faces ring in grey rather than white, as the inline
+    // split does on the debate card's grey footer.
+    <div className="flex flex-col gap-3" style={GREY_SURFACE_RING}>
+      <DebateClaimControls
+        claimId={claimId}
+        spaceId={spaceId}
+        response={response}
+        analyticsSurface="graph-explorer"
+        // The split reads first, then the buttons that change it.
+        summaryLayout="stacked"
+        summaryPlacement="before"
+      />
     </div>
   );
 }
+
+const GREY_SURFACE_RING = { '--avatar-group-ring': 'var(--color-grey-01)' } as React.CSSProperties;

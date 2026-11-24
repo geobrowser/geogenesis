@@ -19,7 +19,6 @@ vi.mock('~/core/graph-explorer/use-graph-explorer', () => ({
     },
   }),
 }));
-vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({ EntityVoteButtons: () => null }));
 vi.mock('~/core/claims/browse/claim-response-summary', () => ({
   CLAIM_RESPONSE_OBJECT_TYPE: 0,
   useClaimResponseSummary: () => ({ hasCounts: false, isLoading: false, positive: 0, negative: 0 }),

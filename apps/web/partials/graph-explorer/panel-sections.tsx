@@ -336,7 +336,7 @@ function ClaimRow({
 }
 
 /** "62% agree · 140 votes" from the live counts, with the percent only from 3 votes. */
-export function ClaimAgreementLine({ claimId, spaceId }: { claimId: string; spaceId: string }) {
+function ClaimAgreementLine({ claimId, spaceId }: { claimId: string; spaceId: string }) {
   const summary = useClaimResponseSummary(claimId, spaceId, 'stance');
   const counts = summary.hasCounts ? { positive: summary.positive, negative: summary.negative } : undefined;
   return (

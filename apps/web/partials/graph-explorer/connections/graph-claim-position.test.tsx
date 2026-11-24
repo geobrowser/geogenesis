@@ -6,6 +6,7 @@ import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { recordAction } from '~/core/analytics-operations';
 import { clearLocalVotes, readLocalVotes } from '~/core/state/local-votes';
 import { openSaveVotesPrompt } from '~/core/state/save-votes-prompt';
 
@@ -96,6 +97,7 @@ beforeEach(() => {
   mocks.submitResponse.mockReset();
   mocks.indexedViewerDirection = null;
   vi.mocked(openSaveVotesPrompt).mockClear();
+  vi.mocked(recordAction).mockClear();
   clearLocalVotes();
 });
 
@@ -110,6 +112,8 @@ describe('the open claim’s Agree and Disagree', () => {
     expect(split).toHaveTextContent('5 of 7 agree');
     // The split reads first, then the buttons that change it.
     expect(split.compareDocumentPosition(agree) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // The box is grey: the split's responder faces ring in grey, not white.
+    expect(split.parentElement?.style.getPropertyValue('--avatar-group-ring')).toBe('var(--color-grey-01)');
     expect(screen.getByRole('button', { name: 'Disagree' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Open the claim →' })).toBeInTheDocument();
   });
@@ -162,5 +166,21 @@ describe('the open claim’s Agree and Disagree', () => {
     ]);
     expect(screen.getByRole('button', { name: /^Disagree.*your response/ })).toHaveAttribute('aria-pressed', 'true');
     expect(openSaveVotesPrompt).toHaveBeenCalledTimes(1);
+  });
+
+  // The vote's action carries the centre's list, so the graph explorer's votes can be told apart.
+  it('attributes a vote to the graph explorer’s centre', () => {
+    mocks.authenticated = false;
+    renderActions();
+
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Agree' }));
+    });
+
+    expect(recordAction).toHaveBeenCalledWith(
+      'local_vote',
+      expect.objectContaining({ component: 'claim_position_control', list_id: 'graph_explorer_centre' }),
+      expect.anything()
+    );
   });
 });

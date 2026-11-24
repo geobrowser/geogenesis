@@ -14,8 +14,8 @@ import type { useDebateClaimResponse } from './use-debate-claim-response';
  * A claim's Agree/Disagree pills, the error a failed response leaves, and — where the host wants it
  * — the claim's split, for a claim inside a debate.
  *
- * The claims panel, the end card and the debate card all draw this from the same
- * `useDebateClaimResponse` result. They were three copies of the same wiring, and the part worth
+ * The claims panel, the end card, the debate card and the graph explorer's open claim all draw
+ * this from the same `useDebateClaimResponse` result. They were three copies of the same wiring, and the part worth
  * having once is the part that drifts: which `control` field feeds which pill prop, and that the
  * split waits for its counts rather than drawing an empty bar.
  */
@@ -29,6 +29,7 @@ export function DebateClaimControls({
   analyticsSurface,
   className,
   summaryLayout,
+  summaryPlacement = 'after',
   summaryClassName,
 }: {
   claimId: string;
@@ -45,10 +46,25 @@ export function DebateClaimControls({
   className?: string;
   /** Draw the claim's split after the pills, in this layout. Omitted: the host draws its own, or none. */
   summaryLayout?: 'stacked' | 'inline';
+  /** Where the split sits: after the pills (every debate surface), or before them (the graph explorer). */
+  summaryPlacement?: 'before' | 'after';
   summaryClassName?: string;
 }) {
+  const split =
+    summaryLayout && !summary.isLoading ? (
+      <ClaimSummary
+        entityId={claimId}
+        spaceId={spaceId}
+        responseKind={responseKind}
+        summary={summary}
+        layout={summaryLayout}
+        className={summaryClassName}
+      />
+    ) : null;
+
   return (
     <>
+      {summaryPlacement === 'before' ? split : null}
       <div className={className}>
         <PositionRow
           positions={control.optimisticPositions}
@@ -72,16 +88,7 @@ export function DebateClaimControls({
           </div>
         ) : null}
       </div>
-      {summaryLayout && !summary.isLoading ? (
-        <ClaimSummary
-          entityId={claimId}
-          spaceId={spaceId}
-          responseKind={responseKind}
-          summary={summary}
-          layout={summaryLayout}
-          className={summaryClassName}
-        />
-      ) : null}
+      {summaryPlacement === 'after' ? split : null}
     </>
   );
 }
