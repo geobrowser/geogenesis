@@ -168,7 +168,7 @@ describe('row labels that repeat the group', () => {
     [
       'Topics keeps the labels that say how a topic is linked',
       { kind: 'topic', relations: ['Topic', 'On this topic', 'Subtopic', 'Broader topic'], typeLabel: 'Topic' },
-      { relation: 'On this topic · Subtopic · Broader topic', sub: null },
+      { relation: 'Subtopic · Broader topic', sub: null },
     ],
     [
       'Topics keeps an incoming fallback label',
@@ -206,6 +206,42 @@ describe('row labels that repeat the group', () => {
       { kind: 'other', relations: ['Mentions'], typeLabel: 'Topic' },
       { relation: 'Mentions', sub: 'Topic' },
     ],
+    // The rows in Preston's screenshot of the Israel-Gaza war map (GEO-3840).
+    [
+      'People and groups drops Related entity and keeps Organization',
+      { kind: 'ent', relations: ['Related entity'], typeLabel: 'Organization' },
+      { relation: null, sub: 'Organization' },
+    ],
+    [
+      'People and groups drops Related person and keeps Person',
+      { kind: 'ent', relations: ['Related person'], typeLabel: 'Person' },
+      { relation: null, sub: 'Person' },
+    ],
+    [
+      'News drops On this topic and keeps the date',
+      { kind: 'story', relations: ['On this topic'], typeLabel: 'News story', date: 'Jan 26, 2024' },
+      { relation: null, sub: 'Jan 26, 2024' },
+    ],
+    [
+      'Sources drops On this topic and keeps Article',
+      { kind: 'src', relations: ['On this topic'], typeLabel: 'Article' },
+      { relation: null, sub: 'Article' },
+    ],
+    [
+      'a generic label goes beside a specific one',
+      { kind: 'ent', relations: ['Related to', 'Plaintiff'], typeLabel: 'Country' },
+      { relation: 'Plaintiff', sub: 'Country' },
+    ],
+    [
+      'Claims drops Related claim and Related to, keeps Supports',
+      { kind: 'claim', relations: ['Related claim', 'Related to', 'Supports'] },
+      { relation: 'Supports', sub: null },
+    ],
+    [
+      'generic fallback labels go: Relation and any Related …',
+      { kind: 'other', relations: ['Relation (incoming)', 'Related topics (incoming)', 'Related spaces'] },
+      { relation: null, sub: null },
+    ],
     [
       'a relation that only repeats the row type goes, the type stays',
       { kind: 'ent', relations: ['Publisher'], typeLabel: 'Publisher' },
@@ -215,9 +251,10 @@ describe('row labels that repeat the group', () => {
     expect(rowLabels(input)).toEqual(expected);
   });
 
-  it('keeps every real relation label in every group, except the few that name the group', () => {
+  it('keeps every real relation label that says how a row connects, in every group', () => {
+    const generic = ['Topic', 'On this topic', 'Related person', 'Related project', 'Related entity'];
+    generic.push('Related to', 'Related claim', 'Related story');
     const dropped: Partial<Record<GraphKind, string[]>> = {
-      topic: ['Topic'],
       story: ['Story', 'Story in'],
       event: ['Event'],
       src: ['Source'],
@@ -231,7 +268,7 @@ describe('row labels that repeat the group', () => {
         expect([kind, label, rowLabels({ kind, relations: [label] }).relation]).toEqual([
           kind,
           label,
-          dropped[kind]?.includes(label) ? null : label,
+          generic.includes(label) || dropped[kind]?.includes(label) ? null : label,
         ]);
   });
 });

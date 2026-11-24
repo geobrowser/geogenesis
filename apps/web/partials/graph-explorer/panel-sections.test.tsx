@@ -263,9 +263,24 @@ describe('NeighbourGroups', () => {
       groups: [
         {
           kind: 'story',
-          spokes: [row(20, 'story', ['Story'], { name: 'Ceasefire talks', types: [storyType], date: '2026-11-03' })],
+          spokes: [
+            row(20, 'story', ['Story', 'On this topic'], {
+              name: 'Ceasefire talks',
+              types: [storyType],
+              date: '2026-11-03',
+            }),
+          ],
         },
         { kind: 'topic', spokes: [row(21, 'topic', ['Topic'], { name: 'Civilian casualties', types: [topicType] })] },
+        {
+          kind: 'ent',
+          spokes: [
+            row(23, 'ent', ['Related entity'], {
+              name: 'International Court of Justice',
+              types: [{ id: NEIGHBOUR_KIND_TYPE_IDS.organisation[0], name: 'Organization' }],
+            }),
+          ],
+        },
         {
           kind: 'other',
           spokes: [row(22, 'other', ['Mentions'], { name: 'A memo', types: [{ id: 'x', name: 'Memo' }] })],
@@ -274,6 +289,9 @@ describe('NeighbourGroups', () => {
     });
     expect(rows(screen.getByRole('region', { name: 'Topics · 1' }))).toEqual(['Civilian casualties']);
     expect(rows(screen.getByRole('region', { name: 'News · 1' }))).toEqual(['Ceasefire talksNov 3, 2026']);
+    expect(rows(screen.getByRole('region', { name: 'People and groups · 1' }))).toEqual([
+      'International Court of JusticeOrganization',
+    ]);
     expect(rows(screen.getByRole('region', { name: 'Other · 1' }))).toEqual(['MentionsA memoMemo']);
   });
 

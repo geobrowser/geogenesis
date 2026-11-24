@@ -3,7 +3,7 @@ import { normId } from '~/core/utils/norm-id';
 
 import { type ClaimBand, MIN_RESPONSES_FOR_BAND, agreePercent, claimBand } from './claim-band';
 import type { GraphNode } from './fetch-graph-neighbourhood';
-import { GRAPH_KIND_REDUNDANT_LABELS, type GraphKind } from './graph-kinds';
+import { GRAPH_KIND_REDUNDANT_LABELS, type GraphKind, isGenericRelationLabel } from './graph-kinds';
 import type { GraphSelection } from './select-graph';
 import type { Spoke } from './spokes';
 import type { SummarisedClaim } from './topic-claims-summary';
@@ -121,8 +121,9 @@ function labelKey(label: string) {
 }
 
 /**
- * A row's line above (its relations) and below (its type and date), without the labels its group's
- * heading already says, and without a relation that only repeats the row's own type.
+ * A row's line above (its relations) and below (its type and date). The line above keeps only
+ * relations that say how the row connects: never a generic "related" label, a label its group's
+ * heading already says, or one that only repeats the row's own type below.
  */
 export function rowLabels({
   kind,
@@ -138,7 +139,10 @@ export function rowLabels({
   const redundant = new Set(GRAPH_KIND_REDUNDANT_LABELS[kind].map(labelKey));
   const type = typeLabel && !redundant.has(labelKey(typeLabel)) ? typeLabel : null;
   const shown = relations.filter(
-    label => !redundant.has(labelKey(label)) && !(typeLabel && labelKey(label) === labelKey(typeLabel))
+    label =>
+      !isGenericRelationLabel(label) &&
+      !redundant.has(labelKey(label)) &&
+      !(typeLabel && labelKey(label) === labelKey(typeLabel))
   );
   return {
     relation: shown.join(' · ') || null,

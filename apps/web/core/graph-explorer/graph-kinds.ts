@@ -49,6 +49,18 @@ export const GRAPH_KIND_REDUNDANT_LABELS: Record<GraphKind, readonly string[]> =
   other: [],
 };
 
+/**
+ * Relation labels that only say a row is related, not how, so no row shows them: "On this topic",
+ * "Topic", the fallback "Relation", and every "Related …" label ("Related person", "Related to",
+ * "Related claim", a fallback "Related topics (incoming)"…). Matched ignoring case.
+ */
+const GENERIC_RELATION_LABELS = new Set(['on this topic', 'topic', 'topics', 'relation', 'relation (incoming)']);
+
+export function isGenericRelationLabel(label: string) {
+  const key = label.trim().toLowerCase();
+  return GENERIC_RELATION_LABELS.has(key) || /^related\b/.test(key);
+}
+
 export const NEWS_EVENT_TYPE_ID = 'bb9a85bd6dc64efd8232e2782cb4b5f8';
 const TIMELINE_TYPE_ID = '3b22262d7919441db1a839eee9c2b3e9';
 
