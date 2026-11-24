@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { pageContext } from '~/core/action-context';
 import { captureSafely } from '~/core/analytics-capture-safely';
 import { currentNavigationType } from '~/core/utils/navigation-type';
 
@@ -97,6 +98,12 @@ export function startGraphExplorerSession(init: GraphSessionInit, now: () => num
   let markedExit: GraphExit | null = null;
   let lastOpen: { at: number; kind: 'claim' | 'entity'; target: string } | null = null;
   const once = new Set<string>();
+  /** The explorer's latest page view: `left` can fire after the app moved to another page. */
+  let explorerPage: ReturnType<typeof pageContext> | null = null;
+  const notePage = () => {
+    const page = pageContext();
+    if (page.page_type === 'graph_explorer') explorerPage = page;
+  };
 
   const base = () => ({
     graph_session_id: id,
@@ -121,6 +128,7 @@ export function startGraphExplorerSession(init: GraphSessionInit, now: () => num
       extra: { entityKind?: GraphKind; layout: 'phone' | 'desktop'; trailDepth: number }
     ) {
       if (openedAt !== null || ended) return;
+      notePage();
       openedAt = now();
       if (outcome === 'ready') readyMs = Math.round(openedAt - mountedAt);
       visibleSince = document.visibilityState === 'visible' ? openedAt : null;
@@ -156,6 +164,7 @@ export function startGraphExplorerSession(init: GraphSessionInit, now: () => num
     recentred(entityId: string, extra: { trailDepth: number; kindFilter: string }) {
       if (ended || entityId === centre) return;
       const from = centre;
+      notePage();
       const tag = tagged?.target === entityId ? tagged : null;
       tagged = null;
       centre = entityId;
@@ -187,6 +196,7 @@ export function startGraphExplorerSession(init: GraphSessionInit, now: () => num
         once.add('summary_seen');
       }
       if (event.interaction === 'open_page') lastOpen = { at: now(), kind: event.value, target: event.target_id };
+      notePage();
       captureSafely('graph_explorer_interacted', { ...base(), ...event, ...sinceOpen() });
     },
     markExit(exit: GraphExit) {
@@ -206,6 +216,7 @@ export function startGraphExplorerSession(init: GraphSessionInit, now: () => num
           ? 'page_hidden'
           : (markedExit ?? (open ? (open.kind === 'claim' ? 'open_claim' : 'open_entity') : 'navigated'));
       captureSafely('graph_explorer_left', {
+        ...explorerPage,
         ...base(),
         exit,
         hops,

@@ -2,6 +2,7 @@ import { renderHook } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { pageContext } from '~/core/action-context';
 import { capture } from '~/core/analytics';
 
 import { classifyEntry, startGraphExplorerSession, useGraphExplorerSession } from './graph-explorer-analytics';
@@ -188,6 +189,54 @@ describe('a graph explorer session', () => {
     vi.mocked(capture).mockClear();
     startGraphExplorerSession(init, now).left('unmount');
     expect(sent()).toEqual([]);
+  });
+});
+
+describe('graph_explorer_left page context', () => {
+  const GAZA = '4ed3162278994f29bde7a6f7cf60e28e';
+  const CLAIM = '69727edb0a7848f1ad833ce6a99012db';
+  const SPACE = '89bd89bf28ff8a0963faf92a8c905e20';
+  afterEach(() => window.history.replaceState(null, '', '/'));
+
+  it('keeps the explorer’s last page view when an open claim took the app to the claim’s page', () => {
+    window.history.replaceState(null, '', `/explore/graph/${GAZA}?topic=${GAZA}`);
+    const session = startGraphExplorerSession({ ...init, entityId: GAZA }, now);
+    session.opened('ready', layout);
+    window.history.replaceState(null, '', `/explore/graph/${CLAIM}?topic=${GAZA}`);
+    session.recentred(CLAIM, { trailDepth: 1, kindFilter: 'all' });
+    session.interacted({ interaction: 'open_page', value: 'claim', target_id: CLAIM });
+    const onExplorer = pageContext().page_view_id;
+    window.history.replaceState(null, '', `/space/${SPACE}/${CLAIM}`);
+    session.left('unmount');
+
+    expect(named('graph_explorer_left')[0].props).toEqual(
+      expect.objectContaining({
+        exit: 'open_claim',
+        page_type: 'graph_explorer',
+        page_path: `/explore/graph/${CLAIM}`,
+        page_view_id: onExplorer,
+        page_entity_id: CLAIM,
+      })
+    );
+  });
+
+  it('keeps it on close, too', () => {
+    window.history.replaceState(null, '', `/explore/graph/${GAZA}?topic=${GAZA}`);
+    const session = startGraphExplorerSession({ ...init, entityId: GAZA }, now);
+    session.opened('ready', layout);
+    const onExplorer = pageContext().page_view_id;
+    session.markExit('close');
+    window.history.replaceState(null, '', `/space/${SPACE}/${GAZA}`);
+    session.left('unmount');
+
+    expect(named('graph_explorer_left')[0].props).toEqual(
+      expect.objectContaining({
+        exit: 'close',
+        page_type: 'graph_explorer',
+        page_path: `/explore/graph/${GAZA}`,
+        page_view_id: onExplorer,
+      })
+    );
   });
 });
 
