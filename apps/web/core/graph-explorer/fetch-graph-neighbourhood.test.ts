@@ -52,7 +52,9 @@ afterEach(() => api.request.mockReset());
 
 /** Every hop-1 request's document, printed together. */
 function printHop1(kinds: readonly GraphKind[], lensed: boolean) {
-  return [hop1CentreDocument, ...kinds.map(kind => hop1KindDocument(kind, lensed))].map(doc => print(doc)).join('\n');
+  return [hop1CentreDocument, ...kinds.map(kind => hop1KindDocument(kind, lensed, true))]
+    .map(doc => print(doc))
+    .join('\n');
 }
 
 /** The filter of one aliased connection in a printed document. */
@@ -109,7 +111,7 @@ describe('hidden entities', () => {
     const filter = resolveGraphFilter({ spaceIds: ['a'.repeat(32)], topicId: null, topicSpaceId: null });
     for (const document of [
       hop1CentreDocument,
-      ...filter.kinds.map(kind => hop1KindDocument(kind, false)),
+      ...filter.kinds.map(kind => hop1KindDocument(kind, false, true)),
       hop2Document(['1'.repeat(32)], false, false),
     ]) {
       const printed = print(document).replace(/\s+/g, ' ');
@@ -226,7 +228,10 @@ describe('hop documents', () => {
     for (const filter of [lensed, open, narrow]) {
       const on = lensTopicFor(filter) !== null;
       const sent = Object.keys(hop1Variables(CENTRE, filter));
-      const hop1 = [hop1CentreDocument, ...filter.kinds.map(kind => hop1KindDocument(kind, on))].map(declared);
+      const hop1 = [
+        hop1CentreDocument,
+        ...filter.kinds.map(kind => hop1KindDocument(kind, on, filter.spaceIds !== null)),
+      ].map(declared);
       // Each request declares a subset of the hop's variables, and together they use every one.
       for (const names of hop1) expect(sent).toEqual(expect.arrayContaining(names));
       expect([...new Set(hop1.flat())].sort()).toEqual([...sent].sort());
@@ -353,7 +358,7 @@ describe('entity-first kinds', () => {
       ['ent', 'ent_in'],
       ['other', 'other_in'],
     ] as const) {
-      const printed = print(hop1KindDocument(kind, true)).replace(/\s+/g, ' ');
+      const printed = print(hop1KindDocument(kind, true, true)).replace(/\s+/g, ' ');
       const filterText = aliasFilter(printed, alias);
       expect(filterText).toContain(`${alias}: entitiesConnection`);
       expect(filterText).toContain(
@@ -367,13 +372,18 @@ describe('entity-first kinds', () => {
       expect(printed).toContain('hidden: valuesList');
       expect(aliasFilter(printed, alias.replace('_in', '_out'))).toContain('relationsConnection');
     }
-    expect(aliasFilter(print(hop1KindDocument('ent', true)), 'ent_in')).toContain('$entTypeIds');
-    expect(aliasFilter(print(hop1KindDocument('other', true)), 'other_in')).toMatch(
+    expect(aliasFilter(print(hop1KindDocument('ent', true, true)), 'ent_in')).toContain('$entTypeIds');
+    expect(aliasFilter(print(hop1KindDocument('other', true, true)), 'other_in')).toMatch(
       /not: \{\s*typeIds: \{\s*overlaps: \$otherTypeIds/
     );
     for (const kind of ['topic', 'claim', 'story', 'event', 'src', 'case'] as const)
-      expect(print(hop1KindDocument(kind, true))).not.toContain('entitiesConnection');
+      expect(print(hop1KindDocument(kind, true, true))).not.toContain('entitiesConnection');
     expect(hop1Variables(CENTRE, filter).plumbingPropertyIds).toEqual(PLUMBING_RELATION_TYPE_IDS);
+  });
+
+  it('asks them relation first without a space scope', () => {
+    for (const kind of ['ent', 'other'] as const)
+      expect(print(hop1KindDocument(kind, false, false))).not.toContain('entitiesConnection');
   });
 
   it('reads an entity-first page as relations, dropping an entity with no edge', () => {

@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  type Query,
   type QueryKey,
   hashKey,
   keepPreviousData,
@@ -16,12 +17,15 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useTopicSpaceScope } from '~/core/topics/use-topic-space-scope';
 
 import { type ClaimsAboutPage, fetchClaimsAbout } from './claims-about';
-import { fetchCrossLinks, fetchHop1, fetchHop2 } from './fetch-graph-neighbourhood';
+import { type GraphHop1, fetchCrossLinks, fetchHop1, fetchHop2 } from './fetch-graph-neighbourhood';
 import { type GraphFilter, type GraphScope, graphFilterKey } from './graph-filter';
 import { type GraphCaps, type GraphKindFilter, presentKinds, selectGraph, selectHop1 } from './select-graph';
 import { claimCountsKey, fetchTopicClaims, summariseTopicClaims } from './topic-claims-summary';
 
 const STALE_MS = 60_000;
+
+/** A hop missing a failed kind is stale at once, so the next mount or focus asks again. */
+const hop1StaleTime = (query: Query<GraphHop1>) => (query.state.data?.failedKinds?.length ? 0 : STALE_MS);
 
 /**
  * The topic view's scope: the same spaces the topic page draws from. Null while the allowlist is
@@ -67,7 +71,7 @@ export function usePrefetchHop1(filter: GraphFilter | null) {
         void queryClient.prefetchQuery({
           queryKey: [...neighbourhoodKey('hop1', filter), entityId],
           queryFn: ({ signal }) => fetchHop1(entityId, filter, signal),
-          staleTime: STALE_MS,
+          staleTime: hop1StaleTime,
           retry: false,
         });
       }, GRAPH_HOP_PREFETCH_DELAY_MS);
@@ -124,7 +128,7 @@ export function useGraphNeighbourhood({
     queryKey: filter ? [...neighbourhoodKey('hop1', filter), centreId] : ['graph-explorer', 'neighbourhood', 'pending'],
     queryFn: ({ signal }) => fetchHop1(centreId, filter!, signal),
     enabled: filter !== null,
-    staleTime: STALE_MS,
+    staleTime: hop1StaleTime,
     // The fetches carry their own deadline; a query that missed it would miss it again.
     retry: false,
     // The previous graph stays on screen until the next centre's lands, then eases into it.

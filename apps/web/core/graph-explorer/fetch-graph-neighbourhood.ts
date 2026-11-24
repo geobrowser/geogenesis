@@ -111,6 +111,11 @@ const NODE_VARIABLES = `
  */
 export const ENTITY_FIRST: ReadonlySet<string> = new Set(['ent_in', 'other_in']);
 
+/** Only within a space scope: unscoped, the entity-first plan can be the slower one. */
+function isEntityFirst(alias: string, scoped: boolean) {
+  return scoped && ENTITY_FIRST.has(alias);
+}
+
 /** Conditions on the far end's types, shared by both shapes. */
 function farEndFilter(kind: GraphKind, lensed: boolean) {
   const types =
@@ -173,8 +178,8 @@ function entityFirstConnection(kind: GraphKind, direction: 'in' | 'out', lensed:
   }`;
 }
 
-function kindConnection(kind: GraphKind, direction: 'in' | 'out', lensed: boolean) {
-  return ENTITY_FIRST.has(`${kind}_${direction}`)
+function kindConnection(kind: GraphKind, direction: 'in' | 'out', lensed: boolean, scoped: boolean) {
+  return isEntityFirst(`${kind}_${direction}`, scoped)
     ? entityFirstConnection(kind, direction, lensed)
     : relationFirstConnection(kind, direction, lensed);
 }
@@ -225,13 +230,13 @@ export const hop1CentreDocument = queryDocument(
 const hop1KindDocuments = new Map<string, TypedDocumentNode<Record<string, unknown>, Record<string, unknown>>>();
 
 /** One request per kind, both directions, so a slow or failing kind can't hold up or blank the rest. */
-export function hop1KindDocument(kind: GraphKind, lensed: boolean) {
-  const key = `${kind}|${lensed}`;
+export function hop1KindDocument(kind: GraphKind, lensed: boolean, scoped: boolean) {
+  const key = `${kind}|${lensed}|${scoped}`;
   const cached = hop1KindDocuments.get(key);
   if (cached) return cached;
   const document = queryDocument(
     'GraphNeighbourhoodKind',
-    `${kindConnection(kind, 'out', lensed)}\n${kindConnection(kind, 'in', lensed)}`
+    `${kindConnection(kind, 'out', lensed, scoped)}\n${kindConnection(kind, 'in', lensed, scoped)}`
   ) as TypedDocumentNode<Record<string, unknown>, Record<string, unknown>>;
   hop1KindDocuments.set(key, document);
   return document;
@@ -311,12 +316,12 @@ export function asRelationConnection(connection: RawEntityFirstConnection, direc
 }
 
 /** A kind's two connections, its entity-first directions in the relation-first shape. */
-function normaliseKind(response: Record<string, unknown>, kind: GraphKind) {
+function normaliseKind(response: Record<string, unknown>, kind: GraphKind, scoped: boolean) {
   const normalised: Record<string, RawConnection> = {};
   for (const direction of ['out', 'in'] as const) {
     const alias = `${kind}_${direction}`;
     const connection = response[alias] ?? null;
-    normalised[alias] = ENTITY_FIRST.has(alias)
+    normalised[alias] = isEntityFirst(alias, scoped)
       ? asRelationConnection(connection as RawEntityFirstConnection, direction)
       : (connection as RawConnection);
   }
@@ -405,6 +410,7 @@ export function decodeHop1(response: Hop1Response, centreId: string, kinds: read
  */
 export async function fetchHop1(centreId: string, filter: GraphFilter, signal?: AbortSignal): Promise<GraphHop1> {
   const lensed = lensTopicFor(filter) !== null;
+  const scoped = filter.spaceIds !== null;
   const variables = hop1Variables(centreId, filter);
   const request = <T>(query: TypedDocumentNode<T, Record<string, unknown>>) =>
     Effect.runPromise(
@@ -419,7 +425,7 @@ export async function fetchHop1(centreId: string, filter: GraphFilter, signal?: 
   const [centre, ...kinds] = await Promise.allSettled([
     request(hop1CentreDocument),
     ...filter.kinds.map(kind =>
-      request(hop1KindDocument(kind, lensed)).then(response => normaliseKind(response, kind))
+      request(hop1KindDocument(kind, lensed, scoped)).then(response => normaliseKind(response, kind, scoped))
     ),
   ]);
   if (centre.status === 'rejected') throw centre.reason;

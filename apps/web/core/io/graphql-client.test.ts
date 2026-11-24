@@ -72,6 +72,21 @@ describe('graphql timeoutMs', () => {
     expect(transport.request).toHaveBeenCalledTimes(1);
   });
 
+  it('ends a backoff longer than the deadline at the deadline', async () => {
+    transport.request.mockRejectedValue(
+      Object.assign(new Error('Service Unavailable'), {
+        response: { status: 503, headers: new Map([['retry-after', '20']]), body: 'busy' },
+      })
+    );
+    const result = failure({ timeoutMs: 9_000 });
+    let settled = false;
+    void result.then(() => (settled = true));
+    await vi.advanceTimersByTimeAsync(9_000);
+    expect(settled).toBe(true);
+    expect(await result).toMatchObject({ isTimeout: true });
+    expect(transport.request).toHaveBeenCalledTimes(1);
+  });
+
   it('still retries a 504 without one', async () => {
     transport.request.mockRejectedValueOnce(gatewayTimeout()).mockResolvedValueOnce({ entity: { id: 'x' } });
     const result = run();

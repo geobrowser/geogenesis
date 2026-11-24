@@ -377,6 +377,13 @@ export function graphql<TDocument extends TypedDocumentNode<any, any>, Decoded>(
     const operationName = getOperationName(query);
     const deadline = withDeadline(signal, timeoutMs);
     yield* Effect.addFinalizer(() => Effect.sync(deadline.clear));
+    const timeoutError = () =>
+      new GraphqlRequestError(`GraphQL request timed out after ${timeoutMs}ms`, {
+        isTimeout: true,
+        retryCategory: 'transport_timeout',
+        clientRequestId,
+        request: { operationName, url: getConfig().api, clientRequestId },
+      });
 
     const client = new GraphQLClient(getConfig().api, {
       signal: deadline.signal,
@@ -395,14 +402,7 @@ export function graphql<TDocument extends TypedDocumentNode<any, any>, Decoded>(
       catch: error => {
         const errorDetails: any = {};
 
-        if (deadline.timedOut()) {
-          return new GraphqlRequestError(`GraphQL request timed out after ${timeoutMs}ms`, {
-            isTimeout: true,
-            retryCategory: 'transport_timeout',
-            clientRequestId,
-            request: { operationName, url: getConfig().api, clientRequestId },
-          });
-        }
+        if (deadline.timedOut()) return timeoutError();
 
         if (error instanceof Error) {
           errorDetails.message = error.message;
@@ -456,12 +456,16 @@ export function graphql<TDocument extends TypedDocumentNode<any, any>, Decoded>(
       },
     });
 
+    const retried = withRetry(run, {
+      operationName,
+      clientRequestId,
+      retryable: retryableFor(timeoutMs !== undefined),
+    });
     const dataResult = yield* Effect.either(
-      withRetry(run, {
-        operationName,
-        clientRequestId,
-        retryable: retryableFor(timeoutMs !== undefined),
-      })
+      // Also ends a backoff sleep (a long Retry-After) that outlasts the deadline.
+      timeoutMs === undefined
+        ? retried
+        : Effect.timeoutFail(retried, { duration: Duration.millis(timeoutMs), onTimeout: timeoutError })
     );
 
     if (Either.isLeft(dataResult)) {

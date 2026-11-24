@@ -147,3 +147,27 @@ describe('useGraphNeighbourhood failures', () => {
     expect(api.fetchHop1).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('useGraphNeighbourhood partial hop 1', () => {
+  it('treats a hop missing a failed kind as stale at once', async () => {
+    api.fetchHop1.mockResolvedValue({ ...hop1('a', 'p'), failedKinds: ['story'] });
+    api.fetchHop2.mockResolvedValue({});
+    api.fetchCrossLinks.mockResolvedValue([]);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(
+      () =>
+        useGraphNeighbourhood({ centreId: id('a'), filter, caps: DESKTOP_GRAPH_CAPS, kindFilter: 'all', hubId: null }),
+      { wrapper }
+    );
+    await waitFor(() => expect(result.current.hop1.isSuccess).toBe(true));
+    expect(result.current.hop1.isStale).toBe(true);
+
+    api.fetchHop1.mockResolvedValue(hop1('a', 'p'));
+    await result.current.hop1.refetch();
+    await waitFor(() => expect(result.current.hop1.data?.failedKinds).toBeUndefined());
+    expect(result.current.hop1.isStale).toBe(false);
+  });
+});
