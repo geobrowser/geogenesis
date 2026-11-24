@@ -316,7 +316,9 @@ describe('DebateMomentsPlayer', () => {
     render(<DebateMomentsPlayer debateId={DEBATE} label="Debate A" moments={MOMENTS} />);
     const video = videoOf(screen.getByRole('region', { name: 'Debate A' }));
     fireEvent.error(video);
-    expect(screen.getByText('Couldn’t play this moment.')).toBeInTheDocument();
+
+    expect(screen.getByText('Couldn’t play this moment.').parentElement).toHaveClass('pointer-events-none');
+    expect(screen.getByRole('button', { name: 'Retry' })).toHaveClass('pointer-events-auto');
     // No edges to step with: the whole picture is the one tap.
     expect(screen.queryByRole('button', { name: 'Previous moment' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Next moment' })).not.toBeInTheDocument();

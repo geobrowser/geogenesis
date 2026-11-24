@@ -726,14 +726,14 @@ function MomentsStory({
       )}
 
       {failed && (
-        <div className="absolute inset-x-3 top-1/2 z-30 flex -translate-y-1/2 flex-col items-center gap-2 text-center">
+        <div className="pointer-events-none absolute inset-x-3 top-1/2 z-30 flex -translate-y-1/2 flex-col items-center gap-2 text-center">
           <span className="text-breadcrumb text-white/90">
             {story.mode === 'moments' ? 'Couldn’t play this moment.' : 'Couldn’t play this debate.'}
           </span>
           <button
             type="button"
             onClick={retry}
-            className="rounded bg-white px-3 py-1.5 text-smallButton text-text shadow-card"
+            className="pointer-events-auto rounded bg-white px-3 py-1.5 text-smallButton text-text shadow-card"
           >
             Retry
           </button>
