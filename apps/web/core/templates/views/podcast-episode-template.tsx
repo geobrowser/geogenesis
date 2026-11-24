@@ -112,7 +112,7 @@ export function PodcastEpisodeTemplate({
                     (model.show.href ? (
                       <Link
                         href={model.show.href}
-                        className="inline-flex items-center gap-1.5 text-[14.5px] font-semibold text-text no-underline transition-colors hover:text-[#4c1fd4]"
+                        className="inline-flex max-w-full min-w-0 items-center gap-1.5 text-[14.5px] font-semibold text-text no-underline transition-colors hover:text-[#4c1fd4]"
                       >
                         {model.show.artworkUrl && (
                           <PodcastArtwork
@@ -121,18 +121,20 @@ export function PodcastEpisodeTemplate({
                             className="size-5 rounded"
                           />
                         )}
-                        <span>{model.show.name}</span>
+                        <span className="truncate">{model.show.name}</span>
                       </Link>
                     ) : model.show.onSelect ? (
                       <button
                         type="button"
                         onClick={model.show.onSelect}
-                        className="inline-flex cursor-pointer items-center gap-1.5 border-0 bg-transparent p-0 text-[14.5px] font-semibold text-text transition-colors hover:text-[#4c1fd4]"
+                        className="inline-flex max-w-full min-w-0 cursor-pointer items-center gap-1.5 border-0 bg-transparent p-0 text-[14.5px] font-semibold text-text transition-colors hover:text-[#4c1fd4]"
                       >
-                        <span>{model.show.name}</span>
+                        <span className="truncate">{model.show.name}</span>
                       </button>
                     ) : (
-                      <span className="text-[14.5px] font-semibold text-text">{model.show.name}</span>
+                      <span className="max-w-full truncate text-[14.5px] font-semibold text-text">
+                        {model.show.name}
+                      </span>
                     ))}
 
                   {metaParts.length > 0 && (

@@ -344,8 +344,12 @@ describe('TemplateBreadcrumb layout', () => {
 
     const nav = screen.getByRole('navigation', { name: 'Breadcrumb' });
     expect(nav).not.toHaveClass('flex-wrap');
-    expect(screen.getByRole('link', { name: 'A long parent space name' })).toHaveClass('truncate', 'shrink-[999]');
-    expect(screen.getByText('Current claim')).toHaveClass('truncate', 'min-w-0');
+    expect(screen.getByRole('link', { name: 'A long parent space name' })).toHaveClass(
+      'truncate',
+      'min-w-0',
+      'max-w-[45%]'
+    );
+    expect(screen.getByText('Current claim')).toHaveClass('truncate', 'flex-1', 'basis-0', 'min-w-[40%]');
     expect(nav.querySelector('svg')).toHaveClass('shrink-0');
   });
 });

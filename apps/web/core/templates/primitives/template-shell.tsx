@@ -136,14 +136,15 @@ export function TemplateTitleRow({
   );
 }
 
-const BREADCRUMB_ANCESTOR = 'min-w-[6ch] max-w-[50%] shrink-[999] truncate text-[15px] leading-[20px]';
+/** Ancestors keep their natural width up to 45% of the row, and only they shrink when the row is full. */
+const BREADCRUMB_ANCESTOR = 'max-w-[45%] min-w-0 truncate text-[15px] leading-[20px]';
 
 export function TemplateBreadcrumb({ items, className }: { items: readonly BreadcrumbItem[]; className?: string }) {
   if (items.length === 0) return null;
 
   return (
-    // One line: ancestors give up their width first (down to half the row, then a few letters), so the
-    // current page keeps its name and a chevron never wraps onto a line of its own.
+    // One line, so a chevron never wraps onto a line of its own. The current page takes the space the
+    // ancestors leave (at least 40% of the row; basis-0, so it never squeezes them), and truncates.
     <nav aria-label="Breadcrumb" className={cx('flex min-w-0 items-center gap-x-1.5', className)}>
       {items.map((item, index) => {
         const isLast = index === items.length - 1;
@@ -176,7 +177,7 @@ export function TemplateBreadcrumb({ items, className }: { items: readonly Bread
                 title={item.label}
                 className={cx(
                   isLast
-                    ? 'max-w-[380px] min-w-0 truncate text-[15px] leading-[20px] font-medium text-text'
+                    ? 'min-w-[40%] flex-1 basis-0 truncate text-[15px] leading-[20px] font-medium text-text'
                     : cx(BREADCRUMB_ANCESTOR, 'text-grey-04')
                 )}
               >
