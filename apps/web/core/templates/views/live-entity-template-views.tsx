@@ -80,6 +80,7 @@ export function LiveNewsStoryTemplateView({
   return (
     <NewsStoryTemplate
       model={data}
+      spaceId={spaceId}
       actionCallbacks={actionCallbacks}
       compact={compact}
       isLoadingSections={isSectionsLoading}

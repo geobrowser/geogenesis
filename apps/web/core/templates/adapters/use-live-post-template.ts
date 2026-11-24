@@ -27,8 +27,10 @@ import {
   readEntityTextValue,
   resolvePostAuthor,
 } from '../ontology';
+import { sourcesIngestionLink } from './source-ingestion-links';
 import { useHydratedSourceCards, usePostAuthorMetadata } from './use-hydrated-source-cards';
 import { useLiveEntityActions } from './use-live-entity-actions';
+import { useEntityWithViewerSources } from './use-viewer-sources';
 
 /**
  * Live Geo adapter for `PostTemplate` (`TWEET_TYPE_ID` / `POST_TYPE_ID`).
@@ -75,14 +77,17 @@ export function useLivePostTemplate({
     ownerKind: 'post',
   });
 
+  // Page-space Sources plus the viewer's own personal-space ones, so a non-member who added a source
+  // sees it (GEO-3819).
+  const sourcesEntity = useEntityWithViewerSources({ entity, entityId, spaceId });
   const sourceSeeds = React.useMemo(
     () =>
-      readEntityRelations(entity, TEMPLATE_ONTOLOGY.SOURCES_PROPERTY_ID).map(rel => ({
+      readEntityRelations(sourcesEntity, TEMPLATE_ONTOLOGY.SOURCES_PROPERTY_ID).map(rel => ({
         id: rel.toEntity.id,
         name: rel.toEntity.name,
         spaceId: rel.toSpaceId,
       })),
-    [entity]
+    [sourcesEntity]
   );
   const { items: hydratedSourceCards } = useHydratedSourceCards({
     sources: sourceSeeds,
@@ -208,6 +213,7 @@ export function useLivePostTemplate({
         title: 'Sources',
         layout: 'cards',
         items: hydratedSourceCards,
+        ingestionLink: sourcesIngestionLink(entity.id, entity.name, spaceId),
       });
     }
 

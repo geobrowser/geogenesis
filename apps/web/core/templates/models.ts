@@ -8,6 +8,7 @@
  * Optional modules on page models follow Geo's progressive disclosure rule:
  * "Modules render only when they have something to say."
  */
+import type { IngestionLink } from '~/core/chat/ingestion-link';
 import type { Entity } from '~/core/types';
 
 export type VoteChoice = 'agree' | 'disagree' | null;
@@ -245,6 +246,11 @@ export interface EntityListSectionModel {
     href?: string;
     onClick?: () => void;
   };
+  /**
+   * On a Sources section: the page it belongs to and the relation that lists its sources, so a link
+   * pasted through the section's `+` becomes a source of that page (GEO-3819).
+   */
+  ingestionLink?: IngestionLink;
 }
 
 export interface StrongestCaseModel {

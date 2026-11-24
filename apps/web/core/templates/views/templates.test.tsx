@@ -3,11 +3,12 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 
 import * as React from 'react';
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type GazaFixtureRoute, useGazaFixtureTemplates } from '../adapters/gaza-fixture';
 import type { TopicTemplateModel } from '../models';
 import { ContextPeekDrawer } from '../primitives';
+import { TEMPLATE_ACTIONS } from '../template-actions';
 import { ClaimTemplate } from './claim-template';
 import { DebateTemplate } from './debate-template';
 import { EventTemplate } from './event-template';
@@ -22,6 +23,21 @@ import { TimelineTemplate } from './timeline-template';
 import { TopicTemplate } from './topic-template';
 
 afterEach(cleanup);
+
+// The shipped switch, read before any test flips it, and put back after each one that does.
+const SHIPPED_TEMPLATE_ACTIONS = { ...TEMPLATE_ACTIONS };
+function restoreTemplateActions() {
+  Object.assign(TEMPLATE_ACTIONS, SHIPPED_TEMPLATE_ACTIONS);
+}
+
+/** These fixture walks cover Add context and Dispute with the actions switched on. */
+function withTemplateActionsOn() {
+  beforeEach(() => {
+    TEMPLATE_ACTIONS.addContext = true;
+    TEMPLATE_ACTIONS.dispute = true;
+  });
+  afterEach(restoreTemplateActions);
+}
 
 function FixtureHarness({ initialRoute }: { initialRoute?: GazaFixtureRoute }) {
   const fixture = useGazaFixtureTemplates();
@@ -110,6 +126,8 @@ describe('TopicTemplate progressive disclosure', () => {
 });
 
 describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Post graph', () => {
+  withTemplateActionsOn();
+
   it('navigates Topic -> Claim -> Event -> Story -> Source with inline voting and Claim Peek Drawer', () => {
     render(<FixtureHarness />);
 
@@ -831,5 +849,92 @@ describe('EventTemplate Sources section (GEO-3819)', () => {
     const sources = screen.getByRole('region', { name: 'Sources' });
     expect(within(sources).getByText('No sources')).toBeInTheDocument();
     expect(within(sources).getByRole('button', { name: /add source/i })).toBeInTheDocument();
+  });
+});
+
+describe('Add context and Dispute switched off (GEO-3819 defaults)', () => {
+  const story = {
+    id: 'story-off',
+    headline: 'Story with no context yet',
+    date: 'Nov 20, 2026',
+    summary: 'Summary.',
+    topics: [],
+    relatedPeople: [],
+    relatedProjects: [],
+    relatedEntities: [],
+    sources: [
+      {
+        id: 'src-off',
+        title: 'A linked source',
+        publication: 'Reuters',
+        date: 'Nov 20, 2026',
+        url: 'https://reuters.com/example',
+        href: '/space/s/src-off',
+      },
+    ],
+    reportedClaims: [],
+    sections: [],
+  };
+
+  it('ships both actions off in the one switch', () => {
+    expect(SHIPPED_TEMPLATE_ACTIONS).toEqual({ addContext: false, dispute: false });
+  });
+
+  it('shows no Add context / Dispute entry point and no empty Context or Disputes section', () => {
+    render(<NewsStoryTemplate model={story} />);
+
+    expect(screen.queryByRole('region', { name: 'Context' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Disputes' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /add context|add dispute|dispute|challenge/i })).toBeNull();
+    expect(screen.queryByText(/^(Add context|Dispute|Challenge)$/)).toBeNull();
+    // The Sources `+` stays: it is the link ingestion, not an Add context action.
+    expect(
+      within(screen.getByRole('region', { name: 'Sources' })).getByRole('button', { name: 'Add source' })
+    ).toBeInTheDocument();
+  });
+
+  it('hides the Post "Add context note" button and the empty Context notes section', () => {
+    const fixture = { current: null as ReturnType<typeof useGazaFixtureTemplates> | null };
+    function Probe() {
+      fixture.current = useGazaFixtureTemplates();
+      return null;
+    }
+    render(<Probe />);
+    const post = fixture.current?.postSource.data;
+    expect(post).toBeTruthy();
+    cleanup();
+
+    render(<PostTemplate model={{ ...post!, notes: [] }} />);
+    expect(screen.queryByRole('button', { name: 'Add context note' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Context notes' })).toBeNull();
+  });
+
+  it('brings every entry point back when the switch is flipped on', () => {
+    TEMPLATE_ACTIONS.addContext = true;
+    TEMPLATE_ACTIONS.dispute = true;
+    try {
+      render(<NewsStoryTemplate model={story} />);
+      expect(screen.getByRole('region', { name: 'Context' })).toBeInTheDocument();
+      expect(screen.getByRole('region', { name: 'Disputes' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Add context' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Add dispute' })).toBeInTheDocument();
+    } finally {
+      restoreTemplateActions();
+    }
+  });
+});
+
+describe('Topic Context & Disputes row with nothing in it (GEO-3819)', () => {
+  it('hides the wrapper instead of leaving an empty row and its gap on a live Topic', () => {
+    const { container } = render(
+      <TopicTemplate model={{ id: 'topic-empty', title: 'Quiet topic', lede: '' }} actionCallbacks={{}} />
+    );
+    // Live (callbacks set), but no context and no disputes: both sections hide themselves.
+    expect(screen.queryByRole('region', { name: 'Context' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Disputes' })).toBeNull();
+    // jsdom applies no Tailwind; the wrapper must be empty and carry the class that hides it.
+    const wrapper = container.querySelector('[class~="empty:hidden"]');
+    expect(wrapper).not.toBeNull();
+    expect(wrapper).toBeEmptyDOMElement();
   });
 });

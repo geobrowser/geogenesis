@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import Link from 'next/link';
 
+import { sourcesIngestionLink } from '../adapters/source-ingestion-links';
 import {
   type ClaimSummaryModel,
   type ClaimTopicPillModel,
@@ -38,6 +39,8 @@ export interface NewsStoryTemplateProps {
   /** Shows a calm skeleton below the Summary while claim groups and sources hydrate in one smooth reveal. */
   isLoadingSections?: boolean;
   className?: string;
+  /** The story's space, which a Sources `+` import is picked from (GEO-3819). */
+  spaceId?: string;
 }
 
 /**
@@ -56,6 +59,7 @@ export function NewsStoryTemplate({
   compact = false,
   isLoadingSections = false,
   className,
+  spaceId,
 }: NewsStoryTemplateProps) {
   const [addedClaimsByGroup, setAddedClaimsByGroup] = React.useState<Record<string, ClaimSummaryModel[]>>({});
 
@@ -80,6 +84,7 @@ export function NewsStoryTemplate({
       title: 'Sources',
       layout: 'cards',
       emptyText: 'No sources',
+      ingestionLink: sourcesIngestionLink(model.id, model.headline, spaceId),
       items: rawSources.map(source => ({
         id: source.id,
         kind: 'source',
@@ -95,7 +100,7 @@ export function NewsStoryTemplate({
         onSelect: source.onSelect,
       })),
     };
-  }, [hasSourcesInSections, model.sources]);
+  }, [hasSourcesInSections, model.headline, model.id, model.sources, spaceId]);
 
   const sourceCount = model.sources?.length ?? 0;
   const resolvedCover = resolveTemplateImageUrl(model.coverUrl);

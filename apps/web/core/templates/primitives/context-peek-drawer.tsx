@@ -15,6 +15,7 @@ import {
   type SubClaimModel,
   formatClaimKindLabel,
 } from '../models';
+import { TEMPLATE_ACTIONS } from '../template-actions';
 import {
   AddClaimPopover,
   AddContextPopover,
@@ -554,6 +555,9 @@ function PeekAddedContextRelations({
   const safePage = Math.min(page, totalPages);
   const pagedGroups = grouped.slice((safePage - 1) * PEEK_ROWS_PER_PAGE, safePage * PEEK_ROWS_PER_PAGE);
 
+  // With Add context off (GEO-3819) the section shows only when there is context to read.
+  if (!TEMPLATE_ACTIONS.addContext && grouped.length === 0) return null;
+
   return (
     <section aria-label="Context" className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-2">
@@ -645,16 +649,18 @@ function PeekAddedContextRelations({
                       </button>
                     )}
 
-                    <TemplateAddRelationPillPopover
-                      predicate={group.predicate}
-                      existingLabels={group.items.map(i => i.targetName)}
-                      onAdd={targetName =>
-                        setAdded(prev => [
-                          ...prev,
-                          { id: `peek-pill-${Date.now()}`, predicate: group.predicate, targetName },
-                        ])
-                      }
-                    />
+                    {TEMPLATE_ACTIONS.addContext && (
+                      <TemplateAddRelationPillPopover
+                        predicate={group.predicate}
+                        existingLabels={group.items.map(i => i.targetName)}
+                        onAdd={targetName =>
+                          setAdded(prev => [
+                            ...prev,
+                            { id: `peek-pill-${Date.now()}`, predicate: group.predicate, targetName },
+                          ])
+                        }
+                      />
+                    )}
                   </dd>
                 </div>
               );
@@ -679,6 +685,9 @@ function PeekFlagsSection({ initialFlags }: { initialFlags: readonly EntityFlagM
   const totalPages = Math.max(1, Math.ceil(allFlags.length / PEEK_FLAGS_PER_PAGE));
   const safePage = Math.min(page, totalPages);
   const visibleFlags = allFlags.slice((safePage - 1) * PEEK_FLAGS_PER_PAGE, safePage * PEEK_FLAGS_PER_PAGE);
+
+  // With Dispute off (GEO-3819) the section shows only when there are disputes to read.
+  if (!TEMPLATE_ACTIONS.dispute && allFlags.length === 0) return null;
 
   return (
     <section aria-label="Disputes" className="flex flex-col gap-3">
