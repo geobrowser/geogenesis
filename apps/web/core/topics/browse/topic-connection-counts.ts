@@ -30,7 +30,7 @@ export const EMPTY_TOPIC_CONNECTION_COUNTS: TopicConnectionCounts = { claims: 0,
  * Count entities so duplicate Topics relations across spaces count only once. Claims, news and
  * debates all carry Topics directly and use the same one-hop predicate.
  *
- * Unscoped to spaces, unlike the composition strip. A topic gathers across the whole graph, and
+ * Unscoped by default, unlike the composition strip. A topic gathers across the whole graph, and
  * this count is asked on a claim page that is scoped to one space — narrowing to the spaces a
  * viewer happens to be in would make a topic's size depend on who is reading it, and would reorder
  * the tab under anyone whose space allowlist resolved a beat after the counts did.
@@ -39,20 +39,26 @@ export const EMPTY_TOPIC_CONNECTION_COUNTS: TopicConnectionCounts = { claims: 0,
  * counts over the same connections, and the list is split at {@link TOPIC_COUNT_BATCH_SIZE}. Claims
  * on testnet carry at most 7 topics, so a claim's whole Topics tab is normally a single request.
  * Five topics measured ~0.75s against testnet, against five round trips for the same work.
+ *
+ * `scoped` adds a space clause for callers that show one space's content, such as the topic
+ * template's header, which lists only what the viewed space published.
  */
-function buildCountsSource(topicCount: number): string {
+function buildCountsSource(topicCount: number, scoped: boolean): string {
   const declarations = [
     '$topicsPropertyId: UUID!',
     '$claimTypeIds: [UUID!]',
     '$newsTypeIds: [UUID!]',
     '$debateTypeIds: [UUID!]',
+    ...(scoped ? ['$spaceIds: [UUID!]'] : []),
     ...Array.from({ length: topicCount }, (_, index) => `$topic${index}: UUID!`),
   ].join(', ');
 
   const buckets = Array.from({ length: topicCount }, (_, index) => {
     const topic = `$topic${index}`;
 
-    const namesTopic = `relations: { some: { typeId: { is: $topicsPropertyId }, toEntityId: { is: ${topic} } } }`;
+    const namesTopic = `relations: { some: { typeId: { is: $topicsPropertyId }, toEntityId: { is: ${topic} } } }${
+      scoped ? ', spaceIds: { overlaps: $spaceIds }' : ''
+    }`;
 
     return /* GraphQL */ `
       claims${index}: entitiesConnection(filter: { typeIds: { overlaps: $claimTypeIds }, ${namesTopic} }) {
@@ -82,14 +88,15 @@ function buildCountsSource(topicCount: number): string {
  * themselves are variables — so a claim page with three topics reuses the same parsed document as
  * every other three-topic claim, rather than re-parsing a string per render.
  */
-const documentsByTopicCount = new Map<number, TypedDocumentNode<any, any>>();
+const documentsByShape = new Map<string, TypedDocumentNode<any, any>>();
 
-export function topicConnectionCountsDocument(topicCount: number): TypedDocumentNode<any, any> {
-  const cached = documentsByTopicCount.get(topicCount);
+export function topicConnectionCountsDocument(topicCount: number, scoped = false): TypedDocumentNode<any, any> {
+  const shape = `${topicCount}:${scoped}`;
+  const cached = documentsByShape.get(shape);
   if (cached) return cached;
 
-  const document = parse(buildCountsSource(topicCount)) as TypedDocumentNode<any, any>;
-  documentsByTopicCount.set(topicCount, document);
+  const document = parse(buildCountsSource(topicCount, scoped)) as TypedDocumentNode<any, any>;
+  documentsByShape.set(shape, document);
   return document;
 }
 
@@ -137,17 +144,21 @@ export function topicCountBatches(topicIds: readonly string[]): string[][] {
   return chunk(ids, TOPIC_COUNT_BATCH_SIZE);
 }
 
-/** One batch of `topicCountBatches`, answered. Shared by the hook and the server's seed. */
-export function fetchTopicConnectionCountsBatch(ids: string[], signal?: AbortSignal) {
+/**
+ * One batch of `topicCountBatches`, answered. Shared by the hook and the server's seed.
+ * With `spaceId`, counts only entities in that space.
+ */
+export function fetchTopicConnectionCountsBatch(ids: string[], signal?: AbortSignal, spaceId?: string) {
   return Effect.runPromise(
     graphql({
-      query: topicConnectionCountsDocument(ids.length),
+      query: topicConnectionCountsDocument(ids.length, Boolean(spaceId)),
       decoder: (response: CountsResponse) => decodeTopicConnectionCounts(response, ids),
       variables: {
         topicsPropertyId: ID.uuidToHex(TOPICS_PROPERTY_ID),
         claimTypeIds: [ID.uuidToHex(CLAIM_TYPE_ID)],
         newsTypeIds: [ID.uuidToHex(NEWS_STORY_TYPE_ID)],
         debateTypeIds: [ID.uuidToHex(DEBATE_TYPE_ID)],
+        ...(spaceId ? { spaceIds: [ID.uuidToHex(spaceId)] } : {}),
         ...Object.fromEntries(ids.map((id, index) => [`topic${index}`, ID.uuidToHex(id)])),
       },
       signal,
@@ -155,4 +166,7 @@ export function fetchTopicConnectionCountsBatch(ids: string[], signal?: AbortSig
   );
 }
 
-export const topicConnectionCountsQueryKey = (ids: string[]) => ['topic', 'connection-counts', ids] as const;
+export const topicConnectionCountsQueryKey = (ids: string[], spaceId?: string) =>
+  spaceId
+    ? (['topic', 'connection-counts', ids, normId(spaceId)] as const)
+    : (['topic', 'connection-counts', ids] as const);

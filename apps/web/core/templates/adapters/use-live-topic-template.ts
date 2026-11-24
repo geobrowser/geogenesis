@@ -15,14 +15,13 @@ import type { ExploreFeedItem } from '~/core/explore/explore-card-item';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { ID } from '~/core/id';
 import { graphql } from '~/core/io/graphql-client';
-import { getSpaces } from '~/core/io/queries';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import { useTopicAncestors } from '~/core/topics/browse/use-topic-ancestors';
 import { useTopicConnectionCounts } from '~/core/topics/browse/use-topic-connection-counts';
 import { type TopicCoveragePage, useTopicCoverage } from '~/core/topics/browse/use-topic-coverage';
 import { useTopicLinkedEntities } from '~/core/topics/browse/use-topic-linked-entities';
-import { useTopicSpaceScope } from '~/core/topics/use-topic-space-scope';
 import { Entities } from '~/core/utils/entity';
+import { normId } from '~/core/utils/norm-id';
 import { resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -183,8 +182,6 @@ function extractHandleFromSocialUrl(rawUrl: string | null | undefined): string |
   }
 }
 
-const SUBSPACE_PALETTE = ['#6833ff', '#3963fe', '#0f766e', '#b45309'] as const;
-
 async function fetchTopicFeedSlice({
   topicId,
   spaceId,
@@ -294,13 +291,17 @@ function parseDebateTitle(
  *
  * Hydrates the full Topic experience from live Geo services:
  * - Best-ranked Claims (via `/api/topics/feed` + `useTopicLinkedEntities` + direct `Claims`),
- *   batch-hydrated for `Is factual` (`Factual`/`Judgment`) and cross-space `userVotes` (with
- *   multi-space split bars, `Disputed` / `Accepted` tabs, and interactive inline voting).
+ *   batch-hydrated for `Is factual` (`Factual`/`Judgment`) and `userVotes` from every voter
+ *   (`Disputed` / `Accepted` tabs and interactive inline voting).
  * - Live `Recent debates` horizontal gallery (via `/api/topics/feed` for `DEBATE_TYPE_ID`).
  * - Live `Timeline` combining `News events` (`Event date`) and dated `News stories`.
  * - Rich 2-column format-aware `Sources & evidence` media cards (`layout: 'cards'`).
  * - Header stats (`countsByTopicId`), compact clickable `Subtopics` chips, `Context` relation
  *   pills, `Flags` (`Community notes` / `Disclaimer`), and live `useMutate` actions.
+ *
+ * Every list holds only what the viewed space published: the feeds are scoped to the route space,
+ * and the linked-entity, coverage and count reads take it as their only space. Vote counts still
+ * include every voter, since votes live in each voter's personal space.
  */
 export function useLiveTopicTemplate({
   entityId,
@@ -316,9 +317,10 @@ export function useLiveTopicTemplate({
 }): TemplateDataSource<TopicTemplateModel> {
   const { entity, isLoading: isEntityLoading } = useQueryEntity({ id: entityId, spaceId });
   const { personalSpaceId } = usePersonalSpaceId();
-  const spaceIds = useTopicSpaceScope(spaceId);
+  const spaceIds = React.useMemo(() => [normId(spaceId)], [spaceId]);
   const ancestors = useTopicAncestors(entityId, spaceId);
-  const { countsByTopicId } = useTopicConnectionCounts([entityId]);
+  const topicIds = React.useMemo(() => [entityId], [entityId]);
+  const { countsByTopicId } = useTopicConnectionCounts(topicIds, { spaceId });
 
   const queryClient = useQueryClient();
 
@@ -403,11 +405,9 @@ export function useLiveTopicTemplate({
 
   // The viewer's own personal-space sources tagged with this Topic, so a non-member who added one sees
   // it (GEO-3819): published ones by a second coverage read scoped to that space alone (skipped when
-  // the scope already includes it, or while it is unscoped), staged ones from the local store.
+  // it is the page's space), staged ones from the local store. Only the viewer sees these.
   const viewerSpaceId = useViewerSpaceId(spaceId);
-  const viewerSpaceInScope =
-    spaceIds === undefined || (viewerSpaceId !== null && spaceIds.some(id => ID.equals(id, viewerSpaceId)));
-  const viewerCoverageEnabled = viewerSpaceId !== null && !viewerSpaceInScope;
+  const viewerCoverageEnabled = viewerSpaceId !== null && !ID.equals(viewerSpaceId, spaceId);
   const viewerCoverage = useTopicCoverage({
     topicId: entityId,
     spaceIds: viewerSpaceId ? [viewerSpaceId] : undefined,
@@ -490,7 +490,6 @@ export function useLiveTopicTemplate({
       id: string;
       title: string;
       spaceId: string;
-      spaceName?: string;
       kind?: ClaimKind;
       debateCount?: number;
     }[] = [];
@@ -507,7 +506,6 @@ export function useLiveTopicTemplate({
         id: item.entityId,
         title: item.title,
         spaceId: item.spaceId || spaceId,
-        spaceName: item.spaceName,
       });
     }
     for (const debateItem of bestDebatesQuery.data ?? []) {
@@ -516,7 +514,6 @@ export function useLiveTopicTemplate({
         id: debateItem.debateClaim.entityId,
         title: debateItem.debateClaim.name,
         spaceId: debateItem.spaceId || spaceId,
-        spaceName: debateItem.spaceName,
       });
     }
     for (const item of bestClaimsQuery.data ?? []) {
@@ -524,7 +521,6 @@ export function useLiveTopicTemplate({
         id: item.entityId,
         title: item.title,
         spaceId: item.spaceId || spaceId,
-        spaceName: item.spaceName,
       });
     }
     for (const claim of linkedClaims) {
@@ -599,25 +595,7 @@ export function useLiveTopicTemplate({
 
       // Agree / Disagree only, once per (claim, space, voter): the counts the Claim page draws.
       const activeVotes = activeStanceVotes(response);
-      const spaceIdsSet = new Set(activeVotes.map(vote => vote.spaceHex));
-
-      const spaceNameByHex = new Map<string, string>();
-      if (spaceIdsSet.size > 0) {
-        try {
-          const spaces = await Effect.runPromise(getSpaces({ spaceIds: Array.from(spaceIdsSet) }, signal));
-          for (const sp of spaces) {
-            if (sp.entity?.name) {
-              spaceNameByHex.set(ID.uuidToHex(sp.id), sp.entity.name);
-            }
-          }
-        } catch {
-          // Non-fatal: falls back to feed spaceName or "Everyone"
-        }
-      }
-
-      const byClaim = aggregateClaimVotes(activeVotes, personalSpaceId);
-
-      return { byClaim, spaceNameByHex };
+      return { byClaim: aggregateClaimVotes(activeVotes, personalSpaceId) };
     },
   });
 
@@ -657,11 +635,11 @@ export function useLiveTopicTemplate({
         ]
       : [];
 
-    // Helper to build SplitRows from cross-space votes. A row's own vote is drawn by its pills
-    // (`TemplateClaimVote`), which swap the viewer's vote in the row's space for the live one.
+    // One "Everyone" split row per claim: the counts include every voter, so the row names no space.
+    // A row's own vote is drawn by its pills (`TemplateClaimVote`), which swap the viewer's vote in
+    // the row's space for the live one.
     const buildSplitForClaim = (
-      claimId: string,
-      fallbackSpaceName?: string
+      claimId: string
     ): {
       rows: SplitRow[];
       total: number;
@@ -673,7 +651,6 @@ export function useLiveTopicTemplate({
     } => {
       const hex = ID.uuidToHex(claimId);
       const raw = votesQuery.data?.byClaim.get(hex);
-      const spaceNames = votesQuery.data?.spaceNameByHex;
       const userVote: VoteChoice = raw?.viewerVote ?? null;
 
       const pos = raw?.totalPositive ?? 0;
@@ -683,47 +660,10 @@ export function useLiveTopicTemplate({
       const percent = total > 0 ? Math.round((pos / total) * 100) : undefined;
       const isAccepted = total >= 2 && percent !== undefined && (percent >= 75 || percent <= 25);
 
-      const rows: SplitRow[] = [];
-      if (total > 0 && percent !== undefined) {
-        const spaceBuckets = raw?.bySpace ?? [];
-        if (spaceBuckets.length > 1) {
-          rows.push({
-            id: 'all',
-            label: 'All spaces',
-            color: '#202020',
-            percent,
-            voterCount: total,
-            isEveryone: true,
-          });
-          spaceBuckets.slice(0, 3).forEach((bucket, idx) => {
-            const bTotal = bucket.positive + bucket.negative;
-            const bPct = bTotal > 0 ? Math.round((bucket.positive / bTotal) * 100) : 0;
-            rows.push({
-              id: bucket.spaceId,
-              label: spaceNames?.get(bucket.spaceId) ?? bucket.spaceId.slice(0, 8),
-              color: SUBSPACE_PALETTE[idx % SUBSPACE_PALETTE.length]!,
-              percent: bPct,
-              voterCount: bTotal,
-              isSubspace: true,
-              href: NavUtils.toSpace(bucket.spaceId),
-            });
-          });
-        } else {
-          const singleSpaceId = spaceBuckets[0]?.spaceId;
-          const label =
-            (singleSpaceId ? spaceNames?.get(singleSpaceId) : undefined) ||
-            (fallbackSpaceName && fallbackSpaceName.length > 8 ? fallbackSpaceName : undefined) ||
-            'Everyone';
-          rows.push({
-            id: singleSpaceId ?? spaceId,
-            label,
-            color: '#202020',
-            percent,
-            voterCount: total,
-            isEveryone: true,
-          });
-        }
-      }
+      const rows: SplitRow[] =
+        total > 0 && percent !== undefined
+          ? [{ id: 'all', label: 'Everyone', color: '#202020', percent, voterCount: total, isEveryone: true }]
+          : [];
 
       return { rows, total, agreeCount: pos, disagreeCount: neg, percent, userVote, isAccepted };
     };
@@ -756,10 +696,7 @@ export function useLiveTopicTemplate({
     for (const seed of orderedClaimSeeds) {
       const hex = ID.uuidToHex(seed.id);
       const kind = seed.kind ?? hydratedClaimKindByHex.get(hex);
-      const { rows, total, agreeCount, disagreeCount, percent, userVote, isAccepted } = buildSplitForClaim(
-        seed.id,
-        seed.spaceName
-      );
+      const { rows, total, agreeCount, disagreeCount, percent, userVote, isAccepted } = buildSplitForClaim(seed.id);
       const debateCount = debateCountByClaimHex.get(hex);
       const claimHref = NavUtils.toEntity(seed.spaceId, seed.id);
 
@@ -803,7 +740,7 @@ export function useLiveTopicTemplate({
     const recentDebates: TopicRecentDebateModel[] = (bestDebatesQuery.data ?? []).slice(0, 8).map(item => {
       const { claimTitle, speakers } = parseDebateTitle(item.title, item.debateClaim?.name);
       const claimId = item.debateClaim?.entityId ?? item.entityId;
-      const claimSplit = buildSplitForClaim(claimId, item.spaceName);
+      const claimSplit = buildSplitForClaim(claimId);
       const normDebateId = ID.uuidToHex(item.entityId).toLowerCase();
       const slot1Avatar = resolveDebateStillSrc(item.debatePosters?.slot1, normDebateId, 1);
       const slot2Avatar = resolveDebateStillSrc(item.debatePosters?.slot2, normDebateId, 2);

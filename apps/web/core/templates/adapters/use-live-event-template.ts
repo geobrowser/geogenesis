@@ -8,6 +8,7 @@ import { claimResponseTargetKey } from '~/core/responses/claim-response-summarie
 import { useClaimResponseSummaryBatch } from '~/core/responses/use-claim-response-summaries';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import { Entities } from '~/core/utils/entity';
+import { normId } from '~/core/utils/norm-id';
 import { resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -54,6 +55,8 @@ export function useLiveEventTemplate({
   const relatedClaimsWhere = React.useMemo(
     () => ({
       types: [{ id: { equals: TEMPLATE_ONTOLOGY.CLAIM_TYPE_ID } }],
+      // Only claims in the viewed space.
+      spaces: [{ equals: normId(spaceId) }],
       relations: [
         {
           typeOf: { id: { equals: TEMPLATE_ONTOLOGY.RELATED_ENTITIES_PROPERTY_ID } },
@@ -61,7 +64,7 @@ export function useLiveEventTemplate({
         },
       ],
     }),
-    [entityId]
+    [entityId, spaceId]
   );
 
   const { entities: linkedClaims } = useQueryEntities({ where: relatedClaimsWhere, first: 12 });

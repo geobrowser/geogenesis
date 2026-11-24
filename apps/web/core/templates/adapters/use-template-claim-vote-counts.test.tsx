@@ -8,7 +8,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { entityResponseCountsQueryKey } from '~/core/responses/entity-response';
 
-import { partitionVoteCountTargets, useTemplateClaimVoteCounts } from './use-template-claim-vote-counts';
+import {
+  OWN_SPACE_LABEL,
+  partitionVoteCountTargets,
+  useTemplateClaimVoteCounts,
+} from './use-template-claim-vote-counts';
 
 const PAGE_SPACE = '11111111-1111-1111-1111-111111111111';
 const OTHER_SPACE = '22222222-2222-2222-2222-222222222222';
@@ -33,11 +37,6 @@ vi.mock('~/core/io/queries', () => ({
     mocks.countReads.push({ entityId, spaceId, responseKind });
     return Effect.succeed(mocks.graph.get(`${entityId}|${spaceId}`) ?? null);
   },
-}));
-vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
-  useSpacesByIds: (ids: string[]) => ({
-    spaces: ids.includes(OTHER_SPACE) ? [{ id: OTHER_SPACE, entity: { name: 'Crypto' } }] : [],
-  }),
 }));
 
 let client: QueryClient;
@@ -95,8 +94,10 @@ describe('useTemplateClaimVoteCounts (GEO-3819)', () => {
     expect(lastBatch.spaceId).toBe(PAGE_SPACE);
     expect(lastBatch.targets.map(target => target.entityId)).toEqual([HOME_CLAIM]);
 
-    expect(result.current.labelFor(OTHER_SPACE, 'Page space')).toBe('Crypto');
+    // Counts in the claim's own space, labelled as such and never with that space's name (GEO-3828).
+    expect(result.current.labelFor(OTHER_SPACE, 'Page space')).toBe(OWN_SPACE_LABEL);
     expect(result.current.labelFor(PAGE_SPACE, 'Page space')).toBe('Page space');
+    expect(result.current.labelFor(PAGE_SPACE.toUpperCase(), 'Page space')).toBe('Page space');
   });
 
   it('draws a page-space row from the entry the batch primes, and follows it when a vote refreshes it', async () => {
