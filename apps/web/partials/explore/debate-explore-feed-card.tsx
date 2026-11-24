@@ -11,11 +11,15 @@ import { DebateClaimFooter } from '~/core/debates/browse/debate-claim-footer';
 import { DebateFeedPlayer } from '~/core/debates/browse/debate-feed-player';
 import { DebateInteractionBar } from '~/core/debates/browse/debate-interaction-bar';
 import { DEBATE_FEED_HOLDS_FULL_PLAYBACK } from '~/core/debates/browse/feed-full-playback';
+import { DEBATE_CARD_PLAYS_MOMENTS } from '~/core/debates/browse/feed-moments';
+import { useInlinePlaybackUnavailable } from '~/core/debates/browse/inline-playback';
 import { DebateShareDialog } from '~/core/debates/browse/lazy-share-dialog';
 import { useDebateShareAction } from '~/core/debates/browse/use-debate-share-action';
 import { compositeTopSlot } from '~/core/debates/composite-top-slot';
 import { clickAsksToPlay, useDebateCardPlayback } from '~/core/debates/debate-playback-gate';
 import { useDebate, useDebateMedia } from '~/core/debates/hooks';
+import { MomentsCardPlayer } from '~/core/debates/moments-player/moments-card-player';
+import { useDebateMoments } from '~/core/debates/moments-player/use-debate-moments';
 import { hasProcessedVideo, isWatchableDebate } from '~/core/debates/playback-utils';
 import { fallBackToDurableStill, speakerStillContentUrl } from '~/core/debates/speaker-still';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
@@ -297,6 +301,23 @@ export function DebateExploreFeedCard({
 
   const readyDebate = debate != null && watchable && processed ? debate : null;
 
+  /*
+   * The moments reel (GEO-3833), behind `NEXT_PUBLIC_DEBATE_CARD_MOMENTS`. The switch is read first:
+   * off, the read never runs and every card is the two-tile player, never stills waiting on a read
+   * that was not asked for. Nor in an in-app browser that cannot play inline (TikTok), where the
+   * two-tile player hands over to its combined player.
+   *
+   * On, nothing that loads the recordings mounts until the read settles, so a card does not sign two
+   * recordings and then swap them for clips. A debate with no reel, or a read that failed, keeps the
+   * two-tile player.
+   */
+  const inlinePlaybackUnavailable = useInlinePlaybackUnavailable();
+  const reelSwitch = DEBATE_CARD_PLAYS_MOMENTS && !inlinePlaybackUnavailable;
+  const momentsRead = useDebateMoments(debateId, { enabled: reelSwitch && nearViewport });
+  const reelMoments =
+    reelSwitch && momentsRead.status === 'ready' && momentsRead.moments.length > 0 ? momentsRead.moments : null;
+  const reelPending = reelSwitch && momentsRead.status === 'loading';
+
   /**
    * Whether this card is carrying a debate's resources at all.
    *
@@ -306,6 +327,8 @@ export function DebateExploreFeedCard({
    * and keeps the reads it has started, which are cheap and cached.
    */
   const mediaMounted = readyDebate != null && nearViewport && !notWatchable;
+
+  const showReel = mediaMounted && reelMoments !== null;
 
   // Feed cards only: a click on a card that is not playing yet scrolls it into view. A tap-to-play
   // card does the same from `tapToPlayNow`, which only the player's own play controls call.
@@ -404,14 +427,39 @@ export function DebateExploreFeedCard({
             here clips it, inset in the app's card at the app's 20px. */}
         <div
           data-debate-card-media=""
+          data-debate-card-reel={showReel || undefined}
           className={
-            compactChrome
-              ? undefined
-              : 'mx-auto w-[var(--debate-card-media-width)] max-w-full overflow-hidden rounded-[20px] bg-[#151515]'
+            showReel
+              ? // The reel draws its own moments row above its frame, so the frame is its own too.
+                compactChrome
+                ? undefined
+                : 'mx-auto w-[var(--debate-card-media-width)] max-w-full'
+              : compactChrome
+                ? undefined
+                : 'mx-auto w-[var(--debate-card-media-width)] max-w-full overflow-hidden rounded-[20px] bg-[#151515]'
           }
           onClickCapture={mediaMounted && !tapToPlay ? requestPlayback : undefined}
         >
-          {mediaMounted ? (
+          {showReel ? (
+            <MomentsCardPlayer
+              debate={readyDebate}
+              moments={reelMoments}
+              stills={item.debatePosters}
+              topSlot={topSlot}
+              active={playerActive}
+              // Only the cards being watched or about to be hold clip elements: on screen (paused
+              // until tapped, outside a feed, so the tap that plays it gives sound), and in a feed
+              // the one up next. Further cards show their stills and download nothing.
+              mountMedia={!coveredBySheet && (tapToPlay ? onScreen : onScreen || upNext || active)}
+              upNext={!tapToPlay && upNext && !active && !coveredBySheet}
+              tapToPlay={tapToPlay}
+              onPlaybackRequest={tapToPlay ? tapToPlayNow : undefined}
+              fullScreenHref={NavUtils.toEntity(item.spaceId, item.entityId)}
+              entityId={item.entityId}
+              spaceId={item.spaceId}
+              turns={mediaQuery.data?.turn_segments}
+            />
+          ) : mediaMounted && !reelPending ? (
             // The recordings resolve while the card is still approaching. Crossing back out of
             // that same window unmounts this subtree instead of retaining two paused videos forever.
             <DebateCardVideos
@@ -450,13 +498,16 @@ export function DebateExploreFeedCard({
               endSlot={
                 <div className="ml-auto flex shrink-0 items-center gap-1">
                   {endSlot}
-                  <FullscreenLink
-                    requiresFullPage
-                    href={NavUtils.toEntity(item.spaceId, item.entityId)}
-                    entityId={item.entityId}
-                    spaceId={item.spaceId}
-                    ariaLabel="Watch this debate full screen"
-                  />
+                  {/* The reel has its own, on the clip, as the app's card does. */}
+                  {showReel ? null : (
+                    <FullscreenLink
+                      requiresFullPage
+                      href={NavUtils.toEntity(item.spaceId, item.entityId)}
+                      entityId={item.entityId}
+                      spaceId={item.spaceId}
+                      ariaLabel="Watch this debate full screen"
+                    />
+                  )}
                 </div>
               }
             />
