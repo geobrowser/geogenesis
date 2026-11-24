@@ -38,12 +38,14 @@ import {
   readClaimKind,
   readEntityRelations,
 } from '../ontology';
+import { sourcesIngestionLink } from './source-ingestion-links';
 import { resolveDebateStillSrc, useDebateParticipantsBatch } from './use-debate-participants-batch';
 import { useHydratedSourceCards } from './use-hydrated-source-cards';
 import { useInitialHydrationGate } from './use-initial-hydration-gate';
 import { useLiveEntityActions } from './use-live-entity-actions';
 import { useTemplateClaimVoteCounts } from './use-template-claim-vote-counts';
 import { useTopicMediaBatch } from './use-topic-media-batch';
+import { useEntityWithViewerSources } from './use-viewer-sources';
 
 function parseDebateTitle(rawTitle: string, fallbackClaim: string): { claimTitle: string; speakers: [string, string] } {
   const clean = rawTitle.trim();
@@ -198,7 +200,10 @@ export function useLiveClaimTemplate({
   // Batch-hydrate topic thumbnail images (Avatar preferred, then Cover) for Topic pills
   const topicMediaQuery = useTopicMediaBatch(topicIds);
 
-  const sources = React.useMemo(() => getClaimSources(entity?.relations ?? []), [entity?.relations]);
+  // Page-space Sources plus the viewer's own personal-space ones, so a non-member who added a source
+  // sees it (GEO-3819).
+  const sourcesEntity = useEntityWithViewerSources({ entity, entityId, spaceId });
+  const sources = React.useMemo(() => getClaimSources(sourcesEntity?.relations ?? []), [sourcesEntity?.relations]);
   const { items: hydratedSourceCards, isLoading: isSourcesLoading } = useHydratedSourceCards({
     sources,
     spaceId,
@@ -558,6 +563,7 @@ export function useLiveClaimTemplate({
       layout: 'cards',
       items: hydratedSourceCards,
       emptyText: 'No sources',
+      ingestionLink: sourcesIngestionLink(entity.id, title, spaceId),
     });
 
     // Filter out claims already displayed in Supporting / Opposing / Related subclaims.

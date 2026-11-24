@@ -19,6 +19,7 @@ import type {
   EntityTripleModel,
   EntityTripleValueModel,
 } from '../models';
+import { TEMPLATE_ACTIONS } from '../template-actions';
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
@@ -94,7 +95,7 @@ export function TemplatePopoverPortalProvider({ children }: { children: React.Re
   );
 }
 
-function useTemplatePopoverContainer(): HTMLDivElement | undefined {
+export function useTemplatePopoverContainer(): HTMLDivElement | undefined {
   const ctx = React.useContext(EntityActionContext);
   const localPortal = React.useContext(TemplatePopoverPortalContext);
   return localPortal ?? ctx?.popoverContainer ?? undefined;
@@ -329,13 +330,18 @@ export function TemplateAddRelationPillPopover({
  * Anchored popover attached to a borderless `+` trigger for adding Context triples
  * without opening a full-screen modal.
  */
-export function AddContextPopover({
-  onSubmit,
-  align = 'end',
-}: {
+type AddContextPopoverProps = {
   onSubmit: (predicate: string, values: readonly string[]) => void;
   align?: 'start' | 'center' | 'end';
-}) {
+};
+
+/** Hidden while `TEMPLATE_ACTIONS.addContext` is off (GEO-3819). */
+export function AddContextPopover(props: AddContextPopoverProps) {
+  if (!TEMPLATE_ACTIONS.addContext) return null;
+  return <AddContextPopoverInner {...props} />;
+}
+
+function AddContextPopoverInner({ onSubmit, align = 'end' }: AddContextPopoverProps) {
   const popoverContainer = useTemplatePopoverContainer();
   const [open, setOpen] = React.useState(false);
   const [predicate, setPredicate] = React.useState('');
@@ -475,13 +481,18 @@ export function AddContextPopover({
  * Anchored popover attached to a borderless `+` trigger for submitting a Flag
  * without opening a full-screen modal.
  */
-export function AddFlagPopover({
-  onSubmit,
-  align = 'end',
-}: {
+type AddFlagPopoverProps = {
   onSubmit: (draft: { reason: string; body: string; sourceUrl?: string }) => void;
   align?: 'start' | 'center' | 'end';
-}) {
+};
+
+/** Hidden while `TEMPLATE_ACTIONS.dispute` is off (GEO-3819). */
+export function AddFlagPopover(props: AddFlagPopoverProps) {
+  if (!TEMPLATE_ACTIONS.dispute) return null;
+  return <AddFlagPopoverInner {...props} />;
+}
+
+function AddFlagPopoverInner({ onSubmit, align = 'end' }: AddFlagPopoverProps) {
   const popoverContainer = useTemplatePopoverContainer();
   const [open, setOpen] = React.useState(false);
   const [reason, setReason] = React.useState<string>(FLAG_REASONS[0]);
@@ -1251,7 +1262,7 @@ function TripleKeyValueList({
                   </button>
                 )}
 
-                {onAddValue && (
+                {onAddValue && TEMPLATE_ACTIONS.addContext && (
                   <TemplateAddRelationPillPopover
                     predicate={triple.predicate}
                     existingLabels={triple.values.map(v => v.label)}
@@ -1715,127 +1726,133 @@ export function EntityActionProvider({
               </section>
             )}
 
-            {/* Context section with real section header & right-aligned borderless + anchored popover */}
-            <section aria-label="Context" className="flex flex-col gap-3">
-              <div className="flex items-center justify-between gap-2">
-                <h4 className="m-0 inline-flex items-center gap-2 text-[17px] leading-[22px] font-semibold text-text">
-                  <NetworkIcon className="size-4 text-grey-04" />
-                  <span>Context</span>
-                </h4>
-                <AddContextPopover onSubmit={(pred, vals) => addTriple(activePaneTarget.id, pred, vals)} />
-              </div>
-
-              {viewerData.triples.length > 0 ? (
-                <div className="@container">
-                  <TripleKeyValueList
-                    target={activePaneTarget}
-                    triples={viewerData.triples}
-                    onInspectRelation={(t, p, v) => inspectRelation(t, p, v, { returnToViewer: true })}
-                    onAddValue={addTripleValue}
-                    onDeleteValue={deleteTripleValue}
-                  />
+            {/* Context section with real section header & right-aligned borderless + anchored popover.
+                With Add context off (GEO-3819) it only shows when there is context to read. */}
+            {(TEMPLATE_ACTIONS.addContext || viewerData.triples.length > 0) && (
+              <section aria-label="Context" className="flex flex-col gap-3">
+                <div className="flex items-center justify-between gap-2">
+                  <h4 className="m-0 inline-flex items-center gap-2 text-[17px] leading-[22px] font-semibold text-text">
+                    <NetworkIcon className="size-4 text-grey-04" />
+                    <span>Context</span>
+                  </h4>
+                  <AddContextPopover onSubmit={(pred, vals) => addTriple(activePaneTarget.id, pred, vals)} />
                 </div>
-              ) : (
-                <p className="m-0 text-[14px] text-grey-04">No context added yet.</p>
-              )}
-            </section>
 
-            {/* Disputes section with real section header & right-aligned borderless + anchored popover */}
-            <section aria-label="Disputes" className="flex flex-col gap-3">
-              <div className="flex items-center justify-between gap-2">
-                <h4 className="m-0 inline-flex items-center gap-2 text-[17px] leading-[22px] font-semibold text-text">
-                  <FlagIcon className="size-4 text-grey-04" />
-                  <span>Disputes</span>
-                </h4>
-                <AddFlagPopover onSubmit={draft => addFlag(activePaneTarget.id, draft)} />
-              </div>
+                {viewerData.triples.length > 0 ? (
+                  <div className="@container">
+                    <TripleKeyValueList
+                      target={activePaneTarget}
+                      triples={viewerData.triples}
+                      onInspectRelation={(t, p, v) => inspectRelation(t, p, v, { returnToViewer: true })}
+                      onAddValue={addTripleValue}
+                      onDeleteValue={deleteTripleValue}
+                    />
+                  </div>
+                ) : (
+                  <p className="m-0 text-[14px] text-grey-04">No context added yet.</p>
+                )}
+              </section>
+            )}
 
-              {visibleDrawerFlags.length > 0 ? (
-                <div className="flex flex-col gap-3">
-                  {visibleDrawerFlags.map(flag => {
-                    const vote = flagVotes[flag.id] ?? null;
-                    return (
-                      <article
-                        key={flag.id}
-                        className="flex flex-col gap-2.5 rounded-xl border border-black/[0.05] bg-grey-01/55 p-4"
-                      >
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-text">
-                            <FlagIcon className="size-3.5 text-grey-04" />
-                            <span>{flag.reason ?? 'Disputed'}</span>
-                          </span>
+            {/* Disputes section with real section header & right-aligned borderless + anchored popover.
+                With Dispute off (GEO-3819) it only shows when there are disputes to read. */}
+            {(TEMPLATE_ACTIONS.dispute || viewerData.flags.length > 0) && (
+              <section aria-label="Disputes" className="flex flex-col gap-3">
+                <div className="flex items-center justify-between gap-2">
+                  <h4 className="m-0 inline-flex items-center gap-2 text-[17px] leading-[22px] font-semibold text-text">
+                    <FlagIcon className="size-4 text-grey-04" />
+                    <span>Disputes</span>
+                  </h4>
+                  <AddFlagPopover onSubmit={draft => addFlag(activePaneTarget.id, draft)} />
+                </div>
 
-                          {flag.helpfulPercent !== undefined && (
-                            <span className="text-[12.5px] text-grey-04 tabular-nums">
-                              {flag.helpfulPercent}% agree
+                {visibleDrawerFlags.length > 0 ? (
+                  <div className="flex flex-col gap-3">
+                    {visibleDrawerFlags.map(flag => {
+                      const vote = flagVotes[flag.id] ?? null;
+                      return (
+                        <article
+                          key={flag.id}
+                          className="flex flex-col gap-2.5 rounded-xl border border-black/[0.05] bg-grey-01/55 p-4"
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-text">
+                              <FlagIcon className="size-3.5 text-grey-04" />
+                              <span>{flag.reason ?? 'Disputed'}</span>
                             </span>
+
+                            {flag.helpfulPercent !== undefined && (
+                              <span className="text-[12.5px] text-grey-04 tabular-nums">
+                                {flag.helpfulPercent}% agree
+                              </span>
+                            )}
+                          </div>
+
+                          <p className="m-0 text-[14.5px] leading-[21px] text-text/90">{flag.body}</p>
+
+                          {flag.sourceUrl && (
+                            <a
+                              href={flag.sourceUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 self-start text-[13px] font-medium text-ctaPrimary no-underline hover:text-ctaHover"
+                            >
+                              <span>{flag.sourceLabel ?? flag.sourceUrl}</span>
+                              <ArrowUpRightIcon className="size-3.5" />
+                            </a>
                           )}
-                        </div>
 
-                        <p className="m-0 text-[14.5px] leading-[21px] text-text/90">{flag.body}</p>
-
-                        {flag.sourceUrl && (
-                          <a
-                            href={flag.sourceUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 self-start text-[13px] font-medium text-ctaPrimary no-underline hover:text-ctaHover"
-                          >
-                            <span>{flag.sourceLabel ?? flag.sourceUrl}</span>
-                            <ArrowUpRightIcon className="size-3.5" />
-                          </a>
-                        )}
-
-                        <div className="flex items-center gap-1.5 pt-1" role="group" aria-label="Vote on dispute">
-                          <button
-                            type="button"
-                            aria-pressed={vote === 'agree'}
-                            onClick={() => voteOnFlag(flag.id, 'agree')}
-                            className={cx(
-                              'inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full border px-2.5 text-[12.5px] font-medium transition-colors',
-                              vote === 'agree'
-                                ? 'border-text bg-text text-white'
-                                : 'border-grey-02 bg-white text-text hover:border-text'
-                            )}
-                          >
-                            <ThumbUpIcon className="size-3" />
-                            <span>Agree</span>
-                          </button>
-                          <button
-                            type="button"
-                            aria-pressed={vote === 'disagree'}
-                            onClick={() => voteOnFlag(flag.id, 'disagree')}
-                            className={cx(
-                              'inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full border px-2.5 text-[12.5px] font-medium transition-colors',
-                              vote === 'disagree'
-                                ? 'border-text bg-text text-white'
-                                : 'border-grey-02 bg-white text-text hover:border-text'
-                            )}
-                          >
-                            <ThumbDownIcon className="size-3" />
-                            <span>Disagree</span>
-                          </button>
-                        </div>
-                      </article>
-                    );
-                  })}
-                  <InlinePagination
-                    page={safeFlagPage}
-                    totalPages={flagTotalPages}
-                    onPageChange={setFlagPage}
-                    label="Disputes pages"
-                  />
-                </div>
-              ) : (
-                <p className="m-0 text-[14px] text-grey-04">No disputes</p>
-              )}
-            </section>
+                          <div className="flex items-center gap-1.5 pt-1" role="group" aria-label="Vote on dispute">
+                            <button
+                              type="button"
+                              aria-pressed={vote === 'agree'}
+                              onClick={() => voteOnFlag(flag.id, 'agree')}
+                              className={cx(
+                                'inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full border px-2.5 text-[12.5px] font-medium transition-colors',
+                                vote === 'agree'
+                                  ? 'border-text bg-text text-white'
+                                  : 'border-grey-02 bg-white text-text hover:border-text'
+                              )}
+                            >
+                              <ThumbUpIcon className="size-3" />
+                              <span>Agree</span>
+                            </button>
+                            <button
+                              type="button"
+                              aria-pressed={vote === 'disagree'}
+                              onClick={() => voteOnFlag(flag.id, 'disagree')}
+                              className={cx(
+                                'inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full border px-2.5 text-[12.5px] font-medium transition-colors',
+                                vote === 'disagree'
+                                  ? 'border-text bg-text text-white'
+                                  : 'border-grey-02 bg-white text-text hover:border-text'
+                              )}
+                            >
+                              <ThumbDownIcon className="size-3" />
+                              <span>Disagree</span>
+                            </button>
+                          </div>
+                        </article>
+                      );
+                    })}
+                    <InlinePagination
+                      page={safeFlagPage}
+                      totalPages={flagTotalPages}
+                      onPageChange={setFlagPage}
+                      label="Disputes pages"
+                    />
+                  </div>
+                ) : (
+                  <p className="m-0 text-[14px] text-grey-04">No disputes</p>
+                )}
+              </section>
+            )}
           </div>
         </aside>
       )}
 
-      {/* Add context (Triple) / Flag composer dialog */}
-      {composer && (
+      {/* Add context (Triple) / Flag composer dialog; never opens for an action that is switched off */}
+      {composer && (composer.action === 'flag' ? TEMPLATE_ACTIONS.dispute : TEMPLATE_ACTIONS.addContext) && (
         <div className="fixed inset-0 z-[130] flex items-center justify-center p-4">
           <div aria-hidden onClick={closeComposerOnly} className="fixed inset-0 bg-black/25 backdrop-blur-[1px]" />
 
@@ -2102,6 +2119,9 @@ export function EntityFlagsSection({ target, className }: { target: EntityAction
   const safePage = Math.min(page, totalPages);
   const visibleFlags = flags.slice((safePage - 1) * FLAGS_PER_PAGE, safePage * FLAGS_PER_PAGE);
 
+  // With Dispute off (GEO-3819) an empty section is only an empty state with nothing to do.
+  if (!TEMPLATE_ACTIONS.dispute && flags.length === 0) return null;
+
   return (
     <section aria-label="Disputes" className={cx('flex flex-col gap-3', className)}>
       <div className="flex items-center justify-between gap-3">
@@ -2243,6 +2263,14 @@ export function EntityOverflowMenu({
   const relationCount = countRelations(data.triples);
   const flagCount = data.flags.length;
   const hasAny = relationCount > 0 || flagCount > 0;
+  const showAddContext = TEMPLATE_ACTIONS.addContext;
+  const showDispute = TEMPLATE_ACTIONS.dispute;
+  const hasWriteItems = showAddContext || showDispute;
+  const hasShowAllContextToggle = isPageRoot && Boolean(ctx);
+  const hasShowContextItem = !isPageRoot && hasAny;
+  // With Add context and Dispute off (GEO-3819) the menu can be left with nothing in it; then the
+  // "..." trigger goes too, rather than opening an empty menu.
+  const hasMenuItems = hasWriteItems || hasShowAllContextToggle || hasShowContextItem;
 
   React.useEffect(() => {
     if (!open) return;
@@ -2318,25 +2346,27 @@ export function EntityOverflowMenu({
         </button>
       )}
 
-      <button
-        type="button"
-        aria-label={`More actions for ${target.title}`}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={event => {
-          event.stopPropagation();
-          setOpen(prev => !prev);
-        }}
-        className={cx(
-          'inline-grid cursor-pointer place-items-center rounded-full border-0 bg-transparent text-grey-04 transition-colors hover:bg-grey-01 hover:text-text',
-          open && 'bg-grey-01 text-text',
-          size === 'md' ? 'size-8' : 'size-7'
-        )}
-      >
-        <MoreHorizontalIcon className="size-4" />
-      </button>
+      {hasMenuItems && (
+        <button
+          type="button"
+          aria-label={`More actions for ${target.title}`}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          onClick={event => {
+            event.stopPropagation();
+            setOpen(prev => !prev);
+          }}
+          className={cx(
+            'inline-grid cursor-pointer place-items-center rounded-full border-0 bg-transparent text-grey-04 transition-colors hover:bg-grey-01 hover:text-text',
+            open && 'bg-grey-01 text-text',
+            size === 'md' ? 'size-8' : 'size-7'
+          )}
+        >
+          <MoreHorizontalIcon className="size-4" />
+        </button>
+      )}
 
-      {open && (
+      {open && hasMenuItems && (
         <div
           role="menu"
           aria-label={`Actions for ${target.title}`}
@@ -2373,11 +2403,11 @@ export function EntityOverflowMenu({
                   />
                 </span>
               </button>
-              <div className="my-1 h-px bg-divider" />
+              {hasWriteItems && <div className="my-1 h-px bg-divider" />}
             </>
           )}
 
-          {!isPageRoot && hasAny && (
+          {hasShowContextItem && (
             <>
               <button
                 type="button"
@@ -2391,29 +2421,33 @@ export function EntityOverflowMenu({
                 </span>
                 <span className="text-[12.5px] text-grey-04 tabular-nums">{relationCount + flagCount}</span>
               </button>
-              <div className="my-1 h-px bg-divider" />
+              {hasWriteItems && <div className="my-1 h-px bg-divider" />}
             </>
           )}
 
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => triggerAction('add-context')}
-            className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg border-0 bg-transparent px-2.5 py-2 text-left text-[14px] font-medium text-text transition-colors hover:bg-grey-01"
-          >
-            <NetworkIcon className="size-4 text-grey-04" />
-            <span>Add context</span>
-          </button>
+          {showAddContext && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => triggerAction('add-context')}
+              className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg border-0 bg-transparent px-2.5 py-2 text-left text-[14px] font-medium text-text transition-colors hover:bg-grey-01"
+            >
+              <NetworkIcon className="size-4 text-grey-04" />
+              <span>Add context</span>
+            </button>
+          )}
 
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => triggerAction('flag')}
-            className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg border-0 bg-transparent px-2.5 py-2 text-left text-[14px] font-medium text-text transition-colors hover:bg-grey-01"
-          >
-            <FlagIcon className="size-4 text-grey-04" />
-            <span>Dispute</span>
-          </button>
+          {showDispute && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => triggerAction('flag')}
+              className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg border-0 bg-transparent px-2.5 py-2 text-left text-[14px] font-medium text-text transition-colors hover:bg-grey-01"
+            >
+              <FlagIcon className="size-4 text-grey-04" />
+              <span>Dispute</span>
+            </button>
+          )}
         </div>
       )}
     </div>
