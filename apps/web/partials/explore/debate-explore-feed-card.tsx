@@ -53,10 +53,10 @@ const DEACTIVATE_RATIO = 0.4;
  *   34 (16px padding top and bottom and the 1px outline) + 28 (the moments row the moments card
  *   draws above the clip on desktop, held now so that card does not move this one; 0 on phones,
  *   where its bar sits over the clip) + 44 (the claim's 24px above and 20px below) + 54 (two
- *   27px claim lines, the clamp) + 44 (the vote row) + 24 (the meta line under it)
- *   = **228px on desktop, 200px on phones**.
+ *   27px claim lines, the clamp) + 44 (the vote row) + 36 (the 24px meta line and the 12px above
+ *   it) = **240px on desktop, 212px on phones**.
  *
- * At 1366×768 that is (768 − 76 − 228) × 0.8304 = 385px of media; at 1440×900 it is 495px, capped
+ * At 1366×768 that is (768 − 76 − 240) × 0.8304 = 375px of media; at 1440×900 it is 485px, capped
  * by the card to 448px (480 − 32). Never under 280px, where a face is too small to read, so a very
  * short window gives up the promise rather than the picture. The results row the app shows after a
  * vote (64px) is not reserved, as in the app: the vote row stays where it was tapped, and the
@@ -393,7 +393,7 @@ export function DebateExploreFeedCard({
             ? 'max-w-full overflow-hidden rounded-lg border border-grey-02'
             : cx(
                 'rounded-[26px] border border-[#e5e5e5] p-4 shadow-[0_8px_14px_rgba(0,0,0,0.075)]',
-                '[--debate-card-chrome:228px] md:[--debate-card-chrome:200px]',
+                '[--debate-card-chrome:240px] md:[--debate-card-chrome:212px]',
                 fullWidth ? 'max-w-full' : 'max-w-[480px]'
               )
         )}
