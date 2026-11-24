@@ -6,10 +6,10 @@ import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useRouter } from 'next/navigation';
 
 import { useBulkPublish } from '~/core/hooks/use-publish';
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { Space } from '~/core/io/dto/spaces';
 import { Entities } from '~/core/utils/entity';
 import { getImagePath } from '~/core/utils/utils';
+import { useAccountAddress } from '~/core/wallet/account-readiness';
 
 import { Button, SquareButton } from '~/design-system/button';
 import { Close } from '~/design-system/icons/close';
@@ -48,21 +48,28 @@ const PublishImport = ({ spaceId, space }: PublishImportProps) => {
   const spaceAvatar = Entities.avatar(space?.entity?.relations);
   const [proposalName, setProposalName] = useState('');
   const isReadyToPublish = proposalName.length > 0;
-  const { smartAccount } = useSmartAccount();
+  const accountAddress = useAccountAddress();
   const { makeBulkProposal } = useBulkPublish();
 
+  const [isPublishing, setIsPublishing] = useState(false);
+
   const handlePublish = async () => {
-    if (!smartAccount) return;
-    await makeBulkProposal({
-      values,
-      relations,
-      spaceId,
-      name: proposalName,
-      onSuccess: () => {
-        setIsPublishOpen(false);
-        router.refresh();
-      },
-    });
+    if (!accountAddress || isPublishing) return;
+    setIsPublishing(true);
+    try {
+      await makeBulkProposal({
+        values,
+        relations,
+        spaceId,
+        name: proposalName,
+        onSuccess: () => {
+          setIsPublishOpen(false);
+          router.refresh();
+        },
+      });
+    } finally {
+      setIsPublishing(false);
+    }
   };
 
   return (
@@ -87,7 +94,7 @@ const PublishImport = ({ spaceId, space }: PublishImportProps) => {
           </div>
         </div>
         <div>
-          <Button onClick={handlePublish} disabled={!isReadyToPublish || values.length === 0}>
+          <Button onClick={handlePublish} disabled={!isReadyToPublish || values.length === 0 || isPublishing}>
             Publish
           </Button>
         </div>

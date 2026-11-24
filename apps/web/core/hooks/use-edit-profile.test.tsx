@@ -73,6 +73,7 @@ vi.mock('~/core/sync/store', () => ({ GeoStore: { queryKey: (id: string) => ['en
 vi.mock('~/core/hooks/use-smart-account', () => ({
   useSmartAccount: () => ({ smartAccount: { account: { address: ADDRESS } } }),
 }));
+vi.mock('~/core/wallet/account-readiness', () => ({ useAccountAddress: () => ADDRESS }));
 
 vi.mock('~/core/hooks/use-personal-space-id', () => ({
   usePersonalSpaceId: () => ({

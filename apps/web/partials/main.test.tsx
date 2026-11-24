@@ -5,7 +5,7 @@ import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Main } from './main';
-import { debateFullscreenActiveAtom } from '~/atoms';
+import { debateFullscreenActiveAtom, graphExplorerUnavailableAtom } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({ pathname: '/space/space-1/entity-1' }));
 
@@ -53,6 +53,27 @@ describe('Main', () => {
     for (const className of CHROME) expect(main).not.toHaveClass(className);
   });
 
+  // By path, so the server render and every hydration order agree: the first paint is the explorer.
+  it('drops the chrome on the graph route', () => {
+    mocks.pathname = '/explore/graph/entity-1';
+    const main = renderMain();
+    for (const className of CHROME) expect(main).not.toHaveClass(className);
+  });
+
+  it('gives the chrome back on the graph route when the page is not showing the explorer', () => {
+    mocks.pathname = '/explore/graph/entity-1';
+    store.set(graphExplorerUnavailableAtom, true);
+    expect(renderMain()).toHaveClass(...CHROME);
+  });
+
+  it('keeps the chrome on other routes', () => {
+    for (const pathname of ['/explore/graph', '/explore/graph/entity-1/more', '/space/space-1/entity-1']) {
+      mocks.pathname = pathname;
+      expect(renderMain()).toHaveClass(...CHROME);
+      cleanup();
+    }
+  });
+
   it('keeps the chrome off routes that are already full-width', () => {
     mocks.pathname = '/space/space-1/debates';
     const main = renderMain();
@@ -69,5 +90,20 @@ describe('Main', () => {
     expect(main).toHaveClass('mx-auto', 'max-w-[1200px]');
     expect(main).not.toHaveClass('pt-8');
     expect(main).not.toHaveClass('pb-16');
+  });
+
+  // The call room is the same shell; the top padding pushed its control bar below the fold.
+  it('drops only the vertical padding around a space call, which fills the viewport itself', () => {
+    mocks.pathname = '/space/25a3b0d1c4e84f1e9a7b6c5d4e3f2a1b/calls/0b5c9d41f2a74e0f9d3a8f6e1c2b7a90';
+    const main = renderMain();
+
+    expect(main).toHaveClass('mx-auto', 'max-w-[1200px]');
+    expect(main).not.toHaveClass('pt-8');
+    expect(main).not.toHaveClass('pb-16');
+  });
+
+  it('keeps the padding on the Calls tab', () => {
+    mocks.pathname = '/space/25a3b0d1c4e84f1e9a7b6c5d4e3f2a1b/calls';
+    expect(renderMain()).toHaveClass(...CHROME);
   });
 });

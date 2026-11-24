@@ -49,13 +49,13 @@ import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 import { useOnboarding } from '~/core/hooks/use-onboarding';
 import { useRankingComposeAccess } from '~/core/hooks/use-ranking-compose-access';
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useCanUserEdit } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useEditorInstance } from '~/core/state/editor/editor-provider';
 import { useEditorStoreLite } from '~/core/state/editor/use-editor-blocks';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import type { Row } from '~/core/types';
+import { useAccountAddress } from '~/core/wallet/account-readiness';
 
 import { stepAtom } from '~/partials/onboarding/onboarding-atoms';
 
@@ -295,8 +295,7 @@ export function useRankingBlockState({
     ? (initialSharedRanking?.entries ?? EMPTY_RANKING_ENTRIES)
     : EMPTY_RANKING_ENTRIES;
 
-  const { smartAccount } = useSmartAccount();
-  const walletAddress = smartAccount?.account.address;
+  const walletAddress = useAccountAddress() ?? undefined;
   const { profile } = useGeoProfile(walletAddress);
   const myAvatarUrl =
     sharedSubmission?.author.avatarUrl ??
@@ -452,7 +451,7 @@ export function useRankingBlockState({
   const showMyRankingSection = showMyRankingTab && hasMyRankingData;
   // Logged-out users still see "Add my ranking" — clicking it opens the sign-in
   // prompt via ensureAccess instead of hiding the entry point entirely.
-  const isLoggedIn = Boolean(smartAccount);
+  const isLoggedIn = Boolean(walletAddress);
   const showAddMyRankingInGlobalHeader = (showMyRankingTab || !isLoggedIn) && !hasOwnMyRankingData;
 
   React.useEffect(() => {
@@ -780,7 +779,7 @@ export function useRankingBlockState({
         const queryString = searchParams?.toString() ?? '';
         setRankingComposeReturnHref(`${pathname}${queryString ? `?${queryString}` : ''}`);
 
-        if (!smartAccount) {
+        if (!walletAddress) {
           promptLogin(href);
           return;
         }
@@ -821,7 +820,7 @@ export function useRankingBlockState({
       setRankingComposeReturnHref,
       setStep,
       searchParams,
-      smartAccount,
+      walletAddress,
       spaceId,
     ]
   );

@@ -24,6 +24,15 @@ describe('action context', () => {
       page_type: 'space_activity',
     });
   });
+  it('reads the graph explorer as its own page, not the Explore feed', () => {
+    expect(pageContext(`/explore/graph/${claim}`)).toMatchObject({
+      page_type: 'graph_explorer',
+      page_entity_id: claim,
+      page_entity_type: 'entity',
+    });
+    expect(pageContext('/explore')).toMatchObject({ page_type: 'explore', page_entity_id: undefined });
+    expect(pageContext('/explore/graph').page_type).toBe('explore');
+  });
   it('retains the starting page, overlay and list on replay after navigation', () => {
     window.history.replaceState({}, '', '/explore');
     const original = snapshotActionContext('explore_feed_card', 'claim', claim, {

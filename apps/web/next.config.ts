@@ -171,7 +171,21 @@ const nextConfig: NextConfig = {
     ],
   },
   async headers() {
-    return [{ source: '/:path*', headers: securityHeaders }];
+    return [
+      { source: '/:path*', headers: securityHeaders },
+      // GEO-3817: the debate share player is the one page meant to be framed, by X's player card.
+      // A later rule wins for the same key, and current browsers ignore X-Frame-Options when a CSP
+      // frame-ancestors is present. The page itself only exists on preview deployments.
+      {
+        source: '/share-player/:path*',
+        headers: [
+          {
+            key: 'Content-Security-Policy',
+            value: "frame-ancestors 'self' https://x.com https://*.x.com https://twitter.com https://*.twitter.com",
+          },
+        ],
+      },
+    ];
   },
   async redirects() {
     return [

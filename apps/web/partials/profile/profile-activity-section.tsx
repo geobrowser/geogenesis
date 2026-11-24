@@ -6,10 +6,8 @@ import cx from 'classnames';
 
 import { ActionContextProvider } from '~/core/action-context-provider';
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
-import { DebatePlaybackGate } from '~/core/debates/debate-playback-gate';
 import { type ExploreFeedRow, toExploreFeedItem } from '~/core/explore/explore-card-item';
 import { type SpaceLabel, spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
-import { ID } from '~/core/id';
 import { ACTIVITY_GALLERY_CARD_LIMIT } from '~/core/profile/activity-gallery';
 import type { ClaimResponse } from '~/core/profile/use-person-positions';
 import { normId } from '~/core/utils/norm-id';
@@ -23,9 +21,6 @@ import { ExploreFeedCard } from '~/partials/explore/explore-feed-card';
 import { withSpaceTabsAnchor } from '~/partials/space-page/space-tabs-anchor';
 
 import { GalleryClaimCard } from './gallery-claim-card';
-
-const GALLERY_ACTIVATE_RATIO = 0.6;
-const GALLERY_DEACTIVATE_RATIO = 0.4;
 
 export type ActivityKind = {
   key: string;
@@ -555,15 +550,7 @@ function ActivityGallery({
   const rowSpaceIds = React.useMemo(() => [...new Set(shown.map(row => row.spaceId))], [shown]);
   const { labelsById } = useSpaceLabels(rowSpaceIds);
 
-  const {
-    scrollerRef,
-    allowedDebateId,
-    requestPlayback,
-    setPlaybackAvailable,
-    canScrollLeft,
-    canScrollRight,
-    scrollByCard,
-  } = useActivityGallery(shown);
+  const { scrollerRef, canScrollLeft, canScrollRight, scrollByCard } = useActivityGallery(shown);
 
   React.useEffect(() => {
     onNavigationChange?.({ left: canScrollLeft, right: canScrollRight, scrollByCard });
@@ -574,10 +561,9 @@ function ActivityGallery({
   React.useEffect(() => () => onNavigationChange?.(null), [onNavigationChange]);
 
   return (
-    // One at a time. Compact cards can leave several debates fully visible, so intersection alone
-    // cannot choose. The first debate receives autoplay; clicking another player transfers the
-    // gate before that click starts it, which also pauses the previous owner.
-    <DebatePlaybackGate allowedId={allowedDebateId}>
+    // Nothing here plays until it is tapped, and a tap plays only that card (GEO-3812): the gallery
+    // is outside a feed, so its debate cards are tap-to-play, one debate at a time app-wide.
+    <>
       {/*
        * The wrapper, not the scroller, carries both of these.
        *
@@ -613,64 +599,38 @@ function ActivityGallery({
               label={spaceLabel(labelsById, row.spaceId)}
               response={responseByClaimId?.[normId(row.entityId)]}
               personName={personName}
-              onDebatePlaybackRequest={requestPlayback}
-              onDebatePlaybackAvailabilityChange={setPlaybackAvailable}
               debateEndSlot={debateEndSlot}
             />
           ))}
           <span aria-hidden className="w-0 shrink-0 md:pr-4" />
         </div>
       </div>
-    </DebatePlaybackGate>
+    </>
   );
 }
 
 /**
- * Own autoplay for a row where several debates can be visible at once.
+ * The rail's navigation: whether it can scroll either way, and a step of one card.
  *
- * The first debate with a mounted player starts. A click on an active player transfers ownership
- * immediately; a click on an inactive visible edge centers that card and transfers once active.
- * Scrolling the rail or page keeps that owner until less than 40% of its two-dimensional area is
- * visible, then advances to a mounted card that is at least 60% visible. Those are the same
- * hysteresis edges and visibility dimensions used by the player itself, so the gate hands off at
- * the moment the outgoing player pauses rather than leaving a silent visible row. The same
- * measurement pass also drives the rail navigation controls.
+ * This used to choose which debate in the row autoplayed, too. Outside a feed nothing autoplays any
+ * more (GEO-3812): the card the viewer taps is the one that plays, which the cards settle between
+ * themselves, so all that is left to measure here is the rail.
  */
 function useActivityGallery(rows: ExploreFeedRow[]) {
   const scrollerRef = React.useRef<HTMLDivElement | null>(null);
   const collectionKey = React.useMemo(() => rows.map(row => `${row.entityId}:${row.spaceId}`).join('|'), [rows]);
-  const [availableDebateIds, setAvailableDebateIds] = React.useState<ReadonlySet<string>>(() => new Set());
-  const scheduleMeasureRef = React.useRef<(() => void) | null>(null);
-  const availableRef = React.useRef(availableDebateIds);
-  availableRef.current = availableDebateIds;
-  // Ownership is state, not a derivation from row order. Once a player starts, a different row
-  // finishing its lookup must not interrupt it; only click, visibility, or unavailability moves it.
-  const [selectedPlaybackId, setSelectedPlaybackId] = React.useState<string | null>(null);
-  const allowedDebateId =
-    selectedPlaybackId &&
-    availableDebateIds.has(normId(selectedPlaybackId)) &&
-    rows.some(row => !isClaimRow(row) && ID.equals(row.entityId, selectedPlaybackId))
-      ? selectedPlaybackId
-      : null;
-  const allowedRef = React.useRef(allowedDebateId);
-  allowedRef.current = allowedDebateId;
   const [navigation, setNavigation] = React.useState({ left: false, right: false });
 
   React.useEffect(() => {
     const scroller = scrollerRef.current;
     if (!scroller) return;
 
-    // A different Activity collection starts at its first card. Besides being the expected tab
-    // behavior, this keeps the first debate selected for autoplay and actually visible together.
+    // A different Activity collection starts at its first card.
     scroller.scrollLeft = 0;
     let frame = 0;
-    let previousScrollLeft = 0;
 
     const measure = () => {
       frame = 0;
-      const scrollDirection = Math.sign(scroller.scrollLeft - previousScrollLeft);
-      previousScrollLeft = scroller.scrollLeft;
-
       const scrollerBox = scroller.getBoundingClientRect();
       const cards = Array.from(scroller.querySelectorAll<HTMLElement>('[data-activity-card]'));
       const firstBox = cards.at(0)?.getBoundingClientRect();
@@ -685,74 +645,25 @@ function useActivityGallery(rows: ExploreFeedRow[]) {
       setNavigation(current =>
         current.left === nextNavigation.left && current.right === nextNavigation.right ? current : nextNavigation
       );
-
-      const visible = cards.flatMap((card, index) => {
-        const id = card.dataset.activityDebateId;
-        if (!id || !availableRef.current.has(normId(id))) return [];
-        const box = card.getBoundingClientRect();
-        const visibleWidth = Math.max(
-          0,
-          Math.min(box.right, scrollerBox.right, window.innerWidth) - Math.max(box.left, scrollerBox.left, 0)
-        );
-        const visibleHeight = Math.max(
-          0,
-          Math.min(box.bottom, scrollerBox.bottom, window.innerHeight) - Math.max(box.top, scrollerBox.top, 0)
-        );
-        return [
-          {
-            id,
-            index,
-            ratio: box.width > 0 && box.height > 0 ? (visibleWidth * visibleHeight) / (box.width * box.height) : 0,
-          },
-        ];
-      });
-
-      const currentId = allowedRef.current;
-      const current = visible.find(card => currentId && ID.equals(card.id, currentId));
-      if (current && current.ratio > GALLERY_DEACTIVATE_RATIO) return;
-
-      const candidates = visible.filter(card => card.id && card.ratio >= GALLERY_ACTIVATE_RATIO);
-      const directional =
-        scrollDirection > 0
-          ? candidates.find(card => current == null || card.index > current.index)
-          : scrollDirection < 0
-            ? [...candidates].reverse().find(card => current == null || card.index < current.index)
-            : undefined;
-      const next = directional ?? candidates.sort((a, b) => b.ratio - a.ratio)[0];
-
-      if (next && (!currentId || !ID.equals(next.id, currentId))) {
-        setSelectedPlaybackId(next.id);
-      }
     };
 
     const scheduleMeasure = () => {
       if (!frame) frame = requestAnimationFrame(measure);
     };
-    scheduleMeasureRef.current = scheduleMeasure;
 
     measure();
     scroller.addEventListener('scroll', scheduleMeasure, { passive: true });
-    window.addEventListener('scroll', scheduleMeasure, { passive: true });
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(scheduleMeasure);
     observer?.observe(scroller);
     window.addEventListener('resize', scheduleMeasure);
 
     return () => {
-      if (scheduleMeasureRef.current === scheduleMeasure) scheduleMeasureRef.current = null;
       if (frame) cancelAnimationFrame(frame);
       scroller.removeEventListener('scroll', scheduleMeasure);
-      window.removeEventListener('scroll', scheduleMeasure);
       observer?.disconnect();
       window.removeEventListener('resize', scheduleMeasure);
     };
   }, [collectionKey]);
-
-  // A player can appear or disappear without the rail moving (query completion, refetch failure,
-  // or media eviction). Re-run the same visibility selection used by scrolling instead of falling
-  // back to source order until some later scroll or resize happens to correct ownership.
-  React.useEffect(() => {
-    scheduleMeasureRef.current?.();
-  }, [availableDebateIds]);
 
   const scrollByCard = React.useCallback(
     (direction: -1 | 1) => {
@@ -766,32 +677,8 @@ function useActivityGallery(rows: ExploreFeedRow[]) {
     [scrollerRef]
   );
 
-  const requestPlayback = React.useCallback((debateId: string) => {
-    if (availableRef.current.has(normId(debateId))) setSelectedPlaybackId(debateId);
-  }, []);
-
-  const setPlaybackAvailable = React.useCallback((debateId: string, available: boolean) => {
-    const id = normId(debateId);
-    setSelectedPlaybackId(current => {
-      if (available) return current ?? debateId;
-      // An unavailable owner must not reclaim the gate merely by remounting later.
-      return current && ID.equals(current, debateId) ? null : current;
-    });
-    setAvailableDebateIds(current => {
-      if (current.has(id) === available) return current;
-
-      const next = new Set(current);
-      if (available) next.add(id);
-      else next.delete(id);
-      return next;
-    });
-  }, []);
-
   return {
     scrollerRef,
-    allowedDebateId,
-    requestPlayback,
-    setPlaybackAvailable,
     canScrollLeft: navigation.left,
     canScrollRight: navigation.right,
     scrollByCard,
@@ -814,8 +701,6 @@ function GalleryCard({
   label,
   response,
   personName,
-  onDebatePlaybackRequest,
-  onDebatePlaybackAvailabilityChange,
   debateEndSlot,
 }: {
   itemPosition: number;
@@ -823,8 +708,6 @@ function GalleryCard({
   label: SpaceLabel | undefined;
   response: ClaimResponse | undefined;
   personName?: string | null;
-  onDebatePlaybackRequest: (debateId: string) => void;
-  onDebatePlaybackAvailabilityChange: (debateId: string, available: boolean) => void;
   debateEndSlot?: (item: ReturnType<typeof toExploreFeedItem>) => React.ReactNode;
 }) {
   // A claim gets the debates panel's own card, and everything else the feed's.
@@ -840,7 +723,6 @@ function GalleryCard({
     <ActionContextProvider value={{ list_id: 'profile_activity', item_position: itemPosition }}>
       <div
         data-activity-card
-        data-activity-debate-id={isClaim ? undefined : row.entityId}
         // Measure the visible gallery, including inside a side panel, rather than the viewport.
         // The next card still peeks into view; the card itself owns its frame and padding.
         className="w-[min(300px,84cqw)] shrink-0 snap-start"
@@ -855,8 +737,6 @@ function GalleryCard({
             hideJoinButton
             titleOpensSidePanel
             compactDebateChrome
-            onDebatePlaybackRequest={onDebatePlaybackRequest}
-            onDebatePlaybackAvailabilityChange={onDebatePlaybackAvailabilityChange}
             debateEndSlot={debateEndSlot?.(toExploreFeedItem(row, label))}
           />
         )}

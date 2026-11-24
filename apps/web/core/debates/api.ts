@@ -1181,6 +1181,11 @@ export function getCurrentGeoChatUserId() {
   return decodeGeoChatAccessToken(session?.access_token)?.user_id ?? null;
 }
 
+/** The stored session's person entity id; null on a geo-chat build that sends none. */
+export function getCurrentGeoChatPersonId() {
+  return loadSession(null)?.profile?.person_id ?? null;
+}
+
 export async function getServerTime() {
   return geoChatRequest<{ server_time_ms: number }>('/time');
 }
@@ -2968,6 +2973,8 @@ export type DebateLobbyPerson = {
 export type DebateLobbyCallDetails = {
   space_id: string;
   space_name: string | null;
+  /** The call's Call Event entity once written (GEO-3593); absent from older geo-chat. */
+  entity_id?: string | null;
   /** The space's member chat room (GEO-3422); absent from geo-chat without space chat. */
   chat_room_id?: string | null;
   started_by: DebateLobbyPerson | null;
@@ -4665,13 +4672,34 @@ function saveSession(session: GeoChatSession, accountKey: string | null) {
       geoChatSessionStorageKey,
       JSON.stringify({ account_key: accountKey, session } satisfies StoredGeoChatSession)
     );
+    notifySessionListeners();
   }
 }
 
 function removeStoredSession() {
   if (typeof window !== 'undefined') {
     window.localStorage.removeItem(geoChatSessionStorageKey);
+    notifySessionListeners();
   }
+}
+
+const sessionListeners = new Set<() => void>();
+
+function notifySessionListeners() {
+  for (const listener of sessionListeners) listener();
+}
+
+/** Calls `listener` whenever the stored session changes, here or in another tab. */
+export function subscribeGeoChatSession(listener: () => void) {
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === geoChatSessionStorageKey) listener();
+  };
+  sessionListeners.add(listener);
+  window.addEventListener('storage', onStorage);
+  return () => {
+    sessionListeners.delete(listener);
+    window.removeEventListener('storage', onStorage);
+  };
 }
 
 function assertCurrentGeoChatSessionEpoch(issuedForEpoch: number) {

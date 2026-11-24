@@ -1,17 +1,22 @@
 import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 
-import { cookies } from 'next/headers';
+import type { Metadata } from 'next';
+
+import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 
+import { readWalletSession } from '~/core/auth/server/wallet-session';
 import { bountiesEnabledForNetwork, isBountyEntity } from '~/core/bounties/config';
 import { EVENT_SCHEMA } from '~/core/community-calls/constants';
 import { getRecordingUrls } from '~/core/community-calls/recordings';
-import { WALLET_ADDRESS } from '~/core/cookie';
 import { DebateEntityView } from '~/core/debates/browse/debate-entity-view';
 import { DebateRemovedView } from '~/core/debates/browse/debate-removed-view';
 import { isDebateEntity } from '~/core/debates/is-debate-entity';
+import { sharePlayerEnabled, sharePlayerMetadata } from '~/core/debates/server/share-player';
 import { debatePageStillPreloads } from '~/core/debates/speaker-still';
 import { isHiddenEntity } from '~/core/moderation/hidden';
+import { firstLine } from '~/core/opengraph';
+import { Entities } from '~/core/utils/entity';
 import { entityBrowseViewFromTypes } from '~/core/utils/entity-browse-view';
 import { entityHasOnlyPostType } from '~/core/utils/entity/entities';
 
@@ -19,7 +24,12 @@ import { BountyDetailHeader } from '~/partials/bounties/bounty-detail-header';
 import { BountyDetailSections } from '~/partials/bounties/bounty-detail-sections';
 import { CommunityCallRecording } from '~/partials/community-calls/community-call-recording';
 
-import { cachedFetchDebatePageMedia, cachedFetchEntityPage, cachedReadDebateVisibility } from './cached-fetch-entity';
+import {
+  cachedFetchDebatePageMedia,
+  cachedFetchDebateVisibility,
+  cachedFetchEntityPage,
+  cachedReadDebateVisibility,
+} from './cached-fetch-entity';
 import DefaultEntityPage from './default-entity-page';
 import PostEntityPage from './post-entity-page';
 import { ProfileEntityServerContainer } from './profile-entity-server-container';
@@ -27,6 +37,39 @@ import { ProfileEntityServerContainer } from './profile-entity-server-container'
 interface Props {
   params: Promise<{ id: string; entityId: string }>;
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}
+
+/**
+ * GEO-3817 experiment, preview deployments only: a debate with a share video unfurls as a playable
+ * card (X player card, `og:video`). Here rather than in the layout because `?card=tall` (the video's
+ * own 9:16 player instead of 16:9) is a search param, which only a page's metadata can read.
+ * Merged over the layout's title and description; the layout's hidden and removed guards are
+ * repeated so a withheld debate never gains a playable card.
+ */
+export async function generateMetadata(props: Props): Promise<Metadata> {
+  const params = await props.params;
+  if (!IdUtils.isValid(params.id) || !IdUtils.isValid(params.entityId)) return {};
+  if (!sharePlayerEnabled(params.entityId)) return {};
+
+  const entity = (await cachedFetchEntityPage(params.entityId, params.id))?.entity ?? null;
+  if (!entity || isHiddenEntity(entity) || !isDebateEntity(entity.types)) return {};
+  if ((await cachedFetchDebateVisibility(params.entityId)) === 'removed') return {};
+
+  const host = (await headers()).get('host');
+  if (!host) return {};
+  const searchParams = await props.searchParams;
+
+  return (
+    sharePlayerMetadata({
+      origin: `${host.startsWith('localhost') ? 'http' : 'https'}://${host}`,
+      spaceId: params.id,
+      debateId: params.entityId,
+      media: await cachedFetchDebatePageMedia(params.entityId),
+      title: entity.name ?? 'Debate',
+      description: firstLine(Entities.description(entity.values ?? [])),
+      shape: searchParams.card === 'tall' ? 'tall' : 'wide',
+    }) ?? {}
+  );
 }
 
 export default async function EntityTemplateStrategy(props: Props) {
@@ -67,10 +110,10 @@ export default async function EntityTemplateStrategy(props: Props) {
     //
     // The same read's body, and the debate's media readiness fetched beside it, go to the feed so
     // the linked debate can render, on the server too, without its own lookups (GEO-3604).
-    const [{ visibility, debate }, media, cookieStore] = await Promise.all([
+    const [{ visibility, debate }, media, signedInWallet] = await Promise.all([
       cachedReadDebateVisibility(params.entityId),
       cachedFetchDebatePageMedia(params.entityId),
-      cookies(),
+      readWalletSession(),
     ]);
     if (visibility === 'removed') {
       return <DebateRemovedView spaceId={params.id} debateId={params.entityId} />;
@@ -91,7 +134,7 @@ export default async function EntityTemplateStrategy(props: Props) {
         <DebateEntityView
           spaceId={params.id}
           debateId={params.entityId}
-          seed={{ debate, media, signedIn: cookieStore.get(WALLET_ADDRESS) !== undefined }}
+          seed={{ debate, media, signedIn: signedInWallet !== null }}
           editView={<DefaultEntityPage params={params} searchParams={searchParams} />}
           removedView={<DebateRemovedView spaceId={params.id} debateId={params.entityId} reportOutcome={false} />}
         />

@@ -36,6 +36,7 @@ export const ACTION_COMPONENTS = [
   'onboarding_customize_feed',
   'person_follow_button',
   'debate_claim_card',
+  'best_debates_watch',
 ] as const;
 export type ActionComponent = (typeof ACTION_COMPONENTS)[number];
 export type ActionKind =
@@ -250,7 +251,12 @@ export function pageContext(
   let pageType = segments[0] || 'home';
   let entityId: string | undefined;
   let entityType: string | undefined;
-  if (segments[0] === 'space') {
+  if (segments[0] === 'explore' && segments[1] === 'graph' && isId(segments[2])) {
+    // Not 'explore': the Explore feed signals count every vote on page_type 'explore' as a feed vote.
+    pageType = 'graph_explorer';
+    entityId = segments[2];
+    entityType = 'entity';
+  } else if (segments[0] === 'space') {
     if (isId(segments[2])) {
       pageType = 'entity';
       entityId = segments[2];

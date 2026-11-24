@@ -42,7 +42,7 @@ vi.mock('./explore-welcome-banner', () => ({ ExploreWelcomeBanner: () => null })
 vi.mock('./explore-live-lobbies-banner', () => ({ ExploreLiveLobbiesBanner: () => null }));
 vi.mock('./email-capture-popup', () => ({ ExploreEmailCapturePopup: () => null }));
 // GEO-3421: the past-call list is geo-chat's; here only what the feed is handed matters.
-const pastCallInterleave = () => new Map();
+const pastCallInterleave = () => ({ cards: new Map(), replaces: new Set<string>() });
 vi.mock('~/core/space-calls/recording/explore-past-calls', () => ({
   usePastCallInterleave: (enabled: boolean) => (enabled ? pastCallInterleave : undefined),
 }));

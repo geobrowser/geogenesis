@@ -15,10 +15,11 @@ import { commentsFetchedQueryKey } from '~/core/io/query-keys';
 import { geo } from '~/core/sdk/geo-client';
 import { useReportError } from '~/core/state/status-bar-store';
 import { toUserFacingError } from '~/core/utils/error-diagnostics';
+import { useAccountAddress } from '~/core/wallet/account-readiness';
 
 import type { CommentEntity, CreateCommentParams } from '~/partials/comments/types';
 
-import { readCachedPersonalSpace, readCachedSmartAccount } from './cached-write-identity';
+import { awaitSigningAccount, readAccountAddress, readCachedPersonalSpace } from './cached-write-identity';
 import { fetchCommentEntitiesForTarget, mergePendingWithServer } from './use-comments';
 import { useGeoProfile } from './use-geo-profile';
 import { usePersonalSpaceId } from './use-personal-space-id';
@@ -94,7 +95,7 @@ export function useCreateComment(targetEntityId: string) {
   // in React Query's cache — no extra request. Stored in a ref so createComment can read the
   // latest value without being re-created when the profile eventually loads (otherwise the
   // memoized callback would close over a stale null profile until some other dep changed).
-  const walletAddress = smartAccount?.account.address ?? null;
+  const walletAddress = useAccountAddress();
   const { profile: cachedProfile } = useGeoProfile(walletAddress ?? undefined);
   const cachedProfileRef = React.useRef(cachedProfile);
   React.useEffect(() => {
@@ -152,16 +153,14 @@ export function useCreateComment(targetEntityId: string) {
       onOptimistic,
       commentId: existingCommentId,
     }: CreateCommentInput): Promise<CreateCommentResult | null> => {
-      const account = readCachedSmartAccount(queryClient, smartAccount);
-      if (!account) {
+      const walletAddr = smartAccount?.account.address ?? readAccountAddress();
+      if (!walletAddr) {
         setToast(<span>Please connect your wallet to comment</span>);
         return null;
       }
 
-      const { personalSpaceId } = readCachedPersonalSpace(queryClient, account.account.address);
       const commentEntityId = existingCommentId ?? IdUtils.generate();
       const commentName = getCommentName(text);
-      const walletAddr = account.account.address;
 
       // Insert the optimistic row whenever it is not in the cache — not only on a first attempt.
       //
@@ -185,7 +184,8 @@ export function useCreateComment(targetEntityId: string) {
           profileSnapshot?.avatarUrl && profileSnapshot.avatarUrl !== PLACEHOLDER_SPACE_IMAGE
             ? profileSnapshot.avatarUrl
             : null;
-        const displaySpaceId = personalSpaceId ?? `pending:${walletAddr}`;
+        const displaySpaceId =
+          readCachedPersonalSpace(queryClient, walletAddr).personalSpaceId ?? `pending:${walletAddr}`;
         const optimisticComment: CommentEntity = {
           id: commentEntityId,
           name: commentName,
@@ -215,6 +215,12 @@ export function useCreateComment(targetEntityId: string) {
         onOptimistic?.(commentEntityId);
       }
 
+      const account = await awaitSigningAccount(smartAccount);
+      if (!account) {
+        return { id: commentEntityId, published: false };
+      }
+
+      const { personalSpaceId } = readCachedPersonalSpace(queryClient, account.account.address);
       if (!personalSpaceId) {
         return { id: commentEntityId, published: false };
       }
@@ -439,7 +445,7 @@ export function useCreateComment(targetEntityId: string) {
       commentSpaceId: string;
       newText: string;
     }): Promise<boolean> => {
-      const account = readCachedSmartAccount(queryClient, smartAccount);
+      const account = await awaitSigningAccount(smartAccount);
       if (!account) {
         setToast(<span>Please connect your wallet to edit</span>);
         return false;

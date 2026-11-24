@@ -10,7 +10,7 @@ import { personProfileOpened } from '~/core/analytics';
 import { SLOT_MINUTES } from '~/core/availability/blocks';
 import { PEER_SCHEDULE_DAYS, slotStarts } from '~/core/availability/peer-schedule';
 import type { ScheduleEntry } from '~/core/availability/schedule-analytics';
-import { accountSetupMessage } from '~/core/debates/account-setup-copy';
+import { accountSetupMessage, openSessionRefusalMessage } from '~/core/debates/account-setup-copy';
 import { FollowButton } from '~/core/follows/follow-button';
 import { usePersonFollowerCount } from '~/core/follows/person-follow-counts';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
@@ -818,6 +818,7 @@ function DefaultPersonRow({
   // so the row offers Schedule the way an offline row does — but only when there is a week to book.
   // Otherwise the pill says Away, the way it says In a debate, until they are back.
   const away = Boolean(person.away) && !schedule;
+  const [refusal, setRefusal] = React.useState<string | null>(null);
   const offersSchedule = Boolean(schedule) || (away && canScheduleAway);
   // Reached only when Schedule is not offered: someone who cannot take a live request right now.
   const unrequestable = person.in_debate || away;
@@ -954,6 +955,7 @@ function DefaultPersonRow({
             // the press looking like it did nothing. With no week to book, the refetched list redraws
             // them as Away instead.
             onRecipientAway={canScheduleAway ? () => openSchedule(null) : undefined}
+            onRefused={setRefusal}
             // Only the offer is primary. "In a debate" and "Away" are statuses, so they keep the
             // outlined pill and their own text-derived analytics labels. `in_debate` and `away` hold
             // signed out too: they describe this person rather than any viewer.
@@ -969,6 +971,14 @@ function DefaultPersonRow({
           />
         )}
       </div>
+      {refusal ? (
+        // Under the row, where the press was; role="alert" so it is announced as well as drawn.
+        <div role="alert" className="col-span-full pt-1.5">
+          <Text as="p" variant="footnote" color="red-01">
+            {refusal}
+          </Text>
+        </div>
+      ) : null}
     </li>
   );
 }
@@ -1034,6 +1044,7 @@ function PanelPersonRow({
   const free = schedule ?? times;
   const nextFree = nextFreeLabel(free, new Date(now));
   const askedHere = askIsForPerson(ask, person.profile_space_id) ? ask : null;
+  const [refusal, setRefusal] = React.useState<string | null>(null);
   const { openTimes, profileHref } = personRowActions({ person, onRequireSignIn, onSeeTimes, entry });
 
   const spaceNames = spaceIds
@@ -1137,6 +1148,7 @@ function PanelPersonRow({
               // They went away between the list loading and the press (GEO-3119): their week is the
               // next best thing, as on the full row — but only when there is a week to book.
               onRecipientAway={canScheduleAway ? () => openTimes(null, 'people_schedule') : undefined}
+              onRefused={setRefusal}
               // Paused while any ask is out (one at a time), or when the viewer is otherwise tied up.
               disabled={disabled}
               title={disabled && !onRequireSignIn ? disabledReason : undefined}
@@ -1162,6 +1174,14 @@ function PanelPersonRow({
           />
         )}
       </div>
+      {refusal ? (
+        // Under the row, where the press was; role="alert" so it is announced as well as drawn.
+        <div role="alert" className="col-span-full pt-1.5">
+          <Text as="p" variant="footnote" color="red-01">
+            {refusal}
+          </Text>
+        </div>
+      ) : null}
     </li>
   );
 }
@@ -1305,6 +1325,7 @@ function DebateNowPill({
   analyticsSurface,
   onRequireSignIn,
   onRecipientAway,
+  onRefused,
   status = null,
   disabled,
   title,
@@ -1315,6 +1336,8 @@ function DebateNowPill({
   onRequireSignIn?: (properties?: AnalyticsProperties) => void;
   /** They went away between the list loading and the press (GEO-3119). Unset: nothing to offer. */
   onRecipientAway?: () => void;
+  /** geo-chat's `already_in_open_session` (either side is in another session): the row says why. */
+  onRefused?: (message: string | null) => void;
   status?: 'In a debate' | 'Away' | null;
   disabled: boolean;
   title?: string;
@@ -1331,16 +1354,19 @@ function DebateNowPill({
       onClick={() =>
         onRequireSignIn
           ? onRequireSignIn({ target_id: person.profile_space_id, target_type: 'space', auth_control: 'start_debate' })
-          : createChallenge.mutate(
+          : (onRefused?.(null),
+            createChallenge.mutate(
               { recipient_profile_space_id: person.profile_space_id },
               {
                 onError: error => {
+                  const refusal = openSessionRefusalMessage(error);
+                  if (refusal) onRefused?.(refusal);
                   if (onRecipientAway && error instanceof GeoChatRequestError && error.code === RECIPIENT_AWAY_CODE) {
                     onRecipientAway();
                   }
                 },
               }
-            )
+            ))
       }
       disabled={Boolean(status) || (!onRequireSignIn && (!person.can_challenge || disabled))}
       pending={createChallenge.isPending}

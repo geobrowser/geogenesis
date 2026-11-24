@@ -3,7 +3,7 @@ import { toHexId } from '~/core/utils/hex-id';
 import { isValidId } from '~/core/utils/space-url';
 
 export const SHARE_METHODS = ['copy_link', 'x', 'linkedin', 'reddit', 'native_share'] as const;
-export const SHARE_CONTENT_TYPES = ['debate', 'lobby', 'availability'] as const;
+export const SHARE_CONTENT_TYPES = ['debate', 'lobby', 'availability', 'graph'] as const;
 export type ShareMethod = (typeof SHARE_METHODS)[number];
 export type ShareContentType = (typeof SHARE_CONTENT_TYPES)[number];
 export type ShareAttribution = {
@@ -27,7 +27,7 @@ const METHOD_CODES: Record<ShareMethod, string> = {
   reddit: 'r',
   native_share: 'n',
 };
-const CONTENT_CODES: Record<ShareContentType, string> = { debate: 'd', lobby: 'l', availability: 'a' };
+const CONTENT_CODES: Record<ShareContentType, string> = { debate: 'd', lobby: 'l', availability: 'a', graph: 'g' };
 const SHORT_CODE = /^([a-z])([a-z])([A-Za-z0-9_-]{22})$/;
 const CAMPAIGN_PARAMS = ['link_id', 'campaign_id', 'gclid', 'fbclid', 'msclkid', 'ttclid', 'twclid'];
 

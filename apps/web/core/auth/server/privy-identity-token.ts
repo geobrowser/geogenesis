@@ -1,11 +1,9 @@
 /**
  * Server-side verification of a Privy identity token, so a route can know WHO is asking.
  *
- * Until now no route in this app verified anything: the wallet cookie (`WALLET_ADDRESS`) is set by
- * the client and only ever used for public reads, where trusting it costs nothing. For you reads a
- * person's private interest profile, so it cannot trust a cookie anyone can write. The browser
- * sends the identity token it already holds (`getCachedIdentityToken`, the same one debates and
- * community calls send to their backends), and this checks it the way geo-chat does
+ * Used per request by For you and the ranking lab, and by `POST /api/wallet-session`, which issues
+ * the signed session every other server read trusts (`./wallet-session`). The browser sends the
+ * identity token it already holds (`getCachedIdentityToken`), and this checks it the way geo-chat does
  * (crates/auth/src/privy.rs): ES256 against Privy's published keys, issuer `privy.io`, audience
  * this app's Privy id, not expired. The user's Geo account is the embedded Ethereum wallet in its
  * `linked_accounts` claim.
@@ -15,12 +13,16 @@
 
 const JWKS_TTL_MS = 60 * 60 * 1000;
 const JWKS_FETCH_TIMEOUT_MS = 2_000;
+/** An unknown kid refetches keys at most this often, so forged kids cannot make every request call Privy. */
+const JWKS_FORCED_REFRESH_MIN_MS = 60_000;
 /** Accepted clock skew, in seconds, on exp / nbf / iat. */
 const CLOCK_SKEW_S = 30;
 
 type Jwk = JsonWebKey & { kid?: string; alg?: string };
 
 let jwksCache: { appId: string; keys: Jwk[]; fetchedAt: number } | null = null;
+/** One fetch at a time per app, so a burst of unknown kids can't fan out past the refetch cap. */
+let jwksInFlight: { appId: string; keys: Promise<Jwk[]> } | null = null;
 
 export function privyJwksUrl(appId: string): string {
   return `https://auth.privy.io/api/v1/apps/${encodeURIComponent(appId)}/jwks.json`;
@@ -36,19 +38,38 @@ async function fetchJwks(appId: string, fetcher: typeof fetch): Promise<Jwk[]> {
   return Array.isArray(body.keys) ? body.keys : [];
 }
 
-async function keysFor(appId: string, fetcher: typeof fetch, forceRefresh: boolean): Promise<Jwk[]> {
-  const now = Date.now();
-  if (!forceRefresh && jwksCache && jwksCache.appId === appId && now - jwksCache.fetchedAt < JWKS_TTL_MS) {
-    return jwksCache.keys;
+/** The keys, and whether this call fetched them (false when served from cache). */
+async function keysFor(
+  appId: string,
+  fetcher: typeof fetch,
+  forceRefresh: boolean,
+  now: number
+): Promise<{ keys: Jwk[]; fetched: boolean }> {
+  const age = jwksCache && jwksCache.appId === appId ? now - jwksCache.fetchedAt : Infinity;
+  if (jwksCache && age < (forceRefresh ? JWKS_FORCED_REFRESH_MIN_MS : JWKS_TTL_MS)) {
+    return { keys: jwksCache.keys, fetched: false };
   }
-  const keys = await fetchJwks(appId, fetcher);
-  jwksCache = { appId, keys, fetchedAt: now };
-  return keys;
+  if (jwksInFlight?.appId !== appId) {
+    const inFlight = {
+      appId,
+      keys: fetchJwks(appId, fetcher)
+        .then(keys => {
+          jwksCache = { appId, keys, fetchedAt: now };
+          return keys;
+        })
+        .finally(() => {
+          if (jwksInFlight === inFlight) jwksInFlight = null;
+        }),
+    };
+    jwksInFlight = inFlight;
+  }
+  return { keys: await jwksInFlight.keys, fetched: true };
 }
 
 /** Test seam. */
 export function resetPrivyJwksCacheForTests() {
   jwksCache = null;
+  jwksInFlight = null;
 }
 
 function base64UrlDecode(segment: string): Uint8Array<ArrayBuffer> {
@@ -104,30 +125,37 @@ export function embeddedEthereumWallet(linkedAccountsClaim: unknown): string | n
 }
 
 /**
- * The verified identity behind `token`, or null for anything that does not verify. Never throws
- * for a bad token; a JWKS outage also yields null, so a caller falls back to the signed-out path.
+ * Why a token did not verify: `invalid` for the token itself, `unavailable` when Privy's keys could
+ * not be fetched, so the same token may verify later.
  */
-export async function verifyPrivyIdentityToken(
+export type PrivyVerification =
+  { ok: true; identity: PrivyIdentity } | { ok: false; reason: 'invalid' | 'unavailable' };
+
+const INVALID = { ok: false, reason: 'invalid' } as const;
+
+/** `verifyPrivyIdentityToken`, telling a bad token apart from a key-fetch outage. */
+export async function verifyPrivyIdentityTokenDetailed(
   token: string | null | undefined,
   options: { appId: string; fetcher?: typeof fetch; now?: () => number }
-): Promise<PrivyIdentity | null> {
-  if (!token || !options.appId) return null;
+): Promise<PrivyVerification> {
+  if (!token || !options.appId) return INVALID;
   const parts = token.trim().split('.');
-  if (parts.length !== 3) return null;
+  if (parts.length !== 3) return INVALID;
   const [headerSegment, payloadSegment, signatureSegment] = parts as [string, string, string];
 
   const header = decodeJson(headerSegment);
   const payload = decodeJson(payloadSegment);
-  if (!header || !payload || header.alg !== 'ES256') return null;
+  if (!header || !payload || header.alg !== 'ES256') return INVALID;
 
-  const nowS = Math.floor((options.now?.() ?? Date.now()) / 1000);
+  const nowMs = options.now?.() ?? Date.now();
+  const nowS = Math.floor(nowMs / 1000);
   const aud = payload.aud;
   const audiences = Array.isArray(aud) ? aud : [aud];
-  if (payload.iss !== 'privy.io' || !audiences.includes(options.appId)) return null;
-  if (typeof payload.exp !== 'number' || payload.exp + CLOCK_SKEW_S < nowS) return null;
-  if (typeof payload.nbf === 'number' && payload.nbf - CLOCK_SKEW_S > nowS) return null;
-  if (typeof payload.iat === 'number' && payload.iat - CLOCK_SKEW_S > nowS) return null;
-  if (typeof payload.sub !== 'string' || payload.sub.length === 0) return null;
+  if (payload.iss !== 'privy.io' || !audiences.includes(options.appId)) return INVALID;
+  if (typeof payload.exp !== 'number' || payload.exp + CLOCK_SKEW_S < nowS) return INVALID;
+  if (typeof payload.nbf === 'number' && payload.nbf - CLOCK_SKEW_S > nowS) return INVALID;
+  if (typeof payload.iat === 'number' && payload.iat - CLOCK_SKEW_S > nowS) return INVALID;
+  if (typeof payload.sub !== 'string' || payload.sub.length === 0) return INVALID;
 
   const fetcher = options.fetcher ?? fetch;
   const kid = typeof header.kid === 'string' ? header.kid : null;
@@ -135,14 +163,29 @@ export async function verifyPrivyIdentityToken(
   try {
     signature = base64UrlDecode(signatureSegment);
   } catch {
-    return null;
+    return INVALID;
   }
   const signed = new TextEncoder().encode(`${headerSegment}.${payloadSegment}`);
 
-  const verifyWith = async (forceRefresh: boolean): Promise<boolean | null> => {
-    const keys = await keysFor(options.appId, fetcher, forceRefresh);
-    const jwk = kid ? keys.find(k => k.kid === kid) : keys[0];
-    if (!jwk) return null;
+  const pick = (keys: Jwk[]) => (kid ? keys.find(k => k.kid === kid) : keys[0]) ?? null;
+
+  let jwk: Jwk | null;
+  try {
+    const cached = await keysFor(options.appId, fetcher, false, nowMs);
+    jwk = pick(cached.keys);
+    if (!jwk && !cached.fetched) {
+      // An unknown kid means Privy may have rotated keys: refetch once, rate-limited. When the cap
+      // stops the refetch the token could not be checked, which is not the same as it being bad.
+      const refreshed = await keysFor(options.appId, fetcher, true, nowMs);
+      if (!refreshed.fetched) return { ok: false, reason: 'unavailable' };
+      jwk = pick(refreshed.keys);
+    }
+  } catch {
+    return { ok: false, reason: 'unavailable' };
+  }
+  if (!jwk) return INVALID;
+
+  try {
     const key = await crypto.subtle.importKey(
       'jwk',
       { kty: jwk.kty, crv: jwk.crv, x: jwk.x, y: jwk.y, ext: true },
@@ -150,19 +193,27 @@ export async function verifyPrivyIdentityToken(
       false,
       ['verify']
     );
-    return crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, key, signature, signed);
-  };
-
-  try {
-    // An unknown kid means Privy rotated keys since the cache was filled: refetch once.
-    let valid = await verifyWith(false);
-    if (valid === null) valid = await verifyWith(true);
-    if (!valid) return null;
+    if (!(await crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, key, signature, signed))) return INVALID;
   } catch {
-    return null;
+    return INVALID;
   }
 
-  return { userId: payload.sub, walletAddress: embeddedEthereumWallet(payload.linked_accounts) };
+  return {
+    ok: true,
+    identity: { userId: payload.sub, walletAddress: embeddedEthereumWallet(payload.linked_accounts) },
+  };
+}
+
+/**
+ * The verified identity behind `token`, or null for anything that does not verify. Never throws
+ * for a bad token; a JWKS outage also yields null, so a caller falls back to the signed-out path.
+ */
+export async function verifyPrivyIdentityToken(
+  token: string | null | undefined,
+  options: { appId: string; fetcher?: typeof fetch; now?: () => number }
+): Promise<PrivyIdentity | null> {
+  const result = await verifyPrivyIdentityTokenDetailed(token, options);
+  return result.ok ? result.identity : null;
 }
 
 /** The bearer token from an Authorization header, if any. */

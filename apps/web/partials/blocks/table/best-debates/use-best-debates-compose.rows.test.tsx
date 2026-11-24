@@ -1,4 +1,4 @@
-import { cleanup, render, renderHook } from '@testing-library/react';
+import { act, cleanup, render, renderHook } from '@testing-library/react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -7,11 +7,16 @@ import { useBestDebatesCompose } from './use-best-debates-compose';
 const mocks = vi.hoisted(() => ({
   start: vi.fn(),
   rowProps: [] as Array<Record<string, unknown>>,
+  toRankArgs: [] as Array<Record<string, unknown>>,
 }));
 
 vi.mock('~/core/blocks/ranking/use-best-debates-to-rank', () => ({
-  useBestDebatesToRank: () => ({ debates: [], isLoading: false, error: null }),
+  useBestDebatesToRank: (args: Record<string, unknown>) => {
+    mocks.toRankArgs.push(args);
+    return { debates: [], isLoading: false, error: null, rankedMatches: RANKED_MATCHES };
+  },
 }));
+const RANKED_MATCHES = { ranked: ['r1'], downRanked: ['p1'], capped: false };
 vi.mock('~/core/blocks/ranking/use-block-rankers', () => ({
   useBlockRankers: () => ({ status: 'ready', rankersOf: () => [], rankerCount: () => 0, invalidate: vi.fn() }),
 }));
@@ -47,6 +52,7 @@ afterEach(() => {
   cleanup();
   mocks.start.mockClear();
   mocks.rowProps.length = 0;
+  mocks.toRankArgs.length = 0;
 });
 
 function useCompose(orderedIds: string[]) {
@@ -101,5 +107,56 @@ describe('the team rows useBestDebatesCompose draws', () => {
     );
     expect(mocks.rowProps.at(-1)?.onRank).toBeUndefined();
     expect(mocks.rowProps.at(-1)?.myRank).toBe(1);
+  });
+});
+
+// GEO-3810: under a search or filter, To rank can show your ranked and down ranked matches.
+describe('To rank’s ranked matches', () => {
+  it('reads them from your draft and your down ranks, and hands them to the list', () => {
+    const { result } = renderHook(() =>
+      useBestDebatesCompose({
+        enabled: true,
+        openOnToRank: true,
+        blockId: 'block',
+        blockSpaceId: 'debates',
+        isMobile: false,
+        orderedIds: ['r1', 'r2'],
+        setOrderedIds: vi.fn(),
+        hasUnpublishedChanges: false,
+        nameOf: () => null,
+        personalSpaceId: 'me',
+        saveMySubmission: vi.fn(async () => null),
+        isSaving: false,
+        pushDown: { pushedDownEntityIds: ['p1'] } as never,
+      })
+    );
+    expect(mocks.toRankArgs.at(-1)).toMatchObject({ rankedEntityIds: ['r1', 'r2'], downRankedEntityIds: ['p1'] });
+    const panel = result.current.teamView.toRankPanel as React.ReactElement<Record<string, unknown>>;
+    expect(panel.props.rankedMatches).toBe(RANKED_MATCHES);
+    expect(panel.props.fallbackSpaceId).toBe('debates');
+    // The To rank count stays unranked-only.
+    expect(result.current.teamView.toRankCount).toBe(0);
+  });
+
+  it('asks for none while All is showing, so no read is made for a list nobody sees', () => {
+    const { result } = renderHook(() =>
+      useBestDebatesCompose({
+        enabled: true,
+        blockId: 'block',
+        blockSpaceId: 'debates',
+        isMobile: false,
+        orderedIds: ['r1', 'r2'],
+        setOrderedIds: vi.fn(),
+        hasUnpublishedChanges: false,
+        nameOf: () => null,
+        personalSpaceId: 'me',
+        saveMySubmission: vi.fn(async () => null),
+        isSaving: false,
+        pushDown: { pushedDownEntityIds: ['p1'] } as never,
+      })
+    );
+    expect(mocks.toRankArgs.at(-1)).toMatchObject({ rankedEntityIds: [], downRankedEntityIds: [] });
+    act(() => result.current.teamView.onModeChange('to_rank'));
+    expect(mocks.toRankArgs.at(-1)).toMatchObject({ rankedEntityIds: ['r1', 'r2'], downRankedEntityIds: ['p1'] });
   });
 });

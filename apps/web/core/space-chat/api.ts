@@ -1,17 +1,56 @@
 import { type GetPrivyIdentityToken, geoChatRequest } from '~/core/debates/api';
 
-/** A space chat room (GEO-3422). Every public DAO space has a `member` room and an `editor` room. */
+export type SpaceChannelReadPolicy = 'everyone' | 'members_and_editors' | 'editors_only' | 'invited';
+export type SpaceChannelPostPolicy = 'members_and_editors' | 'editors_only' | 'everyone_signed_in';
+
+/** A space chat room, i.e. a channel (GEO-3818): `member` is #general, `editor` #editors. */
 export type SpaceChatRoom = {
   id: string;
   public_dao_space_id: string;
   space_id: string;
-  kind: 'member' | 'editor';
+  kind: 'member' | 'editor' | 'channel';
   key: string;
-  /** On the space's room list only: whether the viewer may post, reply and react here. */
+  name?: string;
+  /** `""` when none. */
+  description?: string;
+  read_policy?: SpaceChannelReadPolicy;
+  post_policy?: SpaceChannelPostPolicy;
+  slow_mode?: boolean;
+  archived?: boolean;
+  position?: number;
+  created_by?: string | null;
+  /** Bumped by every settings change; `channel.updated` at or below the held one is stale. */
+  version?: number;
+  /** On the space's room list only: whether the viewer may post here. */
   can_post?: boolean;
+  /** Whether the viewer may reply and react. Equals `can_post` except in replies-only channels. */
+  can_reply?: boolean;
   /** Whether the viewer may delete anyone's message here. Absent from a geo-chat without it. */
   can_moderate?: boolean;
+  /** Capped at 100; `null` signed out. */
+  unread_count?: number | null;
+  last_read_message_id?: string | null;
+  /** Local only: the newest `space.channel_activity` counted into `unread_count`; a refetch drops it. */
+  counted_message_id?: string;
 };
+
+export type SpaceChatRoomList = {
+  rooms: SpaceChatRoom[];
+  /** Absent from a geo-chat without channels. */
+  channels_enabled?: boolean;
+  can_manage_channels?: boolean;
+};
+
+/** What an editor sets on a channel. */
+export type SpaceChannelSettings = {
+  name: string;
+  description: string;
+  read_policy: SpaceChannelReadPolicy;
+  post_policy: SpaceChannelPostPolicy;
+  slow_mode: boolean;
+};
+
+export type SpaceChannelMember = { user_id: string; added_by: string; added_at: string };
 
 export type SpaceChatReaction = { value: string; count: number; reacted: boolean };
 
@@ -54,9 +93,18 @@ function writeOptions(auth: SpaceChatAuth) {
   return { auth: true as const, getPrivyIdentityToken: auth.getPrivyIdentityToken, accountKey: auth.accountKey };
 }
 
-/** 404 `not_found` for a space that is not a public DAO space: it has no chat. */
-export function listSpaceChatRooms(spaceId: string, auth: SpaceChatAuth | null, signal?: AbortSignal) {
-  return geoChatRequest<{ rooms: SpaceChatRoom[] }>(`/spaces/${encodeURIComponent(spaceId)}/rooms`, {
+/**
+ * 404 `not_found` for a space that is not a public DAO space: it has no chat. `includeArchived`
+ * also lists archived channels, marked `archived: true`.
+ */
+export function listSpaceChatRooms(
+  spaceId: string,
+  auth: SpaceChatAuth | null,
+  signal?: AbortSignal,
+  includeArchived = false
+) {
+  const query = includeArchived ? '?include_archived=true' : '';
+  return geoChatRequest<SpaceChatRoomList>(`/spaces/${encodeURIComponent(spaceId)}/rooms${query}`, {
     ...authOptions(auth),
     signal,
   });
@@ -129,5 +177,57 @@ export function setSpaceChatReaction(messageId: string, value: string, added: bo
     ...writeOptions(auth),
     method: added ? 'PUT' : 'DELETE',
     body: { value },
+  });
+}
+
+/** Moves the viewer's read cursor forward; geo-chat never moves it back. */
+export function markSpaceChatRoomRead(roomId: string, lastReadMessageId: string, auth: SpaceChatAuth) {
+  return geoChatRequest<unknown>(`/rooms/${encodeURIComponent(roomId)}/read-state`, {
+    ...writeOptions(auth),
+    method: 'PUT',
+    body: { last_read_message_id: lastReadMessageId },
+  });
+}
+
+/** Editors only. `member_ids` only with `read_policy: 'invited'`. */
+export function createSpaceChannel(
+  spaceId: string,
+  body: SpaceChannelSettings & { member_ids: string[] },
+  auth: SpaceChatAuth
+) {
+  return geoChatRequest<SpaceChatRoom>(`/spaces/${encodeURIComponent(spaceId)}/channels`, {
+    ...writeOptions(auth),
+    method: 'POST',
+    body,
+  });
+}
+
+/** Editors only: any subset of the settings, or `archived` to archive and restore. */
+export function updateSpaceChannel(
+  roomId: string,
+  body: Partial<SpaceChannelSettings> & { archived?: boolean },
+  auth: SpaceChatAuth
+) {
+  return geoChatRequest<SpaceChatRoom>(`/rooms/${encodeURIComponent(roomId)}`, {
+    ...writeOptions(auth),
+    method: 'PATCH',
+    body,
+  });
+}
+
+/** The people added to an invited channel, oldest first; editors are not listed. */
+export function listSpaceChannelMembers(roomId: string, auth: SpaceChatAuth, signal?: AbortSignal) {
+  return geoChatRequest<{ members: SpaceChannelMember[] }>(`/rooms/${encodeURIComponent(roomId)}/members`, {
+    ...writeOptions(auth),
+    signal,
+  });
+}
+
+/** At most 100 ids. Editors add and remove anyone; a member may remove only themself. */
+export function changeSpaceChannelMembers(roomId: string, userIds: string[], added: boolean, auth: SpaceChatAuth) {
+  return geoChatRequest<{ members: SpaceChannelMember[] }>(`/rooms/${encodeURIComponent(roomId)}/members`, {
+    ...writeOptions(auth),
+    method: added ? 'POST' : 'DELETE',
+    body: { user_ids: userIds },
   });
 }

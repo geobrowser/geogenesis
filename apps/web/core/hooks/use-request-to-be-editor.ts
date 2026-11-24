@@ -8,7 +8,6 @@ import { Effect, Either } from 'effect';
 
 import { normalizeSpaceId } from '~/core/access/space-access';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { useSpace } from '~/core/hooks/use-space';
 import { getIsEditorOfSpace } from '~/core/io/queries';
@@ -16,6 +15,7 @@ import { geo } from '~/core/sdk/geo-client';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { validateSpaceId } from '~/core/utils/utils';
+import { useAccountAddress } from '~/core/wallet/account-readiness';
 
 interface UseRequestToBeEditorArgs {
   /** The space ID (bytes16 hex without 0x, e.g., UUID format) of the space to become an editor of */
@@ -30,14 +30,14 @@ interface UseRequestToBeEditorArgs {
 export function useRequestToBeEditor({ spaceId }: UseRequestToBeEditorArgs) {
   const { dispatch } = useStatusBar();
 
-  const { smartAccount } = useSmartAccount();
+  const address = useAccountAddress();
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
   const { space } = useSpace(spaceId ?? undefined);
 
   const tx = useSmartAccountTransaction();
 
   const handleRequestToBeEditor = useCallback(async () => {
-    if (!smartAccount) {
+    if (!address) {
       throw new Error('No smart account available');
     }
 
@@ -108,7 +108,7 @@ export function useRequestToBeEditor({ spaceId }: UseRequestToBeEditorArgs) {
       },
       onRight: hash => console.log('Successfully requested to be editor. Transaction hash:', hash),
     });
-  }, [dispatch, smartAccount, personalSpaceId, isRegistered, spaceId, space, tx]);
+  }, [dispatch, address, personalSpaceId, isRegistered, spaceId, space, tx]);
 
   const { mutate, status } = useMutation({
     mutationFn: handleRequestToBeEditor,

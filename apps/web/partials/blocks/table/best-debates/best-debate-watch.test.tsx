@@ -6,11 +6,12 @@ import * as React from 'react';
 import { Provider as JotaiProvider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { BestDebateRowData } from '~/core/blocks/ranking/use-best-debate-displays';
 import { GeoChatRequestError } from '~/core/debates/api';
 import type { DebateMoment } from '~/core/debates/moments-player/debate-moments';
 import type { MomentsPlayerPosition } from '~/core/debates/moments-player/debate-moments-player';
 
-import { BestDebateWatchContext } from './best-debate-row';
+import { BestDebateDisplaysContext, BestDebateWatchContext } from './best-debate-row';
 import { BestDebateWatchProvider } from './best-debate-watch';
 
 type PlayerProps = {
@@ -35,9 +36,11 @@ const mocks = vi.hoisted(() => ({
   transcript: {} as Record<string, unknown>,
   isMediaAdmin: true,
   isPhone: false,
+  toast: vi.fn(),
 }));
 
-vi.mock('~/core/analytics', () => ({ capture: mocks.capture }));
+vi.mock('~/core/analytics', () => ({ capture: mocks.capture, analyticsContextRevision: () => 0 }));
+vi.mock('~/core/hooks/use-toast', () => ({ useToast: () => [null, mocks.toast] }));
 vi.mock('~/core/debates/moments-player/debate-moments-player', async () => {
   const ReactModule = await import('react');
   return {
@@ -70,10 +73,27 @@ vi.mock('~/core/debates/moments-editor/hooks', () => ({ useIsMediaAdmin: () => m
 vi.mock('~/core/hooks/use-is-phone-layout', () => ({ useIsPhoneLayout: () => mocks.isPhone }));
 vi.mock('./edit-moments', () => ({
   debateUuid: (id: string) => id,
-  EditMomentsMenu: ({ entityId, onOpen }: { entityId: string; onOpen: (id: string) => void }) => (
-    <button type="button" onClick={() => onOpen(entityId)}>
-      Edit moments
-    </button>
+  DebateWatchMenu: ({
+    entityId,
+    canEditMoments,
+    onCopyLink,
+    onEditMoments,
+  }: {
+    entityId: string;
+    canEditMoments: boolean;
+    onCopyLink: () => void;
+    onEditMoments: (id: string) => void;
+  }) => (
+    <>
+      <button type="button" onClick={onCopyLink}>
+        Copy link
+      </button>
+      {canEditMoments ? (
+        <button type="button" onClick={() => onEditMoments(entityId)}>
+          Edit moments
+        </button>
+      ) : null}
+    </>
   ),
   ReelRenderWatcher: ({ entityId }: { entityId: string }) => <span data-testid={`reel-watcher-${entityId}`} />,
   captureEditMoments: (event: Record<string, unknown>) =>
@@ -147,21 +167,32 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-function Opener({ entry }: { entry: 'row' | 'poster' }) {
+function Opener({ entry, entityId }: { entry: 'row' | 'poster'; entityId: string }) {
   const watch = React.useContext(BestDebateWatchContext);
   return (
-    <button type="button" onClick={() => watch?.('d1', entry)}>
+    <button type="button" onClick={() => watch?.(entityId, entry)}>
       open
     </button>
   );
 }
 
-function openWatch(entry: 'row' | 'poster' = 'row') {
+function openWatch(
+  entry: 'row' | 'poster' = 'row',
+  displays?: ReadonlyMap<string, BestDebateRowData>,
+  entityId = 'd1'
+) {
+  const provider = (
+    <BestDebateWatchProvider source="best_debates_ranking" blockId="block" spaceId="debates">
+      <Opener entry={entry} entityId={entityId} />
+    </BestDebateWatchProvider>
+  );
   render(
     <JotaiProvider store={store}>
-      <BestDebateWatchProvider source="best_debates_ranking" blockId="block" spaceId="debates">
-        <Opener entry={entry} />
-      </BestDebateWatchProvider>
+      {displays ? (
+        <BestDebateDisplaysContext.Provider value={displays}>{provider}</BestDebateDisplaysContext.Provider>
+      ) : (
+        provider
+      )}
     </JotaiProvider>
   );
   fireEvent.click(screen.getByRole('button', { name: 'open' }));
@@ -362,18 +393,113 @@ describe('the watch popup’s speed', () => {
     expect(screen.getByTestId('reel-watcher-d1')).toBeInTheDocument();
   });
 
-  it('gives no header slot at all to someone who isn’t a media admin, or on a phone (GEO-3742)', () => {
-    for (const [isMediaAdmin, isPhone] of [
-      [false, false],
-      [true, true],
+  it('gives everyone the "…" with Copy link, and Edit moments only to a media admin on desktop (GEO-3809)', () => {
+    for (const [isMediaAdmin, isPhone, editMoments] of [
+      [true, false, true],
+      [false, false, false],
+      [true, true, false],
+      [false, true, false],
     ]) {
       mocks.isMediaAdmin = isMediaAdmin;
       mocks.isPhone = isPhone;
       openWatch();
-      expect(screen.queryByTestId('header-actions')).toBeNull();
+      const header = within(screen.getByTestId('header-actions'));
+      expect(header.getByRole('button', { name: 'Copy link' })).toBeInTheDocument();
+      expect(header.queryByRole('button', { name: 'Edit moments' }) !== null).toBe(editMoments);
       cleanup();
     }
     mocks.isMediaAdmin = true;
     mocks.isPhone = false;
+  });
+});
+
+// GEO-3809: the popup copies the same link the Share sheet does, counted as the popup's.
+describe('the watch popup’s Copy link', () => {
+  let write: ReturnType<typeof vi.fn>;
+  beforeEach(() => {
+    write = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: write } });
+  });
+  afterEach(() => {
+    delete (navigator as { clipboard?: unknown }).clipboard;
+  });
+
+  const shareAction = () => mocks.capture.mock.calls.filter(([name]) => name === 'debate_share_action');
+  // The share operation (`action_completed`) carries the surface; the link handoff needs a real id.
+  const completed = () => mocks.capture.mock.calls.find(([name]) => name === 'action_completed')?.[1];
+  const copy = async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Copy link' }));
+    await act(async () => {});
+  };
+
+  it('copies the debates-app link, says so, and counts the share as the popup’s', async () => {
+    openWatch();
+    await copy();
+    expect(write).toHaveBeenCalledTimes(1);
+    const url = new URL(write.mock.calls[0][0]);
+    expect(`${url.origin}${url.pathname}`).toBe('https://debates.geobrowser.io/debate/d1');
+    expect(mocks.toast.mock.calls[0][0].props.children).toBe('Link copied!');
+    // Before the debate's entity loads, the block's space stands in for the required space_id.
+    expect(shareAction()).toEqual([
+      [
+        'debate_share_action',
+        {
+          surface: 'best_debates_ranking',
+          block_id: 'block',
+          debate_id: 'd1',
+          space_id: 'debates',
+          method: 'copy_link',
+        },
+      ],
+    ]);
+    expect(completed()).toMatchObject({
+      action_kind: 'share',
+      component: 'best_debates_watch',
+      target_id: 'd1',
+      outcome: 'succeeded',
+    });
+  });
+
+  it.each([
+    ['its space, once named', { id: 'named-space', name: 'Politics', image: null }, 'named-space'],
+    ['its own space id while the space’s name loads', null, 'own-space'],
+  ] as const)('counts the share for the debate’s space: %s', async (_, space, expected) => {
+    const display = { space, ownSpaceId: 'own-space', debaterSpaceIds: ['p1', 'p2'] } as unknown as BestDebateRowData;
+    openWatch('row', new Map([['d1', display]]));
+    await copy();
+    expect(shareAction()[0][1]).toMatchObject({ space_id: expected });
+  });
+
+  it('hands the debaters over, so a debater copying their own debate is counted as one', async () => {
+    const debate = '11111111111141118111111111111111';
+    const debater = '22222222222242228222222222222222';
+    window.lytics = {
+      getContext: () => ({ is_identified: true }),
+      getIdentity: () => ({ personal_space_id: debater }),
+    };
+    try {
+      const display = {
+        space: null,
+        ownSpaceId: 'own-space',
+        debaterSpaceIds: [debater],
+      } as unknown as BestDebateRowData;
+      openWatch('row', new Map([[debate, display]]), debate);
+      await copy();
+      expect(
+        mocks.capture.mock.calls.filter(([name]) => name === 'share_link_handoff').map(([, props]) => props)
+      ).toEqual([
+        expect.objectContaining({ component: 'best_debates_watch', handoff_kind: 'copied', sharer_role: 'debater' }),
+      ]);
+    } finally {
+      delete window.lytics;
+    }
+  });
+
+  it('says it could not copy when the clipboard refuses, and counts no share', async () => {
+    write.mockRejectedValue(new Error('denied'));
+    openWatch();
+    await copy();
+    expect(mocks.toast.mock.calls[0][0].props.children).toBe('Could not copy link.');
+    expect(shareAction()).toEqual([]);
   });
 });

@@ -14,7 +14,7 @@ import { DebateInteractionBar } from '~/core/debates/browse/debate-interaction-b
 import { DEBATE_FEED_HOLDS_FULL_PLAYBACK } from '~/core/debates/browse/feed-full-playback';
 import { DebateShareDialog } from '~/core/debates/browse/lazy-share-dialog';
 import { useDebateShareAction } from '~/core/debates/browse/use-debate-share-action';
-import { useDebatePlaybackAllowed } from '~/core/debates/debate-playback-gate';
+import { clickAsksToPlay, useDebateCardPlayback } from '~/core/debates/debate-playback-gate';
 import { useDebate, useDebateMedia } from '~/core/debates/hooks';
 import { hasProcessedVideo, isWatchableDebate } from '~/core/debates/playback-utils';
 import { fallBackToDurableStill, speakerStillContentUrl } from '~/core/debates/speaker-still';
@@ -119,14 +119,6 @@ type DebateExploreFeedCardProps = {
    * screen it is watched on. See {@link DEBATE_CARD_FULL_WIDTH_STYLE}.
    */
   fullWidth?: boolean;
-  /**
-   * Called when a coordinated surface's player is clicked. An allowed active player transfers
-   * before the click reaches it. A visible non-owner consumes that first click while ownership
-   * commits, and an inactive player is centered before requesting ownership when it becomes active.
-   */
-  onPlaybackRequest?: (debateId: string) => void;
-  /** Tell a coordinated surface whether this card currently owns a mounted, playable player. */
-  onPlaybackAvailabilityChange?: (debateId: string, available: boolean) => void;
   /** Additional action placed beside the full-screen link. */
   endSlot?: React.ReactNode;
   /**
@@ -139,7 +131,8 @@ type DebateExploreFeedCardProps = {
 
 /**
  * The explore-feed rendition of a published Debate: the same two synchronized debater videos as
- * the full-screen `/debates` feed (autoplaying muted while in view, with winner voting), in the same
+ * the full-screen `/debates` feed (in a feed autoplaying muted while in view, elsewhere waiting for a
+ * tap — see `debate-playback-gate.tsx`; with winner voting), in the same
  * card — the claim and the reader's side on it under the media, which is sized to the viewport —
  * with a control that opens this debate at full size.
  *
@@ -155,8 +148,6 @@ export function DebateExploreFeedCard({
   titleOpensSidePanel = false,
   compactChrome = false,
   fullWidth = false,
-  onPlaybackRequest,
-  onPlaybackAvailabilityChange,
   endSlot,
   fallback,
 }: DebateExploreFeedCardProps) {
@@ -258,21 +249,60 @@ export function DebateExploreFeedCard({
     return () => observer.disconnect();
   }, [container]);
 
-  // A veto, not a replacement: where a surface holds playback to one debate —
-  // a row of cards, all of them fully on screen at once — this says whether it
-  // is this one's turn. A card that is allowed but scrolled away still stops,
-  // because its own judgement above is unchanged.
-  const playbackAllowed = useDebatePlaybackAllowed(debateId);
+  // Only a feed's cards start themselves (GEO-3812). Anywhere else — a profile's record, a claim's
+  // debates, a gallery, a table block — the card shows its stills and Play until it is tapped, and
+  // then it is the one debate playing in the app. See `debate-playback-gate.tsx`.
+  // This card, not just this debate: the same debate can be on two surfaces at once.
+  const owner = React.useId();
+  // A veto, not a replacement: a feed card still plays only while it is in view, and yields while a
+  // debate tapped elsewhere plays; a tap-to-play card plays only once it is tapped.
+  const {
+    tapToPlay,
+    allowed: playbackAllowed,
+    isTapped,
+    tap,
+    release: releaseTap,
+    reclaim: reclaimPlayback,
+  } = useDebateCardPlayback(debateId, owner);
   // A card nobody can see stops playing and lets go of its media: behind a mobile sheet (the side
   // panel, the Debates hub), or off screen on the mobile layout. Paused video still holds its
   // decoders and buffered frames, and on a phone that adds up to a reloaded tab. The card keeps its
   // signed URLs, so it reattaches quickly (GEO-3067's `releaseMedia`). Cards inside a sheet, like a
   // profile's Activity gallery, are not covered by it. Desktop keeps off-screen cards loaded so
   // the next one starts at once.
+  //
+  // Outside a feed nothing plays next by itself, so there is no next card to keep ready: a card
+  // holds its media only while it is on screen, on every layout. It holds it there, paused, so that
+  // a tap on Play starts elements that already exist — inside the tap, which is what lets the
+  // browser start it with sound.
   const coveredBySheet = useCoveredByMobileSheet();
   const isMobileLayout = useIsMobileLayout();
   // The card up next keeps its media too, so what it has loaded is there when it arrives.
-  const releaseMedia = coveredBySheet || (isMobileLayout && !onScreen && !upNext);
+  const releaseMedia = tapToPlay
+    ? coveredBySheet || !onScreen
+    : coveredBySheet || (isMobileLayout && !onScreen && !upNext);
+
+  /*
+   * Whether the player may run.
+   *
+   * A feed card runs while it is mostly in view (`active`). A tapped card runs from the tap, even if
+   * less than 60% of it is showing yet: the tap started its elements, and holding them for the
+   * scroll that brings it into view would stop them again under the viewer's finger.
+   */
+  const playerActive = tapToPlay
+    ? playbackAllowed && onScreen && !coveredBySheet
+    : active && playbackAllowed && !coveredBySheet;
+
+  // A tap lasts as long as the viewer is watching this card: it is given up once the card leaves
+  // the screen, goes behind a sheet, or scrolls back out of the active range it reached — so it
+  // neither resumes when the card comes back nor lets anything else start in its place.
+  const wasActiveRef = React.useRef(active);
+  React.useEffect(() => {
+    const wasActive = wasActiveRef.current;
+    wasActiveRef.current = active;
+    if (!tapToPlay || !isTapped) return;
+    if (!onScreen || coveredBySheet || (wasActive && !active)) releaseTap();
+  }, [active, coveredBySheet, isTapped, onScreen, releaseTap, tapToPlay]);
 
   const debateQuery = useDebate(debateId, nearViewport);
   const debate = debateQuery.data;
@@ -301,80 +331,30 @@ export function DebateExploreFeedCard({
    */
   const mediaMounted = readyDebate != null && nearViewport && !notWatchable;
 
-  // A card enters the media look-ahead band before it is active. Its visible edge can therefore
-  // receive a click while the player still has `active={false}`. Giving that card ownership at
-  // once would stop the current player only for the new owner to pause itself. Bring the clicked
-  // card into the active range first, then complete the same capture-phase handoff once its
-  // observer confirms that the player can run.
-  const pendingPlaybackRequestRef = React.useRef(false);
-
-  React.useEffect(() => {
-    if (!mediaMounted || !onPlaybackRequest) {
-      pendingPlaybackRequestRef.current = false;
-      return;
-    }
-
-    if (!active || !pendingPlaybackRequestRef.current) return;
-
-    pendingPlaybackRequestRef.current = false;
-    onPlaybackRequest(debateId);
-  }, [active, debateId, mediaMounted, onPlaybackRequest]);
-
+  // Feed cards only: a click on a card that is not playing yet scrolls it into view. A tap-to-play
+  // card does the same from `tapToPlayNow`, which only the player's own play controls call.
   const requestPlayback = (event: React.MouseEvent<HTMLDivElement>) => {
-    // Clicks that are not asks to play pass straight through. A finished debate's end card is drawn
-    // inside this wrapper, and its vote, its voter list and its way into the claims panel are not
-    // media controls — capturing them swallowed the vote and handed playback to a debate that had
-    // ended. Only its replay asks to play. The voter list is portalled out of this DOM but its
-    // clicks still bubble through React's tree, so a target outside the wrapper is let go too.
-    const target = event.target;
-    if (target instanceof Node && !event.currentTarget.contains(target)) return;
-    const onEndCard = target instanceof Element && target.closest('[data-debate-end-card]') !== null;
-    const isReplay = target instanceof Element && target.closest('[data-end-card-replay]') !== null;
-    if (onEndCard && !isReplay) return;
-    // The combined player opens the native full-screen player, so it cannot play over another card.
-    if (target instanceof Element && target.closest('[data-debate-combined-player]') !== null) return;
-    if (!onPlaybackRequest) {
-      // Let the player's handler keep the play request, but leave activation to visibility. Forcing
-      // this card active in place could play it over the previous card, and a toolbar resize would
-      // immediately undo that activation while it was still below the lower threshold.
-      if (!active) container?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-      return;
-    }
-    if (active && playbackAllowed) {
-      pendingPlaybackRequestRef.current = false;
-      onPlaybackRequest(debateId);
-      return;
-    }
-
-    // This first click either activates the card or transfers the gate. It must not also reach the
-    // player's full-tile toggle (or another media control) before the player is both active and
-    // allowed, or React's batched ownership update can briefly run it alongside the old owner.
-    //
-    // The end card's replay is the exception: it is let through. The player holds a replay until it
-    // is handed playback, so it cannot run alongside the old owner — and swallowing it here left an
-    // ended debate with nothing to resume, so Replay took a second tap.
-    if (!isReplay) {
-      event.preventDefault();
-      event.stopPropagation();
-    }
-
-    if (active) {
-      pendingPlaybackRequestRef.current = false;
-      onPlaybackRequest(debateId);
-      return;
-    }
-
-    if (!container) return;
-    pendingPlaybackRequestRef.current = true;
-    container.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    if (!clickAsksToPlay(event)) return;
+    // A feed card yielding to a debate tapped outside the feed takes playback back in this same
+    // click, so the press reaches a player that may run rather than one held a render later.
+    if (!playbackAllowed) reclaimPlayback();
+    // Let the player's handler keep the play request, but leave activation to visibility. Forcing
+    // this card active in place could play it over the previous card, and a toolbar resize would
+    // immediately undo that activation while it was still below the lower threshold.
+    if (!active) container?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
   };
 
-  React.useEffect(() => {
-    if (!mediaMounted || !onPlaybackAvailabilityChange) return;
-
-    onPlaybackAvailabilityChange(debateId, true);
-    return () => onPlaybackAvailabilityChange(debateId, false);
-  }, [debateId, mediaMounted, onPlaybackAvailabilityChange]);
+  /*
+   * A tap-to-play card's Play. The player calls it from inside the tap, and only from the controls
+   * that ask to play (Play, the tile, Replay) — never from a vote or a link drawn over the media,
+   * which is why it is the player's call rather than a capture on the whole wrapper. The player
+   * starts its elements in that same tap; this makes the card the one allowed to keep playing, which
+   * stops whatever was playing before, and brings it into view.
+   */
+  const tapToPlayNow = React.useCallback(() => {
+    tap();
+    if (!active) container?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  }, [active, container, tap]);
 
   // The panel is drawn by `ExploreDebateClaimsPanelHost`, so the app has one of it and a card that
   // unmounts (paging, or sitting inside the entity side panel this replaces) doesn't take it along.
@@ -443,18 +423,20 @@ export function DebateExploreFeedCard({
         {/* The videos first, then the claim they argue and the reader's side on it, in one frame —
             the same card the full-screen feed draws (GEO-3454). The frame is the card's, so the
             player and its stand-ins draw no corners of their own. */}
-        <div onClickCapture={mediaMounted ? requestPlayback : undefined}>
+        <div onClickCapture={mediaMounted && !tapToPlay ? requestPlayback : undefined}>
           {mediaMounted ? (
             // The recordings resolve while the card is still approaching. Crossing back out of
             // that same window unmounts this subtree instead of retaining two paused videos forever.
             <DebateCardVideos
               debate={readyDebate}
               stills={item.debatePosters}
-              active={active && playbackAllowed && !coveredBySheet}
-              upNext={upNext && !active && !coveredBySheet}
+              active={playerActive}
+              upNext={!tapToPlay && upNext && !active && !coveredBySheet}
               releaseMedia={releaseMedia}
               reducedOverlays={compactChrome}
               onOpenClaims={openClaims}
+              tapToPlay={tapToPlay}
+              onPlaybackRequest={tapToPlay ? tapToPlayNow : undefined}
             />
           ) : item.debatePosters ? (
             <DebatePosterSkeleton debateId={debateId} posters={item.debatePosters} />
@@ -541,6 +523,8 @@ const DebateCardVideos = React.memo(function DebateCardVideos({
   releaseMedia,
   reducedOverlays,
   onOpenClaims,
+  tapToPlay,
+  onPlaybackRequest,
 }: {
   debate: Debate;
   stills: ExploreFeedItem['debatePosters'];
@@ -549,6 +533,8 @@ const DebateCardVideos = React.memo(function DebateCardVideos({
   releaseMedia: boolean;
   reducedOverlays: boolean;
   onOpenClaims: () => void;
+  tapToPlay: boolean;
+  onPlaybackRequest?: () => void;
 }) {
   return (
     <DebateFeedPlayer
@@ -562,6 +548,8 @@ const DebateCardVideos = React.memo(function DebateCardVideos({
       reducedOverlays={reducedOverlays}
       framed
       onOpenClaims={onOpenClaims}
+      tapToPlay={tapToPlay}
+      onPlaybackRequest={onPlaybackRequest}
     />
   );
 });

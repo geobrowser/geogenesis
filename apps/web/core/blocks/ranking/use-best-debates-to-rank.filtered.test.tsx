@@ -3,7 +3,7 @@ import { renderHook, waitFor } from '@testing-library/react';
 
 import * as React from 'react';
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { RecentDebate } from './best-debates-debates';
 import { NO_RANKING_FILTERS, toRankWindow } from './best-debates-ranking-filters';
@@ -44,6 +44,10 @@ function wrapper({ children }: { children: React.ReactNode }) {
 beforeEach(() => {
   mocks.matching.mockReset();
   mocks.recent.mockReset();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe('useBestDebatesToRank under the screen’s filters (GEO-3774)', () => {
@@ -109,6 +113,87 @@ describe('useBestDebatesToRank under the screen’s filters (GEO-3774)', () => {
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(mocks.recent).toHaveBeenCalled();
     expect(mocks.matching).not.toHaveBeenCalled();
+  });
+});
+
+describe('useBestDebatesToRank ranked matches (GEO-3810)', () => {
+  it('without a recorded, debater or claim filter: your whole ranking, of any age, then down ranked', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(nyDayStartMs(TODAY) + 12 * 3_600_000);
+    mocks.recent.mockResolvedValue([debate('new', TODAY)]);
+    const { result } = renderHook(
+      () =>
+        useBestDebatesToRank({
+          enabled: true,
+          excludeEntityIds: ['old', 'r2', 'p1'],
+          rankers,
+          filters: NO_RANKING_FILTERS,
+          rankedEntityIds: ['r2', 'old'],
+          downRankedEntityIds: ['p1', 'old'],
+        }),
+      { wrapper }
+    );
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    // No read for them: they're the draft's ids, in its order; a ranked one isn't down ranked too.
+    expect(result.current.rankedMatches).toEqual({ ranked: ['r2', 'old'], downRanked: ['p1'], capped: false });
+    expect(mocks.matching).not.toHaveBeenCalled();
+    // To rank and its count stay unranked-only.
+    expect(result.current.debates.map(d => d.entityId)).toEqual(['new']);
+  });
+
+  it('under a debater filter: the ones an all-time read returns, older than 7 days too', async () => {
+    const now = Date.now();
+    const fresh: RecentDebate = { entityId: 'fresh', name: 'fresh', createdAtMs: now - 86_400_000, spaceId: 's' };
+    const old = debate('old', '2026-09-01');
+    mocks.matching.mockImplementation(async ({ and }: { and: Record<string, unknown>[] }) =>
+      and.some(clause => 'createdAt' in clause)
+        ? { debates: [fresh], capped: false }
+        : { debates: [fresh, old, debate('p1', '2026-09-02')], capped: true }
+    );
+    const filters = { ...NO_RANKING_FILTERS, debaterIds: ['aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'] };
+    const { result } = renderHook(
+      () =>
+        useBestDebatesToRank({
+          enabled: true,
+          excludeEntityIds: ['old', 'other', 'p1', 'p2'],
+          rankers,
+          filters,
+          todayKey: TODAY,
+          rankedEntityIds: ['other', 'old'],
+          downRankedEntityIds: ['p2', 'p1'],
+        }),
+      { wrapper }
+    );
+    await waitFor(() => expect(result.current.rankedMatches.ranked).toEqual(['old']));
+    expect(result.current.rankedMatches).toEqual({ ranked: ['old'], downRanked: ['p1'], capped: true });
+    expect(result.current.debates.map(d => d.entityId)).toEqual(['fresh']);
+    expect(result.current.capped).toBe(false);
+    // To rank's read keeps its 7 days; the ranked one has no date clause.
+    const reads = mocks.matching.mock.calls.map(([arg]) => (arg as { and: object[] }).and);
+    expect(reads.map(and => and.some(clause => 'createdAt' in clause)).sort()).toEqual([false, true]);
+  });
+
+  it('under a recorded day: the same read as To rank, made once', async () => {
+    mocks.matching.mockResolvedValue({
+      debates: [debate('old1', '2026-10-02'), debate('ranked', '2026-10-02')],
+      capped: false,
+    });
+    const filters = { ...NO_RANKING_FILTERS, recorded: { kind: 'day' as const, dayKey: '2026-10-02' } };
+    const { result } = renderHook(
+      () =>
+        useBestDebatesToRank({
+          enabled: true,
+          excludeEntityIds: ['ranked', 'elsewhere'],
+          rankers,
+          filters,
+          todayKey: TODAY,
+          rankedEntityIds: ['elsewhere', 'ranked'],
+        }),
+      { wrapper }
+    );
+    await waitFor(() => expect(result.current.rankedMatches.ranked).toEqual(['ranked']));
+    expect(result.current.debates.map(d => d.entityId)).toEqual(['old1']);
+    expect(mocks.matching).toHaveBeenCalledTimes(1);
   });
 });
 

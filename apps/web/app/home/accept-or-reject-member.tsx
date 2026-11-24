@@ -4,7 +4,7 @@ import { type ReactNode, useEffect, useState } from 'react';
 
 import { useRouter } from 'next/navigation';
 
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { proposalTimestampSeconds } from '~/core/governance/proposal-timestamp';
 import { useToast } from '~/core/hooks/use-toast';
 import { getStaleProposalVoteToastMessage, useVote } from '~/core/hooks/use-vote';
 import { Proposal } from '~/core/io/dto/proposals';
@@ -12,6 +12,7 @@ import type { SubstreamVote } from '~/core/io/substream-schema';
 import { useReportError } from '~/core/state/status-bar-store';
 import { describeGovernanceError } from '~/core/utils/contracts/governance-errors';
 import { NavUtils, getProposalTimeRemaining } from '~/core/utils/utils';
+import { useAccountAddress } from '~/core/wallet/account-readiness';
 
 import { Avatar } from '~/design-system/avatar';
 import { SmallButton } from '~/design-system/button';
@@ -21,8 +22,6 @@ import { Pending } from '~/design-system/pending';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { Execute } from '~/partials/active-proposal/execute';
-import { proposalTimestampSeconds } from '~/core/governance/proposal-timestamp';
-
 import { GovernanceOutcomeDate, GovernanceOutcomeTime } from '~/partials/governance/governance-outcome-timestamp';
 import { useAddOptimisticVote, useRemoveOptimisticVote } from '~/partials/governance/optimistic-voted-atom';
 
@@ -86,7 +85,7 @@ export function AcceptOrRejectMember({
   const isPending = voteStatus === 'pending';
   const txSucceeded = voteStatus === 'success';
 
-  const { smartAccount } = useSmartAccount();
+  const accountAddress = useAccountAddress();
   const addOptimisticVote = useAddOptimisticVote();
   const removeOptimisticVote = useRemoveOptimisticVote();
   const reportError = useReportError();
@@ -211,14 +210,14 @@ export function AcceptOrRejectMember({
       actions = <div className="rounded bg-successTertiary px-3 py-2 text-button text-green">Accepted</div>;
     } else if (status === 'REJECTED') {
       actions = <div className="rounded bg-errorTertiary px-3 py-2 text-button text-red-01">Rejected</div>;
-    } else if (canExecute && smartAccount) {
+    } else if (canExecute && accountAddress) {
       actions = <Execute spaceId={spaceId} proposalId={proposalId} variant="small" />;
     } else if (canExecute) {
       actions = <div className="rounded bg-successTertiary px-3 py-2 text-button text-green">Pending execution</div>;
     } else {
       actions = <div className="rounded bg-errorTertiary px-3 py-2 text-button text-red-01">Rejected</div>;
     }
-  } else if (smartAccount) {
+  } else if (accountAddress) {
     // While the proposal is open, editors can vote and change their vote. The
     // current choice is shown checked + emphasized and is inert; the other side
     // submits a replacement vote. Errors surface via the global error modal

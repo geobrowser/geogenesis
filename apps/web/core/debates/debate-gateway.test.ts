@@ -9,10 +9,16 @@ import {
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { showChatRoom } from '~/core/space-chat/shown-room';
 import type { SpaceChatState } from '~/core/space-chat/state';
 
 import { GeoChatRequestError, getStoredGeoChatAccessToken, resetGeoChatSession } from './api';
-import { DebateGatewayClient, type DebateGatewaySession } from './debate-gateway';
+import {
+  BROADCAST_INVALIDATION_SPREAD_MS,
+  CHANNEL_LIST_SPREAD_MS,
+  DebateGatewayClient,
+  type DebateGatewaySession,
+} from './debate-gateway';
 import { type LobbyHighlightsState, settleFetchedLobbyHighlights } from './lobbies/lobby-highlights-state';
 import { type RemoteClaimResponse, subscribeRemoteClaimResponses } from './remote-claim-responses';
 
@@ -1613,6 +1619,177 @@ describe('DebateGatewayClient', () => {
     expect(listener).toHaveBeenCalled();
   });
 
+  describe('channels (GEO-3818)', () => {
+    const roomId = '0192aaaa-0000-7000-8000-000000000009';
+    const dashless = '0192aaaa000070008000000000000009';
+    const scope = { scope: 'chat-room', space_id: 'space-1', room_id: roomId, room_kind: 'channel' } as const;
+    const echo = { space_id: 'space-1', room_id: dashless, room_kind: 'channel', resume_after_seq: null };
+    const roomsKey = ['debates', 'account', 'user-a', 'space-chat-rooms', 'space-1'];
+    const archivedKey = [...roomsKey, 'archived'];
+
+    async function connected() {
+      const release = client.retainScope(scope);
+      client.start(
+        vi.fn(async () => 'privy-token'),
+        'user-a'
+      );
+      await vi.runAllTicks();
+      sockets[0]!.open();
+      sockets[0]!.receive('READY', readyPayload([echo]));
+      await flushInvalidations();
+      invalidateQueries.mockClear();
+      return release;
+    }
+
+    function roomEvent(payload: unknown) {
+      sockets[0]!.receiveRaw(
+        JSON.stringify({
+          v: 1,
+          op: 'EVENT',
+          seq: 9,
+          space_id: 'space-1',
+          room_id: dashless,
+          room_kind: 'channel',
+          payload,
+        })
+      );
+    }
+
+    it('subscribes a channel in the room shape', async () => {
+      await connected();
+      expect(sockets[0]!.sent).toContainEqual(
+        expect.objectContaining({ op: 'SUBSCRIBE', payload: { ...echo, room_id: roomId } })
+      );
+      expect(client.isScopeLive(scope)).toBe(true);
+    });
+
+    it('patches every cached room list on a newer channel.updated, then re-reads them', async () => {
+      const row = { id: dashless, space_id: 'space-1', kind: 'channel', name: 'markets', version: 1, can_post: true };
+      queryClient.setQueryData(roomsKey, {
+        supported: true,
+        rooms: [row],
+        channelsEnabled: true,
+        canManageChannels: false,
+      });
+      queryClient.setQueryData(archivedKey, {
+        supported: true,
+        rooms: [row],
+        channelsEnabled: true,
+        canManageChannels: false,
+      });
+      await connected();
+
+      roomEvent({
+        event_type: 'channel.updated',
+        payload: { room: { ...row, can_post: undefined, name: 'prices', version: 2 } },
+      });
+      for (const key of [roomsKey, archivedKey]) {
+        expect(queryClient.getQueryData<{ rooms: { name: string; can_post: boolean }[] }>(key)?.rooms[0]).toMatchObject(
+          {
+            name: 'prices',
+            can_post: true,
+          }
+        );
+      }
+      await flushInvalidations();
+      expectInvalidated(invalidateQueries, { queryKey: roomsKey, refetchType: 'active' });
+    });
+
+    it('re-reads the channel’s people on channel.members_changed', async () => {
+      await connected();
+      roomEvent({
+        event_type: 'channel.members_changed',
+        payload: { room_id: dashless, room_kind: 'channel', added_user_ids: ['a'], removed_user_ids: [] },
+      });
+      await flushInvalidations();
+      expectInvalidated(invalidateQueries, {
+        queryKey: ['debates', 'account', 'user-a', 'space-chat-members', dashless],
+        refetchType: 'active',
+      });
+    });
+
+    it('re-reads the room lists on space.channels_changed', async () => {
+      await connected();
+      sockets[0]!.receive('EVENT', {
+        event_id: 'channels-1',
+        event_type: 'space.channels_changed',
+        payload: { space_id: 'space-1' },
+      });
+      await vi.advanceTimersByTimeAsync(5_000);
+      await flushInvalidations();
+      expectInvalidated(invalidateQueries, { queryKey: roomsKey, refetchType: 'active' });
+    });
+
+    it('marks a revoked channel, stops it, keeps the socket, and clears the mark once released', async () => {
+      const release = await connected();
+      expect(client.isRoomRevoked(roomId)).toBe(false);
+
+      sockets[0]!.receive('ERROR', { code: 'subscription_revoked', subscription: echo });
+      expect(client.isRoomRevoked(roomId)).toBe(true);
+      expect(client.isScopeLive(scope)).toBe(false);
+      expect(client.getSnapshot().status).toBe('ready');
+      await flushInvalidations();
+      expectInvalidated(invalidateQueries, { queryKey: roomsKey, refetchType: 'active' });
+
+      release();
+      expect(client.isRoomRevoked(roomId)).toBe(false);
+    });
+
+    it('counts space.channel_activity into the cached list, not the shown channel, with no refetch', async () => {
+      const row = { id: dashless, space_id: 'space-1', kind: 'channel', unread_count: 1, last_read_message_id: null };
+      queryClient.setQueryData(roomsKey, {
+        supported: true,
+        rooms: [row],
+        channelsEnabled: true,
+        canManageChannels: false,
+      });
+      await connected();
+      const activity = (eventId: string, messageId: string) =>
+        sockets[0]!.receive('EVENT', {
+          event_id: eventId,
+          event_type: 'space.channel_activity',
+          payload: { space_id: 'space-1', room_id: dashless, message_id: messageId, author_id: 'someone' },
+        });
+      const unread = () =>
+        queryClient.getQueryData<{ rooms: { unread_count: number }[] }>(roomsKey)?.rooms[0]?.unread_count;
+
+      activity('activity-1', '0195000000007000800000000000000a');
+      expect(unread()).toBe(2);
+      const hide = showChatRoom(roomId);
+      activity('activity-2', '0195000000007000800000000000000b');
+      expect(unread()).toBe(2);
+      hide();
+      activity('activity-3', '0195000000007000800000000000000c');
+      expect(unread()).toBe(3);
+      await flushInvalidations();
+      expect(invalidateQueries).not.toHaveBeenCalled();
+    });
+
+    it('re-reads the room list after events_lagged', async () => {
+      await connected();
+      sockets[0]!.receive('ERROR', { code: 'events_lagged' });
+      await vi.advanceTimersByTimeAsync(5_000);
+      await flushInvalidations();
+      const predicate = (
+        invalidateQueries.mock.calls[0]?.[0] as { predicate?: (q: { queryKey: unknown[] }) => boolean }
+      )?.predicate;
+      expect(predicate?.({ queryKey: roomsKey })).toBe(true);
+    });
+
+    it('subscribes a revoked channel again when readmitted', async () => {
+      await connected();
+      sockets[0]!.receive('ERROR', { code: 'subscription_revoked', subscription: echo });
+      sockets[0]!.sent.length = 0;
+      client.readmitRoom(dashless);
+      expect(client.isRoomRevoked(roomId)).toBe(false);
+      expect(sockets[0]!.sent).toContainEqual(
+        expect.objectContaining({ op: 'SUBSCRIBE', payload: { ...echo, room_id: roomId } })
+      );
+      sockets[0]!.receive('READY', readyPayload([echo]));
+      expect(client.isScopeLive(scope)).toBe(true);
+    });
+  });
+
   it('resubscribes a chat room on the new token’s socket after a refresh closes the old one, and refetches it', async () => {
     const roomId = '0192aaaa-0000-7000-8000-000000000001';
     const dashless = '0192aaaa000070008000000000000001';
@@ -1743,6 +1920,39 @@ describe('DebateGatewayClient', () => {
       release();
       expect(sockets[0]!.readyState).toBe(FakeWebSocket.CLOSED);
       expect(anonymous.getSnapshot().status).toBe('idle');
+    });
+
+    it('patches a channel.updated into the public room list without re-reading it', async () => {
+      const channelEcho = { ...echo, room_kind: 'channel' };
+      const listKey = ['space-chat-rooms', 'space-1'];
+      const row = { id: dashless, space_id: 'space-1', kind: 'channel', name: 'markets', version: 1 };
+      queryClient.setQueryData(listKey, {
+        supported: true,
+        rooms: [row],
+        channelsEnabled: true,
+        canManageChannels: false,
+      });
+      const release = anonymous.retainScope({ ...roomScope, room_kind: 'channel' });
+      sockets[0]!.open();
+      sockets[0]!.receive('READY', readyPayload([channelEcho]));
+      await flushInvalidations();
+      invalidateQueries.mockClear();
+
+      sockets[0]!.receiveRaw(
+        JSON.stringify({
+          v: 1,
+          op: 'EVENT',
+          seq: 4,
+          space_id: 'space-1',
+          room_id: dashless,
+          room_kind: 'channel',
+          payload: { event_type: 'channel.updated', payload: { room: { ...row, name: 'prices', version: 2 } } },
+        })
+      );
+      await flushInvalidations();
+      expect(queryClient.getQueryData<{ rooms: { name: string }[] }>(listKey)?.rooms[0]?.name).toBe('prices');
+      expect(invalidateQueries).not.toHaveBeenCalled();
+      release();
     });
 
     it('never carries anything but a member room', () => {
@@ -3533,3 +3743,204 @@ function expectBroadInvalidated(invalidateQueries: ReturnType<typeof vi.spyOn>) 
     { throwOnError: true, cancelRefetch: false }
   );
 }
+
+describe('invalidation spread', () => {
+  let sockets: FakeWebSocket[];
+  let invalidateQueries: ReturnType<typeof vi.spyOn>;
+  let client: DebateGatewayClient;
+  let random: number;
+  /** Draws taken before falling back to `random`. */
+  let draws: number[];
+
+  const SPREAD_END = 50 + BROADCAST_INVALIDATION_SPREAD_MS;
+  const invalidatedKeys = () =>
+    invalidateQueries.mock.calls.map((call: unknown[]) => (call[0] as { queryKey?: unknown } | undefined)?.queryKey);
+  const event = (id: string, type: string, payload: Record<string, unknown> = {}) =>
+    sockets[0]!.receive('EVENT', { event_id: id, event_type: type, payload });
+
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-20T12:00:00.000Z'));
+    sockets = [];
+    random = 1;
+    draws = [];
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries').mockResolvedValue();
+    client = new DebateGatewayClient({
+      queryClient,
+      getSession: async () => ({
+        access_token: 'access token',
+        refresh_token: 'refresh-token',
+        expires_at: '2026-07-20T12:10:00.000Z',
+      }),
+      getApiBaseUrl: () => 'https://chat.example.com/',
+      createWebSocket: url => {
+        const socket = new FakeWebSocket(url);
+        sockets.push(socket);
+        return socket;
+      },
+      random: () => draws.shift() ?? random,
+    });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+  });
+
+  afterEach(() => {
+    client.stop();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  async function connect() {
+    sockets[0]!.receive('READY', readyPayload([]));
+    await vi.advanceTimersByTimeAsync(SPREAD_END);
+    expectBroadInvalidated(invalidateQueries);
+    invalidateQueries.mockClear();
+  }
+
+  it('spreads the reconcile after a (re)connect', async () => {
+    sockets[0]!.receive('READY', readyPayload([]));
+    await vi.advanceTimersByTimeAsync(SPREAD_END - 1);
+    expect(invalidateQueries).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expectBroadInvalidated(invalidateQueries);
+
+    invalidateQueries.mockClear();
+    sockets[0]!.receive('RESUME', {});
+    await vi.advanceTimersByTimeAsync(SPREAD_END - 1);
+    expect(invalidateQueries).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expectBroadInvalidated(invalidateQueries);
+  });
+
+  it('reconciles a scope the viewer just opened at the usual coalesce', async () => {
+    await connect();
+    client.retainScope({ scope: 'space', space_id: 'space-1' });
+    sockets[0]!.receive('READY', readyPayload([{ scope: 'space', space_id: 'space-1' }]));
+    await vi.advanceTimersByTimeAsync(50);
+    expect(invalidatedKeys()).toContainEqual(['debates', 'claims', 'space-1']);
+  });
+
+  it.each([
+    ['debate.claims_changed', { space_id: 'space-1' }, ['debates', 'claims', 'space-1']],
+    ['debate.media_changed', { debate_id: 'debate-1' }, ['debates', 'media', 'debate1']],
+    ['debate.matchmaking_changed', {}, ['debates', 'account', 'user-a', 'people']],
+    ['debate.lobbies_changed', {}, ['debates', 'account', 'user-a', 'lobbies']],
+    ['debate.space_calls_changed', { space_id: 'space-1', change: 'ended' }, ['debates', 'space-calls', 'space1']],
+  ])('spreads %s over a bounded random delay', async (type, payload, key) => {
+    await connect();
+    event('event-1', type, payload);
+    await vi.advanceTimersByTimeAsync(SPREAD_END - 1);
+    expect(invalidateQueries).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(invalidatedKeys()).toContainEqual(key);
+  });
+
+  it.each([
+    ['debate.state_changed', { debate_id: 'debate-1' }, ['debates', 'detail', 'debate1']],
+    ['debate.lobby_changed', { lobby_id: 'lobby-1' }, ['debates', 'account', 'user-a', 'lobby', 'lobby1']],
+    ['debate.requests_changed', {}, ['debates', 'account', 'user-a', 'requests']],
+  ])('refetches %s, sent to named people, at the usual coalesce', async (type, payload, key) => {
+    await connect();
+    event('event-1', type, payload);
+    await vi.advanceTimersByTimeAsync(50);
+    expect(invalidatedKeys()).toContainEqual(key);
+  });
+
+  it('spreads space.channels_changed over up to two seconds', async () => {
+    await connect();
+    event('event-1', 'space.channels_changed', { space_id: 'space-1' });
+    await vi.advanceTimersByTimeAsync(50 + CHANNEL_LIST_SPREAD_MS - 1);
+    expect(invalidateQueries).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(invalidatedKeys()).toContainEqual(['debates', 'account', 'user-a', 'space-chat-rooms', 'space-1']);
+  });
+
+  it('brings pending broadcast reads along with a participant event', async () => {
+    await connect();
+    event('event-1', 'debate.media_changed', { debate_id: 'debate-1' });
+    event('event-2', 'debate.requests_changed');
+    await vi.advanceTimersByTimeAsync(50);
+    expect(invalidatedKeys()).toEqual(
+      expect.arrayContaining([
+        ['debates', 'account', 'user-a', 'requests'],
+        ['debates', 'media', 'debate1'],
+      ])
+    );
+  });
+
+  it('keeps an earlier flush when a later broadcast asks for a longer delay', async () => {
+    await connect();
+    random = 0.2;
+    event('event-1', 'debate.media_changed', { debate_id: 'debate-1' });
+    random = 1;
+    event('event-2', 'debate.claims_changed', { space_id: 'space-2' });
+    await vi.advanceTimersByTimeAsync(50 + 0.2 * BROADCAST_INVALIDATION_SPREAD_MS);
+    expect(invalidatedKeys()).toEqual(
+      expect.arrayContaining([
+        ['debates', 'media', 'debate1'],
+        ['debates', 'claims', 'space-2'],
+      ])
+    );
+  });
+
+  it('brings a pending reconnect reconcile forward for a participant event', async () => {
+    sockets[0]!.receive('READY', readyPayload([]));
+    event('event-1', 'debate.state_changed', { debate_id: 'debate-1' });
+    await vi.advanceTimersByTimeAsync(50);
+    expectBroadInvalidated(invalidateQueries);
+  });
+
+  it('draws one delay for every key a broadcast event queues', async () => {
+    await connect();
+    draws = [0.9, 0.1, 0.1];
+    event('event-1', 'debate.media_changed', { debate_id: 'debate-1', space_id: 'space-1' });
+    await vi.advanceTimersByTimeAsync(50 + 0.9 * BROADCAST_INVALIDATION_SPREAD_MS - 1);
+    expect(invalidateQueries).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(invalidatedKeys()).toEqual(
+      expect.arrayContaining([
+        ['debates', 'media', 'debate1'],
+        ['debates', 'detail', 'debate1'],
+        ['debates', 'transcript', 'debate1'],
+        ['debates', 'space', 'space-1'],
+      ])
+    );
+  });
+
+  it('spreads the reconcile after an events-lagged error', async () => {
+    await connect();
+    sockets[0]!.receive('ERROR', { code: 'events_lagged' });
+    await vi.advanceTimersByTimeAsync(SPREAD_END - 1);
+    expect(invalidateQueries).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expectBroadInvalidated(invalidateQueries);
+  });
+
+  it('drops the spread when queueing throws', async () => {
+    await connect();
+    const spreading = client as unknown as { withInvalidationSpread(spread: boolean, queue: () => void): void };
+    draws = [0.9];
+    expect(() =>
+      spreading.withInvalidationSpread(true, () => {
+        throw new Error('boom');
+      })
+    ).toThrow('boom');
+    // A leaked delay would be reused here instead of a fresh draw of 0.
+    random = 0;
+    event('event-1', 'debate.media_changed', { debate_id: 'debate-1' });
+    await vi.advanceTimersByTimeAsync(50);
+    expect(invalidatedKeys()).toContainEqual(['debates', 'media', 'debate1']);
+  });
+
+  it('ignores an event type it does not know', async () => {
+    await connect();
+    event('event-1', 'debate.something_new', { space_id: 'space-1' });
+    await vi.advanceTimersByTimeAsync(SPREAD_END);
+    expect(invalidateQueries).not.toHaveBeenCalled();
+  });
+});

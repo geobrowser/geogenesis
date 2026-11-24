@@ -4,6 +4,7 @@ import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import { openSessionRefusalMessage } from '../account-setup-copy';
 import {
   type DebateRoomView,
   type UpcomingDebateRoom,
@@ -89,6 +90,9 @@ async function withRetry<T>(task: () => Promise<T>, shouldStop: () => boolean = 
     try {
       return await task();
     } catch (error) {
+      // A refusal that says why (geo-chat#383) is an answer, not a dropped request: asking again
+      // three more times would only delay saying so.
+      if (openSessionRefusalMessage(error) !== null) throw error;
       if (attempt >= PRESENCE_RETRIES || shouldStop()) throw error;
       await new Promise(resolve => setTimeout(resolve, PRESENCE_RETRY_MS * (attempt + 1)));
       // Again after the wait: a leave sent during it must not be followed by this join.
@@ -127,6 +131,8 @@ export function useRoomPresence(roomId: string, admitted: boolean, startsAt: str
   const tokenRef = React.useRef(getPrivyIdentityToken);
   tokenRef.current = getPrivyIdentityToken;
   const announceRef = React.useRef<(() => Promise<boolean>) | null>(null);
+  // geo-chat refused the join because either person is in another open session. The room page says so.
+  const [refusal, setRefusal] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (!admitted) return;
@@ -156,9 +162,13 @@ export function useRoomPresence(roomId: string, admitted: boolean, startsAt: str
         .then(room => {
           if (cancelled) return null;
           queryClient.setQueryData(debateQueryKeys.room(accountKey, roomId), room);
+          setRefusal(null);
           return room;
         })
-        .catch(() => null);
+        .catch(error => {
+          if (!cancelled) setRefusal(openSessionRefusalMessage(error));
+          return null;
+        });
     const announce = () => announceRoom().then(room => room !== null);
 
     // GEO-3427: geo-chat counts someone as having arrived by a join at or after the start, so that a
@@ -246,7 +256,7 @@ export function useRoomPresence(roomId: string, admitted: boolean, startsAt: str
   // next join, which an occupant who never left would otherwise not send.
   const rejoin = React.useCallback(() => announceRef.current?.() ?? Promise.resolve(false), []);
 
-  return { connectionId, rejoin };
+  return { connectionId, rejoin, refusal };
 }
 
 /**

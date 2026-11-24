@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => ({
   capture: vi.fn(),
   publish: vi.fn(),
   reportError: vi.fn(),
+  signer: true,
+  accountArrives: Promise.resolve(null) as Promise<unknown>,
 }));
 const SPACE = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const BLOCK = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
@@ -19,7 +21,13 @@ const ITEM = 'cccccccccccccccccccccccccccccccc';
 
 vi.mock('~/core/analytics', () => ({ capture: mocks.capture, analyticsContextRevision: () => 0 }));
 vi.mock('~/core/hooks/use-smart-account', () => ({
-  useSmartAccount: () => ({ smartAccount: { account: { address: '0xabc' }, sendUserOperation: mocks.send } }),
+  useSmartAccount: () => ({
+    smartAccount: mocks.signer ? { account: { address: '0xabc' }, sendUserOperation: mocks.send } : null,
+  }),
+}));
+vi.mock('~/core/hooks/cached-write-identity', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/hooks/cached-write-identity')>()),
+  awaitSigningAccount: (live: unknown) => (live ? Promise.resolve(live) : mocks.accountArrives),
 }));
 vi.mock('~/core/hooks/use-personal-space-id', () => ({
   usePersonalSpaceId: () => ({ personalSpaceId: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' }),
@@ -51,6 +59,7 @@ vi.mock('@geoprotocol/geo-sdk', async importOriginal => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.signer = true;
   mocks.send.mockReset();
   mocks.send.mockResolvedValue('0xhash');
   mocks.publish.mockResolvedValue({ to: '0xabc', calldata: '0x01' });
@@ -81,6 +90,34 @@ describe('ranking submission outcomes', () => {
     );
     expect(mocks.capture.mock.calls.some(([name]) => name === 'ranking_submitted')).toBe(false);
     expect(view.result.current.isSaving).toBe(false);
+    view.unmount();
+    client.clear();
+  });
+
+  it('is saving from the press, while it waits for the signing account', async () => {
+    mocks.signer = false;
+    let arrive!: (account: unknown) => void;
+    mocks.accountArrives = new Promise(resolve => (arrive = resolve));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const view = renderHook(() => useRankingSubmissions(BLOCK, SPACE, 'Test ranking'), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      ),
+    });
+
+    let saving!: Promise<unknown>;
+    act(() => {
+      saving = view.result.current.saveMySubmission([{ id: ITEM, name: null, spaceId: SPACE }]);
+    });
+    expect(view.result.current.isSaving).toBe(true);
+
+    await act(async () => {
+      arrive(null);
+      expect(await saving).toBeNull();
+    });
+
+    expect(view.result.current.isSaving).toBe(false);
+    expect(mocks.send).not.toHaveBeenCalled();
     view.unmount();
     client.clear();
   });

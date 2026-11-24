@@ -6,11 +6,13 @@ import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { spaceCallKeys } from '../query-keys';
+import type { PastCall } from './api';
+import { listPastCalls } from './api';
 import { PAST_CALLS_LIMIT, usePastCalls } from './hooks';
 
 vi.mock('./api', async importOriginal => ({
   ...(await importOriginal<typeof import('./api')>()),
-  listPastCalls: vi.fn().mockResolvedValue({ calls: [] }),
+  listPastCalls: vi.fn().mockResolvedValue({ calls: [], next_cursor: null }),
 }));
 
 afterEach(() => vi.useRealTimers());
@@ -36,5 +38,25 @@ describe('usePastCalls', () => {
       await vi.advanceTimersByTimeAsync(2 * 60_000);
     });
     expect(cached()).toBeUndefined();
+  });
+
+  it('pages through next_cursor and keeps the calls in order', async () => {
+    const call = (id: string) => ({ call_id: id }) as PastCall;
+    vi.mocked(listPastCalls)
+      .mockResolvedValueOnce({ calls: [call('a'), call('b')], next_cursor: 'c1' })
+      .mockResolvedValueOnce({ calls: [call('c')], next_cursor: null });
+    const client = new QueryClient();
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    const hook = renderHook(() => usePastCalls(true), { wrapper });
+    await waitFor(() => expect(hook.result.current.hasNextPage).toBe(true));
+
+    await act(async () => {
+      await hook.result.current.fetchNextPage();
+    });
+    await waitFor(() => expect(hook.result.current.data?.map(c => c.call_id)).toEqual(['a', 'b', 'c']));
+    expect(hook.result.current.hasNextPage).toBe(false);
+    expect(vi.mocked(listPastCalls).mock.calls.at(-1)?.[0]).toEqual({ limit: PAST_CALLS_LIMIT, cursor: 'c1' });
   });
 });

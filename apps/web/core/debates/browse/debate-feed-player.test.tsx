@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 import { createRef } from 'react';
 
@@ -7,6 +7,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate, DebateMediaTurnSegment, DebateParticipant } from '~/core/debates/api';
 import type { ClaimMarker } from '~/core/debates/claim-ticker';
+import {
+  RESUME_STORAGE_KEY,
+  readDebateResumeSeconds,
+  rememberDebatePosition,
+} from '~/core/debates/debate-resume-positions';
 import { PAIR_HOLD_TIMEOUT_MS, SUSPEND_GRACE_MS } from '~/core/debates/pair-readiness';
 import { turnSpansForDurations, turnSpansFromSegments, turnStateFromSegments } from '~/core/debates/playback-utils';
 import { turnTimerScale } from '~/core/debates/recording-countdown-ring';
@@ -272,6 +277,8 @@ function controllerFixture(overrides: {
   seekBoth?: ReturnType<typeof vi.fn>;
   /** Where the playhead sits, which is all a round cue reads. */
   playheadSeconds?: number;
+  /** The debate's length; 0 before its turn timings are known. */
+  timelineSeconds?: number;
   /** A condensed Open rounds render's breaks and picks (GEO-3277); none by default. */
   playbackBreaks?: DebatePlaybackController['playbackBreaks'];
   turnSegments?: DebateMediaTurnSegment[];
@@ -314,7 +321,7 @@ function controllerFixture(overrides: {
     setMutedByUser: vi.fn(),
     playheadSeconds,
     // Four 30s turns, so the whole timeline is 120s.
-    timelineSeconds: 120,
+    timelineSeconds: overrides.timelineSeconds ?? 120,
     turnState: { slot: speakingSlot, seconds: 10, progress: 0.5 },
     turnSpans,
     // The format's count, which is what names a round. Equal to the spans here because nothing was
@@ -383,6 +390,7 @@ beforeEach(() => {
   mocks.playbackOptions = [];
   mocks.analyticsAttached = [];
   mocks.control = vi.fn();
+  window.localStorage.removeItem(RESUME_STORAGE_KEY);
   vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
   vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
 });
@@ -1413,6 +1421,299 @@ describe('a seek asked for by the link that brought the reader here', () => {
   });
 });
 
+describe('resuming where this browser left a debate', () => {
+  function renderResumable({
+    initialSeekSeconds = null,
+    ready = true,
+    releaseMedia = false,
+    playheadSeconds = 5,
+    playing = true,
+    timelineSeconds = 120,
+    active = true,
+    playbackEnded = false,
+    autoplayBlocked = false,
+    holdFullPlayback = false,
+    measure = true,
+    onPlaybackRequest,
+  }: {
+    active?: boolean;
+    holdFullPlayback?: boolean;
+    measure?: boolean;
+    playbackEnded?: boolean;
+    autoplayBlocked?: boolean;
+    onPlaybackRequest?: () => void;
+    initialSeekSeconds?: number | null;
+    ready?: boolean;
+    releaseMedia?: boolean;
+    playheadSeconds?: number;
+    playing?: boolean;
+    timelineSeconds?: number;
+  } = {}) {
+    const seeks: number[] = [];
+    const makeSeek = () => vi.fn((seconds: number) => void seeks.push(seconds));
+    let props = {
+      initialSeekSeconds,
+      ready,
+      releaseMedia,
+      playheadSeconds,
+      playing,
+      timelineSeconds,
+      active,
+      playbackEnded,
+      autoplayBlocked,
+      debateId: debate.id,
+    };
+
+    const element = () => (
+      <DebateFeedPlayer
+        debate={props.debateId === debate.id ? debate : ({ ...debate, id: props.debateId } as typeof debate)}
+        active={props.active}
+        onPlaybackRequest={onPlaybackRequest}
+        releaseMedia={props.releaseMedia}
+        initialSeekSeconds={props.initialSeekSeconds}
+        holdFullPlayback={holdFullPlayback}
+        measure={measure}
+      />
+    );
+    const fixture = () =>
+      controllerFixture({
+        mutedByUser: true,
+        turnSlot: 1,
+        ready: props.ready,
+        playing: props.playing,
+        playheadSeconds: props.playheadSeconds,
+        timelineSeconds: props.timelineSeconds,
+        playbackEnded: props.playbackEnded,
+        autoplayBlocked: props.autoplayBlocked,
+        seekBoth: makeSeek(),
+      });
+
+    mocks.controller = fixture();
+    const view = render(element());
+
+    return {
+      seeks,
+      controller: () => mocks.controller as ReturnType<typeof controllerFixture>,
+      update(next: Partial<typeof props> = {}) {
+        props = { ...props, ...next };
+        mocks.controller = fixture();
+        view.rerender(element());
+      },
+      unmount: view.unmount,
+    };
+  }
+
+  const startOver = () => screen.queryByRole('button', { name: 'Start over' });
+
+  it('opens a debate watched part of the way a few seconds before where the viewer stopped', () => {
+    rememberDebatePosition(debate.id, 80, 120);
+
+    const player = renderResumable();
+
+    expect(player.seeks).toEqual([75]);
+    expect(startOver()).not.toBeNull();
+  });
+
+  it('starts a debate never watched at the beginning, with no Start over', () => {
+    const player = renderResumable();
+
+    expect(player.seeks).toEqual([]);
+    expect(startOver()).toBeNull();
+  });
+
+  it('waits for the recordings to be signed, without saving over the position it waits for', () => {
+    rememberDebatePosition(debate.id, 80, 120);
+    const player = renderResumable({ ready: false });
+    expect(player.seeks).toEqual([]);
+    expect(readDebateResumeSeconds(debate.id)).toBe(75);
+
+    player.update({ ready: true });
+    expect(player.seeks).toEqual([75]);
+  });
+
+  it('seeks a held card to its saved position before its videos attach', () => {
+    getDefaultStore().set(feedFullPlaybackStartedAtom, false);
+    try {
+      rememberDebatePosition(debate.id, 80, 120);
+      const player = renderResumable({ playing: false, holdFullPlayback: true });
+
+      expect(document.querySelectorAll('video')).toHaveLength(0);
+      expect(player.seeks).toEqual([75]);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Play debate' }));
+
+      expect(document.querySelectorAll('video')).toHaveLength(2);
+      expect(player.seeks).toEqual([75]);
+    } finally {
+      getDefaultStore().set(feedFullPlaybackStartedAtom, false);
+    }
+  });
+
+  it("waits for the debate's length before resuming", () => {
+    rememberDebatePosition(debate.id, 80, 120);
+    const player = renderResumable({ timelineSeconds: 0 });
+
+    expect(player.seeks).toEqual([]);
+    expect(screen.queryByRole('button', { name: 'Start over' })).toBeNull();
+    // Playing from 0 while it waits must not forget the position either.
+    player.update({ playheadSeconds: 8, playing: false });
+    expect(readDebateResumeSeconds(debate.id)).toBe(75);
+
+    player.update({ timelineSeconds: 120 });
+    expect(player.seeks).toEqual([75]);
+    expect(screen.queryByRole('button', { name: 'Start over' })).not.toBeNull();
+  });
+
+  it('does not chase its own saves back while the debate plays on', () => {
+    rememberDebatePosition(debate.id, 80, 120);
+    const player = renderResumable({ playheadSeconds: 75 });
+
+    // Each of these is saved, so a resume read live would seek again every few seconds.
+    for (const seconds of [76, 82, 90, 101]) player.update({ playheadSeconds: seconds });
+
+    expect(player.seeks).toEqual([75]);
+    expect(readDebateResumeSeconds(debate.id)).toBe(96);
+  });
+
+  it('lets a link that named a moment win, and does not resume once that link is dropped', () => {
+    rememberDebatePosition(debate.id, 80, 120);
+    const player = renderResumable({ initialSeekSeconds: 30 });
+
+    expect(player.seeks).toEqual([30]);
+    expect(startOver()).toBeNull();
+
+    // Browser Back to the same debate without `?t=`: the viewer is already where the link put them.
+    player.update({ initialSeekSeconds: null });
+    expect(player.seeks).toEqual([30]);
+  });
+
+  it('reads its own position for a different debate on the same card', () => {
+    rememberDebatePosition(debate.id, 80, 120);
+    rememberDebatePosition('debate-2', 50, 120);
+    const player = renderResumable({ playing: false });
+
+    player.update({ debateId: 'debate-2' });
+
+    expect(player.seeks).toEqual([75, 45]);
+  });
+
+  it('Start over plays from the beginning and forgets the position', () => {
+    rememberDebatePosition(debate.id, 80, 120);
+    const player = renderResumable({ playing: false });
+
+    fireEvent.click(startOver()!);
+
+    expect(player.controller().playFromStart).toHaveBeenCalledOnce();
+    expect(readDebateResumeSeconds(debate.id)).toBeNull();
+    expect(startOver()).toBeNull();
+  });
+
+  it('Start over on a card that does not hold playback asks for it, and starts over once handed it', () => {
+    rememberDebatePosition(debate.id, 80, 120);
+    const onPlaybackRequest = vi.fn();
+    const player = renderResumable({ active: false, playing: false, onPlaybackRequest });
+
+    fireEvent.click(startOver()!);
+
+    // Playing now would run beside the card that holds playback, then be paused by it.
+    expect(onPlaybackRequest).toHaveBeenCalledOnce();
+    expect(player.controller().playFromStart).not.toHaveBeenCalled();
+    expect(readDebateResumeSeconds(debate.id)).toBe(75);
+    expect(startOver()).not.toBeNull();
+
+    player.update({ active: true });
+
+    expect(player.controller().playFromStart).toHaveBeenCalledOnce();
+    expect(readDebateResumeSeconds(debate.id)).toBeNull();
+    expect(startOver()).toBeNull();
+  });
+
+  it('leaves a refused card to the Watch the debate prompt, and offers Start over once it plays', () => {
+    rememberDebatePosition(debate.id, 80, 120);
+    const player = renderResumable({ playing: false, autoplayBlocked: true });
+    const prompt = document.querySelector<HTMLElement>('[data-debate-watch-prompt]');
+
+    expect(prompt).not.toBeNull();
+    expect(startOver()).toBeNull();
+
+    fireEvent.click(prompt!);
+    expect(player.controller().togglePlayback).toHaveBeenCalledOnce();
+    player.update({ playing: true, autoplayBlocked: false });
+
+    expect(document.querySelector('[data-debate-watch-prompt]')).toBeNull();
+    expect(startOver()).not.toBeNull();
+  });
+
+  it('drops a held Start over once the card moves to another debate', () => {
+    rememberDebatePosition(debate.id, 80, 120);
+    const player = renderResumable({ active: false, playing: false, onPlaybackRequest: vi.fn() });
+    fireEvent.click(startOver()!);
+
+    player.update({ debateId: 'debate-2' });
+    player.update({ active: true });
+
+    expect(player.controller().playFromStart).not.toHaveBeenCalled();
+    expect(readDebateResumeSeconds(debate.id)).toBe(75);
+  });
+
+  it('drops a held Start over once the debate ends', () => {
+    rememberDebatePosition(debate.id, 80, 120);
+    const player = renderResumable({ active: false, playing: false, onPlaybackRequest: vi.fn() });
+    fireEvent.click(startOver()!);
+
+    player.update({ playbackEnded: true });
+    player.update({ active: true });
+
+    expect(player.controller().playFromStart).not.toHaveBeenCalled();
+  });
+
+  it('saves where the viewer stopped when they pause', () => {
+    const player = renderResumable({ playheadSeconds: 40 });
+    player.update({ playheadSeconds: 43 });
+    expect(readDebateResumeSeconds(debate.id)).toBe(35);
+
+    // Under the save interval while playing; written once playback stops.
+    player.update({ playheadSeconds: 43, playing: false });
+    expect(readDebateResumeSeconds(debate.id)).toBe(38);
+  });
+
+  it('saves where the viewer stopped when the player goes away', () => {
+    const player = renderResumable({ playheadSeconds: 40 });
+    player.update({ playheadSeconds: 44 });
+
+    player.unmount();
+
+    expect(readDebateResumeSeconds(debate.id)).toBe(39);
+  });
+
+  it('saves nothing for a viewer who watched only the first few seconds', () => {
+    const player = renderResumable({ playheadSeconds: 3 });
+    player.update({ playheadSeconds: 12, playing: false });
+
+    expect(readDebateResumeSeconds(debate.id)).toBeNull();
+  });
+
+  it('forgets the position once the debate is finished', () => {
+    rememberDebatePosition(debate.id, 80, 120);
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false, playbackEnded: true });
+
+    render(<DebateFeedPlayer debate={debate} active />);
+
+    expect(readDebateResumeSeconds(debate.id)).toBeNull();
+  });
+
+  // The moments editor (GEO-3773) passes measure={false}: an admin editing a reel is not a viewer.
+  it('neither resumes nor saves a position on a player that does not measure', () => {
+    rememberDebatePosition(debate.id, 80, 120);
+    const player = renderResumable({ playheadSeconds: 40, measure: false });
+    player.update({ playheadSeconds: 50, playing: false });
+
+    expect(player.seeks).toEqual([]);
+    expect(startOver()).toBeNull();
+    expect(readDebateResumeSeconds(debate.id)).toBe(75);
+  });
+});
+
 describe('the round it is playing', () => {
   const at = (playheadSeconds: number, extra: { playing?: boolean } = {}) =>
     controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds, ...extra });
@@ -2219,6 +2520,8 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
       expect(seekBoth).toHaveBeenCalledWith(70.8, { preserveTransitionHold: true });
 
       cleanup();
+
+      window.localStorage.removeItem(RESUME_STORAGE_KEY);
       const pausedSeek = vi.fn();
       renderAt(62.3, { playbackBreaks: breaks({ breaks: [extendBreak] }), seekBoth: pausedSeek, playing: false });
       vi.advanceTimersByTime(5_000);
@@ -3456,6 +3759,238 @@ describe('holding the full recordings until the viewer asks (feed bandwidth)', (
     const [slot1, slot2] = Array.from(container.querySelectorAll('video'));
     expect(slot1.getAttribute('preload')).toBe('metadata');
     expect(slot2.getAttribute('preload')).toBe('auto');
+  });
+});
+
+describe('tap to play, outside a feed (GEO-3812)', () => {
+  beforeEach(() => {
+    getDefaultStore().set(feedFullPlaybackStartedAtom, false);
+    mocks.mediaAttached = [];
+    streamMocks.streamsFully = false;
+  });
+  afterEach(() => {
+    getDefaultStore().set(feedFullPlaybackStartedAtom, false);
+    streamMocks.streamsFully = false;
+  });
+
+  const stills = { slot1: 'https://cdn.test/still-1.jpg', slot2: 'https://cdn.test/still-2.jpg' };
+
+  /** An element that keeps its own `paused`, as a browser's does, so a play inside the tap shows. */
+  function playable(video: HTMLVideoElement) {
+    let paused = true;
+    Object.defineProperty(video, 'paused', { configurable: true, get: () => paused });
+    video.play = () => {
+      paused = false;
+      return Promise.resolve();
+    };
+  }
+
+  /** A paused controller whose toggle starts both elements, as `resumeBoth` does inside a tap. */
+  function pausedController(overrides: Partial<Parameters<typeof controllerFixture>[0]> = {}) {
+    const controller = controllerFixture({
+      mutedByUser: true,
+      turnSlot: 1,
+      playing: false,
+      posters: stills,
+      ...overrides,
+    });
+    controller.togglePlayback.mockImplementation(() => {
+      for (const video of document.querySelectorAll('video')) void video.play();
+    });
+    mocks.controller = controller;
+    return controller;
+  }
+
+  it('waits on its stills and Play with its recordings attached, paused, and starts nothing', () => {
+    const controller = pausedController();
+    previewMocks.enabled = [];
+    const { container, getByRole, queryByRole } = render(
+      <DebateFeedPlayer debate={debate} active={false} preload tapToPlay holdFullPlayback />
+    );
+
+    expect(getByRole('button', { name: 'Play debate' })).toBeTruthy();
+    expect(container.querySelector('[data-debate-full-playback-held="true"]')).toBeTruthy();
+    expect(container.querySelectorAll('[data-debate-poster]')).toHaveLength(2);
+    // The elements exist, so a tap can start them — hidden, so the stills are what shows, even once
+    // both have a frame they could paint over them.
+    const videos = Array.from(container.querySelectorAll('video'));
+    expect(videos).toHaveLength(2);
+    for (const video of videos) {
+      Object.defineProperty(video, 'readyState', { configurable: true, value: 4 });
+      fireEvent(video, new Event('canplay'));
+    }
+    for (const video of videos) expect(video.classList.contains('opacity-0')).toBe(true);
+    expect(mocks.mediaAttached.at(-1)).toBe(true);
+    // Nothing else of the player's until it plays.
+    expect(queryByRole('button', { name: 'Unmute' })).toBeNull();
+    expect(container.querySelector('input[type="range"]')).toBeNull();
+    expect(controller.resumeBoth).not.toHaveBeenCalled();
+    expect(controller.togglePlayback).not.toHaveBeenCalled();
+    // And no preview loop in place of the stills.
+    expect(previewMocks.enabled.every(enabled => !enabled)).toBe(true);
+  });
+
+  it.each([
+    ['a full card', false],
+    ['a compact gallery card', true],
+  ])('on %s, starts both recordings inside the tap, with sound, reported once', (_label, reducedOverlays) => {
+    const controller = pausedController();
+    const onPlaybackRequest = vi.fn();
+    const { container, getByRole, queryByRole, rerender } = render(
+      <DebateFeedPlayer
+        debate={debate}
+        active={false}
+        preload
+        tapToPlay
+        holdFullPlayback
+        reducedOverlays={reducedOverlays}
+        onPlaybackRequest={onPlaybackRequest}
+      />
+    );
+    const videos = Array.from(container.querySelectorAll('video'));
+    videos.forEach(playable);
+
+    fireEvent.click(getByRole('button', { name: 'Play debate' }));
+
+    expect(onPlaybackRequest).toHaveBeenCalledOnce();
+    // Started inside the tap, not left for the autoplay effect a render later, which is what lets
+    // the browser give it sound: so the sound goes on, and the elements are unlocked for it.
+    expect(controller.togglePlayback).toHaveBeenCalledOnce();
+    expect(videos.every(video => !video.paused)).toBe(true);
+    expect(videos.every(isGestureVideoUnlocked)).toBe(true);
+    expect(controller.setMutedByUser).toHaveBeenCalledWith(false, 'inferred');
+    expect(mocks.control.mock.calls).toEqual([['play'], ['unmute', { source: 'play' }]]);
+    // A tap on one debate is not the viewer opting the feeds out of their hold.
+    expect(getDefaultStore().get(feedFullPlaybackStartedAtom)).toBe(false);
+
+    mocks.controller = { ...controller, playing: true };
+    rerender(
+      <DebateFeedPlayer
+        debate={debate}
+        active
+        preload
+        tapToPlay
+        holdFullPlayback
+        reducedOverlays={reducedOverlays}
+        onPlaybackRequest={onPlaybackRequest}
+      />
+    );
+    expect(queryByRole('button', { name: 'Play debate' })).toBeNull();
+    expect(container.querySelector('[data-debate-full-playback-held="false"]')).toBeTruthy();
+    for (const video of container.querySelectorAll('video')) expect(video.classList.contains('opacity-0')).toBe(false);
+    expect(mocks.control).toHaveBeenCalledTimes(2);
+  });
+
+  it('plays from a tap anywhere on the video, too', () => {
+    const controller = pausedController();
+    const onPlaybackRequest = vi.fn();
+    const { getAllByRole } = render(
+      <DebateFeedPlayer debate={debate} active={false} tapToPlay onPlaybackRequest={onPlaybackRequest} />
+    );
+
+    fireEvent.click(getAllByRole('button', { name: 'Pause or play' })[0]);
+
+    expect(onPlaybackRequest).toHaveBeenCalledOnce();
+    expect(controller.togglePlayback).toHaveBeenCalledOnce();
+  });
+
+  it('never lifts the feeds’ hold while it plays, pauses and plays again', () => {
+    const controller = pausedController();
+    const { getAllByRole } = render(<DebateFeedPlayer debate={debate} active tapToPlay holdFullPlayback />);
+
+    fireEvent.click(getAllByRole('button', { name: 'Play debate' })[0]);
+
+    expect(controller.togglePlayback).toHaveBeenCalledOnce();
+    expect(getDefaultStore().get(feedFullPlaybackStartedAtom)).toBe(false);
+  });
+
+  it('reports a tap made before its media is ready once, when the media arrives', () => {
+    const controller = pausedController({ ready: false });
+    const onPlaybackRequest = vi.fn();
+    const props = { debate, preload: true, tapToPlay: true, onPlaybackRequest };
+    const { getByRole, rerender } = render(<DebateFeedPlayer {...props} active={false} />);
+
+    fireEvent.click(getByRole('button', { name: 'Play debate' }));
+    expect(onPlaybackRequest).toHaveBeenCalledOnce();
+    // Nothing to start inside the tap; once active, the autoplay effect starts it (muted).
+    expect(controller.togglePlayback).not.toHaveBeenCalled();
+    expect(mocks.control).not.toHaveBeenCalled();
+
+    rerender(<DebateFeedPlayer {...props} active />);
+    expect(mocks.control).not.toHaveBeenCalled();
+
+    mocks.controller = { ...controller, ready: true };
+    rerender(<DebateFeedPlayer {...props} active />);
+    expect(mocks.control.mock.calls).toEqual([['play']]);
+
+    rerender(<DebateFeedPlayer {...props} active />);
+    expect(mocks.control).toHaveBeenCalledOnce();
+  });
+
+  it('neither loops preview clips nor starts from Stream while it waits', () => {
+    streamMocks.streamsFully = true;
+    const controller = pausedController();
+    const pair = { slot1: 'https://cdn.test/preview-1.mp4', slot2: 'https://cdn.test/preview-2.mp4' };
+    const { container, getByRole } = render(
+      <DebateFeedPlayer debate={debate} active={false} preload buffer tapToPlay holdFullPlayback previewClips={pair} />
+    );
+
+    expect(container.querySelector('video[data-debate-preview-clip]')).toBeNull();
+    expect(getByRole('button', { name: 'Play debate' })).toBeTruthy();
+    expect(controller.resumeBoth).not.toHaveBeenCalled();
+  });
+
+  it('comes back from a pause and a scroll away on Play, resuming where it was', () => {
+    // Paused, scrolled away (its tap let go), and back: inactive again, so Play, and Play resumes.
+    const controller = pausedController({ playheadSeconds: 42 });
+    const { getByRole, queryByRole } = render(<DebateFeedPlayer debate={debate} active={false} tapToPlay />);
+    expect(queryByRole('button', { name: 'Resume debate' })).toBeNull();
+
+    fireEvent.click(getByRole('button', { name: 'Play debate' }));
+
+    expect(controller.togglePlayback).toHaveBeenCalledOnce();
+    expect(controller.playFromStart).not.toHaveBeenCalled();
+    expect(controller.seekBoth).not.toHaveBeenCalled();
+  });
+
+  it('offers only Play on an ended debate that is waiting, and Play replays it', () => {
+    const controller = pausedController({ playbackEnded: true });
+    const { getByRole, queryByRole, container } = render(<DebateFeedPlayer debate={debate} active={false} tapToPlay />);
+    container.querySelectorAll('video').forEach(video => playable(video));
+    expect(queryByRole('button', { name: 'Replay debate' })).toBeNull();
+
+    fireEvent.click(getByRole('button', { name: 'Play debate' }));
+
+    // The controller's toggle replays an ended debate; going through it is what lets the sound on.
+    expect(controller.togglePlayback).toHaveBeenCalledOnce();
+    expect(controller.setMutedByUser).toHaveBeenCalledWith(false, 'inferred');
+    expect(mocks.control.mock.calls).toEqual([['replay'], ['unmute', { source: 'play' }]]);
+  });
+
+  // The autoplay effect starts neither an ended debate nor a paused one, so a tap that had to wait
+  // for its media (URLs re-signing after a while off screen) would land on the end card or the
+  // paused glyph and need a second tap.
+  it.each([
+    ['an ended debate', { playbackEnded: true }, 'replay'],
+    ['a debate the viewer paused', { userPaused: true }, 'play'],
+  ] as const)('carries out a tap that waited on its media, on %s', (_label, state, reported) => {
+    const controller = { ...pausedController(), ...state, urlsLapsed: true };
+    mocks.controller = controller;
+    const onPlaybackRequest = vi.fn();
+    const props = { debate, preload: true, tapToPlay: true, onPlaybackRequest };
+    const { getByRole, rerender } = render(<DebateFeedPlayer {...props} active={false} />);
+
+    fireEvent.click(getByRole('button', { name: 'Play debate' }));
+    expect(onPlaybackRequest).toHaveBeenCalledOnce();
+    expect(controller.togglePlayback).not.toHaveBeenCalled();
+
+    mocks.controller = { ...controller, urlsLapsed: false };
+    rerender(<DebateFeedPlayer {...props} active />);
+
+    expect(controller.togglePlayback).toHaveBeenCalledOnce();
+    // Reported once, as what it was, and with no sound inferred: the tap is long over.
+    expect(mocks.control.mock.calls).toEqual([[reported]]);
+    expect(controller.setMutedByUser).not.toHaveBeenCalled();
   });
 });
 

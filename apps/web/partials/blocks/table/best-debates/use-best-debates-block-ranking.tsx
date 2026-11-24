@@ -12,6 +12,7 @@ import {
   hasAnyGrade,
   placeAsIn,
   removeEntry,
+  restoreRemoved,
 } from '~/core/blocks/ranking/ranking-grades';
 import { rankingPublishKey, sameBallot, setUnsavedRankingDraft } from '~/core/blocks/ranking/ranking-publish-queue';
 import type { RankingSubmissionSlot } from '~/core/blocks/ranking/ranking-submission-types';
@@ -34,6 +35,7 @@ import {
 } from './best-debate-grading';
 import { useBestDebatesCompose } from './use-best-debates-compose';
 import { useBestDebatesPushDownSlot } from './use-best-debates-push-down-slot';
+import { useRemovedToast } from './use-removed-toast';
 
 const NO_IDS: readonly string[] = [];
 
@@ -136,6 +138,7 @@ export function useBestDebatesBlockRanking({
     downRank: compose.requestPushDown,
     reorder: compose.reorder,
     placeAfterGrade: true,
+    nameOf: entityId => nameById.get(normId(entityId)) ?? null,
   });
   batchRef.current = grading;
 
@@ -204,6 +207,7 @@ export function useBlockGrading({
   downRank,
   reorder = () => false,
   placeAfterGrade = false,
+  nameOf = () => null,
 }: {
   blockId: string;
   ready: boolean;
@@ -227,6 +231,8 @@ export function useBlockGrading({
   reorder?: (entityId: string) => boolean | void;
   /** A popup grade opens the Placed step for the debate, so its place can be fine-tuned first. */
   placeAfterGrade?: boolean;
+  /** A debate's name, for Remove's toast. */
+  nameOf?: (entityId: string) => string | null;
 }): BlockBatch {
   const recordGrade = useRecordGrade(blockId);
   // The draft as of the last change (state lags a render behind).
@@ -415,6 +421,16 @@ export function useBlockGrading({
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [unsent]);
 
+  // Remove (GEO-3805) publishes at once, and its toast's Undo publishes the debate back the same
+  // way: where it was, with its grade, into the ballot as it is when that goes out. Nothing changes
+  // when it is back already (graded or placed again since).
+  const showRemovedToast = useRemovedToast();
+  const remove = (entityId: string) => {
+    const before = latest.current;
+    enqueue([entityId], draft => removeEntry(draft.ids, draft.grades, entityId), 'popup');
+    showRemovedToast(nameOf(entityId), () => enqueue([entityId], draft => restoreRemoved(draft, before, entityId)));
+  };
+
   const placeById = React.useMemo(() => new Map(orderedIds.map((id, i) => [normId(id), i + 1])), [orderedIds]);
 
   return {
@@ -434,7 +450,7 @@ export function useBlockGrading({
     },
     reorder: (entityId: string) => openPlaced(entityId),
     reorderBusy: false,
-    remove: (entityId: string) => enqueue([entityId], draft => removeEntry(draft.ids, draft.grades, entityId), 'popup'),
+    remove,
     // Counted as Down rank's own `push_down` once its downvote lands.
     downRank,
     endPlaced,

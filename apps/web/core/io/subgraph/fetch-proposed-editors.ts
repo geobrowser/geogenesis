@@ -3,6 +3,7 @@ import { Effect, Either, Schema } from 'effect';
 import { Environment } from '~/core/environment';
 
 import { ApiProposalListResponseSchema, encodePathSegment, restFetch } from '../rest';
+import { getApiProposalCanExecute } from '../rest/schemas/proposal';
 import { AbortError } from './errors';
 
 /** Compare space ids regardless of dashes / 0x prefix / case. */
@@ -12,6 +13,8 @@ export type ActiveEditorRequest = {
   proposalId: string;
   /** False while the vote is still open; true once the period elapsed (passed but not yet executed, or dead). */
   isVotingEnded: boolean;
+  /** Passed and still inside its execution window, by the governance UI's rule. */
+  canExecute: boolean;
 };
 
 /**
@@ -23,9 +26,13 @@ export type ActiveEditorRequest = {
  * and match the action whose target is this member's space, returning the most
  * recent one.
  */
+export class EditorRequestLookupError extends Error {}
+
 export async function fetchActiveEditorRequest(
   spaceId: string,
-  editorSpaceId: string
+  editorSpaceId: string,
+  /** `strict`: a failed or undecodable read throws EditorRequestLookupError instead of reading as none. */
+  { strict = false }: { strict?: boolean } = {}
 ): Promise<ActiveEditorRequest | null> {
   const config = Environment.getConfig();
 
@@ -46,12 +53,14 @@ export async function fetchActiveEditorRequest(
     const error = result.left;
     if (error instanceof AbortError) throw error;
     console.error(`Failed to fetch editor requests for space ${spaceId}, editor ${editorSpaceId}:`, error);
+    if (strict) throw new EditorRequestLookupError('editor request lookup failed');
     return null;
   }
 
   const decoded = Schema.decodeUnknownEither(ApiProposalListResponseSchema)(result.right);
   if (Either.isLeft(decoded)) {
     console.error(`Failed to decode editor requests for space ${spaceId}, editor ${editorSpaceId}:`, decoded.left);
+    if (strict) throw new EditorRequestLookupError('editor request lookup undecodable');
     return null;
   }
 
@@ -65,5 +74,9 @@ export async function fetchActiveEditorRequest(
   const latest = mine[0];
   if (!latest) return null;
 
-  return { proposalId: latest.proposalId, isVotingEnded: latest.timing.isVotingEnded };
+  return {
+    proposalId: latest.proposalId,
+    isVotingEnded: latest.timing.isVotingEnded,
+    canExecute: getApiProposalCanExecute(latest),
+  };
 }

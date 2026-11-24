@@ -22,7 +22,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('~/core/state/status-bar-store', () => ({ useStatusBar: () => ({ dispatch: mocks.dispatch }) }));
-vi.mock('./use-smart-account', () => ({ useSmartAccount: () => ({ smartAccount: { account: { address: '0xv' } } }) }));
+vi.mock('~/core/wallet/account-readiness', () => ({ useAccountAddress: () => '0xv' }));
 vi.mock('./use-personal-space-id', () => ({
   usePersonalSpaceId: () => ({ personalSpaceId: VIEWER, isRegistered: true }),
 }));

@@ -12,6 +12,13 @@ export function entityTabIdFromHref(href: string): string | null {
   return tabId && validateEntityId(tabId) ? tabId : null;
 }
 
+/** Tabs whose page has sub-paths that keep the tab selected: a chat channel (GEO-3818). */
+const NESTED_TAB_SUFFIXES = ['/chat'];
+
+function isNestedTabPath(href: string, fullPath: string) {
+  return NESTED_TAB_SUFFIXES.some(suffix => href.endsWith(suffix)) && fullPath.startsWith(`${href}/`);
+}
+
 /** One active-tab rule for read and edit tab bars, on routes and in the entity side panel. */
 export function isEntityTabActive({
   href,
@@ -28,7 +35,7 @@ export function isEntityTabActive({
   sidePanelKey?: string;
   activeSystemTab?: string | null;
 }): boolean {
-  if (!sidePanel) return href === fullPath;
+  if (!sidePanel) return href === fullPath || isNestedTabPath(href, fullPath);
   if (sidePanelKey) {
     // A null system tab means Overview only when no authored tab owns the selection. Treating every
     // null as Overview made both markers active while an authored side-panel tab was selected.

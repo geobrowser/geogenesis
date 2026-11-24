@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Entity } from '~/core/types';
 
-import { HIDDEN_PROPERTY_ID, isHiddenEntity } from './hidden';
+import { HIDDEN_PROPERTY_ID, isHiddenEntity, isHiddenMarker } from './hidden';
 
 const value = (propertyId: string, raw: string) =>
   ({
@@ -42,5 +42,18 @@ describe('isHiddenEntity', () => {
     expect(isHiddenEntity(null)).toBe(false);
     expect(isHiddenEntity(undefined)).toBe(false);
     expect(isHiddenEntity({} as Pick<Entity, 'values'>)).toBe(false);
+  });
+});
+
+describe('isHiddenMarker', () => {
+  it('reads an API value by its text or its boolean, and a store value as is', () => {
+    expect(isHiddenMarker({ text: 'true', boolean: null })).toBe(true);
+    expect(isHiddenMarker({ text: ' 1 ', boolean: null })).toBe(true);
+    expect(isHiddenMarker({ text: null, boolean: true })).toBe(true);
+    expect(isHiddenMarker({ text: 'false', boolean: false })).toBe(false);
+    expect(isHiddenMarker({ text: null, boolean: null })).toBe(false);
+    expect(isHiddenMarker('TRUE')).toBe(true);
+    expect(isHiddenMarker(true)).toBe(true);
+    expect(isHiddenMarker(null)).toBe(false);
   });
 });

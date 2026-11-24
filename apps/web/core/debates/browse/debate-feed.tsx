@@ -8,6 +8,7 @@ import { useAtomValue, useSetAtom, useStore } from 'jotai';
 import { capture } from '~/core/analytics';
 import { type Debate, GeoChatRequestError } from '~/core/debates/api';
 import type { DebatePageFeedState, DebatePagePlayerState } from '~/core/debates/debate-page-outcome';
+import { clickAsksToPlay, useFeedPlaybackYield } from '~/core/debates/debate-playback-gate';
 import { isRemovedDebateAnswer } from '~/core/debates/debate-removal';
 import { useDebate, useProcessedVideoDebateIds, useSpaceDebates } from '~/core/debates/hooks';
 import { isWatchableDebate } from '~/core/debates/playback-utils';
@@ -674,6 +675,9 @@ function DebateFeedItem({
   const canRemove = useCanRemoveDebate(debate);
   const canEditMoments = useIsMediaAdmin(debate.id, active);
   const hasMenu = canRemove || canEditMoments;
+  // One player in the app (GEO-3812): a debate tapped in the side panel over this feed plays in
+  // place of this one, and a click asking this one to play takes playback back.
+  const { yielding, reclaim } = useFeedPlaybackYield();
 
   React.useEffect(() => {
     const element = itemRef.current;
@@ -714,19 +718,30 @@ function DebateFeedItem({
         {/* One card: the videos, then the claim they argue and the reader's side on it (GEO-3454).
             The frame is the card's, so the player draws none of its own. */}
         <div className="flex flex-col overflow-hidden rounded-xl border border-grey-02 bg-white">
-          <DebateFeedPlayer
-            debate={debate}
-            active={active}
-            preload={preload}
-            buffer={buffer}
-            holdFullPlayback={holdFullPlayback}
-            releaseMedia={releaseMedia}
-            initialSeekSeconds={initialSeekSeconds}
-            framed
-            onOpenClaims={onOpenClaims}
-            onPlaybackRequest={onPlaybackRequest}
-            onPlaybackState={onPlaybackState}
-          />
+          <div
+            className="contents"
+            onClickCapture={
+              yielding
+                ? event => {
+                    if (clickAsksToPlay(event)) reclaim();
+                  }
+                : undefined
+            }
+          >
+            <DebateFeedPlayer
+              debate={debate}
+              active={active && !yielding}
+              preload={preload}
+              buffer={buffer}
+              holdFullPlayback={holdFullPlayback}
+              releaseMedia={releaseMedia}
+              initialSeekSeconds={initialSeekSeconds}
+              framed
+              onOpenClaims={onOpenClaims}
+              onPlaybackRequest={onPlaybackRequest}
+              onPlaybackState={onPlaybackState}
+            />
+          </div>
           <DebateClaimFooter
             claim={debate.claim}
             // The cards the feed is about to reach read theirs too, so a side is there to take

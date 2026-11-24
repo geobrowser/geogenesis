@@ -8,7 +8,6 @@ import { Text } from '~/design-system/text';
 
 import type { DebateMediaTurnSegment } from '../api';
 import { type DraggedSpan, draggedClip } from './clip-drag';
-import { SnapSwitch } from './editor-ui';
 import { type EditorClip, type ReelWord, isSpoken } from './reel';
 import { SPEAKER_OUTLINE_CLASS, SPEAKER_TEXT_CLASS, SPEAKER_TINT_CLASS } from './speaker-classes';
 import { type FineFocus, type PeaksView, cutStretches, fineWindow, formatFineTime } from './waveform';
@@ -68,8 +67,8 @@ type FineDrag = {
 
 /**
  * The fine-tune panel (GEO-3673): the selected clip, zoomed in with a little of the debate either
- * side, over the debate's waveform. Its edges drag to the 10 ms, snapping to whole words unless "Snap
- * to words" is off (Alt flips it for one drag); each word's start and end are ticked, and its text
+ * side, over the debate's waveform. Its edges drag to the 10 ms, never snapping: this is where an
+ * edge is placed by ear (the transcript is where it snaps to words). Each word's start and end are ticked, and its text
  * labelled where it fits. Shaded is what geo-chat will actually play (`playedCuts`); hatched, what
  * the render cut from the video. A click seeks the player.
  */
@@ -86,8 +85,6 @@ export function ReelWaveform({
   readOnly,
   pad,
   focus,
-  snap,
-  onSnap,
   onChangeClip,
   onSeek,
 }: {
@@ -101,13 +98,11 @@ export function ReelWaveform({
   durationMs: number;
   playheadMs: number | null;
   readOnly: boolean;
-  /** How much of the debate shows either side of the clip, and whether edges snap to words: the
-   * editor's, so both last across a change of clip (GEO-3773). */
+  /** How much of the debate shows either side of the clip: the editor's, so it lasts across a
+   * change of clip (GEO-3773). */
   pad: Pad;
   /** The whole clip, or the edge centred with `pad` either side of it. Like `pad`, the editor's. */
   focus: FineFocus;
-  snap: boolean;
-  onSnap: () => void;
   onChangeClip: (index: number, span: DraggedSpan & { claim_index: number | null }) => void;
   onSeek: (ms: number) => void;
 }) {
@@ -171,10 +166,8 @@ export function ReelWaveform({
 
   const onPointerMove = (event: React.PointerEvent) => {
     if (!drag || drag.pxPerMs <= 0) return;
-    // Snapping is on unless the toggle is off; Alt flips it for this drag.
-    const free = snap === event.altKey;
     onChangeClip(index, {
-      ...draggedClip(drag, (event.clientX - drag.x0) / drag.pxPerMs, words, durationMs, free, FINE_STEP_MS),
+      ...draggedClip(drag, (event.clientX - drag.x0) / drag.pxPerMs, words, durationMs, true, FINE_STEP_MS),
       claim_index: drag.claim_index,
     });
   };
@@ -306,11 +299,6 @@ export function ReelWaveform({
             : null}
           {playheadMs !== null ? ` · Playhead ${formatFineTime(playheadMs)}` : null}
         </p>
-        <span aria-hidden className="text-breadcrumb whitespace-nowrap">
-          Snap to words
-        </span>
-        <SnapSwitch checked={snap} onChange={onSnap} />
-        <span className="text-breadcrumb font-normal whitespace-nowrap text-grey-04">Alt flips it for one drag.</span>
       </div>
     </div>
   );

@@ -6,6 +6,7 @@ import { afterEach, assert, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { type Debate, GeoChatRequestError } from '~/core/debates/api';
+import { tappedDebateAtom } from '~/core/debates/debate-playback-gate';
 
 import {
   DEBATE_CARD_WIDE_WRAPS_BELOW,
@@ -317,6 +318,26 @@ describe('DebatesBrowseFeed header links', () => {
     expect(screen.getAllByRole('link', { name: 'Fashion' })[0]).toHaveAttribute('href', '/space/space-1');
   });
 
+  // GEO-3812: one player in the app. A debate tapped in the side panel over this feed plays in its
+  // place, and a click on this feed's player takes playback back.
+  it('yields to a debate tapped outside the feed, and takes playback back on a click', () => {
+    const store = createStore();
+    render(
+      <Provider store={store}>
+        <DebatesBrowseFeed spaceId="space-1" />
+      </Provider>
+    );
+    const player = screen.getByTestId('player-debate-1');
+    expect(player).toHaveAttribute('data-active', 'true');
+
+    act(() => store.set(tappedDebateAtom, { debateId: 'other-debate', owner: 'side-panel-card' }));
+    expect(player).toHaveAttribute('data-active', 'false');
+
+    fireEvent.click(player);
+    expect(store.get(tappedDebateAtom)).toBeNull();
+    expect(player).toHaveAttribute('data-active', 'true');
+  });
+
   it('opens the claim in the shared entity panel and replaces the debate panel without restarting the player', () => {
     const store = createStore();
     store.set(debateFeedPanelAtom, 'comments');
@@ -406,7 +427,11 @@ describe('DebatesBrowseFeed layout and scroll nudge', () => {
     expect(feedItem).not.toHaveClass('pb-[2.75rem]');
     const player = screen.getByTestId('player-debate-1');
     // GEO-3454: the video and the claim under it are one card, and the card draws the frame.
-    const card = player.parentElement;
+    // Inside a `display: contents` wrapper that only catches the clicks taking playback back
+    // (GEO-3812), so it adds no box to the card's layout.
+    const clickCatcher = player.parentElement;
+    expect(clickCatcher).toHaveClass('contents');
+    const card = clickCatcher?.parentElement;
     assert(card, 'Expected the debate player to be rendered inside the card');
     expect(card).toHaveClass('overflow-hidden', 'rounded-xl', 'border');
     expect(player).toHaveAttribute('data-framed', 'true');

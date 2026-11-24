@@ -1,3 +1,4 @@
+import { FILEBASE_GATEWAY_READ_PATH, LIGHTHOUSE_GATEWAY_READ_PATH, PINATA_GATEWAY_READ_PATH } from '~/core/constants';
 import { Relation } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { getImagePath } from '~/core/utils/utils';
@@ -15,6 +16,19 @@ import { getImagePath } from '~/core/utils/utils';
  * fetch does not merely fail — it shadows the cover underneath, which would have worked, and turns
  * a wrong OG Image into a worse card than no OG Image at all (GEO-2782).
  */
+
+/** Our IPFS gateways: the only hosts a card that composes many images may fetch from. */
+export const OG_GATEWAY_HOSTS: ReadonlySet<string> = new Set(
+  [FILEBASE_GATEWAY_READ_PATH, PINATA_GATEWAY_READ_PATH, LIGHTHOUSE_GATEWAY_READ_PATH]
+    .map(base => {
+      try {
+        return new URL(base).host;
+      } catch {
+        return null;
+      }
+    })
+    .filter((host): host is string => Boolean(host))
+);
 
 /**
  * Resolve a stored image value to something Satori can fetch, or null.

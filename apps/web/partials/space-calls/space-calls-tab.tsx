@@ -16,6 +16,7 @@ import { Text } from '~/design-system/text';
 
 import { CallRemind } from './call-remind';
 import { CallRow, CallsSection } from './calls-list';
+import { GeoPublisherNotice } from './geo-publisher-notice';
 import { PastCallsSection } from './past-calls-section';
 import { ScheduledNotice } from './scheduled-notice';
 
@@ -76,6 +77,8 @@ function SpaceCallsTabInner({ spaceId }: { spaceId: string }) {
       ) : null}
 
       {showScheduled ? <ScheduledNotice spaceId={spaceId} outcome={scheduled.outcome} /> : null}
+
+      <GeoPublisherNotice spaceId={spaceId} viewerIsEditor={data?.viewer_can_start === true} />
 
       {callsQuery.isError && !data ? (
         <Text as="p" variant="metadata" color="grey-04">

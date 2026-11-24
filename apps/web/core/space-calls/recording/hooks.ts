@@ -1,6 +1,6 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -95,19 +95,24 @@ export function usePollWhileProcessing(callId: string, processing: boolean) {
   }, [accountKey, active, callId, queryClient]);
 }
 
-/** Enough for several Explore pages; the list is small and changes rarely. */
+/** A page covers many Explore pages; the list is small and changes rarely. */
 export const PAST_CALLS_LIMIT = 20;
 const PAST_CALLS_STALE_MS = 5 * 60_000;
 
-/** Published past calls for Explore. Public; a failure leaves Explore as it was. */
+/**
+ * Published past calls for Explore, a page at a time, flattened in order. Public; a failure leaves
+ * Explore as it was.
+ */
 export function usePastCalls(enabled: boolean) {
-  return useQuery({
+  return useInfiniteQuery({
     ...debateQueryNetworkOptions,
     queryKey: spaceCallKeys.explorePast(PAST_CALLS_LIMIT),
-    queryFn: ({ signal }) => listPastCalls({ limit: PAST_CALLS_LIMIT }, signal),
+    queryFn: ({ pageParam, signal }) => listPastCalls({ limit: PAST_CALLS_LIMIT, cursor: pageParam }, signal),
+    initialPageParam: null as string | null,
+    getNextPageParam: page => page.next_cursor,
     enabled,
     staleTime: PAST_CALLS_STALE_MS,
     gcTime: FEED_SESSION_GC_MS,
-    select: data => data.calls,
+    select: data => data.pages.flatMap(page => page.calls),
   });
 }

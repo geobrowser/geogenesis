@@ -135,6 +135,33 @@ describe('share URLs', () => {
   });
 });
 
+describe('graph explorer share links', () => {
+  const CENTRE = '3689bd216406451a9e506e85d1e397d7';
+  const TOPIC = '4ed3162278994f29bde7a6f7cf60e28e';
+  const SHARE = '22222222222242228222222222222222';
+
+  it('round-trips a short graph code and expands to v1:graph tags', () => {
+    const link = createShareLink(
+      `https://www.geobrowser.io/explore/graph/${CENTRE}?topic=${TOPIC}`,
+      'graph',
+      CENTRE,
+      'native_share',
+      SHARE
+    );
+    const url = new URL(link.url);
+    expect(url.searchParams.get('si')?.slice(0, 2)).toBe('ng');
+    expect(parseShareLink(link.url)).toEqual({
+      share_id: SHARE,
+      share_content_type: 'graph',
+      share_content_id: CENTRE,
+      method: 'native_share',
+    });
+    const expanded = new URL(expandShareLink(link.url)!);
+    expect(expanded.searchParams.get('utm_content')).toBe(`v1:graph:${CENTRE}:${SHARE}`);
+    expect(expanded.searchParams.get('topic')).toBe(TOPIC);
+  });
+});
+
 describe('tagged share links for other sites (GEO-3695)', () => {
   it('always carries the long tags, even when the path ends in the content id', () => {
     const link = createTaggedShareLink(

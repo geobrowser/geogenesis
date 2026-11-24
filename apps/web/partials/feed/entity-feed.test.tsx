@@ -14,6 +14,7 @@ import {
 import { PUBLIC_BEST_FEED_PATH } from '~/core/explore/explore-feed-params';
 
 import { EntityFeed, FEED_REQUEST_TIMEOUT_MS, buildFeedQuery, leadFirst } from './entity-feed';
+import { feedEditionKey } from './feed-edition-key';
 
 const mocks = vi.hoisted(() => ({
   entryItem: null as Record<string, unknown> | null,
@@ -35,6 +36,8 @@ const mocks = vi.hoisted(() => ({
   pages: null as { items: Record<string, unknown>[] }[] | null,
   /** Props the last rendered card received. */
   cardProps: null as Record<string, unknown> | null,
+  /** Whether the last card rendered inside `DebateFeedAutoplay`, so its debates play in view. */
+  cardInFeed: null as boolean | null,
   /** The item each feed position last rendered. */
   itemAt: {} as Record<number, Record<string, unknown>>,
   /** The error the infinite query reports, so the failed-feed message can be rendered. */
@@ -70,6 +73,7 @@ vi.mock('~/core/browse/use-browse-sidebar-cache', () => ({
 
 vi.mock('@tanstack/react-query', () => ({
   keepPreviousData: Symbol('keepPreviousData'),
+  skipToken: Symbol('skipToken'),
   useInfiniteQuery: (options: Record<string, unknown>) => {
     mocks.queryOptions = options;
     mocks.queryKeys.push(options.queryKey as unknown[]);
@@ -110,6 +114,13 @@ vi.mock('~/core/hooks/use-smart-account', () => ({
     smartAccount: mocks.accountAddress ? { account: { address: mocks.accountAddress } } : null,
   }),
 }));
+vi.mock('~/core/auth/wallet-session-sync', () => ({
+  useWalletSessionSync: () => ({ synced: true, settled: true }),
+}));
+vi.mock('~/core/wallet/account-readiness', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/wallet/account-readiness')>()),
+  useAccountAddress: () => mocks.accountAddress ?? null,
+}));
 
 vi.mock('~/design-system/menu', () => ({
   Menu: ({ trigger, children }: { trigger: React.ReactNode; children: React.ReactNode }) => (
@@ -125,13 +136,19 @@ vi.mock('~/design-system/menu', () => ({
   ),
 }));
 
-vi.mock('~/partials/explore/explore-feed-card', () => ({
-  ExploreFeedCard: (props: Record<string, unknown>) => {
-    mocks.cardProps = props;
-    mocks.itemAt[props.itemPosition as number] = props.item as Record<string, unknown>;
-    return null;
-  },
-}));
+vi.mock('~/partials/explore/explore-feed-card', async () => {
+  const gate = await vi.importActual<typeof import('~/core/debates/debate-playback-gate')>(
+    '~/core/debates/debate-playback-gate'
+  );
+  return {
+    ExploreFeedCard: (props: Record<string, unknown>) => {
+      mocks.cardInFeed = gate.useDebateFeedAutoplay();
+      mocks.cardProps = props;
+      mocks.itemAt[props.itemPosition as number] = props.item as Record<string, unknown>;
+      return null;
+    },
+  };
+});
 
 beforeEach(() => {
   mocks.queryOptions = null;
@@ -142,6 +159,7 @@ beforeEach(() => {
   mocks.facetData = null;
   mocks.pages = null;
   mocks.cardProps = null;
+  mocks.cardInFeed = null;
   mocks.itemAt = {};
   mocks.entryItem = null;
   mocks.entryPending = false;
@@ -341,6 +359,14 @@ describe('EntityFeed card and query wiring', () => {
       render(<EntityFeed apiEndpoint="/api/explore/feed" titleOpensSidePanel />);
 
       expect(mocks.cardProps?.titleOpensSidePanel).toBe(true);
+    });
+
+    // GEO-3812: a feed is the one place debates autoplay; everywhere else they wait for a tap.
+    it('lets its cards autoplay their debates, as a feed', () => {
+      mocks.pages = [{ items: [item] }];
+      render(<EntityFeed apiEndpoint="/api/activity/feed" lockedSpaceId="space-1" />);
+
+      expect(mocks.cardInFeed).toBe(true);
     });
 
     it('leaves cards navigating when it is not', () => {
@@ -1070,8 +1096,9 @@ describe('EntityFeed interleave', () => {
     isMemberOrEditor: true,
     hasPendingMembershipRequest: false,
   });
-  const interleave = (feedLength: number) =>
+  const cards = (feedLength: number) =>
     new Map<number, React.ReactNode>([[1, <p key="extra">{`extra after 2 of ${feedLength}`}</p>]]);
+  const interleave = (feedLength: number) => ({ cards: cards(feedLength), replaces: new Set<string>() });
 
   it('draws the extra cards where asked, without touching the request', async () => {
     mocks.pages = [{ items: [item('a'), item('b'), item('c')] }];
@@ -1080,6 +1107,40 @@ describe('EntityFeed interleave', () => {
     expect(screen.getByText('extra after 2 of 3')).toBeTruthy();
     expect(Object.keys(mocks.itemAt)).toEqual(['1', '2', '3']);
     expect(await requestedUrl()).not.toContain('interleave');
+  });
+
+  it('leaves out the feed cards a placed card stands for, slotting by the unfiltered length', () => {
+    const b = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+    // The same entity in another space is another edition and stays.
+    mocks.pages = [{ items: [item('a'), item(b), { ...item(b), spaceId: 'space-2' }, item('c')] }];
+    render(
+      <EntityFeed
+        apiEndpoint="/api/explore/feed"
+        initialSort="best"
+        interleave={feedLength => ({ cards: cards(feedLength), replaces: new Set([feedEditionKey('space-1', b)]) })}
+      />
+    );
+
+    expect(screen.getByText('extra after 2 of 4')).toBeTruthy();
+    expect(
+      Object.values(mocks.itemAt).map(entry => {
+        const { entityId, spaceId } = entry as { entityId: string; spaceId: string };
+        return `${spaceId}/${entityId.slice(0, 1)}`;
+      })
+    ).toEqual(['space-1/a', 'space-2/b', 'space-1/c']);
+  });
+
+  it('keeps every feed card on a narrowed feed, where no extra cards are drawn', () => {
+    mocks.pages = [{ items: [item('a'), item('b'), item('c')] }];
+    render(
+      <EntityFeed
+        apiEndpoint="/api/activity/feed"
+        lockedSpaceId="space-1"
+        interleave={feedLength => ({ cards: cards(feedLength), replaces: new Set([feedEditionKey('space-1', 'b')]) })}
+      />
+    );
+
+    expect(Object.keys(mocks.itemAt)).toEqual(['1', '2', '3']);
   });
 
   it('draws none on a feed narrowed to a space', () => {

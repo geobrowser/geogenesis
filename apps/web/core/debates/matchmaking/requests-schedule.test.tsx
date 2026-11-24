@@ -1037,6 +1037,25 @@ describe('RequestsSchedule', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('They are in a debate now');
   });
 
+  it('words an accept refused because someone is in another open session', () => {
+    mocks.challenge = {
+      id: 'ch-1',
+      status: 'pending',
+      requester: party('user-them', 'Ana'),
+      recipient: party('user-me', 'You'),
+      created_at: new Date().toISOString(),
+      expires_at: new Date(Date.now() + 60_000).toISOString(),
+    };
+    mocks.challengeError = new GeoChatRequestError(
+      'the other person is already in another debate session',
+      'already_in_open_session',
+      409
+    );
+    render(<RequestsSchedule />);
+
+    expect(screen.getByRole('alert')).toHaveTextContent('The other person is already in another debate session.');
+  });
+
   it('calls an arranged invite a debate with them, not an invitation from them', () => {
     mocks.scheduled = {
       ...EMPTY_SCHEDULED,
