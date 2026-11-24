@@ -18,6 +18,7 @@ import { PlaybackDiagnostics } from '~/core/debates/playback-diagnostics';
 import { DebateRecordingUploadCoordinator } from '~/core/debates/recording-upload-coordinator';
 import { requestsAnyModal } from '~/core/deep-links/modal-deep-link';
 import { noteEmailArrival } from '~/core/deep-links/ref-email';
+import { useGraphExplorerActive } from '~/core/graph-explorer/use-graph-explorer-active';
 import { useEntityCommentsPanel } from '~/core/hooks/use-entity-comments-panel';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useGeoLogoutCleanup } from '~/core/hooks/use-geo-logout';
@@ -60,7 +61,6 @@ import { PageViewTracker } from '~/app/page-view-tracker';
 import {
   entitySidePanelWantsEditAtom,
   exploreDebateClaimsPanelAtom,
-  graphExplorerActiveAtom,
   rankingFullscreenActiveAtom,
   rankingFullscreenFocusTargetAtom,
 } from '~/atoms';
@@ -298,7 +298,7 @@ export function App({ children }: { children: React.ReactNode }) {
   const mobileBrowseButtonRef = React.useRef<HTMLButtonElement>(null);
   const navbarRef = React.useRef<HTMLElement>(null);
   const sidebarOpen = useAtomValue(browseSidebarShownAtom);
-  const graphExplorerActive = useAtomValue(graphExplorerActiveAtom);
+  const graphExplorerActive = useGraphExplorerActive();
   const fullscreenActive = useAtomValue(rankingFullscreenActiveAtom) || graphExplorerActive;
   const rankingFullscreenFocusTarget = useAtomValue(rankingFullscreenFocusTargetAtom);
 

@@ -21,6 +21,7 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
+import { GraphExplorerShell } from './graph-explorer-shell';
 import { GraphViewer } from './graph-viewer';
 import { graphExplorerActiveAtom } from '~/atoms';
 
@@ -53,7 +54,8 @@ export function GraphExplorerPage({ entityId: routeEntityId }: { entityId: strin
     return () => setActive(false);
   }, [setActive, shows]);
 
-  if (!hydrated) return null;
+  // Flags are unknown until hydration: show the explorer's skeleton, then the page or the flag-off note.
+  if (!hydrated) return <GraphExplorerShell />;
   if (!shows) return <NotAvailable flagOff={!enabled} />;
   return (
     <div className="flex h-[100dvh] flex-col overflow-hidden bg-white md:h-auto md:min-h-[100dvh] md:overflow-visible">
