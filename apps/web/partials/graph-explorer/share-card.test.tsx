@@ -5,6 +5,7 @@ import * as React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { GraphNode } from '~/core/graph-explorer/fetch-graph-neighbourhood';
+import { getImagePath } from '~/core/utils/utils';
 
 import { NodeCard } from './connections/node-card';
 import { CentreHeader } from './entity-panel';
@@ -15,6 +16,8 @@ vi.mock('~/design-system/prefetch-link', () => ({
 
 const CARD = 'https://cards.example/debate.png';
 const AVATAR = 'https://cards.example/avatar.png';
+/** Real share cards are IPFS URIs. */
+const IPFS_CARD = 'ipfs://QmRu1bVexampleexampleexampleexampleexampleexam';
 
 const debate = (extra: Partial<GraphNode> = {}): GraphNode => ({
   id: '1'.repeat(32),
@@ -101,5 +104,35 @@ describe('a debate in the side panel', () => {
     fireEvent.error(container.querySelector('img[data-card]')!);
     expect(container.querySelector('img')).toBeNull();
     expect(container.querySelector('[aria-hidden]')?.textContent).toBe('T');
+  });
+});
+
+describe('the card URL', () => {
+  it('resolves an ipfs:// card to its gateway URL on the map and in the panel', () => {
+    const gateway = getImagePath(IPFS_CARD);
+    expect(gateway.startsWith('https://')).toBe(true);
+    const { container: map } = render(
+      <NodeCard node={debate({ card: IPFS_CARD })} hop={1} isCentre={false} phone={false} claimSpaceId={null} />
+    );
+    expect(anchorOf(map).querySelector('img')?.getAttribute('src')).toBe(gateway);
+    cleanup();
+
+    const { container: panel } = render(<CentreHeader centre={centre({ card: IPFS_CARD })} />);
+    expect(panel.querySelector('img[data-card]')?.getAttribute('src')).toBe(gateway);
+  });
+
+  it('never draws a card that cannot render as a picture', () => {
+    for (const card of ['javascript:alert(1)', 'just some text']) {
+      const { container: map } = render(
+        <NodeCard node={debate({ card })} hop={1} isCentre={false} phone={false} claimSpaceId={null} />
+      );
+      expect(map.querySelector('[data-card]')).toBeNull();
+      expect(anchorOf(map).textContent).toBe('T');
+      cleanup();
+
+      const { container: panel } = render(<CentreHeader centre={centre({ card })} />);
+      expect(panel.querySelector('img')).toBeNull();
+      cleanup();
+    }
   });
 });
