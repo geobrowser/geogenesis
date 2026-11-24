@@ -381,10 +381,37 @@ describe('TemplateBreadcrumb layout', () => {
     expect(screen.getByRole('link', { name: 'A long parent space name' })).toHaveClass(
       'truncate',
       'min-w-0',
-      'max-w-[45%]'
+      '@[600px]:max-w-[45%]'
     );
     expect(screen.getByText('Current claim')).toHaveClass('truncate', 'flex-1', 'basis-0', 'min-w-[40%]');
     expect(nav.querySelector('svg')).toHaveClass('shrink-0');
+  });
+
+  it('shows only the parent, as a back link, on phones', () => {
+    render(
+      <TemplateBreadcrumb
+        items={[
+          { id: 'root', label: 'Geo', href: '/space/root' },
+          { id: 'mid', label: 'World Affairs', href: '/space/mid' },
+          { id: 'parent', label: 'Wars & conflicts', href: '/space/parent' },
+          { id: 'page', label: 'Israel-Gaza war' },
+        ]}
+      />
+    );
+
+    // The parent stays visible at every width, without the desktop 45% cap.
+    const parent = screen.getByRole('link', { name: 'Wars & conflicts' });
+    expect(parent).not.toHaveClass('hidden');
+    expect(parent).not.toHaveClass('max-w-[45%]');
+    // Every other crumb, including the current page, is desktop-only.
+    for (const name of ['Geo', 'World Affairs']) {
+      expect(screen.getByRole('link', { name })).toHaveClass('hidden', '@[600px]:block');
+    }
+    expect(screen.getByText('Israel-Gaza war')).toHaveClass('hidden', '@[600px]:block');
+    // One back chevron for phones, the desktop separators hidden there.
+    const svgs = Array.from(screen.getByRole('navigation', { name: 'Breadcrumb' }).querySelectorAll('svg'));
+    expect(svgs.filter(svg => svg.classList.contains('@[600px]:hidden'))).toHaveLength(1);
+    expect(svgs.filter(svg => svg.classList.contains('@[600px]:block'))).toHaveLength(3);
   });
 });
 

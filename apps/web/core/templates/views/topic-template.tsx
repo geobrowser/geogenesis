@@ -177,9 +177,10 @@ export function TopicTemplate({
               aria-expanded={phoneSubtopicsOpen}
               aria-controls={subtopicsNavId}
               onClick={() => setPhoneSubtopicsOpen(open => !open)}
-              className="inline-flex h-8 cursor-pointer items-center self-start rounded-md border border-divider bg-white px-3 text-[13.5px] font-medium text-text transition-colors hover:border-text @[760px]:hidden"
+              className="inline-flex cursor-pointer items-center gap-1 self-start border-0 bg-transparent p-0 text-[14px] font-medium text-grey-04 transition-colors hover:text-text @[760px]:hidden"
             >
               {phoneSubtopicsOpen ? 'Hide subtopics' : 'Show subtopics'}
+              <ChevronRightIcon className={cx('size-3.5', phoneSubtopicsOpen ? '-rotate-90' : 'rotate-90')} />
             </button>
           )}
           {subtopicsNav(true)}
