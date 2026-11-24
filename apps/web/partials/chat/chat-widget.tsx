@@ -18,7 +18,7 @@ import { applyInjectOpsToStore } from '~/core/chat/apply-inject-ops';
 import { hasPendingClientToolCall, shouldResubmitAfterClientExecution } from '~/core/chat/client-tools';
 import { useEditDispatcher } from '~/core/chat/edit-dispatcher';
 import { type IngestionLink, ingestionPromptText, stageIngestionLink } from '~/core/chat/ingestion-link';
-import { ingestionWriteTarget } from '~/core/chat/ingestion-space';
+import { type IngestionWriteSpace, ingestionChatContext } from '~/core/chat/ingestion-space';
 import type { InjectType } from '~/core/chat/inject-types';
 import {
   COMPACT_AT_INPUT_TOKENS,
@@ -250,9 +250,9 @@ export function ChatWidget({ openOnMount = null }: { openOnMount?: string | null
 
   // Persists across follow-up turns; reset by `handleNewChat`.
   const modeRef = React.useRef<ChatMode>('default');
-  // Whether this chat's import writes into the viewer's personal space rather than the route's: a
-  // non-member's Sources `+` (GEO-3819). Sent with ingestion turns only; reset by `handleNewChat`.
-  const personalWriteRef = React.useRef(false);
+  // The space a Sources `+` import picked when it was pressed: the page's, or a non-member's own
+  // personal space (GEO-3819). Ingestion turns write there; reset by `handleNewChat`.
+  const writeSpaceRef = React.useRef<IngestionWriteSpace | null>(null);
 
   // Inject pipeline: when the seed signals an inject route, we hold its jobId
   // here and let `useInjectJob` drive the polling + status. The assistant
@@ -273,10 +273,10 @@ export function ChatWidget({ openOnMount = null }: { openOnMount?: string | null
       new DefaultChatTransport({
         api: '/api/chat',
         body: () => ({
-          context: {
-            ...contextRef.current,
-            writeToPersonalSpace: modeRef.current === 'ingestion' && personalWriteRef.current,
-          },
+          context: ingestionChatContext(
+            contextRef.current,
+            modeRef.current === 'ingestion' ? writeSpaceRef.current : null
+          ),
           preloadedEntity: preloadedEntityRef.current,
           mode: modeRef.current,
         }),
@@ -725,7 +725,7 @@ export function ChatWidget({ openOnMount = null }: { openOnMount?: string | null
     // error from the prior chat would resurface on the fresh one.
     clearError();
     modeRef.current = 'default';
-    personalWriteRef.current = false;
+    writeSpaceRef.current = null;
     stoppedRef.current = false;
     setInjectJob(null);
     setInjectInline(null);
@@ -920,9 +920,8 @@ export function ChatWidget({ openOnMount = null }: { openOnMount?: string | null
     stoppedRef.current = false;
     // Drop any stale error so the StatusBar retry doesn't regenerate the previous failed turn.
     clearError();
-    // The seed names its space only when it isn't the route's (a non-member's personal space).
-    const { spaceId: writeSpaceId, personalWrite } = ingestionWriteTarget(seed.spaceId, currentSpaceId);
-    personalWriteRef.current = personalWrite;
+    // A Sources `+` seed carries the space it picked at the press; other seeds write into the route's.
+    writeSpaceRef.current = seed.writeSpace ?? null;
 
     if (seed.mode === 'inject') {
       // Push a synthetic user + empty-assistant pair. The assistant slot is
@@ -939,7 +938,7 @@ export function ChatWidget({ openOnMount = null }: { openOnMount?: string | null
       setInjectInline({ assistantMessageId, status: 'pending', startedAt: Date.now() });
       setInjectJob({
         jobId: seed.jobId,
-        spaceId: writeSpaceId ?? '',
+        spaceId: seed.writeSpace?.spaceId ?? currentSpaceId ?? '',
         url: seed.url,
         injectType: seed.injectType,
         assistantMessageId,
@@ -951,7 +950,7 @@ export function ChatWidget({ openOnMount = null }: { openOnMount?: string | null
     }
 
     modeRef.current = seed.mode;
-    const text = ingestionPromptText(seed.url, seed.link, { personalSpace: personalWriteRef.current });
+    const text = ingestionPromptText(seed.url, seed.link, { personalSpace: writeSpaceRef.current?.personal === true });
     trackAssistantMessage(text, 'typed');
     sendMessageRef.current({ text });
     setSeed(null);
@@ -1105,7 +1104,7 @@ export function ChatWidget({ openOnMount = null }: { openOnMount?: string | null
       setInjectInline(null);
       modeRef.current = 'ingestion';
       const fallbackText = ingestionPromptText(injectJob.url, injectJob.link, {
-        personalSpace: personalWriteRef.current,
+        personalSpace: writeSpaceRef.current?.personal === true,
       });
       trackAssistantMessage(fallbackText, 'typed');
       sendMessageRef.current({ text: fallbackText });

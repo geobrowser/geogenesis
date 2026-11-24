@@ -80,22 +80,22 @@ function useIngestionSpace({
         isRegistered,
       });
       if (!freshPersonalSpaceId) return;
-      const spaceId = await pickIngestionSpace({
+      const writeSpace = await pickIngestionSpace({
         pageSpaceId,
         personalSpaceId: freshPersonalSpaceId,
         tx,
         queryClient,
       });
       if (!isCurrent()) return;
-      await startIngestion({ url, logTag: LOG_TAG, link, spaceId });
+      await startIngestion({ url, logTag: LOG_TAG, link, writeSpace });
     },
   });
 
   return React.useCallback(
     async (url: string): Promise<IngestionSpaceDecision> => {
       if (isRegistered && personalSpaceId) {
-        const spaceId = await pickIngestionSpace({ pageSpaceId, personalSpaceId, tx, queryClient });
-        return { kind: 'ingest', spaceId };
+        const writeSpace = await pickIngestionSpace({ pageSpaceId, personalSpaceId, tx, queryClient });
+        return { kind: 'ingest', writeSpace };
       }
       if (isAccountSetupPending || isPersonalSpaceLoading) {
         queueImport(url);

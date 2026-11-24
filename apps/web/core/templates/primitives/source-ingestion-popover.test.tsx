@@ -28,6 +28,7 @@ const account = vi.hoisted(() => ({
 }));
 const SPACE_ID = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 const PERSONAL_SPACE_ID = 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
+const PERSONAL_WRITE = { spaceId: PERSONAL_SPACE_ID, personal: true };
 const ADDRESS = '0x1111111111111111111111111111111111111111';
 
 vi.mock('~/core/wallet/auth-hooks', () => ({
@@ -162,7 +163,7 @@ describe('Sources section +', () => {
       'https://example.com/story',
       'TemplateSourcesSection',
       expect.objectContaining({ targetEntityId: link.targetEntityId }),
-      PERSONAL_SPACE_ID
+      PERSONAL_WRITE
     );
     expect(membership.access).toHaveBeenCalledWith(SPACE_ID, PERSONAL_SPACE_ID);
     expect(membership.ensure).toHaveBeenCalledWith(
@@ -181,7 +182,7 @@ describe('Sources section +', () => {
     await submitLink();
 
     await waitFor(() => expect(resolveSeed).toHaveBeenCalledTimes(1));
-    expect(resolveSeed.mock.calls[0]?.[3]).toBe(SPACE_ID);
+    expect(resolveSeed.mock.calls[0]?.[3]).toEqual({ spaceId: SPACE_ID, personal: false });
     expect(membership.ensure).not.toHaveBeenCalled();
     expect(membership.tx).not.toHaveBeenCalled();
   });
@@ -195,7 +196,7 @@ describe('Sources section +', () => {
     await submitLink();
 
     await waitFor(() => expect(resolveSeed).toHaveBeenCalledTimes(1));
-    expect(resolveSeed.mock.calls[0]?.[3]).toBe(PERSONAL_SPACE_ID);
+    expect(resolveSeed.mock.calls[0]?.[3]).toEqual(PERSONAL_WRITE);
   });
 
   it('while the personal space is being created, the import is queued like a vote and runs once it exists', async () => {
@@ -228,7 +229,7 @@ describe('Sources section +', () => {
       'https://example.com/story',
       'TemplateSourcesSection',
       expect.objectContaining({ targetEntityId: link.targetEntityId }),
-      PERSONAL_SPACE_ID
+      PERSONAL_WRITE
     );
     expect(store.get(isChatOpenAtom)).toBe(true);
   });
@@ -261,8 +262,34 @@ describe('Sources section +', () => {
       'https://example.com/story',
       'TemplateSourcesSection',
       expect.objectContaining({ targetEntityId: link.targetEntityId }),
-      PERSONAL_SPACE_ID
+      PERSONAL_WRITE
     );
+  });
+
+  it("a member's import queued while restoring replays into the page's space, flagged as not a personal write", async () => {
+    auth.authenticated = true;
+    canEditPageSpace(true);
+    Object.assign(account, { personalSpaceId: null, isRegistered: false, isLoading: true, address: null });
+    resolveSeed.mockResolvedValue({ mode: 'ingestion', url: 'https://example.com/story', link });
+    const store = renderSection();
+
+    await submitLink();
+    const queued = store.get(pendingActionsAtom);
+    expect(queued).toHaveLength(1);
+
+    account.address = ADDRESS;
+    store.queryClient.setQueryData(['personal-space-id', ADDRESS.toLowerCase()], {
+      isRegistered: true,
+      personalSpaceId: PERSONAL_SPACE_ID,
+      personalEntityId: null,
+    });
+    await act(async () => {
+      await queued[0]!.run();
+    });
+
+    // The flag travels with the seed, so the assistant doesn't re-derive it from wherever the viewer is now.
+    expect(resolveSeed.mock.calls[0]?.[3]).toEqual({ spaceId: SPACE_ID, personal: false });
+    expect(membership.ensure).not.toHaveBeenCalled();
   });
 
   it('with no personal space and none on its way, asks them to finish setting up, as a vote does', async () => {
@@ -306,7 +333,7 @@ describe('Sources section +', () => {
       'https://example.com/story',
       'TemplateSourcesSection',
       { ...link, listedEntityIds: [listed] },
-      SPACE_ID
+      { spaceId: SPACE_ID, personal: false }
     );
     expect(store.get(assistantSeedAtom)).toEqual(seed);
     expect(store.get(isChatOpenAtom)).toBe(true);

@@ -3,6 +3,7 @@ import { atom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 
 import type { IngestionLink } from '~/core/chat/ingestion-link';
+import type { IngestionWriteSpace } from '~/core/chat/ingestion-space';
 import type { InjectType } from '~/core/chat/inject-types';
 
 export const isChatOpenAtom = atom(false);
@@ -12,12 +13,20 @@ export const hasSeenAssistantAtom = atomWithStorage('geo:has-seen-assistant', fa
 // `link`: the page the link was added from, when it came from a section's `+`; the new source is
 // linked back to it (GEO-3819).
 /**
- * `spaceId` is the space the import writes into when it isn't the route's: a non-member's Sources `+`
- * writes into their own personal space (GEO-3819). Absent, the import writes into the route's space.
+ * `writeSpace` is the space a Sources `+` import writes into, picked when it was pressed: the page's
+ * space for a member, or a non-member's own personal space (GEO-3819). Absent, the import writes
+ * into the route's space.
  */
 export type AssistantSeed =
-  | { mode: 'ingestion'; url: string; link?: IngestionLink; spaceId?: string }
-  | { mode: 'inject'; url: string; jobId: string; injectType: InjectType; link?: IngestionLink; spaceId?: string };
+  | { mode: 'ingestion'; url: string; link?: IngestionLink; writeSpace?: IngestionWriteSpace }
+  | {
+      mode: 'inject';
+      url: string;
+      jobId: string;
+      injectType: InjectType;
+      link?: IngestionLink;
+      writeSpace?: IngestionWriteSpace;
+    };
 
 // Active in-flight inject job inline UI state. Shared via atom so
 // `chat-messages` can render a custom inline progress UI in place of the

@@ -5,6 +5,7 @@ import * as React from 'react';
 import { useSetAtom } from 'jotai';
 
 import type { IngestionLink } from '~/core/chat/ingestion-link';
+import type { IngestionWriteSpace } from '~/core/chat/ingestion-space';
 import { resolveUrlIngestionSeed } from '~/core/chat/resolve-url-ingestion-seed';
 import { assistantSeedAtom, isChatOpenAtom } from '~/core/state/chat-store';
 import { normalizeHttpUrl } from '~/core/utils/normalize-http-url';
@@ -23,20 +24,31 @@ type Options = {
 
 /**
  * Where an import goes:
- * - `ingest`: now, into `spaceId` (the route's space when absent).
+ * - `ingest`: now, into `writeSpace` (the route's space when absent).
  * - `queued`: held until the viewer's account is ready, and started from the queue then; the form
  *   clears and closes as if it had been sent.
  * - `blocked`: not at all; the URL stays so the viewer can try again.
  */
-export type IngestionSpaceDecision = { kind: 'ingest'; spaceId?: string } | { kind: 'queued' } | { kind: 'blocked' };
+export type IngestionSpaceDecision =
+  { kind: 'ingest'; writeSpace?: IngestionWriteSpace } | { kind: 'queued' } | { kind: 'blocked' };
 
 /** Starts an ingestion: classifies the URL and hands the assistant its seed. */
 export function useStartUrlIngestion() {
   const setSeed = useSetAtom(assistantSeedAtom);
   const setChatOpen = useSetAtom(isChatOpenAtom);
   return React.useCallback(
-    async ({ url, logTag, link, spaceId }: { url: string; logTag: string; link?: IngestionLink; spaceId?: string }) => {
-      const seed = await resolveUrlIngestionSeed(url, logTag, link, spaceId);
+    async ({
+      url,
+      logTag,
+      link,
+      writeSpace,
+    }: {
+      url: string;
+      logTag: string;
+      link?: IngestionLink;
+      writeSpace?: IngestionWriteSpace;
+    }) => {
+      const seed = await resolveUrlIngestionSeed(url, logTag, link, writeSpace);
       setSeed(seed);
       setChatOpen(true);
     },
@@ -70,7 +82,7 @@ export function useUrlIngestionSubmit({ logTag, onComplete, link, resolveSpace }
           : { kind: 'ingest' };
         if (decision.kind === 'blocked') return;
         if (decision.kind === 'ingest') {
-          await startIngestion({ url: normalizedUrl, logTag, link: linkRef.current, spaceId: decision.spaceId });
+          await startIngestion({ url: normalizedUrl, logTag, link: linkRef.current, writeSpace: decision.writeSpace });
         }
         setUrl('');
         onCompleteRef.current?.();

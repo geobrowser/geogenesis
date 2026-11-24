@@ -166,11 +166,12 @@ describe('resolveUrlIngestionSeed with a link', () => {
       vi.fn(async () => new Response(JSON.stringify({ route: 'chat' }), { status: 200 }))
     );
 
-    expect(await resolveUrlIngestionSeed('https://example.com/a', 'test', topicLink, PERSONAL_SPACE)).toEqual({
+    const writeSpace = { spaceId: PERSONAL_SPACE, personal: true };
+    expect(await resolveUrlIngestionSeed('https://example.com/a', 'test', topicLink, writeSpace)).toEqual({
       mode: 'ingestion',
       url: 'https://example.com/a',
       link: topicLink,
-      spaceId: PERSONAL_SPACE,
+      writeSpace,
     });
   });
 });
