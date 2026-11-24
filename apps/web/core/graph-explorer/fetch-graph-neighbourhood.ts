@@ -78,7 +78,6 @@ const NODE_FIELDS = /* GraphQL */ `
   agrees
   disagrees
   names: valuesList(filter: { propertyId: { is: $namePropertyId } }) { spaceId text }
-  placed: valuesList(filter: { propertyId: { notIn: $unplacingPropertyIds } }) { spaceId }
   dates: valuesList(filter: { propertyId: { in: $datePropertyIds } }) { datetime date }
   types { id name }
   relationsList(filter: { typeId: { in: [$avatarPropertyId, $coverPropertyId] } }) {
@@ -87,9 +86,12 @@ const NODE_FIELDS = /* GraphQL */ `
   }
 `;
 
+/** Which spaces hold any other non-hidden value: only the claim space rule reads it, so only claims ask. */
+const PLACED_FIELD = 'placed: valuesList(filter: { propertyId: { notIn: $unplacingPropertyIds } }) { spaceId }';
+const UNPLACING_PROPERTY_IDS = [normId(SystemIds.NAME_PROPERTY), ...[...HIDDEN_PROPERTIES].map(normId)];
+
 const NODE_VARIABLES = `
   $namePropertyId: UUID!
-  $unplacingPropertyIds: [UUID!]
   $datePropertyIds: [UUID!]
   $avatarPropertyId: UUID!
   $coverPropertyId: UUID!
@@ -117,7 +119,7 @@ function kindConnection(kind: GraphKind, direction: 'in' | 'out', lensed: boolea
       ${exclude}
     }
   ) {
-    nodes { id spaceId typeId type { name } ${end} { ${NODE_FIELDS} } }
+    nodes { id spaceId typeId type { name } ${end} { ${NODE_FIELDS} ${kind === 'claim' ? PLACED_FIELD : ''} } }
     pageInfo { hasNextPage }
   }`;
 }
@@ -141,9 +143,11 @@ export function hop1Document(kinds: readonly GraphKind[], lensed: boolean) {
       ${lensed ? TOPIC_LENS_VARIABLES : ''}
       ${lensed && kinds.includes('topic') ? '$lensedTypeIds: [UUID!]' : ''}
       ${NODE_VARIABLES}
+      $unplacingPropertyIds: [UUID!]
     ) {
       entity(id: $id) {
         ${NODE_FIELDS}
+        ${PLACED_FIELD}
         description
         texts: valuesList(filter: { propertyId: { in: $textPropertyIds } }) { propertyId spaceId text }
       }
@@ -162,7 +166,6 @@ export function lensTopicFor(filter: GraphFilter): string | null {
 function nodeVariables() {
   return {
     namePropertyId: normId(SystemIds.NAME_PROPERTY),
-    unplacingPropertyIds: [normId(SystemIds.NAME_PROPERTY), ...[...HIDDEN_PROPERTIES].map(normId)],
     datePropertyIds: DATE_PROPERTY_IDS,
     avatarPropertyId: AVATAR_PROPERTY_ID,
     coverPropertyId: COVER_PROPERTY_ID,
@@ -184,6 +187,7 @@ export function hop1Variables(centreId: string, filter: GraphFilter) {
     ),
     ...(topicId ? topicLensVariables(topicId) : {}),
     ...(topicId && filter.kinds.includes('topic') ? { lensedTypeIds: lensedTypeIds(filter.kinds) } : {}),
+    unplacingPropertyIds: UNPLACING_PROPERTY_IDS,
     ...nodeVariables(),
   };
 }
@@ -363,15 +367,68 @@ export function decodeHop2(response: Record<string, RawConnection>, ids: readonl
   );
 }
 
-export function fetchHop2(ids: readonly string[], filter: GraphFilter, signal?: AbortSignal): Promise<GraphHop2> {
-  if (ids.length === 0) return Promise.resolve({});
-  return Effect.runPromise(
+export async function fetchHop2(ids: readonly string[], filter: GraphFilter, signal?: AbortSignal) {
+  if (ids.length === 0) return {} as GraphHop2;
+  const hop2 = await Effect.runPromise(
     graphql({
       query: hop2Document(ids, lensTopicFor(filter) !== null, filter.kinds.includes('other')),
       decoder: (response: Record<string, RawConnection>) => decodeHop2(response, ids),
       variables: hop2Variables(filter),
       signal,
     })
+  );
+  const claimIds = [
+    ...new Set(
+      Object.values(hop2)
+        .flat()
+        .filter(({ node }) => node.kind === 'claim')
+        .map(({ node }) => node.id)
+    ),
+  ];
+  if (claimIds.length === 0) return hop2;
+  const placed = await Effect.runPromise(
+    graphql({
+      query: placementDocument,
+      decoder: decodePlacement,
+      variables: { ids: claimIds, first: claimIds.length, unplacingPropertyIds: UNPLACING_PROPERTY_IDS },
+      signal,
+    })
+  );
+  return withPlacement(hop2, placed);
+}
+
+type PlacementResponse = {
+  entitiesConnection: { nodes: Array<{ id: string; placed: Array<{ spaceId: string }> | null }> } | null;
+};
+
+const placementDocument = parse(/* GraphQL */ `
+  query GraphNodePlacement($ids: [UUID!], $first: Int, $unplacingPropertyIds: [UUID!]) {
+    entitiesConnection(first: $first, filter: { id: { in: $ids } }) {
+      nodes { id ${PLACED_FIELD} }
+    }
+  }
+`) as TypedDocumentNode<PlacementResponse, Record<string, unknown>>;
+
+function decodePlacement(response: PlacementResponse): Map<string, string[]> {
+  return new Map(
+    (response.entitiesConnection?.nodes ?? []).map(node => [
+      normId(node.id),
+      [...new Set((node.placed ?? []).map(value => normId(value.spaceId)))],
+    ])
+  );
+}
+
+/** Hop 2 with each claim's placement filled in from the follow-up query. */
+export function withPlacement(hop2: GraphHop2, placed: ReadonlyMap<string, string[]>): GraphHop2 {
+  return Object.fromEntries(
+    Object.entries(hop2).map(([parent, entries]) => [
+      parent,
+      entries.map(entry =>
+        placed.has(entry.node.id)
+          ? { ...entry, node: { ...entry.node, placedSpaceIds: placed.get(entry.node.id)! } }
+          : entry
+      ),
+    ])
   );
 }
 

@@ -13,6 +13,7 @@ import {
   hop2Document,
   hop2Variables,
   lensTopicFor,
+  withPlacement,
 } from './fetch-graph-neighbourhood';
 import { resolveGraphFilter } from './graph-filter';
 import { GRAPH_KIND_TYPE_IDS, NEWS_EVENT_TYPE_ID } from './graph-kinds';
@@ -209,5 +210,34 @@ describe('decodeHop2 and decodeCrossLinks', () => {
       },
     });
     expect(edges.map(e => e.id)).toEqual(['b']);
+  });
+});
+
+describe('placement', () => {
+  it('asks for placement only on claims and the centre', () => {
+    const filter = resolveGraphFilter({ spaceIds: ['a'.repeat(32)], topicId: null, topicSpaceId: null });
+    const hop1 = print(hop1Document(filter.kinds, false));
+    const withPlaced = [...hop1.matchAll(/(\w+): relationsConnection[\s\S]*?pageInfo/g)]
+      .filter(match => match[0].includes('placed:'))
+      .map(match => match[1]);
+    expect(withPlaced).toEqual(['claim_out', 'claim_in']);
+    expect(hop1.match(/entity\(id: \$id\)[\s\S]*?placed:/)).not.toBeNull();
+    expect(print(hop2Document([CENTRE], false, true))).not.toContain('placed:');
+  });
+
+  it('fills claims in hop 2 from the follow-up placement', () => {
+    const claim = decodeNode(raw('1'.repeat(32), 'A claim', [CLAIM_TYPE_ID]))!;
+    const person = decodeNode(raw('2'.repeat(32), 'A person', [PERSON]))!;
+    const edge = { id: 'e', fromId: CENTRE, toId: claim.id, propertyId: 'p', propertyName: null, spaceId: 's' };
+    const filled = withPlacement(
+      {
+        [CENTRE]: [
+          { node: claim, edge },
+          { node: person, edge },
+        ],
+      },
+      new Map([[claim.id, ['b'.repeat(32)]]])
+    );
+    expect(filled[CENTRE].map(entry => entry.node.placedSpaceIds)).toEqual([['b'.repeat(32)], []]);
   });
 });
