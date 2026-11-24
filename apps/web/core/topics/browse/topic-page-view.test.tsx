@@ -7,6 +7,7 @@ import type React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TOPIC_TYPE_ID } from '~/core/constants';
+import { featureFlagsStorageKey } from '~/core/state/feature-flags';
 import { entityTabIdFromHref } from '~/core/utils/entity-tab-navigation';
 
 import { ENTITY_PAGE_CONTENT_MAX_WIDTH } from '~/partials/entity-page/entity-page-layout';
@@ -363,6 +364,18 @@ describe('TopicPageView parity with the generic entity page', () => {
     expect(mocks.pageActions).toMatchObject({ entityId: 'topic-1', spaceId: 'space-1' });
     expect(mocks.pageActions?.isVoteable).toBeFalsy();
     expect(mocks.pageActions?.leading).toBeTruthy();
+  });
+
+  it('leaves the graph entry to the header graph button, not a chip beside the types (GEO-3837)', () => {
+    window.localStorage.setItem(featureFlagsStorageKey, JSON.stringify({ graphExplorer: true }));
+    try {
+      render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
+
+      expect(mocks.pageActions?.variant).toBe('template');
+      expect(screen.queryByText('Explore graph')).toBeNull();
+    } finally {
+      window.localStorage.removeItem(featureFlagsStorageKey);
+    }
   });
 
   it('keeps them in the header, beside the types, where the entity page puts them', () => {
