@@ -206,7 +206,10 @@ export function useLiveEntityActions({
     [entityId, entityName, spaceId, storage.entities.name, storage.relations, storage.values]
   );
 
-  const owner = React.useMemo(() => ({ entityId, entityName, ownerKind }), [entityId, entityName, ownerKind]);
+  const owner = React.useMemo(
+    () => ({ entityId, entityName, ownerKind, spaceId }),
+    [entityId, entityName, ownerKind, spaceId]
+  );
   const { add, canOpenAddForm } = useTemplateAddPublish({ owner, pageSpaceId: spaceId });
   const onAddClaim = React.useCallback((draft: ClaimDraft) => add({ kind: 'claim', draft }), [add]);
   const onAddEvent = React.useCallback((draft: EventDraft) => add({ kind: 'event', draft }), [add]);

@@ -73,6 +73,17 @@ describe('buildClaimEdits', () => {
     expect(link(story)).toMatchObject({ type: TEMPLATE_ONTOLOGY.RELATED_CLAIMS_PROPERTY_ID, from: PAGE });
   });
 
+  it("a link to the page from a personal-space edit names the page's space", () => {
+    const PAGE_SPACE = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+    const page = { ...owner('topic'), spaceId: PAGE_SPACE };
+    expect(link(buildClaimEdits(page, { title: 'A claim', kind: 'fact' }, SPACE)!).toSpaceId).toBe(PAGE_SPACE);
+    expect(link(buildEventEdits(page, { title: 'Vote', when: '' }, SPACE)!).toSpaceId).toBe(PAGE_SPACE);
+    const source = { ...owner('source'), spaceId: PAGE_SPACE };
+    expect(link(buildQuoteEdits(source, { text: 'We will' }, SPACE)!).toSpaceId).toBe(PAGE_SPACE);
+    // In the page's own space the link needs no space.
+    expect(link(buildClaimEdits(page, { title: 'A claim', kind: 'fact' }, PAGE_SPACE)!).toSpaceId).toBeUndefined();
+  });
+
   it('builds nothing for an empty title', () => {
     expect(buildClaimEdits(owner('topic'), { title: '  ', kind: 'fact' }, SPACE)).toBeNull();
   });

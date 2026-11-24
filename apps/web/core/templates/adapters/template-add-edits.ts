@@ -17,7 +17,18 @@ export type TemplateAddAction =
   { kind: 'claim'; draft: ClaimDraft } | { kind: 'event'; draft: EventDraft } | { kind: 'quote'; draft: QuoteDraft };
 
 /** The page the `+` was pressed on. */
-export type TemplateAddOwner = { entityId: string; entityName: string; ownerKind: TemplateOwnerKind };
+/** `spaceId` is the page's own space, which links to the page carry when the edit goes elsewhere. */
+export type TemplateAddOwner = {
+  entityId: string;
+  entityName: string;
+  ownerKind: TemplateOwnerKind;
+  spaceId?: string;
+};
+
+/** A link to the page from an edit in another space (a personal space) names the page's space. */
+function toPage(owner: TemplateAddOwner, spaceId: string, relation: Relation): Relation {
+  return owner.spaceId && owner.spaceId !== spaceId ? { ...relation, toSpaceId: owner.spaceId } : relation;
+}
 
 /** One new entity and every value and relation that makes it and links it to the page. */
 export type TemplateAddEdits = { entityId: string; name: string; values: Value[]; relations: Relation[] };
@@ -153,15 +164,19 @@ export function buildClaimEdits(owner: TemplateAddOwner, draft: ClaimDraft, spac
           // The claim lives in the space this edit goes to, which the page's list links into.
           toSpaceId: spaceId,
         }
-      : makeLocalRelation({
+      : toPage(
+          owner,
           spaceId,
-          typeId: link.typeId,
-          typeName: link.typeName,
-          fromId: claimId,
-          fromName: title,
-          toId: owner.entityId,
-          toName: owner.entityName,
-        }),
+          makeLocalRelation({
+            spaceId,
+            typeId: link.typeId,
+            typeName: link.typeName,
+            fromId: claimId,
+            fromName: title,
+            toId: owner.entityId,
+            toName: owner.entityName,
+          })
+        ),
   ];
 
   return { entityId: claimId, name: title, values, relations };
@@ -209,15 +224,19 @@ export function buildEventEdits(owner: TemplateAddOwner, draft: EventDraft, spac
       toId: TEMPLATE_ONTOLOGY.NEWS_EVENT_TYPE_ID,
       toName: 'News event',
     }),
-    makeLocalRelation({
+    toPage(
+      owner,
       spaceId,
-      typeId: TEMPLATE_ONTOLOGY.TOPICS_PROPERTY_ID,
-      typeName: 'Topics',
-      fromId: eventId,
-      fromName: title,
-      toId: owner.entityId,
-      toName: owner.entityName,
-    }),
+      makeLocalRelation({
+        spaceId,
+        typeId: TEMPLATE_ONTOLOGY.TOPICS_PROPERTY_ID,
+        typeName: 'Topics',
+        fromId: eventId,
+        fromName: title,
+        toId: owner.entityId,
+        toName: owner.entityName,
+      })
+    ),
   ];
 
   return { entityId: eventId, name: title, values, relations };
@@ -258,15 +277,19 @@ export function buildQuoteEdits(owner: TemplateAddOwner, draft: QuoteDraft, spac
           }),
           toSpaceId: spaceId,
         }
-      : makeLocalRelation({
+      : toPage(
+          owner,
           spaceId,
-          typeId: TEMPLATE_ONTOLOGY.SOURCES_PROPERTY_ID,
-          typeName: 'Sources',
-          fromId: quoteId,
-          fromName: text,
-          toId: owner.entityId,
-          toName: owner.entityName,
-        }),
+          makeLocalRelation({
+            spaceId,
+            typeId: TEMPLATE_ONTOLOGY.SOURCES_PROPERTY_ID,
+            typeName: 'Sources',
+            fromId: quoteId,
+            fromName: text,
+            toId: owner.entityId,
+            toName: owner.entityName,
+          })
+        ),
   ];
 
   return { entityId: quoteId, name: text, values, relations };
