@@ -33,11 +33,6 @@ describe('action context', () => {
     expect(pageContext('/explore')).toMatchObject({ page_type: 'explore', page_entity_id: undefined });
     expect(pageContext('/explore/graph').page_type).toBe('explore');
   });
-  it('keeps the page view when only the landing share tags leave the URL', () => {
-    const tagged = pageContext(`/explore/graph/${claim}`, `?topic=${space}&utm_source=copy_link&si=cg123`);
-    expect(pageContext(`/explore/graph/${claim}`, `?topic=${space}`).page_view_id).toBe(tagged.page_view_id);
-    expect(pageContext(`/explore/graph/${claim}`, `?topic=${claim}`).page_view_id).not.toBe(tagged.page_view_id);
-  });
   it('retains the starting page, overlay and list on replay after navigation', () => {
     window.history.replaceState({}, '', '/explore');
     const original = snapshotActionContext('explore_feed_card', 'claim', claim, {

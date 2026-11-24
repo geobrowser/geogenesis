@@ -1,5 +1,4 @@
 import type { ActionContext } from '~/core/action-context';
-import { afterAnalyticsRuntime, skipPageViewFor } from '~/core/analytics';
 import { copyShareLink, observeShareLinkHandoff } from '~/core/sharing/share-handoff';
 import { type ShareAttribution, type ShareMethod, createShareLink, parseShareLink } from '~/core/sharing/share-link';
 
@@ -59,34 +58,21 @@ export async function shareGraph(
   return 'copied';
 }
 
-const SHARE_TAG = /^(si|utm_.+)$/;
-
 let landingShare: ShareAttribution | null = null;
 
-/** The graph share this page load arrived through, read before the tags left the URL. */
-export function graphShareLanding() {
-  return landingShare;
+/**
+ * Reads the graph share this page load arrived through. The tags stay in the URL: the analytics
+ * runtime reads them from it when it loads, which can be after the page has settled.
+ */
+export function recordGraphShareLanding() {
+  if (typeof window === 'undefined') return;
+  const attribution = parseShareLink(window.location.href);
+  landingShare = attribution?.share_content_type === 'graph' ? attribution : null;
 }
 
-/**
- * After a landing, takes `si` and `utm_*` out of the URL bar so a re-share from it doesn't credit the
- * original sharer. Waits for the analytics runtime, which reads the landing tags, and keeps the page
- * view as it was.
- */
-export function stripLandingShareTags() {
-  if (typeof window === 'undefined') return;
-  const landed = window.location.href;
-  const attribution = parseShareLink(landed);
-  if (attribution?.share_content_type === 'graph') landingShare = attribution;
-  if (![...new URL(landed).searchParams.keys()].some(key => SHARE_TAG.test(key))) return;
-  afterAnalyticsRuntime(() => {
-    // Only the page that landed, and only if nothing has navigated since.
-    if (window.location.href !== landed) return;
-    const url = new URL(landed);
-    for (const key of [...url.searchParams.keys()]) if (SHARE_TAG.test(key)) url.searchParams.delete(key);
-    skipPageViewFor(url.toString());
-    window.history.replaceState(window.history.state, '', url.toString());
-  });
+/** The graph share this page load arrived through, for the explorer's own events. */
+export function graphShareLanding() {
+  return landingShare;
 }
 
 const ENTRY_TTL_MS = 60_000;

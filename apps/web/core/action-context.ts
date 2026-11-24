@@ -238,21 +238,13 @@ export function notifyActionPageView() {
 let replayContext: ActionContext | undefined;
 let eventContext: { context: ActionContext; depth: number } | undefined;
 
-/** Landing tags (`si`, `utm_*`) that say how someone arrived, not which page they are on. */
-export function withoutShareTags(params: URLSearchParams) {
-  const kept = new URLSearchParams(params);
-  for (const key of [...kept.keys()]) if (key === 'si' || key.startsWith('utm_')) kept.delete(key);
-  return kept;
-}
-
 export function pageContext(
   path = typeof window === 'undefined' ? '/' : window.location.pathname,
   search = typeof window === 'undefined' ? '' : window.location.search
 ) {
   // Match PageViewTracker's pathname + searchParams identity. Query text stays
   // inside this cache key and never becomes an action-description field.
-  // Share tags are stripped from the URL bar after landing; the page view stays the same one.
-  const key = `${path}?${withoutShareTags(new URLSearchParams(search)).toString()}`;
+  const key = `${path}?${new URLSearchParams(search).toString()}`;
   if (page?.key !== key) page = { key, id: crypto.randomUUID() };
   const segments = path.split('/').filter(Boolean);
   const isId = (value?: string) => !!value && /^(?:[a-f\d]{32}|[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12})$/i.test(value);

@@ -2,17 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ActionContext } from '~/core/action-context';
 
-const mocks = vi.hoisted(() => ({
-  capture: vi.fn(),
-  runtimeQueue: [] as Array<() => void>,
-  skipped: [] as string[],
-}));
-vi.mock('~/core/analytics', () => ({
-  capture: mocks.capture,
-  analyticsContextRevision: () => 0,
-  afterAnalyticsRuntime: (run: () => void) => mocks.runtimeQueue.push(run),
-  skipPageViewFor: (href: string) => mocks.skipped.push(href),
-}));
+const mocks = vi.hoisted(() => ({ capture: vi.fn() }));
+vi.mock('~/core/analytics', () => ({ capture: mocks.capture, analyticsContextRevision: () => 0 }));
 
 const CENTRE = '3689bd216406451a9e506e85d1e397d7';
 const TOPIC = '4ed3162278994f29bde7a6f7cf60e28e';
@@ -27,8 +18,6 @@ beforeEach(async () => {
   vi.resetModules();
   share = await import('./graph-share');
   mocks.capture.mockReset();
-  mocks.runtimeQueue.length = 0;
-  mocks.skipped.length = 0;
   fetchMock.mockClear();
   vi.stubGlobal('fetch', fetchMock);
   Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: vi.fn(async () => {}) } });
@@ -104,30 +93,26 @@ describe('sharing a graph', () => {
 });
 
 describe('landing on a shared link', () => {
-  it('reads the share, then strips the tags once analytics has the landing', () => {
-    const tagged = `/explore/graph/${CENTRE}?topic=${TOPIC}&utm_source=copy_link&utm_medium=share&utm_campaign=geo_share&utm_content=v1:graph:${CENTRE}:22222222222242228222222222222222`;
-    window.history.replaceState({ keep: 1 }, '', tagged);
-    share.stripLandingShareTags();
-    expect(share.graphShareLanding()).toMatchObject({ share_content_type: 'graph', method: 'copy_link' });
-    expect(window.location.search).toContain('utm_source');
+  const SHARE = '22222222222242228222222222222222';
 
-    mocks.runtimeQueue.forEach(run => run());
-    expect(window.location.pathname + window.location.search).toBe(`/explore/graph/${CENTRE}?topic=${TOPIC}`);
-    expect(window.history.state).toEqual({ keep: 1 });
-    expect(mocks.skipped).toEqual([window.location.href]);
+  it('reads the graph share and leaves the tags in the URL for analytics', () => {
+    const tagged = `/explore/graph/${CENTRE}?topic=${TOPIC}&utm_source=copy_link&utm_medium=share&utm_campaign=geo_share&utm_content=v1:graph:${CENTRE}:${SHARE}`;
+    window.history.replaceState({}, '', tagged);
+    share.recordGraphShareLanding();
+    expect(share.graphShareLanding()).toMatchObject({ share_content_type: 'graph', share_id: SHARE });
+    expect(window.location.pathname + window.location.search).toBe(tagged);
   });
 
-  it('leaves the URL alone after a hop, and does nothing without tags', () => {
-    window.history.replaceState({}, '', `/explore/graph/${CENTRE}?topic=${TOPIC}&utm_source=x`);
-    share.stripLandingShareTags();
-    window.history.pushState({}, '', `/explore/graph/${TOPIC}?topic=${TOPIC}&utm_source=x`);
-    mocks.runtimeQueue.forEach(run => run());
-    expect(window.location.search).toContain('utm_source=x');
-
-    mocks.runtimeQueue.length = 0;
+  it('records nothing for an untagged landing or another kind of share', () => {
     window.history.replaceState({}, '', `/explore/graph/${CENTRE}?topic=${TOPIC}`);
-    share.stripLandingShareTags();
-    expect(mocks.runtimeQueue).toHaveLength(0);
+    share.recordGraphShareLanding();
+    expect(share.graphShareLanding()).toBeNull();
+    window.history.replaceState(
+      {},
+      '',
+      `/explore/graph/${CENTRE}?utm_source=x&utm_medium=share&utm_campaign=geo_share&utm_content=v1:debate:${CENTRE}:${SHARE}`
+    );
+    share.recordGraphShareLanding();
     expect(share.graphShareLanding()).toBeNull();
   });
 });
