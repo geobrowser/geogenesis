@@ -46,6 +46,8 @@ const mocks = vi.hoisted(() => ({
   /** The page's path and query string, for the deep links the feed reads. */
   pathname: '/space/space-1/debate-1',
   search: '',
+  /** The router the full screen's × drives (GEO-3833). */
+  router: { back: (() => {}) as () => void, push: (() => {}) as (href: string) => void },
 }));
 
 vi.mock('~/core/analytics', () => ({
@@ -101,7 +103,7 @@ vi.mock('next/navigation', async () => {
   const actual = await vi.importActual<typeof import('next/navigation')>('next/navigation');
   return {
     ...actual,
-    useRouter: () => ({ prefetch: vi.fn(), push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
+    useRouter: () => ({ prefetch: vi.fn(), push: mocks.router.push, replace: vi.fn(), back: mocks.router.back }),
     usePathname: () => mocks.pathname,
     useSearchParams: () => new URLSearchParams(mocks.search),
   };
@@ -124,6 +126,8 @@ vi.mock('./debate-feed-player', async () => {
       framed,
       onOpenClaims,
       onPlaybackState,
+      layout,
+      onClose,
     }: {
       debate: Debate;
       active: boolean;
@@ -134,6 +138,8 @@ vi.mock('./debate-feed-player', async () => {
       framed?: boolean;
       onOpenClaims?: () => void;
       onPlaybackState?: (state: typeof mocks.playerState) => void;
+      layout?: 'card' | 'full';
+      onClose?: () => void;
     }) => {
       const state = JSON.stringify(mocks.playerState);
       React.useEffect(() => onPlaybackState?.(JSON.parse(state)), [onPlaybackState, state]);
@@ -146,7 +152,13 @@ vi.mock('./debate-feed-player', async () => {
           data-release-media={releaseMedia ? 'true' : 'false'}
           data-hold-full-playback={holdFullPlayback ? 'true' : 'false'}
           data-framed={framed ? 'true' : 'false'}
+          data-layout={layout ?? 'card'}
         >
+          {onClose && layout === 'full' ? (
+            <button type="button" onClick={onClose}>
+              Close full debate
+            </button>
+          ) : null}
           {/* Stands in for the claims chip on the video, now the only way into the claims panel. */}
           <button type="button" onClick={onOpenClaims}>
             Claims on the video
@@ -167,7 +179,9 @@ vi.mock('./debate-claim-footer', () => ({
     title,
     actions,
     wideActions,
+    look,
   }: {
+    look?: string;
     claim: Debate['claim'] | null;
     enabled: boolean;
     meta: React.ReactNode;
@@ -180,6 +194,7 @@ vi.mock('./debate-claim-footer', () => ({
       data-claim={claim?.claim_entity_id}
       data-enabled={String(enabled)}
       data-wide-actions={String(wideActions ?? false)}
+      data-look={look ?? 'default'}
     >
       {meta}
       {title}
@@ -240,6 +255,8 @@ beforeEach(() => {
   mocks.captured.length = 0;
   mocks.search = '';
   mocks.pathname = '/space/space-1/debate-1';
+  mocks.router = { back: vi.fn(), push: vi.fn() };
+  window.sessionStorage.clear();
 
   class MockIntersectionObserver implements IntersectionObserver {
     readonly root = null;
@@ -405,6 +422,65 @@ describe('DebatesBrowseFeed header links', () => {
     render(<DebatesBrowseFeed spaceId="space-1" />);
 
     expect(screen.getAllByRole('link', { name: 'Fashion' })[0]).toHaveClass('min-w-0');
+  });
+});
+
+describe('the debate page is the dark full screen (GEO-3833)', () => {
+  it("draws the anchored debate on the app's dark page, with no phone bar", () => {
+    const { container } = render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-1" />);
+    const page = container.firstElementChild;
+    expect(page).toHaveClass('bg-[#191919]');
+    expect(screen.getByTestId('player-debate-1')).toHaveAttribute('data-layout', 'full');
+    expect(screen.getByTestId('claim-footer')).toHaveAttribute('data-look', 'app-dark');
+    // The claim prints in white under the stage and is not a link there (D2); no space line (G1).
+    const heading = screen.getByRole('heading', { name: 'Debates are useful' });
+    expect(within(heading).queryByRole('link')).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Fashion' })).toBeNull();
+    expect(screen.getByTestId('player-debate-1').closest('[data-debate-full-page]')).not.toBeNull();
+    // The phone bar is replaced by the header's × (G6).
+    expect(container.querySelector('header')).toBeNull();
+  });
+
+  it("leaves the space's Debates tab on its white cards (D18)", () => {
+    render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-1" surface="debates-tab" />);
+    expect(screen.getByTestId('player-debate-1')).toHaveAttribute('data-layout', 'card');
+    expect(screen.getByTestId('claim-footer')).toHaveAttribute('data-look', 'app');
+  });
+
+  it('closes back to the page that opened it', () => {
+    window.sessionStorage.setItem(
+      'geo:debate-full-return',
+      JSON.stringify({ from: '/explore', to: '/space/space-1/debate-1', at: Date.now() })
+    );
+    vi.spyOn(window.history, 'length', 'get').mockReturnValue(3);
+    render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Close full debate' }));
+    expect(mocks.router.back).toHaveBeenCalledTimes(1);
+    expect(mocks.router.push).not.toHaveBeenCalled();
+  });
+
+  it('closes to Explore when the page was opened from a link', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Close full debate' }));
+    expect(mocks.router.push).toHaveBeenCalledWith('/explore');
+    expect(mocks.router.back).not.toHaveBeenCalled();
+  });
+
+  it('closes out of the full screens, not back to the previous debate, after the viewer scrolled on', () => {
+    // Opened on debate-1 from Explore; × is pressed while the feed shows a later debate, whose URL
+    // the feed wrote with replaceState. Back still leaves for Explore, which is right.
+    mocks.debates = [
+      completedDebate('debate-1', 'Debates are useful', '2026-07-02T00:01:10.000Z'),
+      completedDebate('debate-2', 'Second', '2026-07-01T00:01:10.000Z'),
+    ];
+    window.sessionStorage.setItem(
+      'geo:debate-full-return',
+      JSON.stringify({ from: '/explore', to: '/space/space-1/debate-1', at: Date.now() })
+    );
+    vi.spyOn(window.history, 'length', 'get').mockReturnValue(3);
+    render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-1" />);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Close full debate' })[1]);
+    expect(mocks.router.back).toHaveBeenCalledTimes(1);
   });
 });
 

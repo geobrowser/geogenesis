@@ -25,6 +25,8 @@ type FullscreenLinkProps = {
   entityId?: string;
   spaceId?: string;
   className?: string;
+  /** Runs before the navigation, e.g. to record where the viewer is coming from. */
+  onClick?: React.MouseEventHandler<HTMLAnchorElement>;
 };
 
 /**
@@ -47,6 +49,7 @@ export function FullscreenLink({
   entityId,
   spaceId,
   className,
+  onClick,
 }: FullscreenLinkProps) {
   return (
     <Link
@@ -54,6 +57,7 @@ export function FullscreenLink({
       entityId={entityId}
       spaceId={spaceId}
       aria-label={ariaLabel}
+      onClick={onClick}
       data-entity-side-panel-full-page={requiresFullPage || undefined}
       aria-disabled={disabled || undefined}
       tabIndex={disabled ? -1 : undefined}

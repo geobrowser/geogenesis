@@ -8,7 +8,6 @@ import { flushSync } from 'react-dom';
 
 import { ActionSurface } from '~/core/action-context-provider';
 import type { Debate, DebateParticipant } from '~/core/debates/api';
-import type { ClaimMarker } from '~/core/debates/claim-ticker';
 import { compositeTopSlot } from '~/core/debates/composite-top-slot';
 import type { DebatePagePlayerState } from '~/core/debates/debate-page-outcome';
 import {
@@ -30,7 +29,7 @@ import {
   earlyEndCueAt,
   silentAt,
 } from '~/core/debates/playback-breaks';
-import { type PlaybackTimeline, playbackTimeline } from '~/core/debates/playback-timeline';
+import { playbackTimeline } from '~/core/debates/playback-timeline';
 import { type TurnState, speakerLabel, turnStateFromSegments } from '~/core/debates/playback-utils';
 import { turnTimerRimMask } from '~/core/debates/recording-countdown-ring';
 import type { RoundCue } from '~/core/debates/round-cues';
@@ -61,10 +60,13 @@ import { useBlockedPageTap } from './blocked-page-tap';
 import { CombinedDebatePlayer } from './combined-debate-player';
 import { DebateBreakOverlay, DebateEarlyEndLabels, useBreakCuts } from './debate-break-cues';
 import { DebateClaimCounter } from './debate-claim-counter';
-import { ClaimScrubberMarkers, DebateClaimTickerStack, useDebateClaimTicker } from './debate-claim-ticker';
+import { DebateClaimTickerStack, useDebateClaimTicker } from './debate-claim-ticker';
 import { DebateEndCard } from './debate-end-card';
+import { DebateFullHeader, DebateFullRail, DebateFullTransport, TRANSPORT_HIDE_MS } from './debate-full-header';
+import { skipTargetSeconds } from './debate-full-moments';
 import { DebateRoundBadge, DebateRoundBanner, DebateRoundCard } from './debate-round-cues';
 import { type DebatePreviewClips, debatePreviewClips, feedFullPlaybackStartedAtom } from './feed-full-playback';
+import { FeedScrubber } from './feed-scrubber';
 import { FeedVideo } from './feed-video';
 import { Pause, Play, Speaker, SpeakerMuted } from './icons';
 import { useInlinePlaybackUnavailable } from './inline-playback';
@@ -238,6 +240,16 @@ type DebateFeedPlayerProps = {
   onSoundBlockedChange?: (blocked: boolean) => void;
   /** The editor's controls. Null on the combined-video fallback, which plays another clock. */
   ref?: React.Ref<DebateFeedPlayerHandle>;
+  /**
+   * `full` is the debate page's dark full screen (GEO-3833), the debates app's `LiveDebate`: the
+   * player draws its own header (elapsed, the rail with the reel's moments as dots, the length and
+   * ×) above a rounded dark stage whose split grows toward whoever is speaking, with the app's
+   * ±10 s transport in place of the corner controls and the claim cards. It fills its host's height.
+   * `card`, the default, is every other surface.
+   */
+  layout?: 'card' | 'full';
+  /** The × in the `full` header. */
+  onClose?: () => void;
 };
 
 /**
@@ -273,7 +285,7 @@ const ACTIVATION_HOLD_MAX_MS = 1_500;
 export function DebateFeedPlayer(props: DebateFeedPlayerProps) {
   const inlineUnavailable = useInlinePlaybackUnavailable();
   if (inlineUnavailable) {
-    return (
+    const combined = (
       <CombinedDebatePlayer
         debate={props.debate}
         enabled={props.active || Boolean(props.preload)}
@@ -286,6 +298,17 @@ export function DebateFeedPlayer(props: DebateFeedPlayerProps) {
         stills={props.stills}
         measure={props.measure}
       />
+    );
+    if (props.layout !== 'full') return combined;
+    // In-app browsers (TikTok) play the one combined video with its own controls: full width in the
+    // dark stage, no split, and only × in the header, since its controls are its own.
+    return (
+      <div data-debate-full-layout className="flex min-h-0 flex-1 flex-col">
+        <DebateFullHeader onClose={() => props.onClose?.()} />
+        <div className="relative flex min-h-0 flex-1 flex-col justify-center overflow-hidden rounded-[24px] bg-[#151515]">
+          {combined}
+        </div>
+      </div>
     );
   }
   return <PairedDebateFeedPlayer {...props} />;
@@ -320,8 +343,12 @@ function PairedDebateFeedPlayer({
   onJumpTransition,
   onSoundBlockedChange,
   ref,
+  layout = 'card',
+  onClose,
 }: DebateFeedPlayerProps) {
   const reducedOverlays = reducedOverlaysProp || editorMode;
+  // The editor never plays full screen; its own controls drive it.
+  const full = layout === 'full' && !editorMode;
   // Read first, so whatever decides how the debate opens can see a saved position.
   const resumeSeconds = useDebateResume(debate.id);
   // A tap-to-play card has its own hold, below, and keeps out of the feeds' one entirely.
@@ -601,8 +628,8 @@ function PairedDebateFeedPlayer({
     if (playing) unmuteInGesture('page_tap');
     else togglePlayback(mutedByDefault ? 'page_tap' : null);
   });
-  const seekBoth = (seconds: number) => {
-    measurement.control('seek');
+  const seekBoth = (seconds: number, analytics?: Record<string, unknown>) => {
+    measurement.control('seek', analytics);
     resetAnimationSeek();
     seekBothRaw(seconds);
   };
@@ -1276,6 +1303,8 @@ function PairedDebateFeedPlayer({
    */
   const stackShownFor = (slot: number) => {
     if (reducedOverlays) return false;
+    // The full screen keeps the claims on the rail only; its stage is busy enough at 68/32 (D12).
+    if (full) return false;
     if (playbackEnded) return false;
     // An Open rounds counter shows from the start, at 0.
     if (stamped) return true;
@@ -1369,6 +1398,11 @@ function PairedDebateFeedPlayer({
       startFullPlayback();
       return;
     }
+    // The full screen's tap shows the app's transport, or puts it away, as the app's does.
+    if (full) {
+      setTransportShown(shown => !shown);
+      return;
+    }
     setFlash({ icon: playing ? 'pause' : 'play', visible: true });
     if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
     flashTimeoutRef.current = setTimeout(() => setFlash(current => ({ ...current, visible: false })), 600);
@@ -1381,6 +1415,31 @@ function PairedDebateFeedPlayer({
   // the play, mute and Start over controls ride the top tile, the scrubber and the taller scrim the
   // bottom one, and only the top identity row yields to the round card that crosses it.
   const topSlot = compositeTopSlot(debate.participants);
+
+  // The dark full screen (GEO-3833). The app's transport: up on a tap or while paused, away after a few seconds of play.
+  const [transportShown, setTransportShown] = React.useState(false);
+  const [transportFocused, setTransportFocused] = React.useState(false);
+  const [transportTouches, touchTransport] = React.useReducer((count: number) => count + 1, 0);
+  const transportVisible =
+    full && ready && !held && !refusedPrompt && !playbackEnded && (transportShown || userPaused || transportFocused);
+  React.useEffect(() => {
+    if (!transportShown || !playing || transportFocused) return;
+    const timer = window.setTimeout(() => setTransportShown(false), TRANSPORT_HIDE_MS);
+    return () => window.clearTimeout(timer);
+  }, [transportShown, playing, transportFocused, transportTouches]);
+  const skipBy = (seconds: -10 | 10) => {
+    touchTransport();
+    const fromSeconds = (livePositionMs() ?? playheadSeconds * 1_000) / 1_000;
+    seekBoth(skipTargetSeconds(scrubberTimeline, fromSeconds, seconds), {
+      input_method: 'skip_button',
+      seek_by_ms: seconds * 1_000,
+    });
+  };
+  // The split grows toward whoever holds the turn (the app's 68/32), and evens out between turns.
+  const speakingSlot = betweenTurns ? null : (turnState?.slot ?? null);
+  const splitFraction = !full || speakingSlot == null ? 0.5 : speakingSlot === topSlot ? 0.68 : 0.32;
+  const tileGrow = (slot: 1 | 2): React.CSSProperties | undefined =>
+    full ? { flexGrow: slot === topSlot ? splitFraction : 1 - splitFraction, flexBasis: 0 } : undefined;
   const tilePositionProps = (slot: 1 | 2) =>
     slot === topSlot
       ? { className: topSlot === 2 ? 'order-1' : undefined }
@@ -1388,7 +1447,7 @@ function PairedDebateFeedPlayer({
           className: topSlot === 2 ? 'order-2' : undefined,
           // This is the half the scrubber sits in, so its claim corner is the one that has to lift
           // clear of the bar.
-          clearScrubber: scrubberShown ? ('always' as const) : ('on-hover' as const),
+          clearScrubber: full ? ('never' as const) : scrubberShown ? ('always' as const) : ('on-hover' as const),
           // Taller than the top tile's, per the frame.
           scrimClassName: 'h-[4.625rem]',
         };
@@ -1399,7 +1458,7 @@ function PairedDebateFeedPlayer({
       <div className="flex items-center gap-2">
         {/* Desktop: a persistent play/pause beside the mute control. Mobile keeps the
                   centred paused glyph and tap-to-toggle instead. */}
-        {!refusedPrompt && (
+        {!refusedPrompt && !full && (
           <ControlCircle
             ariaLabel={playing ? 'Pause debate' : 'Play debate'}
             onClick={() => togglePlayback()}
@@ -1429,8 +1488,9 @@ function PairedDebateFeedPlayer({
             if (mutedByUser && playing) unmuteInGesture('explicit');
             else setMutedByUser(current => !current);
           }}
+          tone={full ? 'dark' : 'light'}
           className={
-            mutedByUser
+            mutedByUser || full
               ? undefined
               : cx(
                   'opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 md:opacity-100 no-hover:opacity-100',
@@ -1440,7 +1500,8 @@ function PairedDebateFeedPlayer({
         >
           {mutedByUser ? <SpeakerMuted /> : <Speaker />}
         </ControlCircle>
-        {startOverOffered && !refusedPrompt && (
+        {/* Not in the full screen, where scrubbing to 0:00 is the way back to the start (D9). */}
+        {startOverOffered && !refusedPrompt && !full && (
           <button
             type="button"
             onClick={event => {
@@ -1475,7 +1536,7 @@ function PairedDebateFeedPlayer({
       </div>
     ) : null;
   const scrubberControl =
-    ready && !held && !refusedPrompt && !editorMode ? (
+    ready && !held && !refusedPrompt && !editorMode && !full ? (
       // Always available so the viewer can seek. During playback it recedes to
       // hover-only and drops pointer-events so it can't swallow play/pause taps.
       // `pointer-events-none` does not stop keyboard focus reaching the range input, which
@@ -1555,12 +1616,41 @@ function PairedDebateFeedPlayer({
         // `@container` so the round card sizes against the player rather than the viewport: this
         // same component is a feed card, an explore card and a fullscreen player, and a breakpoint
         // would get two of the three wrong.
+        data-debate-full-layout={full ? '' : undefined}
         className={cx(
-          'group @container relative flex flex-col overflow-hidden',
-          framed ? null : reducedOverlays ? 'rounded-lg' : 'rounded-xl',
+          full
+            ? 'flex min-h-0 flex-1 flex-col'
+            : ['group @container relative flex flex-col overflow-hidden', framed ? null : reducedOverlays ? 'rounded-lg' : 'rounded-xl'],
           stamped && endCardShown && '[&_[data-debate-end-card]>section]:animate-[fadeIn_250ms_ease-out_both]'
         )}
       >
+        {full && (
+          <DebateFullHeader
+            elapsedMs={scrubberTimeline.toPlaybackMs(playheadSeconds * 1_000)}
+            durationMs={scrubberTimeline.durationMs}
+            rail={
+              ready && !held ? (
+                <DebateFullRail
+                  debateId={debate.id}
+                  enabled={active || preload}
+                  currentTime={playheadSeconds}
+                  timeline={scrubberTimeline}
+                  markers={reducedOverlays ? [] : ticker.markers}
+                  onSeek={seconds => seekBoth(seconds, { input_method: 'scrubber' })}
+                  onMomentSeek={seconds => seekBoth(seconds, { input_method: 'scrubber', seek_kind: 'moment_jump' })}
+                  onScrubStart={beginScrub}
+                  onScrubEnd={endScrub}
+                />
+              ) : (
+                // Nothing to seek yet (held, or the media is still coming): the track, so the row
+                // does not change shape when it arrives.
+                <div aria-hidden className="mx-3 h-1 rounded-full bg-white/19" />
+              )
+            }
+            onClose={() => onClose?.()}
+          />
+        )}
+        <FullStage full={full}>
         <DebaterVideo
           inert={endCardShown}
           toggleHidden={refusedPrompt || editorMode}
@@ -1608,6 +1698,9 @@ function PairedDebateFeedPlayer({
           onClaimsHoverChange={onTileHover(1)}
           topLeft={topSlot === 1 ? topControls : undefined}
           scrubber={topSlot === 1 ? undefined : scrubberControl}
+          fill={full}
+          style={tileGrow(1)}
+          toggleLabel={full ? 'Show video controls' : undefined}
           {...tilePositionProps(1)}
         />
         <DebaterVideo
@@ -1652,6 +1745,9 @@ function PairedDebateFeedPlayer({
           {...tilePositionProps(2)}
           topLeft={topSlot === 2 ? topControls : undefined}
           scrubber={topSlot === 1 ? scrubberControl : undefined}
+          fill={full}
+          style={tileGrow(2)}
+          toggleLabel={full ? 'Show video controls' : undefined}
         />
 
         {/* Straddling the seam between the tiles, which is the one strip of the player that is never
@@ -1687,12 +1783,19 @@ function PairedDebateFeedPlayer({
           (stamped ? !announcementShown : !roundCard && !breakCue && !endCardShown) &&
           (!betweenTurns || (stamped && Boolean(breakCue))) &&
           !refusedPrompt &&
+          !transportVisible &&
           (!reducedOverlays || (active && playing && mutedByUser)) && (
             <span
-              style={stamped ? { opacity: PLAYER_FURNITURE_OPACITY } : undefined}
+              data-debate-subtitle
+              style={{
+                ...(stamped ? { opacity: PLAYER_FURNITURE_OPACITY } : undefined),
+                // On the line between the speakers, which moves with the split in the full screen.
+                ...(full ? { top: `${splitFraction * 100}%` } : undefined),
+              }}
               className={cx(
                 'pointer-events-none absolute top-1/2 left-1/2 z-20 w-max max-w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-sm bg-black/78 px-1.5 py-1.5 text-center text-[1rem] leading-tight text-white',
-                !stamped && '[text-box:trim-both_cap_alphabetic] md:max-w-[90%]'
+                !stamped && '[text-box:trim-both_cap_alphabetic] md:max-w-[90%]',
+                full && 'font-semibold transition-[top] duration-320 ease-out motion-reduce:transition-none'
               )}
             >
               {subtitle}
@@ -1735,7 +1838,21 @@ function PairedDebateFeedPlayer({
         {/* The replay and resume states are mutually exclusive, so they share one centered control.
           Replay is shown at every width; the ordinary paused control stays mobile-only because
           desktop retains its persistent corner play/pause control while playback is in progress. */}
-        {((showReplay && !endCardShown && !editorMode) || showPausedGlyph) && (
+        {full && (
+          <DebateFullTransport
+            visible={transportVisible}
+            playing={playing}
+            splitFraction={splitFraction}
+            onTogglePlay={() => {
+              touchTransport();
+              togglePlayback();
+            }}
+            onSkip={skipBy}
+            onFocusChange={setTransportFocused}
+          />
+        )}
+
+        {((showReplay && !endCardShown && !editorMode) || (showPausedGlyph && !full)) && (
           <button
             type="button"
             aria-label={showReplay ? 'Replay debate' : 'Resume debate'}
@@ -1758,24 +1875,37 @@ function PairedDebateFeedPlayer({
               data-debate-refused-dim
               className="pointer-events-none absolute inset-0 z-[5] bg-black/50"
             />
-            <button
-              type="button"
-              data-debate-watch-prompt
-              aria-label={lengthLabel ? `Watch the debate · ${lengthLabel}` : 'Watch the debate'}
-              onClick={() => togglePlayback()}
-              className="absolute top-1/2 left-1/2 z-30 flex h-14 -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-full bg-white pr-6 pl-4 text-[1.0625rem] leading-none font-medium whitespace-nowrap text-text shadow-card focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
-            >
-              <Play />
-              <span>
-                Watch the debate
-                {lengthLabel && <span className="text-grey-04"> · {lengthLabel}</span>}
-              </span>
-            </button>
+            {full ? (
+              // The app's "Tap to play" (`TapToPlay.tsx`): the browser refused, so only a tap starts it.
+              <button
+                type="button"
+                data-debate-watch-prompt
+                onClick={() => togglePlayback()}
+                className={cx(FULL_PROMPT_CLASS, 'z-30')}
+              >
+                <Play color="white" />
+                <span>Tap to play</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                data-debate-watch-prompt
+                aria-label={lengthLabel ? `Watch the debate · ${lengthLabel}` : 'Watch the debate'}
+                onClick={() => togglePlayback()}
+                className="absolute top-1/2 left-1/2 z-30 flex h-14 -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-full bg-white pr-6 pl-4 text-[1.0625rem] leading-none font-medium whitespace-nowrap text-text shadow-card focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+              >
+                <Play />
+                <span>
+                  Watch the debate
+                  {lengthLabel && <span className="text-grey-04"> · {lengthLabel}</span>}
+                </span>
+              </button>
+            )}
           </>
         )}
 
         {/* A held card's one control, at every width: nothing plays until it is pressed. */}
-        {held && (
+        {held && !full && (
           <button
             type="button"
             aria-label="Play debate"
@@ -1783,6 +1913,23 @@ function PairedDebateFeedPlayer({
             className={cx(CENTERED_PLAYBACK_CONTROL_CLASS, 'z-30 grid')}
           >
             <Play />
+          </button>
+        )}
+        {/* A held page in the full screen keeps the pill's promise, in the dark: nothing plays until
+            it is pressed, and it says how long the debate is. */}
+        {held && full && (
+          <button
+            type="button"
+            data-debate-watch-prompt
+            aria-label={lengthLabel ? `Watch the debate · ${lengthLabel}` : 'Watch the debate'}
+            onClick={tapHeld ? playFromTap : startFullPlayback}
+            className={cx(FULL_PROMPT_CLASS, 'z-30')}
+          >
+            <Play color="white" />
+            <span>
+              Watch the debate
+              {lengthLabel && <span className="text-white/60"> · {lengthLabel}</span>}
+            </span>
           </button>
         )}
 
@@ -1793,6 +1940,7 @@ function PairedDebateFeedPlayer({
           className={cx(
             CENTERED_PLAYBACK_CONTROL_CLASS,
             'pointer-events-none z-30 grid transition-[opacity,scale] md:hidden',
+            full && 'hidden',
             stamped ? 'duration-200 ease-out motion-reduce:scale-100 motion-reduce:transition-none' : 'duration-300',
             flash.visible ? 'scale-100 opacity-100' : stamped ? 'scale-[1.025] opacity-0' : 'scale-110 opacity-0'
           )}
@@ -1811,14 +1959,21 @@ function PairedDebateFeedPlayer({
             shown={endCardShown}
             onOpenClaims={onOpenClaims}
             onReplay={replayFromEndCard}
+            tone={full ? 'dark' : 'light'}
           />
         </ActionSurface>
 
         {error && (
-          <Text as="p" variant="metadata" color="red-01" className="absolute inset-x-0 -bottom-6 text-center">
+          <Text
+            as="p"
+            variant="metadata"
+            color="red-01"
+            className={cx('absolute inset-x-0 text-center', full ? 'bottom-3 z-30' : '-bottom-6')}
+          >
             {error}
           </Text>
         )}
+        </FullStage>
       </div>
     </ActionSurface>
   );
@@ -1830,15 +1985,38 @@ function MeasuredEndCard({
   shown,
   onOpenClaims,
   onReplay,
+  tone,
 }: {
   debate: Debate;
   enabled: boolean;
   shown: boolean;
   onOpenClaims?: () => void;
   onReplay: () => void;
+  tone: 'light' | 'dark';
 }) {
   const card = useDebateEndCard(debate, enabled, shown);
-  return shown ? <DebateEndCard card={card} onOpenClaims={onOpenClaims} onReplay={onReplay} /> : null;
+  return shown ? <DebateEndCard card={card} onOpenClaims={onOpenClaims} onReplay={onReplay} tone={tone} /> : null;
+}
+
+/** The full screen's prompts over the stage: the app's dark pill. */
+const FULL_PROMPT_CLASS =
+  'absolute top-1/2 left-1/2 flex h-14 -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-full bg-black/60 pr-6 pl-4 text-[1.0625rem] leading-none font-medium whitespace-nowrap text-white backdrop-blur-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white';
+
+/**
+ * The full screen's stage (GEO-3833): the app's rounded #151515 frame, which every overlay of the
+ * player is positioned in, so the header above it is never covered. On a card it is nothing at all,
+ * and the player's root is the frame, as before.
+ */
+function FullStage({ full, children }: { full: boolean; children: React.ReactNode }) {
+  if (!full) return <>{children}</>;
+  return (
+    <div
+      data-debate-stage
+      className="group @container relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-[24px] bg-[#151515]"
+    >
+      {children}
+    </div>
+  );
 }
 
 function DebaterVideo({
@@ -1885,6 +2063,9 @@ function DebaterVideo({
   stamped = false,
   hideForAnnouncement = false,
   className,
+  fill = false,
+  style,
+  toggleLabel = 'Pause or play',
 }: {
   participant: DebateParticipant | null;
   byline: string | null;
@@ -1945,6 +2126,16 @@ function DebaterVideo({
   hideForAnnouncement?: boolean;
   /** On the tile's root: its flex `order`, which puts the Agree speaker on top (GEO-3833). */
   className?: string;
+  /**
+   * The full screen's tile (GEO-3833): sized by its host's `style` (a share of the stage that grows
+   * toward the speaker) rather than by the recording's shape, and cropped from the top so the
+   * smaller half still shows a face.
+   */
+  fill?: boolean;
+  /** On the tile's root, with `fill`: its share of the stage. */
+  style?: React.CSSProperties;
+  /** What the tile's own tap does, for a screen reader. */
+  toggleLabel?: string;
   /**
    * How much of this tile's bottom band the round card or the break's banner has taken, 0–1.
    *
@@ -2245,12 +2436,19 @@ function DebaterVideo({
       // tile" is otherwise only checkable by counting DOM order.
       data-debate-slot={participant?.participant_slot}
       inert={inert}
-      className={cx('relative aspect-480/289 w-full overflow-hidden bg-grey-01', className)}
+      style={style}
+      className={cx(
+        'relative w-full overflow-hidden',
+        fill
+          ? 'min-h-0 bg-[#151515] transition-[flex-grow] duration-320 ease-out motion-reduce:transition-none [&_img]:object-top [&_video]:object-top'
+          : 'aspect-480/289 bg-grey-01',
+        className
+      )}
     >
       {/* Clicking anywhere on the video toggles pause/play. */}
       <button
         type="button"
-        aria-label="Pause or play"
+        aria-label={toggleLabel}
         tabIndex={toggleHidden ? -1 : undefined}
         aria-hidden={toggleHidden || undefined}
         onClick={onToggle}
@@ -2670,11 +2868,14 @@ function ControlCircle({
   ariaLabel,
   onClick,
   className,
+  tone = 'light',
 }: {
   children: React.ReactNode;
   ariaLabel: string;
   onClick: () => void;
   className?: string;
+  /** `dark` is the full screen's: the app's translucent circle over the video. */
+  tone?: 'light' | 'dark';
 }) {
   return (
     <button
@@ -2685,87 +2886,13 @@ function ControlCircle({
         onClick();
       }}
       className={cx(
-        'grid size-10.5 place-items-center rounded-full bg-white text-text shadow-light [&>svg]:scale-[1.3]',
+        'grid size-10.5 place-items-center rounded-full [&>svg]:scale-[1.3]',
+        tone === 'dark' ? 'bg-black/40 text-white' : 'bg-white text-text shadow-light',
         className
       )}
     >
       {children}
     </button>
-  );
-}
-
-// Only the keys that actually move a range thumb should pause playback. Firing on every
-// key means Tab/Shift while the slider is focused would start a scrub whose keyup lands on
-// another element, leaving playback stuck paused.
-const isScrubKey = (key: string) =>
-  key.startsWith('Arrow') || key === 'Home' || key === 'End' || key === 'PageUp' || key === 'PageDown';
-
-function FeedScrubber({
-  currentTime,
-  timeline,
-  markers,
-  onSeek,
-  onScrubStart,
-  onScrubEnd,
-}: {
-  currentTime: number;
-  timeline: PlaybackTimeline;
-  markers: ClaimMarker[];
-  onSeek: (seconds: number) => void;
-  onScrubStart: () => void;
-  onScrubEnd: () => void;
-}) {
-  const duration = timeline.durationMs / 1000;
-  const bounded = timeline.toPlaybackMs(currentTime * 1000) / 1000;
-  const progress = duration > 0 ? (bounded / duration) * 100 : 0;
-  const displayedMarkers = React.useMemo(
-    () =>
-      markers.map(marker => ({
-        ...marker,
-        fraction: timeline.durationMs > 0 ? timeline.toPlaybackMs(marker.atMs) / timeline.durationMs : 0,
-      })),
-    [markers, timeline]
-  );
-  return (
-    <div className="relative flex h-5 items-center px-3 [--track-height:5px]">
-      <div className="relative h-(--track-height) w-full overflow-hidden rounded-full bg-white/40">
-        <span className="absolute inset-y-0 left-0 rounded-full bg-white" style={{ width: `${progress}%` }} />
-      </div>
-      {/* Above the range input, which is the only way a marker can be clicked at all: the input is
-          transparent but covers the whole bar, so at a lower z it swallowed every marker click and
-          scrubbed to the pixel instead of seeking to the claim. The comment here used to claim the
-          opposite, which is how it survived.
-
-          The markers' wrapper is `pointer-events-none`, so only the targets themselves intercept
-          and a drag starting anywhere else along the bar still reaches the input. Those targets are
-          no longer the 2px hashes, though: they are up to 12px wide, clamped to the gap to the next
-          claim — a mean 10% of the track, 44% on the densest debate in the corpus. See
-          {@link MARKER_HIT_WIDTH_PX} for why that ceiling and not 24. */}
-      {/* Only placement uses the edited clock; claim clicks retain their precise source timestamps. */}
-      <ClaimScrubberMarkers markers={displayedMarkers} onSeek={ms => onSeek(ms / 1000)} className="z-3" />
-      <span
-        className="pointer-events-none absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_1px_4px_rgba(0,0,0,0.35)]"
-        style={{ left: `calc(12px + ${progress}% * (100% - 24px) / 100%)` }}
-      />
-      <input
-        className="absolute inset-0 z-2 m-0 h-5 w-full cursor-pointer appearance-none bg-transparent opacity-0"
-        type="range"
-        min="0"
-        max={duration > 0 ? duration : 1}
-        step="0.05"
-        value={bounded}
-        aria-label="Debate timeline"
-        onChange={event => onSeek(timeline.toSourceMs(Number(event.currentTarget.value) * 1000) / 1000)}
-        // Pause playback for the duration of the drag so the play clock doesn't fight the
-        // seek. onLostPointerCapture reliably fires when a range drag ends (the input
-        // captures the pointer on pointerdown), even if the pointer leaves the thumb.
-        onPointerDown={onScrubStart}
-        onPointerUp={onScrubEnd}
-        onLostPointerCapture={onScrubEnd}
-        onKeyDown={e => isScrubKey(e.key) && onScrubStart()}
-        onKeyUp={e => isScrubKey(e.key) && onScrubEnd()}
-      />
-    </div>
   );
 }
 

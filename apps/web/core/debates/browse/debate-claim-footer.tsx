@@ -51,15 +51,19 @@ export function DebateClaimFooter({
    * `'app'` is the debates app's card (GEO-3833): the claim at the app's size, then the vote row, then
    * the results once the viewer has voted, the "Not counted yet" note, and the meta row last — the
    * app has no meta row, so Geo's goes where it interrupts least. The host gives the padding.
+   *
+   * `'app-dark'` is the same on the debate page's dark full screen (the app's `LiveDebate` claim
+   * panel): white claim text, the dark vote row and results, and no meta row when `meta` is null.
    */
-  look?: 'default' | 'app';
+  look?: 'default' | 'app' | 'app-dark';
   /** On the footer's root. */
   className?: string;
 }) {
-  if (look === 'app') {
+  if (look === 'app' || look === 'app-dark') {
+    const dark = look === 'app-dark';
     return (
       <div className={className}>
-        <div className={APP_TITLE_CLASS_NAME}>{title}</div>
+        <div className={dark ? APP_DARK_TITLE_CLASS_NAME : APP_TITLE_CLASS_NAME}>{title}</div>
         {claim ? (
           <ClaimPositions
             key={`${claim.space_id}:${claim.claim_entity_id}`}
@@ -67,7 +71,7 @@ export function DebateClaimFooter({
             enabled={enabled}
             actions={actions}
             wideActions={wideActions}
-            appLook
+            appLook={look}
           />
         ) : (
           <PositionRow
@@ -78,10 +82,10 @@ export function DebateClaimFooter({
             disabled
             showParticipants={false}
             endSlot={actions}
-            look="app"
+            look={look}
           />
         )}
-        <div className="mt-3">{meta}</div>
+        {meta != null && <div className="mt-3">{meta}</div>}
       </div>
     );
   }
@@ -131,19 +135,23 @@ const IGNORE_RESPONSE = () => {};
  */
 const APP_TITLE_CLASS_NAME =
   'mt-6 mb-5 [&_h2]:text-[23px]! [&_h2]:leading-[27px]! [&_h2]:font-medium! [&_h2]:tracking-[-0.65px]! [&_h2]:text-[#151515]!';
+/** The app's full-view claim (`LiveDebate.tsx`): white, 16px under the stage, 10px over the votes. */
+const APP_DARK_TITLE_CLASS_NAME =
+  'mt-4 mb-2.5 [&_h2]:text-[23px]! [&_h2]:leading-[27px]! [&_h2]:font-medium! [&_h2]:tracking-[-0.65px]! [&_h2]:text-white!';
 
 function ClaimPositions({
   claim,
   enabled,
   actions,
   wideActions,
-  appLook = false,
+  appLook,
 }: {
   claim: Debate['claim'];
   enabled: boolean;
   actions: React.ReactNode;
   wideActions: boolean;
-  appLook?: boolean;
+  /** One of the debates app's looks, or none for Geo's own card. */
+  appLook?: 'app' | 'app-dark';
 }) {
   const [live, setLive] = React.useState(enabled);
   if (enabled && !live) setLive(true);
@@ -175,7 +183,7 @@ function ClaimPositions({
       className={appLook ? undefined : 'p-3'}
       summaryLayout={appLook ? 'results' : 'inline'}
       summaryClassName={appLook ? undefined : 'claim-card-summary-band'}
-      look={appLook ? 'app' : 'default'}
+      look={appLook ?? 'default'}
     />
   );
 }

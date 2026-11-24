@@ -91,13 +91,23 @@ export function useDebateScrollHint(enabled: boolean) {
  *
  * Carries no animation of its own; it sits inside the card, so it inherits the lift.
  */
-export function DebateScrollHint({ leaving, className }: { leaving: boolean; className?: string }) {
+export function DebateScrollHint({
+  leaving,
+  className,
+  tone = 'light',
+}: {
+  leaving: boolean;
+  className?: string;
+  /** `dark` on the debate page's dark full screen (GEO-3833). */
+  tone?: 'light' | 'dark';
+}) {
   return (
     <div
       aria-hidden
       data-testid="debate-scroll-hint"
       className={cx(
-        'pointer-events-none flex items-center justify-center gap-1.5 text-grey-04 transition-opacity',
+        'pointer-events-none flex items-center justify-center gap-1.5 transition-opacity',
+        tone === 'dark' ? 'text-white/60' : 'text-grey-04',
         leaving ? 'opacity-0' : 'opacity-100',
         className
       )}
@@ -106,7 +116,12 @@ export function DebateScrollHint({ leaving, className }: { leaving: boolean; cla
       <ChevronsDown />
       {/* NB: breakpoints here are desktop-first (md = max-width:767px), so md: targets
           mobile — where the gesture really is a swipe rather than a scroll. */}
-      <Text as="span" variant="metadata" color="grey-04" className="!leading-[13px] !tracking-[-0.35px]">
+      <Text
+        as="span"
+        variant="metadata"
+        color={tone === 'dark' ? 'white' : 'grey-04'}
+        className={cx('!leading-[13px] !tracking-[-0.35px]', tone === 'dark' && 'opacity-60')}
+      >
         <span className="md:hidden">Scroll</span>
         <span className="hidden md:inline">Swipe</span>
       </Text>

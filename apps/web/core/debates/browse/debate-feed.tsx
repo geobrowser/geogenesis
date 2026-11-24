@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 import { useAtomValue, useSetAtom, useStore } from 'jotai';
+import { useRouter } from 'next/navigation';
 
 import { capture } from '~/core/analytics';
 import { type Debate, GeoChatRequestError } from '~/core/debates/api';
@@ -42,6 +43,7 @@ import { DebateClaimsPanel } from './debate-claims-panel';
 import { DebateFeedMobileBar } from './debate-feed-mobile-bar';
 import { DebateFeedPlayer } from './debate-feed-player';
 import { type DebateFeedSurface, debateFeedHref } from './debate-feed-url';
+import { debateFullCloseTarget, useDebateFullScreenPresence } from './debate-full-return';
 import { DebateInteractionBar } from './debate-interaction-bar';
 import { DebateOverflowMenu, useCanRemoveDebate } from './debate-overflow-menu';
 import { DebateScrollHint, scrollHintBounceProps, useDebateScrollHint } from './debate-scroll-hint';
@@ -354,6 +356,21 @@ export function DebatesBrowseFeed({
     return () => setDebateFullscreenActive(false);
   }, [rendersFeed, setDebateFullscreenActive]);
 
+  /*
+   * A debate's own page is the dark full screen, the debates app's full view (GEO-3833); the space's
+   * Debates tab keeps its white cards (D18). Its × leaves the full screen for where the viewer came
+   * from — back, when an in-app link brought them to this debate — or for a page worked out here when
+   * there is none to go back to (`debate-full-return.ts`).
+   */
+  const fullScreen = surface === 'debate-page';
+  useDebateFullScreenPresence(fullScreen && rendersFeed);
+  const router = useRouter();
+  const closeFullScreen = React.useCallback(() => {
+    const target = debateFullCloseTarget(initialDebateId ?? '');
+    if (target.kind === 'back') router.back();
+    else router.push(target.href);
+  }, [initialDebateId, router]);
+
   // An unanchored feed has nothing fixed at the top, so its first paint has to be its final order:
   // painting whichever debates' readiness came back first, then ranking the rest in above them, is
   // the drift described at `pinnedIds`. Only until something is pinned — after that the order on
@@ -512,9 +529,13 @@ export function DebatesBrowseFeed({
         if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', ' '].includes(event.key))
           lastScrollIntent.current = performance.now();
       }}
-      className="no-scrollbar [container-type:inline-size] h-[calc(100dvh-2.75rem)] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth"
+      className={cx(
+        'no-scrollbar [container-type:inline-size] h-[calc(100dvh-2.75rem)] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth',
+        // The full screen brings no bar of its own on phones: its × is the way out (G6).
+        fullScreen && 'md:h-dvh'
+      )}
     >
-      {visibleDebates.length === 0 && <FeedMessage>{emptyMessage}</FeedMessage>}
+      {visibleDebates.length === 0 && <FeedMessage dark={fullScreen}>{emptyMessage}</FeedMessage>}
       {visibleDebates.map((debate, index) => (
         <DebateFeedItem
           key={debate.id}
@@ -522,6 +543,8 @@ export function DebatesBrowseFeed({
           spaceId={spaceId}
           spaceName={space?.entity.name ?? 'Space'}
           spaceImage={space?.entity.image}
+          fullScreen={fullScreen}
+          onClose={closeFullScreen}
           active={activeId === debate.id}
           initialSeekSeconds={
             initialDebateId != null && ID.equals(debate.id, initialDebateId) ? initialSeekSeconds : null
@@ -610,11 +633,17 @@ export function DebatesBrowseFeed({
   // Keep the feed in the same tree position whether or not a side panel is open, so
   // toggling the claims/comments panel doesn't remount the players and restart playback.
   return (
-    <div className="flex h-[calc(100dvh-2.75rem)] items-stretch md:fixed md:inset-0 md:z-[70] md:h-dvh md:bg-white">
+    <div
+      className={cx(
+        'flex h-[calc(100dvh-2.75rem)] items-stretch md:fixed md:inset-0 md:z-[70] md:h-dvh',
+        fullScreen ? 'bg-[#191919]' : 'md:bg-white'
+      )}
+    >
       <div className="min-w-0 flex-1">
         {/* Phones only. The feed covers the app navbar there, so it brings its own (GEO-3415); the
-            scroller below is the viewport less this bar's 2.75rem on every size. */}
-        <DebateFeedMobileBar />
+            scroller below is the viewport less this bar's 2.75rem on every size. The full screen
+            has none: its own header's × replaces it (GEO-3833, G6). */}
+        {!fullScreen && <DebateFeedMobileBar />}
         {feed}
       </div>
       {sidePanel}
@@ -627,6 +656,8 @@ function DebateFeedItem({
   spaceId,
   spaceName,
   spaceImage,
+  fullScreen,
+  onClose,
   active,
   initialSeekSeconds,
   preload,
@@ -646,6 +677,10 @@ function DebateFeedItem({
   spaceId: string;
   spaceName: string;
   spaceImage?: string | null;
+  /** The debate page's dark full screen (GEO-3833); the Debates tab's cards otherwise. */
+  fullScreen: boolean;
+  /** The full screen's ×. */
+  onClose: () => void;
   active: boolean;
   initialSeekSeconds: number | null;
   preload: boolean;
@@ -696,6 +731,97 @@ function DebateFeedItem({
     return () => observer.disconnect();
   }, [onActivate, root]);
 
+  const playerHost = (player: React.ReactNode) => (
+    <div
+      className="contents"
+      onClickCapture={
+        yielding
+          ? event => {
+              if (clickAsksToPlay(event)) reclaim();
+            }
+          : undefined
+      }
+    >
+      {player}
+    </div>
+  );
+  const playerProps = {
+    debate,
+    active: active && !yielding,
+    preload,
+    buffer,
+    holdFullPlayback,
+    releaseMedia,
+    initialSeekSeconds,
+    framed: true,
+    onOpenClaims,
+    onPlaybackRequest,
+    onPlaybackState,
+  };
+  const actions = (tone: 'light' | 'dark') => (
+    <DebateInteractionBar
+      commentCount={commentCount}
+      onComment={onOpenComments}
+      onShare={share.onOpen}
+      shareOpen={share.open}
+      variant="circles"
+      tone={tone}
+      overflow={
+        hasMenu ? (
+          <span className="md:hidden">
+            <DebateOverflowMenu debate={debate} canRemove={canRemove} canEditMoments={canEditMoments} />
+          </span>
+        ) : null
+      }
+    />
+  );
+  const shareDialog = (
+    <DebateShareDialog
+      open={share.open}
+      onOpenChange={share.onOpenChange}
+      debate={debate}
+      spaceId={spaceId}
+      openerRef={share.openerRef}
+    />
+  );
+
+  if (fullScreen) {
+    // The debates app's full view (`LiveDebate.tsx`): a 600px column on #191919 holding the player's
+    // header and stage, then the claim in white with the dark vote row. The stage takes whatever
+    // height the claim and its votes leave, so nothing here is a height budget.
+    return (
+      <section
+        ref={itemRef}
+        data-debate-full-page
+        className="flex h-full snap-start justify-center px-4 pb-5 md:pt-[env(safe-area-inset-top)] md:pb-[max(1.25rem,env(safe-area-inset-bottom))]"
+      >
+        <div
+          className={cx(
+            'relative flex h-full w-full max-w-[600px] min-w-0 flex-col',
+            scrollHint?.isVisible && scrollHintBounceProps.className
+          )}
+          style={scrollHint?.isVisible ? scrollHintBounceProps.style : undefined}
+        >
+          {playerHost(<DebateFeedPlayer {...playerProps} layout="full" onClose={onClose} />)}
+          <DebateClaimFooter
+            claim={debate.claim}
+            enabled={active || preload}
+            meta={null}
+            title={<DebateFullClaimTitle claim={debate.claim} />}
+            actions={actions('dark')}
+            wideActions={hasMenu}
+            look="app-dark"
+            className="shrink-0 px-1"
+          />
+          {scrollHint?.isVisible && (
+            <DebateScrollHint tone="dark" leaving={scrollHint.isLeaving} className="absolute inset-x-0 top-full mt-0.5" />
+          )}
+        </div>
+        {shareDialog}
+      </section>
+    );
+  }
+
   return (
     <section
       ref={itemRef}
@@ -720,30 +846,7 @@ function DebateFeedItem({
         {/* One card: the videos, then the claim they argue and the reader's side on it (GEO-3454).
             The frame is the card's, so the player draws none of its own. */}
         <div className="flex flex-col overflow-hidden rounded-xl border border-grey-02 bg-white">
-          <div
-            className="contents"
-            onClickCapture={
-              yielding
-                ? event => {
-                    if (clickAsksToPlay(event)) reclaim();
-                  }
-                : undefined
-            }
-          >
-            <DebateFeedPlayer
-              debate={debate}
-              active={active && !yielding}
-              preload={preload}
-              buffer={buffer}
-              holdFullPlayback={holdFullPlayback}
-              releaseMedia={releaseMedia}
-              initialSeekSeconds={initialSeekSeconds}
-              framed
-              onOpenClaims={onOpenClaims}
-              onPlaybackRequest={onPlaybackRequest}
-              onPlaybackState={onPlaybackState}
-            />
-          </div>
+          {playerHost(<DebateFeedPlayer {...playerProps} />)}
           <DebateClaimFooter
             claim={debate.claim}
             // The cards the feed is about to reach read theirs too, so a side is there to take
@@ -751,22 +854,7 @@ function DebateFeedItem({
             enabled={active || preload}
             meta={<DebateMeta spaceId={spaceId} spaceName={spaceName} spaceImage={spaceImage} />}
             title={<DebateClaimTitle claim={debate.claim} />}
-            actions={
-              <DebateInteractionBar
-                commentCount={commentCount}
-                onComment={onOpenComments}
-                onShare={share.onOpen}
-                shareOpen={share.open}
-                variant="circles"
-                overflow={
-                  hasMenu ? (
-                    <span className="md:hidden">
-                      <DebateOverflowMenu debate={debate} canRemove={canRemove} canEditMoments={canEditMoments} />
-                    </span>
-                  ) : null
-                }
-              />
-            }
+            actions={actions('light')}
             wideActions={hasMenu}
             look="app"
             className="px-4 pb-4"
@@ -778,13 +866,7 @@ function DebateFeedItem({
           <DebateScrollHint leaving={scrollHint.isLeaving} className="absolute inset-x-0 top-full mt-4" />
         )}
       </div>
-      <DebateShareDialog
-        open={share.open}
-        onOpenChange={share.onOpenChange}
-        debate={debate}
-        spaceId={spaceId}
-        openerRef={share.openerRef}
-      />
+      {shareDialog}
     </section>
   );
 }
@@ -866,6 +948,25 @@ function DebateClaimTitle({ claim }: { claim: Debate['claim'] }) {
   );
 }
 
+/**
+ * The claim under the full screen's stage: white, three lines at most, and not a link (D2), as the
+ * app's full view prints it. The whole claim is on hover when it runs longer.
+ */
+function DebateFullClaimTitle({ claim }: { claim: Debate['claim'] }) {
+  const [claimElement, setClaimElement] = React.useState<HTMLHeadingElement | null>(null);
+  const isClaimOverflowing = useLineClampOverflow(claimElement, { maxLines: 3, contentKey: claim.claim });
+  return (
+    <h2
+      ref={setClaimElement}
+      data-debate-claim-title=""
+      title={isClaimOverflowing ? claim.claim : undefined}
+      className={cx(EXPLORE_CARD_TITLE_CLASS_NAME, 'line-clamp-3 text-pretty')}
+    >
+      {claim.claim}
+    </h2>
+  );
+}
+
 function LoadMoreSentinel({ root, onLoadMore }: { root: HTMLElement | null; onLoadMore: () => void }) {
   const ref = React.useRef<HTMLDivElement | null>(null);
   React.useEffect(() => {
@@ -883,10 +984,12 @@ function LoadMoreSentinel({ root, onLoadMore }: { root: HTMLElement | null; onLo
   return <div ref={ref} className="h-4" aria-hidden="true" />;
 }
 
-function FeedMessage({ children }: { children: React.ReactNode }) {
+function FeedMessage({ children, dark = false }: { children: React.ReactNode; dark?: boolean }) {
   return (
     <div className="flex min-h-full items-center justify-center px-4">
-      <Text color="grey-04">{children}</Text>
+      <Text color={dark ? 'white' : 'grey-04'} className={dark ? 'opacity-60' : undefined}>
+        {children}
+      </Text>
     </div>
   );
 }

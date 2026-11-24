@@ -7,6 +7,7 @@ import cx from 'classnames';
 import { ActionContextProvider } from '~/core/action-context-provider';
 import { ClaimResponders, ClaimSplitBar } from '~/core/claims/browse/claim-summary';
 import { CLAIM_RESPONSE_COPY } from '~/core/responses/entity-response';
+import { isModifiedClick } from '~/core/utils/is-modified-click';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
@@ -17,6 +18,7 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { DebateClaimControls } from './debate-claim-controls';
 import { DebateClaimTickerCard } from './debate-claim-ticker';
+import { rememberDebateFullReturn } from './debate-full-return';
 import { Play } from './icons';
 import { PILL_ACTION_CLASS } from './pill-action';
 import type { EndCardClaims, useDebateEndCard } from './use-debate-end-card';
@@ -44,21 +46,28 @@ type EndCardData = ReturnType<typeof useDebateEndCard>;
  *
  * Replay is a pill in the card's header rather than a circle in a band above it. The card still
  * scrolls vertically as a last resort on a player too short for it.
+ *
+ * `tone="dark"` is the debate page's dark full screen (GEO-3833): the same card on the app's dark
+ * surfaces, with the vote row in the app's dark look and the claim cards in their glass tone.
  */
 export function DebateEndCard({
   card,
   onReplay,
   onOpenClaims,
+  tone = 'light',
 }: {
   card: EndCardData;
   onReplay: () => void;
   /** Opens the claims panel. */
   onOpenClaims?: () => void;
+  tone?: 'light' | 'dark';
 }) {
   const { claimResponse, carousel, nextDebate } = card;
+  const dark = tone === 'dark';
+  const label = dark ? 'text-white/60' : 'text-grey-04';
 
   return (
-    <div data-debate-end-card className="absolute inset-0 z-40">
+    <div data-debate-end-card={tone} className="absolute inset-0 z-40">
       <div aria-hidden className="absolute inset-0 bg-black/55" />
       {/* As tall as its content rather than the player: a card stretched to the bottom edge left a
           band of blank white under the last section that read as something missing. Capped at the
@@ -66,12 +75,15 @@ export function DebateEndCard({
           in the card's header, so nothing sits over the dimmed frame. */}
       <section
         aria-label="Debate results"
-        className="absolute inset-x-4 top-4 flex max-h-[calc(100%-2rem)] flex-col overflow-y-auto overscroll-contain rounded-xl bg-white p-5 text-text shadow-card @max-md:inset-x-2 @max-md:top-2 @max-md:max-h-[calc(100%-1rem)] @max-md:rounded-lg @max-md:p-3.5"
+        className={cx(
+          'absolute inset-x-4 top-4 flex max-h-[calc(100%-2rem)] flex-col overflow-y-auto overscroll-contain rounded-xl p-5 shadow-card @max-md:inset-x-2 @max-md:top-2 @max-md:max-h-[calc(100%-1rem)] @max-md:rounded-lg @max-md:p-3.5',
+          dark ? 'bg-[#242424] text-white' : 'bg-white text-text'
+        )}
       >
         <div className="flex flex-col gap-3 @max-md:gap-2">
           <div className="flex flex-col gap-1">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-chatMedium text-grey-04">Where do you stand?</span>
+              <span className={cx('text-chatMedium', label)}>Where do you stand?</span>
               {/* Replay at every width: a pill on the question's own line rather than a circle in a
                   band above the card, which cost the card about 50px and sat apart from everything
                   else the viewer can do here. */}
@@ -98,6 +110,7 @@ export function DebateEndCard({
           <VoteRow
             summary={claimResponse.summary}
             countsReady={claimResponse.summary.hasCounts}
+            dark={dark}
             faces={
               // Geo's own faces-to-voters control, as the claim page and every claim card draw it:
               // the list sectioned by side, portalled above the hub and the side panel, warmed on
@@ -120,17 +133,18 @@ export function DebateEndCard({
             spaceId={card.spaceId}
             response={claimResponse}
             showParticipants={false}
+            look={dark ? 'app-dark' : 'default'}
           />
         </div>
 
         {/* The claims first, then the way onward: the next debate closes the card. */}
         {carousel.claims.length > 0 ? (
           <div className="mt-3.5 @max-md:mt-2.5">
-            <ClaimsCarousel carousel={carousel} onOpenClaims={onOpenClaims} />
+            <ClaimsCarousel carousel={carousel} onOpenClaims={onOpenClaims} dark={dark} />
           </div>
         ) : null}
 
-        {nextDebate ? <NextDebateLink next={nextDebate} /> : null}
+        {nextDebate ? <NextDebateLink next={nextDebate} dark={dark} /> : null}
       </section>
     </div>
   );
@@ -148,10 +162,12 @@ function VoteRow({
   summary,
   countsReady,
   faces,
+  dark,
 }: {
   summary: { percent: number | null; total: number };
   countsReady: boolean;
   faces: React.ReactNode;
+  dark: boolean;
 }) {
   const hasVotes = countsReady && summary.percent !== null;
   const bar = 'h-2 @max-md:h-1.5';
@@ -163,12 +179,12 @@ function VoteRow({
           {summary.percent}% agree
         </span>
       ) : countsReady ? (
-        <span className="shrink-0 text-chat text-grey-04">No votes yet</span>
+        <span className={cx('shrink-0 text-chat', dark ? 'text-white/60' : 'text-grey-04')}>No votes yet</span>
       ) : null}
       {hasVotes ? (
         <ClaimSplitBar percent={summary.percent!} className={cx('min-w-8 flex-1', bar)} />
       ) : (
-        <div className={cx('min-w-8 flex-1 rounded-full bg-grey-01', bar)} />
+        <div className={cx('min-w-8 flex-1 rounded-full', dark ? 'bg-white/15' : 'bg-grey-01', bar)} />
       )}
       {hasVotes ? faces : null}
     </div>
@@ -194,7 +210,15 @@ const IGNORE_ANSWER = () => {};
  * The strip bleeds to the card's edges, so a card scrolled half out of view reads as "there is more
  * this way" rather than as clipped.
  */
-function ClaimsCarousel({ carousel, onOpenClaims }: { carousel: EndCardClaims; onOpenClaims?: () => void }) {
+function ClaimsCarousel({
+  carousel,
+  onOpenClaims,
+  dark,
+}: {
+  carousel: EndCardClaims;
+  onOpenClaims?: () => void;
+  dark: boolean;
+}) {
   const { claims, speakerByClaimId, entitiesByClaimId } = carousel;
   const stripRef = React.useRef<HTMLDivElement>(null);
   const [edges, setEdges] = React.useState({ atStart: true, atEnd: false });
@@ -226,21 +250,27 @@ function ClaimsCarousel({ carousel, onOpenClaims }: { carousel: EndCardClaims; o
     strip.scrollBy({ left: direction * (first.offsetWidth + gap), behavior: 'smooth' });
   };
 
-  const arrow =
-    'grid size-6 place-items-center rounded-full text-grey-04 transition-colors hover:bg-divider hover:text-text disabled:pointer-events-none disabled:opacity-30';
+  const arrow = cx(
+    'grid size-6 place-items-center rounded-full transition-colors disabled:pointer-events-none disabled:opacity-30',
+    dark ? 'text-white/60 hover:bg-white/10 hover:text-white' : 'text-grey-04 hover:bg-divider hover:text-text'
+  );
 
   return (
     <section aria-label="Claims from this debate" className="flex min-w-0 flex-col gap-2">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-chatMedium text-grey-04">
-          Vote on claims made <span className="text-grey-03 tabular-nums">· {claims.length}</span>
+        <span className={cx('text-chatMedium', dark ? 'text-white/60' : 'text-grey-04')}>
+          Vote on claims made{' '}
+          <span className={cx('tabular-nums', dark ? 'text-white/40' : 'text-grey-03')}>· {claims.length}</span>
         </span>
         <div className="flex shrink-0 items-center gap-1">
           {onOpenClaims ? (
             <button
               type="button"
               onClick={() => onOpenClaims()}
-              className="mr-1 rounded px-1 text-smallButton text-grey-04 transition-colors hover:bg-divider hover:text-text @max-md:hidden"
+              className={cx(
+                'mr-1 rounded px-1 text-smallButton transition-colors @max-md:hidden',
+                dark ? 'text-white/60 hover:bg-white/10 hover:text-white' : 'text-grey-04 hover:bg-divider hover:text-text'
+              )}
             >
               See all
             </button>
@@ -291,7 +321,7 @@ function ClaimsCarousel({ carousel, onOpenClaims }: { carousel: EndCardClaims; o
                 row={null}
                 entity={entitiesByClaimId.get(claim.id) ?? null}
                 onAnswered={IGNORE_ANSWER}
-                tone="light"
+                tone={dark ? 'glass' : 'light'}
               />
             </ActionContextProvider>
           </div>
@@ -311,7 +341,8 @@ function ClaimsCarousel({ carousel, onOpenClaims }: { carousel: EndCardClaims; o
  * Headed like the claims section above it, and the heading says which tier it came from: "related" only when it argues a related claim, so the
  * card never calls an unrelated debate related.
  */
-function NextDebateLink({ next }: { next: NextDebate }) {
+function NextDebateLink({ next, dark }: { next: NextDebate; dark: boolean }) {
+  const href = NavUtils.toEntity(next.spaceId, next.debateId);
   // The same fallback as `DebateRow`, for a side whose profile couldn't be resolved.
   const names = next.participants.map(participant => participant.name ?? 'Unnamed debater').join(' vs. ');
 
@@ -325,12 +356,20 @@ function NextDebateLink({ next }: { next: NextDebate }) {
       data-end-card-next-debate={next.related ? 'related' : 'space'}
       className="mt-3.5 flex shrink-0 flex-col gap-2 @max-md:mt-2.5"
     >
-      <span className="text-chatMedium text-grey-04">{heading}</span>
+      <span className={cx('text-chatMedium', dark ? 'text-white/60' : 'text-grey-04')}>{heading}</span>
       <Link
-        href={NavUtils.toEntity(next.spaceId, next.debateId)}
+        href={href}
         entityId={next.debateId}
         spaceId={next.spaceId}
-        className="flex items-center gap-3 rounded-lg bg-grey-01 p-2.5 text-text no-underline transition-colors hover:bg-divider @max-md:gap-2.5 @max-md:p-2"
+        // Records where the viewer came from, for the full screen's ×. Inside a full screen it is a
+        // no-op, so × on the next debate still goes out rather than back here (GEO-3833).
+        onClick={event => {
+          if (!isModifiedClick(event)) rememberDebateFullReturn(href);
+        }}
+        className={cx(
+          'flex items-center gap-3 rounded-lg p-2.5 no-underline transition-colors @max-md:gap-2.5 @max-md:p-2',
+          dark ? 'bg-white/8 text-white hover:bg-white/12' : 'bg-grey-01 text-text hover:bg-divider'
+        )}
       >
         {/* The key frame's own shape: the media job renders it 540×820, both debaters stacked, so a
           landscape box cropped it down to a strip across the middle of the two. */}
@@ -349,7 +388,12 @@ function NextDebateLink({ next }: { next: NextDebate }) {
             {next.claimName}
           </span>
           {next.participants.length > 0 ? (
-            <span className="flex min-w-0 items-center gap-1.5 text-[0.75rem] leading-[0.875rem] text-grey-04">
+            <span
+              className={cx(
+                'flex min-w-0 items-center gap-1.5 text-[0.75rem] leading-[0.875rem]',
+                dark ? 'text-white/60' : 'text-grey-04'
+              )}
+            >
               <span className="flex shrink-0 -space-x-1">
                 {next.participants.map(participant => (
                   <span
