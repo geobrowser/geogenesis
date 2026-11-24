@@ -31,7 +31,7 @@ export function GraphTopBar({
   /** Names from the start of the walk to the centre, which is last. */
   trail: string[];
   search: React.ReactNode;
-  /** Chips beside Everything; topics have none, they always stay on the map. */
+  /** Chips beside Everything; topics have none (Everything is the only view that shows them). */
   kinds: readonly GraphKindFilter[];
   kindFilter: GraphKindFilter;
   onKindFilter: (kind: GraphKindFilter) => void;

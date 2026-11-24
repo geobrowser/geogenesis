@@ -3,12 +3,17 @@ import { copyShareLink, observeShareLinkHandoff } from '~/core/sharing/share-han
 import { type ShareAttribution, type ShareMethod, createShareLink, parseShareLink } from '~/core/sharing/share-link';
 
 import { graphExplorerCanonicalHref, graphExplorerCardHref } from './href';
+import type { GraphKindFilter } from './select-graph';
 
 export type GraphShareIds = { entityId: string; topicId: string; spaceId?: string | null };
 
-/** The link a share hands out: centre, topic and space only; the trail and filters stay behind. */
-export function graphShareUrl(origin: string, ids: GraphShareIds) {
-  return `${origin}${graphExplorerCanonicalHref(ids)}`;
+/**
+ * The link a share hands out: centre, topic, space and the chip in view (`kinds`), so a filtered
+ * view opens filtered. The trail and other filters stay behind.
+ */
+export function graphShareUrl(origin: string, ids: GraphShareIds, kindFilter: GraphKindFilter = 'all') {
+  const href = graphExplorerCanonicalHref(ids);
+  return `${origin}${href}${kindFilter === 'all' ? '' : `&kinds=${kindFilter}`}`;
 }
 
 const warmed = new Set<string>();
@@ -37,9 +42,9 @@ export type GraphShareResult = 'copied' | 'shared' | 'cancelled';
 export async function shareGraph(
   ids: GraphShareIds,
   context: ActionContext,
-  { nativeShare }: { nativeShare: boolean }
+  { nativeShare, kindFilter = 'all' }: { nativeShare: boolean; kindFilter?: GraphKindFilter }
 ): Promise<GraphShareResult> {
-  const url = graphShareUrl(window.location.origin, ids);
+  const url = graphShareUrl(window.location.origin, ids, kindFilter);
   const link = (method: ShareMethod) => createShareLink(url, 'graph', ids.entityId, method);
   warmGraphCard(ids);
   if (nativeShare && typeof navigator.share === 'function') {
