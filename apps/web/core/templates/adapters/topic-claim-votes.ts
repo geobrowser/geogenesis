@@ -41,6 +41,7 @@ const MULTI_SPACE_CLAIM_VOTES_QUERY = parse(/* GraphQL */ `
     userVotesConnection(
       first: $first
       after: $after
+      orderBy: [PRIMARY_KEY_ASC]
       filter: {
         objectType: { is: 0 }
         voteKind: { is: $voteKind }

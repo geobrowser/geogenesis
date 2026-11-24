@@ -64,11 +64,13 @@ import {
 import { resolveDebateStillSrc, useDebateParticipantsBatch } from './use-debate-participants-batch';
 import { useInitialHydrationGate } from './use-initial-hydration-gate';
 import { useLiveEntityActions } from './use-live-entity-actions';
+import { useTopicTaggedInSpace } from './use-topic-tagged-in-space';
 import { useViewerSpaceId, useViewerTopicSources } from './use-viewer-sources';
 
 const LIVE_CLAIMS_LIMIT = 40;
 const LIVE_COVERAGE_LIMIT = 12;
 const NO_COVERAGE_ROWS: TopicCoveragePage['rows'] = [];
+const NO_FEED_ITEMS: ExploreFeedItem[] = [];
 
 interface TweetAuthorMetadata {
   name?: string;
@@ -320,18 +322,15 @@ export function useLiveTopicTemplate({
           endpoint: 'space',
           signal,
         });
-        if (spaceDebates.length > 0) return spaceDebates;
+        if (spaceDebates.length > 0) return { items: spaceDebates, fromSpaceFeed: true };
       }
-      return fetchTopicFeedSlice({ topicId: entityId, spaceId, typeId: DEBATE_TYPE_ID, signal });
+      return {
+        items: await fetchTopicFeedSlice({ topicId: entityId, spaceId, typeId: DEBATE_TYPE_ID, signal }),
+        fromSpaceFeed: false,
+      };
     },
     staleTime: 60_000,
   });
-
-  const debateIdsForParticipants = React.useMemo(
-    () => (bestDebatesQuery.data ?? []).slice(0, 8).map(item => item.entityId),
-    [bestDebatesQuery.data]
-  );
-  const debateParticipantsQuery = useDebateParticipantsBatch(debateIdsForParticipants);
 
   const bestNewsQuery = useQuery({
     queryKey: ['live-topic-template', 'best-news', ID.uuidToHex(entityId), ID.uuidToHex(spaceId), isSpaceHome],
@@ -344,12 +343,64 @@ export function useLiveTopicTemplate({
           endpoint: 'space',
           signal,
         });
-        if (spaceNews.length > 0) return spaceNews;
+        if (spaceNews.length > 0) return { items: spaceNews, fromSpaceFeed: true };
       }
-      return fetchTopicFeedSlice({ topicId: entityId, spaceId, typeId: NEWS_STORY_TYPE_ID, signal });
+      return {
+        items: await fetchTopicFeedSlice({ topicId: entityId, spaceId, typeId: NEWS_STORY_TYPE_ID, signal }),
+        fromSpaceFeed: false,
+      };
     },
     staleTime: 60_000,
   });
+
+  // The topic feed checks only that an entity lives in the space; keep what the space itself tagged.
+  // The space feed lists the space's own items by space, not by tag, so its rows are not checked.
+  const topicFeedDebates = bestDebatesQuery.data?.fromSpaceFeed ? undefined : bestDebatesQuery.data?.items;
+  const topicFeedNews = bestNewsQuery.data?.fromSpaceFeed ? undefined : bestNewsQuery.data?.items;
+  const feedEntityIds = React.useMemo(
+    () =>
+      [topClaimsQuery.data, bestClaimsQuery.data, topicFeedDebates, topicFeedNews].flatMap(
+        items => items?.map(item => item.entityId) ?? []
+      ),
+    [bestClaimsQuery.data, topClaimsQuery.data, topicFeedDebates, topicFeedNews]
+  );
+  const { tagged: taggedInSpace, isLoading: isTaggedLoading } = useTopicTaggedInSpace({
+    topicId: entityId,
+    spaceId,
+    entityIds: feedEntityIds,
+    // One check once every slice has landed, rather than one per slice.
+    enabled:
+      !topClaimsQuery.isLoading &&
+      !bestClaimsQuery.isLoading &&
+      !bestDebatesQuery.isLoading &&
+      !bestNewsQuery.isLoading,
+  });
+  const keepTagged = React.useCallback(
+    (items: ExploreFeedItem[] | undefined): ExploreFeedItem[] => {
+      if (!items) return NO_FEED_ITEMS;
+      if (taggedInSpace) return items.filter(item => taggedInSpace.has(ID.uuidToHex(item.entityId)));
+      // Held back while the check loads; shown unfiltered if it failed.
+      return isTaggedLoading ? NO_FEED_ITEMS : items;
+    },
+    [isTaggedLoading, taggedInSpace]
+  );
+  const topClaims = React.useMemo(() => keepTagged(topClaimsQuery.data), [keepTagged, topClaimsQuery.data]);
+  const bestClaims = React.useMemo(() => keepTagged(bestClaimsQuery.data), [bestClaimsQuery.data, keepTagged]);
+  const bestDebates = React.useMemo(
+    () =>
+      bestDebatesQuery.data?.fromSpaceFeed ? bestDebatesQuery.data.items : keepTagged(bestDebatesQuery.data?.items),
+    [bestDebatesQuery.data, keepTagged]
+  );
+  const bestNews = React.useMemo(
+    () => (bestNewsQuery.data?.fromSpaceFeed ? bestNewsQuery.data.items : keepTagged(bestNewsQuery.data?.items)),
+    [bestNewsQuery.data, keepTagged]
+  );
+
+  const debateIdsForParticipants = React.useMemo(
+    () => bestDebates.slice(0, 8).map(item => item.entityId),
+    [bestDebates]
+  );
+  const debateParticipantsQuery = useDebateParticipantsBatch(debateIdsForParticipants);
 
   // Fallback / local-sync linked claims & events
   const { entities: linkedClaims } = useTopicLinkedEntities({
@@ -476,14 +527,14 @@ export function useLiveTopicTemplate({
       seeds.push(item);
     };
 
-    for (const item of topClaimsQuery.data ?? []) {
+    for (const item of topClaims) {
       add({
         id: item.entityId,
         title: item.title,
         spaceId: item.spaceId || spaceId,
       });
     }
-    for (const debateItem of bestDebatesQuery.data ?? []) {
+    for (const debateItem of bestDebates) {
       if (!debateItem.debateClaim?.entityId || !debateItem.debateClaim?.name) continue;
       add({
         id: debateItem.debateClaim.entityId,
@@ -491,7 +542,7 @@ export function useLiveTopicTemplate({
         spaceId: debateItem.spaceId || spaceId,
       });
     }
-    for (const item of bestClaimsQuery.data ?? []) {
+    for (const item of bestClaims) {
       add({
         id: item.entityId,
         title: item.title,
@@ -516,7 +567,7 @@ export function useLiveTopicTemplate({
       });
     }
     return seeds.slice(0, LIVE_CLAIMS_LIMIT);
-  }, [bestClaimsQuery.data, bestDebatesQuery.data, directClaimRels, linkedClaims, spaceId, topClaimsQuery.data]);
+  }, [bestClaims, bestDebates, directClaimRels, linkedClaims, spaceId, topClaims]);
 
   // Batch-hydrate claim entities that came from `/api/topics/feed` so we read their real `Is factual` value
   const claimIdsToHydrate = React.useMemo(
@@ -550,9 +601,9 @@ export function useLiveTopicTemplate({
       ids.push(hex);
     };
     for (const c of orderedClaimSeeds) push(c.id);
-    for (const d of bestDebatesQuery.data ?? []) push(d.debateClaim?.entityId);
+    for (const d of bestDebates) push(d.debateClaim?.entityId);
     return ids;
-  }, [bestDebatesQuery.data, orderedClaimSeeds]);
+  }, [bestDebates, orderedClaimSeeds]);
 
   const votesQuery = useQuery({
     queryKey: ['live-topic-template', 'multi-space-votes', personalSpaceId ?? null, allVoteClaimIds],
@@ -651,7 +702,7 @@ export function useLiveTopicTemplate({
 
     // Count debates per claim ID from the topic's debates so Claim rows show debate counts
     const debateCountByClaimHex = new Map<string, number>();
-    for (const d of bestDebatesQuery.data ?? []) {
+    for (const d of bestDebates) {
       const claimId = d.debateClaim?.entityId;
       if (!claimId) continue;
       const hex = ID.uuidToHex(claimId);
@@ -705,7 +756,7 @@ export function useLiveTopicTemplate({
 
     // 2. Live Recent Debates gallery
     const debateParticipantsByHex = debateParticipantsQuery.data;
-    const recentDebates: TopicRecentDebateModel[] = (bestDebatesQuery.data ?? []).slice(0, 8).map(item => {
+    const recentDebates: TopicRecentDebateModel[] = bestDebates.slice(0, 8).map(item => {
       const { claimTitle, speakers } = parseDebateTitle(item.title, item.debateClaim?.name);
       const claimId = item.debateClaim?.entityId ?? item.entityId;
       const claimSplit = buildSplitForClaim(claimId);
@@ -780,7 +831,7 @@ export function useLiveTopicTemplate({
       });
     }
 
-    for (const story of bestNewsQuery.data ?? []) {
+    for (const story of bestNews) {
       if (!story.title) continue;
       const hex = ID.uuidToHex(story.entityId);
       if (seenTimelineHex.has(hex)) continue;
@@ -933,8 +984,8 @@ export function useLiveTopicTemplate({
     };
   }, [
     ancestors,
-    bestDebatesQuery.data,
-    bestNewsQuery.data,
+    bestDebates,
+    bestNews,
     countsByTopicId,
     coverage.page.rows,
     viewerCoverageRows,
@@ -956,6 +1007,7 @@ export function useLiveTopicTemplate({
     topClaimsQuery.isLoading ||
       bestClaimsQuery.isLoading ||
       bestDebatesQuery.isLoading ||
+      isTaggedLoading ||
       coverage.isLoading ||
       (orderedClaimSeeds.length > 0 && votesQuery.isLoading),
     `${ID.uuidToHex(entityId)}:${ID.uuidToHex(spaceId)}:${isSpaceHome ? 'home' : 'entity'}`,

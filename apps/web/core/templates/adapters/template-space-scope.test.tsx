@@ -39,6 +39,12 @@ const state = vi.hoisted(() => ({
   infiniteQueries: [] as { queryKey: unknown[]; queryFn: (ctx: { pageParam: string | null }) => Promise<unknown> }[],
   graphqlVariables: [] as Record<string, unknown>[],
   votes: undefined as unknown,
+  /** Topic feed claims, and which of them the viewed space tagged (null: still checking). */
+  feedClaims: undefined as { entityId: string; title: string; spaceId: string }[] | undefined,
+  taggedInSpace: null as Set<string> | null,
+  feedNews: undefined as
+    | { items: { entityId: string; title: string; spaceId: string; createdAtSec: number }[]; fromSpaceFeed: boolean }
+    | undefined,
 }));
 
 const mocks = vi.hoisted(() => ({
@@ -70,7 +76,14 @@ vi.mock('~/core/sync/use-store', () => ({
 vi.mock('@tanstack/react-query', async importOriginal => ({
   ...(await importOriginal<typeof import('@tanstack/react-query')>()),
   useQuery: ({ queryKey }: { queryKey: unknown[] }) => ({
-    data: queryKey[1] === 'multi-space-votes' ? state.votes : undefined,
+    data:
+      queryKey[1] === 'multi-space-votes'
+        ? state.votes
+        : queryKey[1] === 'top-claims'
+          ? state.feedClaims
+          : queryKey[1] === 'best-news'
+            ? state.feedNews
+            : undefined,
     isLoading: false,
   }),
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),
@@ -93,6 +106,12 @@ vi.mock('~/core/responses/use-claim-response-summaries', () => ({
   useClaimResponseSummaryBatch: () => ({ data: undefined }),
 }));
 vi.mock('./use-live-entity-actions', () => ({ useLiveEntityActions: () => ({}) }));
+vi.mock('./use-topic-tagged-in-space', () => ({
+  useTopicTaggedInSpace: ({ entityIds }: { entityIds: string[] }) => ({
+    tagged: state.taggedInSpace,
+    isLoading: entityIds.length > 0 && state.taggedInSpace === null,
+  }),
+}));
 vi.mock('./use-viewer-sources', () => ({
   useEntityWithViewerSources: ({ entity }: { entity: Entity | null }) => entity,
   useViewerSpaceId: () => state.viewerSpaceId,
@@ -186,6 +205,9 @@ beforeEach(() => {
   state.infiniteQueries = [];
   state.graphqlVariables = [];
   state.votes = undefined;
+  state.feedClaims = undefined;
+  state.taggedInSpace = null;
+  state.feedNews = undefined;
   mocks.useClaimRecord.mockReset().mockReturnValue({
     claimRows: [],
     debateRows: [],
@@ -390,6 +412,44 @@ describe('Topic template', () => {
     expect(model.timelineHighlights?.map(item => item.title)).toEqual(['Event here']);
     expect(model.sections?.[0]?.items.map(item => item.title)).toEqual(['Source here']);
     expect(mocks.useTopicConnectionCounts).toHaveBeenCalledWith([PAGE], { spaceId: SPACE });
+  });
+
+  it('lists feed claims only once the viewed space is known to have tagged them', async () => {
+    topicCorpus();
+    state.corpus = [];
+    state.feedClaims = [
+      { entityId: 'f1', title: 'Feed claim tagged here', spaceId: SPACE },
+      { entityId: 'f2', title: 'Feed claim tagged elsewhere', spaceId: SPACE },
+    ];
+    const { result, rerender } = renderHook(() => useLiveTopicTemplate({ entityId: PAGE, spaceId: SPACE }));
+    // Held back while the check loads, rather than shown and then dropped.
+    await waitFor(() => expect(result.current.data).toBeDefined());
+    expect(result.current.data!.contestedClaims ?? []).toEqual([]);
+
+    state.taggedInSpace = new Set(['f1']);
+    rerender();
+    await waitFor(() =>
+      expect(result.current.data!.contestedClaims?.map(claim => claim.title)).toEqual(['Feed claim tagged here'])
+    );
+  });
+
+  it.each([
+    [true, ['Space story', 'Story the space tagged']],
+    [false, ['Story the space tagged']],
+  ])('checks news tags only for topic-feed rows (from the space feed: %s)', async (fromSpaceFeed, expected) => {
+    topicCorpus();
+    state.corpus = [];
+    state.taggedInSpace = new Set(['n2']);
+    state.feedNews = {
+      fromSpaceFeed,
+      items: [
+        { entityId: 'n1', title: 'Space story', spaceId: SPACE, createdAtSec: 2 },
+        { entityId: 'n2', title: 'Story the space tagged', spaceId: SPACE, createdAtSec: 1 },
+      ],
+    };
+    const { result } = renderHook(() => useLiveTopicTemplate({ entityId: PAGE, spaceId: SPACE, isSpaceHome: true }));
+
+    await waitFor(() => expect(result.current.data?.timelineHighlights?.map(item => item.title)).toEqual(expected));
   });
 
   it('reads coverage by where the Topics relation was published, not only where the source lives', async () => {
