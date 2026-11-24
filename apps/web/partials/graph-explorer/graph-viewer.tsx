@@ -152,13 +152,28 @@ export function GraphViewer({
     },
     [analytics, history, onNavigate]
   );
+  // A chip that would hide the new centre gives way, as in the design.
+  const giveWayFor = React.useCallback(
+    (kind: GraphNode['kind']) => {
+      if (kindFilter !== 'all' && kind !== kindFilter) setKindFilter('all');
+    },
+    [kindFilter]
+  );
   const selectNode = React.useCallback(
     (node: GraphNode, method: RecentreMethod = 'node') => {
-      // A chip that would hide the new centre gives way, as in the design.
-      if (kindFilter !== 'all' && node.kind !== kindFilter) setKindFilter('all');
+      giveWayFor(node.kind);
       goTo(node.id, node.name, method, node.kind);
     },
-    [goTo, kindFilter]
+    [giveWayFor, goTo]
+  );
+  // The topic summary keeps its claim rows under any chip, so opening one gives way like a map tap.
+  // (Its People and Latest news rows, the only other ones, show under Everything alone.)
+  const openClaim = React.useCallback(
+    (id: string, name: string | null, method: RecentreMethod = 'panel') => {
+      giveWayFor('claim');
+      goTo(id, name, method);
+    },
+    [giveWayFor, goTo]
   );
   const pickKind = React.useCallback(
     (next: GraphKindFilter) => {
@@ -295,7 +310,7 @@ export function GraphViewer({
             topicId={centreId}
             filter={filter}
             topicSpaceId={topicSpaceId}
-            onOpenClaim={id => goTo(id, null, 'summary')}
+            onOpenClaim={id => openClaim(id, null, 'summary')}
           />
           <TopicOverview
             topicId={centreId}
@@ -304,7 +319,7 @@ export function GraphViewer({
             // Its People and Latest news lists are other kinds: under a chip they stay hidden.
             selection={chipped ? null : selection}
             nodes={chipped ? NO_NODES : loadedNodes}
-            onOpen={goTo}
+            onOpen={openClaim}
           />
         </>
       );

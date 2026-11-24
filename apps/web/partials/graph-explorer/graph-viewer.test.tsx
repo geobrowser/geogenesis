@@ -567,6 +567,30 @@ describe('GraphViewer under a kind chip', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Gaza ceasefire' }));
     expect(chips().getByRole('button', { name: 'Everything' }).getAttribute('aria-pressed')).toBe('true');
   });
+
+  it('shows a shared chip pressed even with none of its kind around the centre', () => {
+    mixedNeighbourhood();
+    render(<Viewer start={TOPIC} scope={scope} overrides={{ chip: 'event' }} />);
+    expect(chips().getByRole('button', { name: 'Events' }).getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it.each([
+    ['the most-responded claim', true],
+    ['a widely agreed claim', false],
+  ] as const)('gives way to Everything when opening %s from the topic summary under a chip', (_, inHeadline) => {
+    mixedNeighbourhood();
+    topicSummary.data = {
+      claims: [{ id: CLAIM, name: 'A claim', spaceId: SPACE, positive: 3, negative: 0, band: 'agreed' }],
+      truncated: false,
+    };
+    render(<Viewer start={TOPIC} scope={topicScope} />);
+    fireEvent.click(chips().getByRole('button', { name: 'News' }));
+    const headline = screen.getByRole('region', { name: 'How people responded' });
+    const rows = screen.getAllByRole('button', { name: /A claim/ });
+    expect(rows).toHaveLength(2);
+    fireEvent.click(rows.find(row => headline.contains(row) === inHeadline)!);
+    expect(chips().getByRole('button', { name: 'Everything' }).getAttribute('aria-pressed')).toBe('true');
+  });
 });
 
 /** The page's session around the viewer, with a way to move history as browser Back would. */
