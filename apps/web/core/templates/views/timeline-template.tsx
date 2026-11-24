@@ -241,21 +241,21 @@ export function TimelineTemplate({ model, headerActions, footer, className }: Ti
                     value={draftDate}
                     onChange={e => setDraftDate(e.target.value)}
                     placeholder="Date (e.g. 14 Nov 2026)"
-                    className="w-full rounded-lg border border-grey-02 bg-white px-3 py-2 text-[14.5px] text-text focus:border-text focus:outline-hidden"
+                    className="w-full rounded-lg border border-grey-02 bg-white px-3 py-2 text-[14.5px] text-text focus:border-text focus:outline-hidden md:text-[16px]"
                   />
                   <textarea
                     rows={2}
                     value={draftSummary}
                     onChange={e => setDraftSummary(e.target.value)}
                     placeholder="What happened and why it matters"
-                    className="w-full rounded-lg border border-grey-02 bg-white px-3 py-2 text-[14.5px] text-text focus:border-text focus:outline-hidden"
+                    className="w-full rounded-lg border border-grey-02 bg-white px-3 py-2 text-[14.5px] text-text focus:border-text focus:outline-hidden md:text-[16px]"
                   />
                   <input
                     type="text"
                     value={draftSource}
                     onChange={e => setDraftSource(e.target.value)}
                     placeholder="Source (optional)"
-                    className="w-full rounded-lg border border-grey-02 bg-white px-3 py-2 text-[14.5px] text-text focus:border-text focus:outline-hidden"
+                    className="w-full rounded-lg border border-grey-02 bg-white px-3 py-2 text-[14.5px] text-text focus:border-text focus:outline-hidden md:text-[16px]"
                   />
                   <div className="flex items-center gap-2">
                     <button

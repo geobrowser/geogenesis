@@ -371,7 +371,7 @@ export function ListRankingWorkspace({
           onChange={event => setSearchQuery(event.target.value)}
           placeholder={`Search ${title.toLowerCase()}…`}
           aria-label={`Search ${title}`}
-          className="h-9 w-full rounded-full border border-grey-02 bg-grey-01/50 pr-8 pl-8.5 text-[14px] text-text placeholder:text-grey-04 focus:border-text focus:bg-white focus:outline-hidden"
+          className="h-9 w-full rounded-full border border-grey-02 bg-grey-01/50 pr-8 pl-8.5 text-[14px] text-text placeholder:text-grey-04 focus:border-text focus:bg-white focus:outline-hidden md:text-[16px]"
         />
         {searchQuery && (
           <button

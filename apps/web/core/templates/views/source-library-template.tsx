@@ -151,14 +151,14 @@ export function SourceLibraryTemplate({ model, headerActions, footer, className 
               value={draftTitle}
               onChange={e => setDraftTitle(e.target.value)}
               placeholder="Source title"
-              className="flex-1 rounded-lg border border-grey-02 px-3 py-2 text-[15px] text-text focus:border-text focus:outline-hidden"
+              className="flex-1 rounded-lg border border-grey-02 px-3 py-2 text-[15px] text-text focus:border-text focus:outline-hidden md:text-[16px]"
             />
             <input
               type="url"
               value={draftUrl}
               onChange={e => setDraftUrl(e.target.value)}
               placeholder="https://... (optional)"
-              className="flex-1 rounded-lg border border-grey-02 px-3 py-2 text-[15px] text-text focus:border-text focus:outline-hidden"
+              className="flex-1 rounded-lg border border-grey-02 px-3 py-2 text-[15px] text-text focus:border-text focus:outline-hidden md:text-[16px]"
             />
             <div className="flex items-center gap-2">
               <button
