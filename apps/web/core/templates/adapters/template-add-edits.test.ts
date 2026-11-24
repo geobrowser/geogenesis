@@ -101,6 +101,9 @@ describe('toStoredDate', () => {
     expect(toStoredDate('2026-11-18')).toBe('2026-11-18T00:00:00.000Z');
     expect(toStoredDate('Nov 18, 2026')).toBe('2026-11-18T00:00:00.000Z');
     expect(toStoredDate('soon')).toBeNull();
+    expect(toStoredDate('2026-02-30')).toBeNull();
+    expect(toStoredDate('2026-13-01')).toBeNull();
+    expect(toStoredDate('2026-00-01')).toBeNull();
   });
 });
 

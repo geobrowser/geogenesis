@@ -175,6 +175,8 @@ export function toStoredDate(text: string): string | null {
   const isoDay = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
   const date = isoDay ? new Date(Number(isoDay[1]), Number(isoDay[2]) - 1, Number(isoDay[3])) : new Date(text);
   if (Number.isNaN(date.getTime())) return null;
+  // `new Date(2026, 1, 30)` rolls over to March 2; an impossible day is no date.
+  if (isoDay && (date.getMonth() + 1 !== Number(isoDay[2]) || date.getDate() !== Number(isoDay[3]))) return null;
   const yyyy = String(date.getFullYear()).padStart(4, '0');
   const mm = String(date.getMonth() + 1).padStart(2, '0');
   const dd = String(date.getDate()).padStart(2, '0');
