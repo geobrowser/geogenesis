@@ -148,6 +148,31 @@ describe('Sources section +', () => {
     expect(membership.ensure).not.toHaveBeenCalled();
   });
 
+  it('on a phone, signed in, opens the link form in a bottom sheet without raising the keyboard', () => {
+    auth.authenticated = true;
+    canEditPageSpace(false);
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn((query: string) => ({
+        matches: query === '(max-width: 767px)' || query === '(hover: none), (pointer: coarse)',
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      }))
+    );
+    try {
+      renderSection();
+      fireEvent.click(screen.getByRole('button', { name: 'Add source' }));
+
+      expect(screen.getByRole('dialog', { name: 'Add source' })).toHaveAttribute('data-testid', 'bottom-sheet');
+      const input = screen.getByPlaceholderText(/Paste news, podcast, tweet, blog URLs/);
+      expect(input).not.toHaveFocus();
+      expect(input).toHaveClass('md:text-[16px]');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('signed in, a non-member imports into their own personal space, with a join request in the background', async () => {
     auth.authenticated = true;
     canEditPageSpace(false);

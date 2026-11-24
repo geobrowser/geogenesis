@@ -167,7 +167,7 @@ export function PodcastShowTemplate({
                   onChange={event => setEpisodeFilter(event.target.value)}
                   placeholder="Filter episodes…"
                   aria-label="Filter episodes"
-                  className="h-8 w-full rounded-full border border-grey-02 bg-white pr-3 pl-8 text-[13.5px] text-text placeholder:text-grey-04 focus:border-text focus:outline-none"
+                  className="h-8 w-full rounded-full border border-grey-02 bg-white pr-3 pl-8 text-[13.5px] text-text placeholder:text-grey-04 focus:border-text focus:outline-none md:text-[16px]"
                 />
               </label>
             )}

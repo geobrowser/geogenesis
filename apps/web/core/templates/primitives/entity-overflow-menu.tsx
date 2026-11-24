@@ -7,6 +7,10 @@ import * as React from 'react';
 import cx from 'classnames';
 import Link from 'next/link';
 
+import { useIsPhoneLayout } from '~/core/hooks/use-is-phone-layout';
+import { useMediaQuery } from '~/core/hooks/use-media-query';
+
+import { BottomSheet } from '~/design-system/bottom-sheet';
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
 import { RelationSmall } from '~/design-system/icons/relation-small';
 import { RightArrowLong } from '~/design-system/icons/right-arrow-long';
@@ -194,6 +198,7 @@ export function TemplateAddRelationPillPopover({
   const popoverContainer = useTemplatePopoverContainer();
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState('');
+  const autoFocus = useAddFormAutoFocus();
   const [liveResults, setLiveResults] = React.useState<readonly string[]>([]);
 
   React.useEffect(() => {
@@ -285,12 +290,12 @@ export function TemplateAddRelationPillPopover({
           >
             <input
               type="text"
-              autoFocus
+              autoFocus={autoFocus}
               value={query}
               onChange={event => setQuery(event.target.value)}
               placeholder={`Find or add ${predicate.toLowerCase()}...`}
               aria-label={`Find or add ${predicate}`}
-              className="h-8 w-full rounded-lg border border-grey-02 bg-white px-2.5 text-[13px] text-text placeholder:text-grey-03 focus:border-text focus:outline-hidden"
+              className="h-8 w-full rounded-lg border border-grey-02 bg-white px-2.5 text-[13px] text-text placeholder:text-grey-03 focus:border-text focus:outline-hidden md:text-[16px]"
             />
           </form>
 
@@ -326,6 +331,112 @@ export function TemplateAddRelationPillPopover({
   );
 }
 
+const stopPropagation = (event: React.SyntheticEvent) => event.stopPropagation();
+
+/** An Add form's Cancel and submit row. In the phone sheet it stays at the bottom while the fields scroll. */
+export const ADD_FORM_ACTIONS_CLASS =
+  'flex items-center justify-end gap-1.5 pt-1 md:sticky md:bottom-0 md:bg-white md:pb-1';
+
+/**
+ * False on a touch screen, where focusing a field on open raises the keyboard over the form before
+ * the person has seen it.
+ */
+export function useAddFormAutoFocus(): boolean {
+  return !useMediaQuery('(hover: none), (pointer: coarse)');
+}
+
+/**
+ * The surface every template Add form opens in from its `+`: an anchored popover on desktop, a
+ * bottom sheet on a phone, where an anchored popover ends up under the keyboard.
+ */
+export function AddFormSurface({
+  label,
+  heading,
+  open,
+  onOpenChange,
+  onClose,
+  align = 'end',
+  children,
+}: {
+  /** The trigger's accessible name and the surface's title. */
+  label: string;
+  /** The visible title, when it is more than `label` (an icon beside it). */
+  heading?: React.ReactNode;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  /** The header X. Separate from `onOpenChange` because the forms keep their draft when X closes them. */
+  onClose: () => void;
+  align?: 'start' | 'center' | 'end';
+  children: React.ReactNode;
+}) {
+  const phone = useIsPhoneLayout();
+  const popoverContainer = useTemplatePopoverContainer();
+
+  const trigger = (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={stopPropagation}
+      className={cx(
+        'inline-grid size-7 cursor-pointer place-items-center border-0 bg-transparent text-grey-04 transition-colors hover:text-text',
+        open && 'text-text'
+      )}
+    >
+      <PlusIcon className="size-4" />
+    </button>
+  );
+
+  const header = (
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-[13.5px] font-semibold text-text">{heading ?? label}</span>
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label={`Close ${label.toLowerCase()}`}
+        className="inline-grid size-6 cursor-pointer place-items-center border-0 bg-transparent text-grey-04 hover:text-text"
+      >
+        <CloseIcon className="size-3.5" />
+      </button>
+    </div>
+  );
+
+  if (phone) {
+    // React bubbles the portaled sheet's clicks (backdrop and padding included) to the trigger's
+    // ancestors, so the whole sheet stops them here, as the popover does.
+    return (
+      <span className="contents" onClick={stopPropagation}>
+        <BottomSheet open={open} onOpenChange={onOpenChange} trigger={trigger} title={label} avoidKeyboard>
+          <div className="flex flex-col gap-3" data-testid="add-form-sheet">
+            {header}
+            {children}
+          </div>
+        </BottomSheet>
+      </span>
+    );
+  }
+
+  return (
+    <Popover.Root modal={false} open={open} onOpenChange={onOpenChange}>
+      <Popover.Trigger asChild>{trigger}</Popover.Trigger>
+      <Popover.Portal container={popoverContainer}>
+        <Popover.Content
+          side="bottom"
+          align={align}
+          sideOffset={8}
+          collisionPadding={12}
+          className="pointer-events-auto z-[160] flex w-[340px] max-w-[calc(100vw-24px)] flex-col gap-3 rounded-xl border border-black/[0.08] bg-white p-4 shadow-[0_18px_48px_-8px_rgba(0,0,0,0.16),0_4px_12px_-2px_rgba(0,0,0,0.06)]"
+          onClick={stopPropagation}
+          data-testid="add-form-popover"
+        >
+          {header}
+          {children}
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+}
+
 /**
  * Anchored popover attached to a borderless `+` trigger for adding Context triples
  * without opening a full-screen modal.
@@ -342,8 +453,8 @@ export function AddContextPopover(props: AddContextPopoverProps) {
 }
 
 function AddContextPopoverInner({ onSubmit, align = 'end' }: AddContextPopoverProps) {
-  const popoverContainer = useTemplatePopoverContainer();
   const [open, setOpen] = React.useState(false);
+  const autoFocus = useAddFormAutoFocus();
   const [predicate, setPredicate] = React.useState('');
   const [valuesInput, setValuesInput] = React.useState('');
 
@@ -362,9 +473,17 @@ function AddContextPopoverInner({ onSubmit, align = 'end' }: AddContextPopoverPr
   };
 
   return (
-    <Popover.Root
-      modal={false}
+    <AddFormSurface
+      label="Add context"
+      heading={
+        <span className="inline-flex items-center gap-1.5">
+          <NetworkIcon className="size-3.5 text-grey-04" />
+          <span>Add context</span>
+        </span>
+      }
       open={open}
+      align={align}
+      onClose={() => setOpen(false)}
       onOpenChange={next => {
         setOpen(next);
         if (!next) {
@@ -373,45 +492,6 @@ function AddContextPopoverInner({ onSubmit, align = 'end' }: AddContextPopoverPr
         }
       }}
     >
-      <Popover.Trigger asChild>
-        <button
-          type="button"
-          aria-label="Add context"
-          title="Add context"
-          onClick={event => event.stopPropagation()}
-          className={cx(
-            'inline-grid size-7 cursor-pointer place-items-center border-0 bg-transparent text-grey-04 transition-colors hover:text-text',
-            open && 'text-text'
-          )}
-        >
-          <PlusIcon className="size-4" />
-        </button>
-      </Popover.Trigger>
-
-      <Popover.Portal container={popoverContainer}>
-        <Popover.Content
-          side="bottom"
-          align={align}
-          sideOffset={8}
-          collisionPadding={12}
-          className="pointer-events-auto z-[160] flex w-[340px] max-w-[calc(100vw-24px)] flex-col gap-3 rounded-xl border border-black/[0.08] bg-white p-4 shadow-[0_18px_48px_-8px_rgba(0,0,0,0.16),0_4px_12px_-2px_rgba(0,0,0,0.06)]"
-          onClick={event => event.stopPropagation()}
-        >
-          <div className="flex items-center justify-between gap-2">
-            <span className="inline-flex items-center gap-1.5 text-[13.5px] font-semibold text-text">
-              <NetworkIcon className="size-3.5 text-grey-04" />
-              <span>Add context</span>
-            </span>
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              aria-label="Close add context"
-              className="inline-grid size-6 cursor-pointer place-items-center border-0 bg-transparent text-grey-04 hover:text-text"
-            >
-              <CloseIcon className="size-3.5" />
-            </button>
-          </div>
-
           <form onSubmit={handleSubmit} className="flex flex-col gap-2.5">
             <div className="flex flex-wrap gap-1.5">
               {SUGGESTED_PREDICATES.map(item => (
@@ -435,11 +515,11 @@ function AddContextPopoverInner({ onSubmit, align = 'end' }: AddContextPopoverPr
               <span className="text-[12.5px] font-medium text-grey-04">Property (relation key)</span>
               <input
                 type="text"
-                autoFocus
+            autoFocus={autoFocus}
                 value={predicate}
                 onChange={e => setPredicate(e.target.value)}
                 placeholder="e.g. Legal status, Supporting reports"
-                className="h-9 w-full rounded-lg border border-grey-02 bg-white px-3 text-[13.5px] text-text placeholder:text-grey-03 focus:border-text focus:outline-hidden"
+            className="h-9 w-full rounded-lg border border-grey-02 bg-white px-3 text-[13.5px] text-text placeholder:text-grey-03 focus:border-text focus:outline-hidden md:text-[16px]"
               />
             </label>
 
@@ -450,11 +530,11 @@ function AddContextPopoverInner({ onSubmit, align = 'end' }: AddContextPopoverPr
                 value={valuesInput}
                 onChange={e => setValuesInput(e.target.value)}
                 placeholder="e.g. ICJ Provisional Order, UN inquiry"
-                className="h-9 w-full rounded-lg border border-grey-02 bg-white px-3 text-[13.5px] text-text placeholder:text-grey-03 focus:border-text focus:outline-hidden"
+            className="h-9 w-full rounded-lg border border-grey-02 bg-white px-3 text-[13.5px] text-text placeholder:text-grey-03 focus:border-text focus:outline-hidden md:text-[16px]"
               />
             </label>
 
-            <div className="flex items-center justify-end gap-1.5 pt-1">
+        <div className={ADD_FORM_ACTIONS_CLASS}>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
@@ -471,9 +551,7 @@ function AddContextPopoverInner({ onSubmit, align = 'end' }: AddContextPopoverPr
               </button>
             </div>
           </form>
-        </Popover.Content>
-      </Popover.Portal>
-    </Popover.Root>
+    </AddFormSurface>
   );
 }
 
@@ -493,8 +571,8 @@ export function AddFlagPopover(props: AddFlagPopoverProps) {
 }
 
 function AddFlagPopoverInner({ onSubmit, align = 'end' }: AddFlagPopoverProps) {
-  const popoverContainer = useTemplatePopoverContainer();
   const [open, setOpen] = React.useState(false);
+  const autoFocus = useAddFormAutoFocus();
   const [reason, setReason] = React.useState<string>(FLAG_REASONS[0]);
   const [body, setBody] = React.useState('');
   const [sourceUrl, setSourceUrl] = React.useState('');
@@ -510,9 +588,17 @@ function AddFlagPopoverInner({ onSubmit, align = 'end' }: AddFlagPopoverProps) {
   };
 
   return (
-    <Popover.Root
-      modal={false}
+    <AddFormSurface
+      label="Add dispute"
+      heading={
+        <span className="inline-flex items-center gap-1.5">
+          <FlagIcon className="size-3.5 text-grey-04" />
+          <span>Add dispute</span>
+        </span>
+      }
       open={open}
+      align={align}
+      onClose={() => setOpen(false)}
       onOpenChange={next => {
         setOpen(next);
         if (!next) {
@@ -522,45 +608,6 @@ function AddFlagPopoverInner({ onSubmit, align = 'end' }: AddFlagPopoverProps) {
         }
       }}
     >
-      <Popover.Trigger asChild>
-        <button
-          type="button"
-          aria-label="Add dispute"
-          title="Add dispute"
-          onClick={event => event.stopPropagation()}
-          className={cx(
-            'inline-grid size-7 cursor-pointer place-items-center border-0 bg-transparent text-grey-04 transition-colors hover:text-text',
-            open && 'text-text'
-          )}
-        >
-          <PlusIcon className="size-4" />
-        </button>
-      </Popover.Trigger>
-
-      <Popover.Portal container={popoverContainer}>
-        <Popover.Content
-          side="bottom"
-          align={align}
-          sideOffset={8}
-          collisionPadding={12}
-          className="pointer-events-auto z-[160] flex w-[340px] max-w-[calc(100vw-24px)] flex-col gap-3 rounded-xl border border-black/[0.08] bg-white p-4 shadow-[0_18px_48px_-8px_rgba(0,0,0,0.16),0_4px_12px_-2px_rgba(0,0,0,0.06)]"
-          onClick={event => event.stopPropagation()}
-        >
-          <div className="flex items-center justify-between gap-2">
-            <span className="inline-flex items-center gap-1.5 text-[13.5px] font-semibold text-text">
-              <FlagIcon className="size-3.5 text-grey-04" />
-              <span>Add dispute</span>
-            </span>
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              aria-label="Close add dispute"
-              className="inline-grid size-6 cursor-pointer place-items-center border-0 bg-transparent text-grey-04 hover:text-text"
-            >
-              <CloseIcon className="size-3.5" />
-            </button>
-          </div>
-
           <form onSubmit={handleSubmit} className="flex flex-col gap-2.5">
             <div className="flex flex-wrap gap-1.5">
               {FLAG_REASONS.map(option => (
@@ -585,11 +632,11 @@ function AddFlagPopoverInner({ onSubmit, align = 'end' }: AddFlagPopoverProps) {
               <span className="text-[12.5px] font-medium text-grey-04">Why are you disputing this?</span>
               <textarea
                 rows={3}
-                autoFocus
+            autoFocus={autoFocus}
                 value={body}
                 onChange={e => setBody(e.target.value)}
                 placeholder="Describe what is inaccurate, disputed, or missing..."
-                className="w-full resize-none rounded-lg border border-grey-02 bg-white px-3 py-2 text-[13.5px] leading-[19px] text-text placeholder:text-grey-03 focus:border-text focus:outline-hidden"
+            className="w-full resize-none rounded-lg border border-grey-02 bg-white px-3 py-2 text-[13.5px] leading-[19px] text-text placeholder:text-grey-03 focus:border-text focus:outline-hidden md:text-[16px] md:leading-[22px]"
               />
             </label>
 
@@ -600,11 +647,11 @@ function AddFlagPopoverInner({ onSubmit, align = 'end' }: AddFlagPopoverProps) {
                 value={sourceUrl}
                 onChange={e => setSourceUrl(e.target.value)}
                 placeholder="https://..."
-                className="h-9 w-full rounded-lg border border-grey-02 bg-white px-3 text-[13.5px] text-text placeholder:text-grey-03 focus:border-text focus:outline-hidden"
+            className="h-9 w-full rounded-lg border border-grey-02 bg-white px-3 text-[13.5px] text-text placeholder:text-grey-03 focus:border-text focus:outline-hidden md:text-[16px]"
               />
             </label>
 
-            <div className="flex items-center justify-end gap-1.5 pt-1">
+        <div className={ADD_FORM_ACTIONS_CLASS}>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
@@ -621,9 +668,7 @@ function AddFlagPopoverInner({ onSubmit, align = 'end' }: AddFlagPopoverProps) {
               </button>
             </div>
           </form>
-        </Popover.Content>
-      </Popover.Portal>
-    </Popover.Root>
+    </AddFormSurface>
   );
 }
 
@@ -645,8 +690,8 @@ export function AddClaimPopover({
   canOpen?: () => boolean;
   align?: 'start' | 'center' | 'end';
 }) {
-  const popoverContainer = useTemplatePopoverContainer();
   const [open, setOpen] = React.useState(false);
+  const autoFocus = useAddFormAutoFocus();
   const [title, setTitle] = React.useState('');
   const [kind, setKind] = React.useState<ClaimKind>('fact');
   const [note, setNote] = React.useState('');
@@ -662,9 +707,11 @@ export function AddClaimPopover({
   };
 
   return (
-    <Popover.Root
-      modal={false}
+    <AddFormSurface
+      label={label}
       open={open}
+      align={align}
+      onClose={() => setOpen(false)}
       onOpenChange={next => {
         if (next && canOpen && !canOpen()) return;
         setOpen(next);
@@ -675,42 +722,6 @@ export function AddClaimPopover({
         }
       }}
     >
-      <Popover.Trigger asChild>
-        <button
-          type="button"
-          aria-label={label}
-          title={label}
-          onClick={event => event.stopPropagation()}
-          className={cx(
-            'inline-grid size-7 cursor-pointer place-items-center border-0 bg-transparent text-grey-04 transition-colors hover:text-text',
-            open && 'text-text'
-          )}
-        >
-          <PlusIcon className="size-4" />
-        </button>
-      </Popover.Trigger>
-
-      <Popover.Portal container={popoverContainer}>
-        <Popover.Content
-          side="bottom"
-          align={align}
-          sideOffset={8}
-          collisionPadding={12}
-          className="pointer-events-auto z-[160] flex w-[340px] max-w-[calc(100vw-24px)] flex-col gap-3 rounded-xl border border-black/[0.08] bg-white p-4 shadow-[0_18px_48px_-8px_rgba(0,0,0,0.16),0_4px_12px_-2px_rgba(0,0,0,0.06)]"
-          onClick={event => event.stopPropagation()}
-        >
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-[13.5px] font-semibold text-text">{label}</span>
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              aria-label={`Close ${label.toLowerCase()}`}
-              className="inline-grid size-6 cursor-pointer place-items-center border-0 bg-transparent text-grey-04 hover:text-text"
-            >
-              <CloseIcon className="size-3.5" />
-            </button>
-          </div>
-
           <form onSubmit={handleSubmit} className="flex flex-col gap-2.5">
             <div className="flex flex-wrap gap-1.5" role="group" aria-label="Claim epistemic type">
               {(
@@ -740,11 +751,11 @@ export function AddClaimPopover({
               <span className="text-[12.5px] font-medium text-grey-04">Claim</span>
               <textarea
                 rows={2}
-                autoFocus
+            autoFocus={autoFocus}
                 value={title}
                 onChange={e => setTitle(e.target.value)}
                 placeholder={placeholder}
-                className="w-full resize-none rounded-lg border border-grey-02 bg-white px-3 py-2 text-[13.5px] leading-[19px] text-text placeholder:text-grey-03 focus:border-text focus:outline-hidden"
+            className="w-full resize-none rounded-lg border border-grey-02 bg-white px-3 py-2 text-[13.5px] leading-[19px] text-text placeholder:text-grey-03 focus:border-text focus:outline-hidden md:text-[16px] md:leading-[22px]"
               />
             </label>
 
@@ -755,11 +766,11 @@ export function AddClaimPopover({
                 value={note}
                 onChange={e => setNote(e.target.value)}
                 placeholder="Key citation or clarification..."
-                className="h-9 w-full rounded-lg border border-grey-02 bg-white px-3 text-[13.5px] text-text placeholder:text-grey-03 focus:border-text focus:outline-hidden"
+            className="h-9 w-full rounded-lg border border-grey-02 bg-white px-3 text-[13.5px] text-text placeholder:text-grey-03 focus:border-text focus:outline-hidden md:text-[16px]"
               />
             </label>
 
-            <div className="flex items-center justify-end gap-1.5 pt-1">
+        <div className={ADD_FORM_ACTIONS_CLASS}>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
@@ -776,9 +787,7 @@ export function AddClaimPopover({
               </button>
             </div>
           </form>
-        </Popover.Content>
-      </Popover.Portal>
-    </Popover.Root>
+    </AddFormSurface>
   );
 }
 
@@ -812,8 +821,8 @@ export function AddEntityItemPopover({
   canOpen?: () => boolean;
   align?: 'start' | 'center' | 'end';
 }) {
-  const popoverContainer = useTemplatePopoverContainer();
   const [open, setOpen] = React.useState(false);
+  const autoFocus = useAddFormAutoFocus();
   const [primary, setPrimary] = React.useState('');
   const [secondary, setSecondary] = React.useState('');
   const [tertiary, setTertiary] = React.useState('');
@@ -833,9 +842,11 @@ export function AddEntityItemPopover({
   };
 
   return (
-    <Popover.Root
-      modal={false}
+    <AddFormSurface
+      label={label}
       open={open}
+      align={align}
+      onClose={() => setOpen(false)}
       onOpenChange={next => {
         if (next && canOpen && !canOpen()) return;
         setOpen(next);
@@ -846,62 +857,26 @@ export function AddEntityItemPopover({
         }
       }}
     >
-      <Popover.Trigger asChild>
-        <button
-          type="button"
-          aria-label={label}
-          title={label}
-          onClick={event => event.stopPropagation()}
-          className={cx(
-            'inline-grid size-7 cursor-pointer place-items-center border-0 bg-transparent text-grey-04 transition-colors hover:text-text',
-            open && 'text-text'
-          )}
-        >
-          <PlusIcon className="size-4" />
-        </button>
-      </Popover.Trigger>
-
-      <Popover.Portal container={popoverContainer}>
-        <Popover.Content
-          side="bottom"
-          align={align}
-          sideOffset={8}
-          collisionPadding={12}
-          className="pointer-events-auto z-[160] flex w-[340px] max-w-[calc(100vw-24px)] flex-col gap-3 rounded-xl border border-black/[0.08] bg-white p-4 shadow-[0_18px_48px_-8px_rgba(0,0,0,0.16),0_4px_12px_-2px_rgba(0,0,0,0.06)]"
-          onClick={event => event.stopPropagation()}
-        >
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-[13.5px] font-semibold text-text">{label}</span>
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              aria-label={`Close ${label.toLowerCase()}`}
-              className="inline-grid size-6 cursor-pointer place-items-center border-0 bg-transparent text-grey-04 hover:text-text"
-            >
-              <CloseIcon className="size-3.5" />
-            </button>
-          </div>
-
           <form onSubmit={handleSubmit} className="flex flex-col gap-2.5">
             <label className="flex flex-col gap-1">
               <span className="text-[12.5px] font-medium text-grey-04">{primaryLabel}</span>
               {multilinePrimary ? (
                 <textarea
                   rows={3}
-                  autoFocus
+              autoFocus={autoFocus}
                   value={primary}
                   onChange={e => setPrimary(e.target.value)}
                   placeholder={primaryPlaceholder}
-                  className="w-full resize-none rounded-lg border border-grey-02 bg-white px-3 py-2 text-[13.5px] leading-[19px] text-text placeholder:text-grey-03 focus:border-text focus:outline-hidden"
+              className="w-full resize-none rounded-lg border border-grey-02 bg-white px-3 py-2 text-[13.5px] leading-[19px] text-text placeholder:text-grey-03 focus:border-text focus:outline-hidden md:text-[16px] md:leading-[22px]"
                 />
               ) : (
                 <input
                   type="text"
-                  autoFocus
+              autoFocus={autoFocus}
                   value={primary}
                   onChange={e => setPrimary(e.target.value)}
                   placeholder={primaryPlaceholder}
-                  className="h-9 w-full rounded-lg border border-grey-02 bg-white px-3 text-[13.5px] text-text placeholder:text-grey-03 focus:border-text focus:outline-hidden"
+              className="h-9 w-full rounded-lg border border-grey-02 bg-white px-3 text-[13.5px] text-text placeholder:text-grey-03 focus:border-text focus:outline-hidden md:text-[16px]"
                 />
               )}
             </label>
@@ -914,7 +889,7 @@ export function AddEntityItemPopover({
                   value={secondary}
                   onChange={e => setSecondary(e.target.value)}
                   placeholder={secondaryPlaceholder}
-                  className="h-9 w-full rounded-lg border border-grey-02 bg-white px-3 text-[13.5px] text-text placeholder:text-grey-03 focus:border-text focus:outline-hidden"
+              className="h-9 w-full rounded-lg border border-grey-02 bg-white px-3 text-[13.5px] text-text placeholder:text-grey-03 focus:border-text focus:outline-hidden md:text-[16px]"
                 />
               </label>
             )}
@@ -927,12 +902,12 @@ export function AddEntityItemPopover({
                   value={tertiary}
                   onChange={e => setTertiary(e.target.value)}
                   placeholder={tertiaryPlaceholder}
-                  className="h-9 w-full rounded-lg border border-grey-02 bg-white px-3 text-[13.5px] text-text placeholder:text-grey-03 focus:border-text focus:outline-hidden"
+              className="h-9 w-full rounded-lg border border-grey-02 bg-white px-3 text-[13.5px] text-text placeholder:text-grey-03 focus:border-text focus:outline-hidden md:text-[16px]"
                 />
               </label>
             )}
 
-            <div className="flex items-center justify-end gap-1.5 pt-1">
+        <div className={ADD_FORM_ACTIONS_CLASS}>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
@@ -949,9 +924,7 @@ export function AddEntityItemPopover({
               </button>
             </div>
           </form>
-        </Popover.Content>
-      </Popover.Portal>
-    </Popover.Root>
+    </AddFormSurface>
   );
 }
 
