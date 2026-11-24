@@ -64,6 +64,10 @@ export function TopicTemplate({
   );
   const addedTimelineTurns = usePendingAdds<TopicTimelineHighlightModel>(listedTimelineIds);
   const [subtopicsExpanded, setSubtopicsExpanded] = React.useState(false);
+  // Phones show the subtopics only on request, so the description leads (GEO-3837). Desktop always
+  // shows them.
+  const [phoneSubtopicsOpen, setPhoneSubtopicsOpen] = React.useState(false);
+  const subtopicsNavId = React.useId();
   const timelineHighlights = [...addedTimelineTurns.rows, ...(model.timelineHighlights ?? [])];
   const subtopics = model.subtopics ?? [];
   const visibleSubtopics = subtopicsExpanded ? subtopics : subtopics.slice(0, 10);
@@ -71,9 +75,17 @@ export function TopicTemplate({
   const hasContextOrLive = (model.graphConnections && model.graphConnections.length > 0) || Boolean(actionCallbacks);
   const hasFlagsOrLive = Boolean(model.contextByEntityId?.[model.id]?.flags?.length) || Boolean(actionCallbacks);
 
-  const subtopicsNav =
+  const subtopicsNav = (collapsibleOnPhone: boolean) =>
     subtopics.length > 0 ? (
-      <nav aria-label="Subtopics" className={cx('flex flex-wrap items-center gap-1.5', !embedded && 'mt-1')}>
+      <nav
+        id={collapsibleOnPhone ? subtopicsNavId : undefined}
+        aria-label="Subtopics"
+        className={cx(
+          'flex-wrap items-center gap-1.5',
+          collapsibleOnPhone && !phoneSubtopicsOpen ? 'hidden @[760px]:flex' : 'flex',
+          !embedded && 'mt-1'
+        )}
+      >
         {visibleSubtopics.map(sub =>
           sub.href ? (
             <Link
@@ -124,7 +136,7 @@ export function TopicTemplate({
     >
       {/* Hero header (omitted when embedded inside a Topic Space shell that renders the space header) */}
       {embedded ? (
-        subtopicsNav
+        subtopicsNav(false)
       ) : (
         <header className="flex flex-col gap-3.5">
           <TemplateTitleRow
@@ -159,7 +171,18 @@ export function TopicTemplate({
             <p className="m-0 mt-1 max-w-[780px] text-[16.5px] leading-[25px] text-text/85">{model.lede}</p>
           )}
 
-          {subtopicsNav}
+          {subtopics.length > 0 && (
+            <button
+              type="button"
+              aria-expanded={phoneSubtopicsOpen}
+              aria-controls={subtopicsNavId}
+              onClick={() => setPhoneSubtopicsOpen(open => !open)}
+              className="inline-flex h-8 cursor-pointer items-center self-start rounded-md border border-divider bg-white px-3 text-[13.5px] font-medium text-text transition-colors hover:border-text @[760px]:hidden"
+            >
+              {phoneSubtopicsOpen ? 'Hide subtopics' : 'Show subtopics'}
+            </button>
+          )}
+          {subtopicsNav(true)}
         </header>
       )}
 
@@ -266,7 +289,7 @@ export function TopicTemplate({
             </section>
           )}
 
-          {/* Sources & evidence (and additional structured sections) */}
+          {/* Evidence (and additional structured sections) */}
           {model.sections && model.sections.length > 0 && (
             <div id="sources-section" className="flex flex-col gap-8">
               {model.sections.map(section => (
@@ -327,13 +350,16 @@ function TimelineHighlightRow({
       </span>
 
       {isInteractive && (
-        <ChevronRightIcon className="mt-1 size-4 shrink-0 text-grey-03 transition-transform group-hover:translate-x-0.5 group-hover:text-[#4c1fd4]" />
+        // Desktop only: on phones the name takes this width (GEO-3837).
+        <ChevronRightIcon className="mt-1 hidden size-4 shrink-0 text-grey-03 transition-transform group-hover:translate-x-0.5 group-hover:text-[#4c1fd4] @[680px]:block" />
       )}
     </span>
   );
 
   return (
-    <li className="grid grid-cols-1 gap-2 @[680px]:grid-cols-[118px_28px_minmax(0,1fr)] @[680px]:gap-4">
+    // On phones the date sits just above its event's name (GEO-3837); the stacked gap and the name's
+    // top padding were 24px between them.
+    <li className="grid grid-cols-1 gap-1 @[680px]:grid-cols-[118px_28px_minmax(0,1fr)] @[680px]:gap-4">
       {/* Left date */}
       <div className="pt-4 text-[14px] font-semibold text-grey-04 @[680px]:pt-5 @[680px]:text-right">{turn.when}</div>
 
@@ -350,7 +376,9 @@ function TimelineHighlightRow({
       </div>
 
       {/* Right: event milestone headline + concise summary + overflow menu */}
-      <div className={cx('flex min-w-0 flex-col gap-2.5 py-4 @[680px]:py-5', !isLast && 'border-b border-divider/90')}>
+      <div
+        className={cx('flex min-w-0 flex-col gap-2.5 pt-1 pb-4 @[680px]:py-5', !isLast && 'border-b border-divider/90')}
+      >
         <div className="flex min-w-0 items-start justify-between gap-3">
           {turn.href ? (
             <Link href={turn.href} className="group flex min-w-0 flex-1 text-left text-text no-underline">
