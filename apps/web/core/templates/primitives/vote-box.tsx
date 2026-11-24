@@ -92,7 +92,16 @@ export function VoteBox({ prompt, split, control, className }: VoteBoxProps) {
             </button>
 
             {countSummary && (
-              <span className="ml-auto text-[13.5px] whitespace-nowrap text-grey-04 tabular-nums">{countSummary}</span>
+              // Stacked (phones), the split row right above already gives the count in parentheses, so
+              // this would say it twice (GEO-3819). Side by side, the bars sit apart and it stays.
+              <span
+                className={cx(
+                  'ml-auto text-[13.5px] whitespace-nowrap text-grey-04 tabular-nums',
+                  split.rows.length > 0 && 'hidden @[680px]:inline'
+                )}
+              >
+                {countSummary}
+              </span>
             )}
           </div>
 

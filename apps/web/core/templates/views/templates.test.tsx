@@ -267,7 +267,8 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     expect(within(claims).getByRole('tab', { name: /Accepted/i })).toBeInTheDocument();
     expect(within(claims).getAllByText('World affairs').length).toBeGreaterThan(0);
     expect(within(claims).getByText('18.2k votes')).toBeInTheDocument();
-    expect(within(claims).getByRole('button', { name: '11 debates' })).toBeInTheDocument();
+    // Rows draw debates and the split twice, once per layout; CSS shows one (GEO-3819).
+    expect(within(claims).getAllByRole('button', { name: '11 debates' }).length).toBeGreaterThan(0);
     expect(within(recentDebates).getAllByRole('article')).toHaveLength(6);
     expect(within(timeline).getAllByRole('listitem')).toHaveLength(8);
     expect(claims.compareDocumentPosition(recentDebates) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -509,7 +510,7 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     expect(screen.getByRole('heading', { name: 'Pilots Killed in LaGuardia Crash' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'WSJ What’s News' })).toHaveAttribute('href', '/space/s/show-wsj');
     expect(screen.getByText('Helium is a critical component in semiconductor manufacturing.')).toBeInTheDocument();
-    expect(screen.getByText('92%')).toBeInTheDocument();
+    expect(screen.getAllByText('92%').length).toBeGreaterThan(0);
     expect(screen.getByText('12 votes')).toBeInTheDocument();
     expect(screen.getByText(/Helium bottlenecks ripple immediately across wafer fabs/i)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Luke Vargas/i })).toBeInTheDocument();

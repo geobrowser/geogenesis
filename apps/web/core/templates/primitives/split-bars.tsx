@@ -35,7 +35,10 @@ export function SplitBars({ rows, density = 'compact', className }: SplitBarsPro
             className={cx(
               'grid items-center',
               isFull
-                ? 'grid-cols-[minmax(122px,156px)_minmax(0,1fr)_auto] gap-3 text-[15px] leading-[20px]'
+                ? // As in compact: the label gives way before the bar, which keeps 40px. With a 122px label
+                  // minimum and a 0 bar minimum, a 320px phone drew no bar (GEO-3819). Wide rows still
+                  // give the label its 156px before the bar takes the rest.
+                  'grid-cols-[minmax(72px,156px)_minmax(40px,1fr)_auto] gap-3 text-[15px] leading-[20px]'
                 : // The label gives way on a narrow row, but the bar keeps 40px: the label grows to 128px
                   // before the bar gets any space, so with a 0 minimum a phone row drew no bar at all.
                   'grid-cols-[minmax(64px,128px)_minmax(40px,1fr)_36px] gap-2.5 text-[13.5px] leading-[18px]',

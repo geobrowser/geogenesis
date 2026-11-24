@@ -186,7 +186,7 @@ export function TopicTemplate({
         <div className="flex animate-fade-in flex-col gap-10">
           {/* Calm single-column Claims list with 2-tab switch (Disputed | Accepted) */}
           {(contested.length > 0 || agreed.length > 0) && (
-            <ClaimExplorer contestedClaims={contested} agreedClaims={agreed} title="Claims" />
+            <ClaimExplorer contestedClaims={contested} agreedClaims={agreed} title="Claims" hideKindOnPhone />
           )}
 
           {/* Recent debates gallery (horizontal snap-scroll cards matching Genesis's debate gallery) */}
