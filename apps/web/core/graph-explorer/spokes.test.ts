@@ -191,6 +191,15 @@ describe('entitySpaceId', () => {
     expect(entitySpaceId({ spaceIds: [CITING, HOME], namedSpaceIds: [HOME] }, [CITING, HOME], null)).toBe(HOME);
   });
 
+  it('prefers the topic space when the entity is named there, over the ranking', () => {
+    const named = { spaceIds: [SPACE_A, SPACE_B], namedSpaceIds: [SPACE_A, SPACE_B] };
+    const ranked = entitySpaceId(named, [SPACE_A, SPACE_B], null);
+    const other = ranked === SPACE_A ? SPACE_B : SPACE_A;
+    expect(entitySpaceId(named, [SPACE_A, SPACE_B], null, other)).toBe(other);
+    // A topic space it is not named in does not win.
+    expect(entitySpaceId({ spaceIds: [SPACE_A], namedSpaceIds: [SPACE_A] }, undefined, null, HOME)).toBe(SPACE_A);
+  });
+
   it('prefers a named space inside the filter, then any named space', () => {
     expect(entitySpaceId({ spaceIds: [SPACE_A, SPACE_B], namedSpaceIds: [SPACE_A, SPACE_B] }, [SPACE_B], null)).toBe(
       SPACE_B

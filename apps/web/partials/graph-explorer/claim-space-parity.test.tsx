@@ -6,8 +6,10 @@ import * as React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { decodeClaimsAbout } from '~/core/graph-explorer/claims-about';
+import { entitySpaceId, namedSpaceIds } from '~/core/graph-explorer/spokes';
 import { TopicClaimCard } from '~/core/topics/browse/topic-claim-card';
 import type { Entity } from '~/core/types';
+import { entityHomeSpaceId } from '~/core/utils/space/entity-home-space';
 
 // The space ranking is real here: parity has to hold under the ranking both surfaces actually use.
 const mocks = vi.hoisted(() => ({ cardSpaceIds: [] as string[] }));
@@ -90,5 +92,29 @@ describe('graph explorer and topic page resolve a claim to the same space', () =
     const card = cardSpace(routeSpaceId);
     expect(card).toBeTruthy();
     expect(graphSpace(routeSpaceId)).toBe(card);
+  });
+});
+
+describe('a topic named in two in-scope spaces, with no ?space', () => {
+  // The topic page opens a topic in its home space and renders its claim cards from there.
+  const topic = {
+    spaces: [WORLD_AFFAIRS, PODCASTS],
+    values: [WORLD_AFFAIRS, PODCASTS].map(spaceId => ({ property: { id: NAME }, spaceId, value: 'Gaza' })),
+  };
+  const topicPageSpace = entityHomeSpaceId(topic)!;
+
+  it('picks the topic page’s space as the topic space', () => {
+    const graphTopicSpace = entitySpaceId(
+      { spaceIds: topic.spaces, namedSpaceIds: namedSpaceIds(topic.values) },
+      [WORLD_AFFAIRS, PODCASTS, DATASETS],
+      null
+    );
+    expect(graphTopicSpace).toBe(topicPageSpace);
+  });
+
+  it('then resolves its claims to the space the topic page’s card votes in', () => {
+    const card = cardSpace(topicPageSpace);
+    expect(card).toBeTruthy();
+    expect(graphSpace(topicPageSpace)).toBe(card);
   });
 });

@@ -69,8 +69,9 @@ export function GraphViewer({
   // Hop 1 once it answers for this centre: the panel, its list and the map read the same data.
   const hop1 = neighbourhood.isSwitching ? null : (neighbourhood.hop1.data ?? null);
   const spokes = React.useMemo(
-    () => (filter && hop1?.centre?.id === centreId ? buildSpokes(hop1AsGraphHop(hop1), centreId, filter) : []),
-    [centreId, filter, hop1]
+    () =>
+      filter && hop1?.centre?.id === centreId ? buildSpokes(hop1AsGraphHop(hop1), centreId, filter, topicSpaceId) : [],
+    [centreId, filter, hop1, topicSpaceId]
   );
 
   React.useEffect(() => {
@@ -195,7 +196,7 @@ export function GraphViewer({
 
     const centreSpaceId =
       (topicSpaceId && hubId && rawCentre.id === hubId ? topicSpaceId : null) ??
-      entitySpaceId(rawCentre, filter.spaceIds, null);
+      entitySpaceId(rawCentre, filter.spaceIds, null, topicSpaceId);
     const centre = { ...rawCentre, ...centreTextInSpace(rawCentre, centreSpaceId) };
     const node = rawCentre;
     const claimSpaceId = node.kind === 'claim' ? nodeClaimSpaceId(node, topicSpaceId) : null;

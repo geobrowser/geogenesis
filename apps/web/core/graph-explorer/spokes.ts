@@ -33,15 +33,19 @@ export function relationLabel(relation: Pick<GraphRelation, 'propertyId' | 'prop
 }
 
 /**
- * The space to read an entity in: where it is named inside the filter, else `entityHomeSpaceId`
- * (named anywhere, then ranked), else `fallbackSpaceId`. A space that only cites it never wins.
+ * The space to read an entity in: `preferredSpaceId` (the route or topic space) when it is named
+ * there, as the topic page does; else where it is named inside the filter, ranked; else
+ * `entityHomeSpaceId` (named anywhere, then ranked); else `fallbackSpaceId`. A space that only cites
+ * it never wins.
  */
 export function entitySpaceId(
   entity: { spaceIds: readonly string[]; namedSpaceIds: readonly string[] },
   allowedSpaceIds: readonly string[] | undefined,
-  fallbackSpaceId: string | null
+  fallbackSpaceId: string | null,
+  preferredSpaceId: string | null = null
 ): string | null {
   const named = entity.namedSpaceIds.map(normId);
+  if (preferredSpaceId && named.includes(normId(preferredSpaceId))) return normId(preferredSpaceId);
   if (allowedSpaceIds) {
     const allowed = new Set(allowedSpaceIds.map(normId));
     const inScope = getTopRankedSpaceId(named.filter(id => allowed.has(id)));
@@ -72,7 +76,12 @@ export function namedSpaceIds(
  * One spoke per named neighbour, merging relations to the same neighbour. Order: outgoing first,
  * then curator `position`, then name.
  */
-export function buildSpokes(hop: GraphHop, centreId: string, filter: Pick<GraphFilter, 'spaceIds'>): Spoke[] {
+export function buildSpokes(
+  hop: GraphHop,
+  centreId: string,
+  filter: Pick<GraphFilter, 'spaceIds'>,
+  topicSpaceId: string | null = null
+): Spoke[] {
   const centre = normId(centreId);
   const byId = new Map<string, Spoke & { order: string }>();
 
@@ -117,7 +126,7 @@ export function buildSpokes(hop: GraphHop, centreId: string, filter: Pick<GraphF
     })
     .map(({ order: _order, ...spoke }) => ({
       ...spoke,
-      nodeSpaceId: entitySpaceId(spoke.entity, filter.spaceIds, spoke.edgeSpaceIds[0] ?? null),
+      nodeSpaceId: entitySpaceId(spoke.entity, filter.spaceIds, spoke.edgeSpaceIds[0] ?? null, topicSpaceId),
     }));
 }
 
