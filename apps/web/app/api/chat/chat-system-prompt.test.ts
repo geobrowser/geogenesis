@@ -23,13 +23,18 @@ describe('renderCurrentContextSection write space (GEO-3819)', () => {
     expect(renderCurrentContextSection(context, PERSONAL_SPACE)).not.toContain('Write space id');
   });
 
-  it('gives no write space without a server-resolved personal space, whatever the client asks', () => {
-    expect(renderCurrentContextSection({ ...context, writeToPersonalSpace: true }, null)).not.toContain(
-      'Write space id'
-    );
+  it("without the server's own personal space, names no write space id and says not to write, rather than leaving the current space as the target", () => {
+    const section = renderCurrentContextSection({ ...context, writeToPersonalSpace: true }, null) ?? '';
+    expect(section).not.toContain('Write space id');
+    expect(section).toContain('- Write space: (unavailable');
+    expect(section).toContain("Don't write anything");
   });
 
   it('the ingestion prompt sends every write, the link included, to the write space when one is given', () => {
     expect(INGESTION_SYSTEM_PROMPT).toContain('unless the Current context gives a Write space id');
+  });
+
+  it('the ingestion prompt writes nothing when the write space is unavailable', () => {
+    expect(INGESTION_SYSTEM_PROMPT).toContain('If it says the Write space is unavailable, write nothing to any space');
   });
 });

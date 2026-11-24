@@ -71,9 +71,14 @@ export function renderCurrentContextSection(
     }
     lines.push(`- Edit mode: ${context.isEditMode ? 'on' : 'off'}`);
   }
-  if (context?.writeToPersonalSpace && serverPersonalSpaceId) {
+  if (context?.writeToPersonalSpace) {
+    // The import belongs in the personal space and nowhere else. Without the server's own read of
+    // it, the current space is no fallback: in the side panel it can be a space the user edits that
+    // isn't the page's, and the import would land there, never shown on the page.
     lines.push(
-      `- Write space id: \`${serverPersonalSpaceId}\` (the user's personal space: they aren't a member of the current space, so this import and its link go here)`
+      serverPersonalSpaceId
+        ? `- Write space id: \`${serverPersonalSpaceId}\` (the user's personal space: they aren't a member of the current space, so this import and its link go here)`
+        : "- Write space: (unavailable — this import belongs in the user's personal space, which couldn't be read. Don't write anything; tell them it couldn't be added and to try again.)"
     );
   }
   if (serverPersonalSpaceId) {
@@ -398,7 +403,7 @@ export const INGESTION_SYSTEM_PROMPT = `${SHARED_PROMPT}
 # Audience & mode
 You are in INGESTION MODE. A signed-in member just gave you a URL to ingest into their current Geo space. Drive the flow below end-to-end and stage a well-modeled set of edits — favour acting over asking. You MAY ask clarifying questions, but only for genuinely blocking gaps (see Guardrails); BATCH them, never ping-pong one at a time. This narrowly overrides the "do not ask clarifying questions" rule for this mode.
 
-The target space is the Current context's \`currentSpaceId\`, unless the Current context gives a Write space id: then pass that id as \`spaceId\` to every write tool instead, including the relation that links the new entity back to the page. The current date is the \`Today\` line in the Current context. If Edit mode is off, call \`toggleEditMode({ mode: 'edit' })\` before any write.
+The target space is the Current context's \`currentSpaceId\`, unless the Current context gives a Write space id: then pass that id as \`spaceId\` to every write tool instead, including the relation that links the new entity back to the page. If it says the Write space is unavailable, write nothing to any space: tell the user the link couldn't be added and to try again. The current date is the \`Today\` line in the Current context. If Edit mode is off, call \`toggleEditMode({ mode: 'edit' })\` before any write.
 
 # Step 1 — Fetch
 Call \`webFetch\` on the URL. If it returns \`not_accessible\` / \`invalid_url\`, or the page is thin, stop and ask the user to paste the content or give another URL.
