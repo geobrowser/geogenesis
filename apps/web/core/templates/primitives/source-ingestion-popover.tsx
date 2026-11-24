@@ -1,11 +1,9 @@
 'use client';
 
-import * as Popover from '@radix-ui/react-popover';
 import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
-import cx from 'classnames';
 import { useParams, usePathname } from 'next/navigation';
 
 import type { IngestionLink } from '~/core/chat/ingestion-link';
@@ -24,8 +22,7 @@ import { useQueuedAction } from '~/core/state/pending-actions';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { usePrivy } from '~/core/wallet/auth-hooks';
 
-import { useTemplatePopoverContainer } from './entity-overflow-menu';
-import { CloseIcon, PlusIcon } from './icons';
+import { ADD_FORM_ACTIONS_CLASS, AddFormSurface, useAddFormAutoFocus } from './entity-overflow-menu';
 
 /**
  * The space of the page the `+` is on: the link's, which the section's adapter set. Not the route's
@@ -138,7 +135,6 @@ export function SourceIngestionPopover({
   link?: IngestionLink;
   align?: 'start' | 'center' | 'end';
 }) {
-  const popoverContainer = useTemplatePopoverContainer();
   const { authenticated } = usePrivy();
   const [open, setOpen] = React.useState(false);
   const promptSignIn = usePrivySignIn(undefined, {
@@ -153,9 +149,10 @@ export function SourceIngestionPopover({
   });
 
   return (
-    <Popover.Root
-      modal={false}
+    <AddFormSurface
+      label={label}
       open={open}
+      align={align}
       onOpenChange={next => {
         if (next && !authenticated) {
           promptSignIn();
@@ -165,46 +162,8 @@ export function SourceIngestionPopover({
         setOpen(next);
       }}
     >
-      <Popover.Trigger asChild>
-        <button
-          type="button"
-          aria-label={label}
-          title={label}
-          onClick={event => event.stopPropagation()}
-          className={cx(
-            'inline-grid size-7 cursor-pointer place-items-center border-0 bg-transparent text-grey-04 transition-colors hover:text-text',
-            open && 'text-text'
-          )}
-        >
-          <PlusIcon className="size-4" />
-        </button>
-      </Popover.Trigger>
-
-      <Popover.Portal container={popoverContainer}>
-        <Popover.Content
-          side="bottom"
-          align={align}
-          sideOffset={8}
-          collisionPadding={12}
-          className="pointer-events-auto z-[160] flex w-[340px] max-w-[calc(100vw-24px)] flex-col gap-3 rounded-xl border border-black/[0.08] bg-white p-4 shadow-[0_18px_48px_-8px_rgba(0,0,0,0.16),0_4px_12px_-2px_rgba(0,0,0,0.06)]"
-          onClick={event => event.stopPropagation()}
-        >
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-[13.5px] font-semibold text-text">{label}</span>
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              aria-label={`Close ${label.toLowerCase()}`}
-              className="inline-grid size-6 cursor-pointer place-items-center border-0 bg-transparent text-grey-04 hover:text-text"
-            >
-              <CloseIcon className="size-3.5" />
-            </button>
-          </div>
-
-          <SourceIngestionForm label={label} link={link} onClose={() => setOpen(false)} />
-        </Popover.Content>
-      </Popover.Portal>
-    </Popover.Root>
+      <SourceIngestionForm label={label} link={link} onClose={() => setOpen(false)} />
+    </AddFormSurface>
   );
 }
 
@@ -214,6 +173,7 @@ export function SourceIngestionPopover({
  */
 function SourceIngestionForm({ label, link, onClose }: { label: string; link?: IngestionLink; onClose: () => void }) {
   const [needsAccount, setNeedsAccount] = React.useState(false);
+  const autoFocus = useAddFormAutoFocus();
   const resolveSpace = useIngestionSpace({
     pageSpaceId: usePageSpaceId(link),
     link,
@@ -232,12 +192,12 @@ function SourceIngestionForm({ label, link, onClose }: { label: string; link?: I
         <span className="text-[12.5px] font-medium text-grey-04">Link</span>
         <input
           type="text"
-          autoFocus
+          autoFocus={autoFocus}
           inputMode="url"
           value={url}
           onChange={event => setUrl(event.target.value)}
           placeholder="Paste news, podcast, tweet, blog URLs…"
-          className="h-9 w-full rounded-lg border border-grey-02 bg-white px-3 text-[13.5px] text-text placeholder:text-grey-03 focus:border-text focus:outline-hidden"
+          className="h-9 w-full rounded-lg border border-grey-02 bg-white px-3 text-[13.5px] text-text placeholder:text-grey-03 focus:border-text focus:outline-hidden md:text-[16px]"
         />
       </label>
 
@@ -247,7 +207,7 @@ function SourceIngestionForm({ label, link, onClose }: { label: string; link?: I
         </p>
       )}
 
-      <div className="flex items-center justify-end gap-1.5 pt-1">
+      <div className={ADD_FORM_ACTIONS_CLASS}>
         <button
           type="button"
           onClick={onClose}
