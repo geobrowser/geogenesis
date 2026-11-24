@@ -28,7 +28,7 @@ const mocks = vi.hoisted(() => ({
   tx: vi.fn(),
   makeProposal: vi.fn(),
   dispatch: vi.fn(),
-  store: { setValues: vi.fn(), setRelations: vi.fn(), clearLocalChangesByIds: vi.fn() },
+  store: { setValues: vi.fn(), setRelations: vi.fn(), setAsPublished: vi.fn() },
 }));
 
 vi.mock('~/core/wallet/auth-hooks', () => ({
@@ -124,14 +124,17 @@ describe('useTemplateAddPublish', () => {
     expect(outcome).toMatchObject({ ok: true, spaceId: PAGE_SPACE });
     const [args] = mocks.makeProposal.mock.calls[0]!;
     expect(args).toMatchObject({ spaceId: PAGE_SPACE, name: 'Add claim: Aid entered on Monday' });
-    // What is published is exactly what was written to the store.
+    // Once published, exactly those rows are written to the store, already marked published.
     expect(mocks.store.setValues).toHaveBeenCalledWith(args.values);
     expect(mocks.store.setRelations).toHaveBeenCalledWith(args.relations);
+    expect(mocks.store.setAsPublished).toHaveBeenCalledWith(
+      args.values.map((v: { id: string }) => v.id),
+      args.relations.map((r: { id: string }) => r.id)
+    );
     expect(
       args.relations.some((r: { type: { id: string } }) => r.type.id === TEMPLATE_ONTOLOGY.TOPICS_PROPERTY_ID)
     ).toBe(true);
     expect(outcome?.ok && outcome.id).toBe(args.values[0].entity.id);
-    expect(mocks.store.clearLocalChangesByIds).not.toHaveBeenCalled();
     expect(invalidate).toHaveBeenCalled();
   });
 
@@ -151,7 +154,7 @@ describe('useTemplateAddPublish', () => {
     ).toBe(true);
   });
 
-  it('a failed publish takes the written rows back out, so nothing is left for Review edits', async () => {
+  it('a failed publish writes nothing to the store, so nothing is left for Review edits', async () => {
     publishes(false);
     const { result } = renderPublisher();
 
@@ -161,12 +164,29 @@ describe('useTemplateAddPublish', () => {
     });
 
     expect(outcome).toMatchObject({ ok: false });
-    const [args] = mocks.makeProposal.mock.calls[0]!;
-    expect(mocks.store.clearLocalChangesByIds).toHaveBeenCalledWith({
-      spaceId: PAGE_SPACE,
-      valueIds: args.values.map((v: { id: string }) => v.id),
-      relationIds: args.relations.map((r: { id: string }) => r.id),
+    expect(mocks.makeProposal).toHaveBeenCalledTimes(1);
+    expect(mocks.store.setValues).not.toHaveBeenCalled();
+    expect(mocks.store.setRelations).not.toHaveBeenCalled();
+  });
+
+  it('nothing is in the store while the publish is in flight', async () => {
+    let finish!: () => void;
+    mocks.makeProposal.mockImplementation(
+      (args: { onSuccess?: () => void }) =>
+        new Promise<void>(resolve => (finish = () => (args.onSuccess?.(), resolve())))
+    );
+    const { result } = renderPublisher();
+
+    let pending!: Promise<TemplateAddResult>;
+    await act(async () => {
+      pending = result.current.add(CLAIM);
     });
+    await vi.waitFor(() => expect(mocks.makeProposal).toHaveBeenCalled());
+    expect(mocks.store.setValues).not.toHaveBeenCalled();
+
+    await act(async () => finish());
+    await expect(pending).resolves.toMatchObject({ ok: true });
+    expect(mocks.store.setValues).toHaveBeenCalledTimes(1);
   });
 
   it('signed out, the form asks for sign-in and writes nothing', async () => {
@@ -238,5 +258,20 @@ describe('useTemplateAddPublish', () => {
 
     await expect(pending).resolves.toMatchObject({ ok: false });
     expect(mocks.makeProposal).not.toHaveBeenCalled();
+  });
+
+  it('a queued draft is dropped, not published later, when the page goes away first', async () => {
+    Object.assign(account, { personalSpaceId: null, isRegistered: false, isSetupPending: true });
+    const { result, store, unmount } = renderPublisher();
+
+    let pending!: Promise<TemplateAddResult>;
+    act(() => {
+      pending = result.current.add(CLAIM);
+    });
+    expect(store.get(pendingActionsAtom)).toHaveLength(1);
+
+    unmount();
+    expect(store.get(pendingActionsAtom)).toHaveLength(0);
+    await expect(pending).resolves.toMatchObject({ ok: false });
   });
 });

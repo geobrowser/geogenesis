@@ -65,8 +65,14 @@ export function NewsStoryTemplate({
   className,
   spaceId,
 }: NewsStoryTemplateProps) {
+  // Only the claims drawn: with groups, the flat list isn't, and a claim added to a group is linked
+  // flat (Related claims), so it would count as listed and vanish.
   const listedClaimIds = React.useMemo(
-    () => [...model.reportedClaims, ...(model.claimGroups ?? []).flatMap(group => group.claims)].map(claim => claim.id),
+    () =>
+      (model.claimGroups && model.claimGroups.length > 0
+        ? model.claimGroups.flatMap(group => group.claims)
+        : model.reportedClaims
+      ).map(claim => claim.id),
     [model.claimGroups, model.reportedClaims]
   );
   const addedClaims = usePendingAdds<ClaimSummaryModel & { groupId: string }>(listedClaimIds);

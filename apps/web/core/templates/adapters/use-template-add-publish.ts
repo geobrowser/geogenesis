@@ -61,9 +61,9 @@ export function parseTemplateAddIntent(intent: string | undefined): TemplateAddA
  * Publishes a template Add claim / Add event / Add quote (GEO-3836), the way Add source and votes do:
  *
  * - The space comes from `pickWriteSpace` with `TEMPLATE_ADD_WRITERS`.
- * - The new entity and its link to the page are written to the local store, then published on
- *   submit with no confirm step. A failed or refused publish takes those rows back out, so nothing
- *   is left for Review edits.
+ * - The new entity and its link to the page are published on submit with no confirm step, and
+ *   written to the local store (as published) only once that succeeds, so nothing is ever left
+ *   for Review edits.
  * - A viewer whose personal space is still on its way (a new account) has the draft queued and
  *   published once the space exists. A signed-out viewer is sent to sign in; the forms ask first
  *   (`canOpenAddForm`), so the draft is never typed for nothing.
@@ -118,25 +118,24 @@ export function useTemplateAddPublish({ owner, pageSpaceId }: { owner: TemplateA
       const edits = buildTemplateAddEdits(owner, action, writeSpace.spaceId);
       if (!edits) return fail(`Your ${noun} is empty.`);
 
-      store.setValues(edits.values);
-      store.setRelations(edits.relations);
-
+      // Published from the edits themselves and only then written to the store, already marked
+      // published: a list that reads the store would otherwise show the entity, live and actionable,
+      // before it exists, and a failed publish would leave rows for Review edits.
       const ok = await publishOnce(makeProposal, {
         values: edits.values,
         relations: edits.relations,
         spaceId: writeSpace.spaceId,
         name: `Add ${noun}: ${edits.name}`,
       });
+      // `usePublish` has already shown why (or the viewer dismissed the signature).
+      if (!ok) return fail(`Your ${noun} could not be published.`, { show: false });
 
-      if (!ok) {
-        store.clearLocalChangesByIds({
-          spaceId: writeSpace.spaceId,
-          valueIds: edits.values.map(value => value.id),
-          relationIds: edits.relations.map(relation => relation.id),
-        });
-        // `usePublish` has already shown why (or the viewer dismissed the signature).
-        return fail(`Your ${noun} could not be published.`, { show: false });
-      }
+      store.setValues(edits.values);
+      store.setRelations(edits.relations);
+      store.setAsPublished(
+        edits.values.map(value => value.id),
+        edits.relations.map(relation => relation.id)
+      );
 
       void refetchPageLists(queryClient, owner.entityId);
       for (const delay of INDEXER_REFETCH_DELAYS_MS) {
@@ -155,7 +154,7 @@ export function useTemplateAddPublish({ owner, pageSpaceId }: { owner: TemplateA
   }, []);
 
   const replayingRef = React.useRef(false);
-  const { isQueued, queue } = useQueuedAction({
+  const { isQueued, queue, cancel } = useQueuedAction({
     id: `template-add:${ID.uuidToHex(owner.entityId)}:${ID.uuidToHex(pageSpaceId)}`,
     component: 'entity_editor',
     label: 'your addition',
@@ -192,6 +191,19 @@ export function useTemplateAddPublish({ owner, pageSpaceId }: { owner: TemplateA
     if (!replayingRef.current) settleWaiting({ ok: false, error: 'Your addition was cancelled.' });
     replayingRef.current = false;
   }, [isQueued, settleWaiting]);
+
+  // A draft still queued when the page goes away is dropped rather than published later, out of
+  // sight, by the next page for this entity.
+  const cancelRef = React.useRef(cancel);
+  cancelRef.current = cancel;
+  React.useEffect(
+    () => () => {
+      if (!waitingRef.current || replayingRef.current) return;
+      cancelRef.current();
+      settleWaiting({ ok: false, error: 'Your addition was cancelled.' });
+    },
+    [settleWaiting]
+  );
 
   const add = React.useCallback(
     async (action: TemplateAddAction): Promise<TemplateAddResult> => {
