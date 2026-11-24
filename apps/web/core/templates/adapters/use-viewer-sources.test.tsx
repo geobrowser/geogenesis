@@ -176,6 +176,29 @@ describe('useEntityWithViewerSources (News story / Claim / Event / Post Sources)
 });
 
 describe('withViewerSources', () => {
+  it('a claim linked twice (Notable and Related, or page and viewer space) is read once, page link first', () => {
+    const notable = relation(PAGE, CLAIM, TEMPLATE_ONTOLOGY.NOTABLE_CLAIMS_PROPERTY_ID, PAGE_SPACE);
+    const related = relation(PAGE, CLAIM, TEMPLATE_ONTOLOGY.RELATED_CLAIMS_PROPERTY_ID, PAGE_SPACE);
+    const page = { id: PAGE, relations: [notable, related] } as Entity;
+    const viewer = {
+      id: PAGE,
+      relations: [
+        relation(
+          PAGE,
+          CLAIM.replace(/^(.{8})(.{4})(.{4})(.{4})/, '$1-$2-$3-$4-'),
+          TEMPLATE_ONTOLOGY.RELATED_CLAIMS_PROPERTY_ID,
+          MY_SPACE
+        ),
+      ],
+    } as Entity;
+
+    const claims = readEntityRelations(withViewerSources(page, viewer), [
+      TEMPLATE_ONTOLOGY.NOTABLE_CLAIMS_PROPERTY_ID,
+      TEMPLATE_ONTOLOGY.RELATED_CLAIMS_PROPERTY_ID,
+    ]);
+    expect(claims).toEqual([notable]);
+  });
+
   it('takes only Sources from the viewer entity and leaves the page entity alone when there are none', () => {
     const page = { id: PAGE, relations: [sources(PAGE, SRC_PAGE, PAGE_SPACE)] } as Entity;
     const viewerOther = {
