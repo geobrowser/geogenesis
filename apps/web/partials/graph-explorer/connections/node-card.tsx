@@ -150,7 +150,9 @@ function ItemCard({ node, hop, isCentre, phone }: CardProps) {
   return (
     <span
       className={cx(
-        'flex flex-col items-start gap-1 rounded-xl text-left backdrop-blur-[6px]',
+        // Blur behind every card is too much for low-end phones.
+        'flex flex-col items-start gap-1 rounded-xl text-left',
+        !phone && 'backdrop-blur-[6px]',
         ITEM_STYLES[node.kind] ?? DARK_CARD,
         cardBox({ isCentre, phone }, ['w-[230px]', 'w-[176px]'])
       )}

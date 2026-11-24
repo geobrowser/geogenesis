@@ -24,6 +24,8 @@ const MOVE_MS = 950;
 const LEAVE_MS = 420;
 const FADE_IN_MS = 500;
 const IDLE_ROTATE_AFTER_MS = 2600;
+/** How long the idle spin runs before the loop sleeps; shorter on phone to save battery. */
+const IDLE_SPIN_MS = { phone: 12_000, desktop: 45_000 };
 const DRAG_THRESHOLD_PX = 5;
 const MIN_DISTANCE = 420;
 const MAX_DISTANCE = 2600;
@@ -136,6 +138,8 @@ export function ConnectionsCanvas({
   const [layoutMs, setLayoutMs] = React.useState<number | null>(null);
   const [hinted, setHinted] = React.useState(false);
   const canHover = useCanHover();
+  /** Restarts the animation loop after it slept; set by the loop effect. */
+  const wake = React.useRef<() => void>(() => {});
   const labelForRef = React.useRef(labelFor);
   labelForRef.current = labelFor;
 
@@ -210,6 +214,7 @@ export function ConnectionsCanvas({
     state.fit = fitDistance(near, state.width || 1280, state.height || 860, phone);
     state.distanceFrom = state.distance;
     state.anim = { t0: now, duration: reduceMotion ? 0 : MOVE_MS };
+    wake.current();
 
     const sweep = () => {
       const cutoff = performance.now() - LEAVE_MS;
@@ -251,34 +256,42 @@ export function ConnectionsCanvas({
       const state = engine.current;
       state.width = rect.width;
       state.height = rect.height;
-      state.dpr = Math.min(2, window.devicePixelRatio || 1);
+      state.dpr = Math.min(phone ? 1.5 : 2, window.devicePixelRatio || 1);
       canvas.width = rect.width * state.dpr;
       canvas.height = rect.height * state.dpr;
       canvas.style.width = `${rect.width}px`;
       canvas.style.height = `${rect.height}px`;
+      wake.current();
     };
     resize();
     const observer = new ResizeObserver(resize);
     observer.observe(stage);
     return () => observer.disconnect();
-  }, []);
+  }, [phone]);
 
-  // The animation loop; paused while the tab is hidden.
+  // The animation loop: sleeps once nothing moves, and while the tab is hidden or the stage is off-screen.
   React.useEffect(() => {
     const canvas = canvasRef.current;
     const context = canvas?.getContext('2d');
-    if (!canvas || !context) return;
+    const stage = stageRef.current;
+    if (!canvas || !context || !stage) return;
     let raf = 0;
+    let onScreen = true;
+    const spinMs = phone ? IDLE_SPIN_MS.phone : IDLE_SPIN_MS.desktop;
 
     const frame = (now: number) => {
-      raf = requestAnimationFrame(frame);
+      raf = 0;
       const state = engine.current;
+      let moving = state.anim !== null || dragging.current || Math.abs(state.vy) + Math.abs(state.vp) > 1e-4;
+      const idle = now - state.lastActive;
+      const spinning = !reduceMotion && idle > IDLE_ROTATE_AFTER_MS && idle < IDLE_ROTATE_AFTER_MS + spinMs;
+      if (!reduceMotion && idle <= IDLE_ROTATE_AFTER_MS + spinMs) moving = true;
       if (!dragging.current) {
         state.yaw += state.vy;
         state.pitch += state.vp;
         state.vy *= 0.93;
         state.vp *= 0.93;
-        if (!reduceMotion && now - state.lastActive > IDLE_ROTATE_AFTER_MS) state.yaw += 0.0011;
+        if (spinning) state.yaw += 0.0011;
       }
       state.pitch = Math.max(-1.25, Math.min(1.25, state.pitch));
       if (state.anim) {
@@ -347,11 +360,15 @@ export function ConnectionsCanvas({
         let opacity = node.alive ? fog : 0;
         if (hover && node.id !== hover && !neighbours.has(node.id)) opacity *= 0.22;
         if (node.id === hover && node.alive) opacity = 1;
-        if (node.alive && !reduceMotion && now - node.born < FADE_IN_MS) opacity *= (now - node.born) / FADE_IN_MS;
+        if (node.alive && !reduceMotion && now - node.born < FADE_IN_MS) {
+          opacity *= (now - node.born) / FADE_IN_MS;
+          moving = true;
+        }
         const box = measure(node.id, element);
         if (phone && centreRect && !isCentre && node.alive) {
           const target = clearance(centreRect, rectAt(point.x, point.y, box, scale));
           const ease = reduceMotion ? 1 : 0.2;
+          if (Math.abs(target[0] - node.push[0]) + Math.abs(target[1] - node.push[1]) > 0.5) moving = true;
           node.push = [
             node.push[0] + (target[0] - node.push[0]) * ease,
             node.push[1] + (target[1] - node.push[1]) * ease,
@@ -378,6 +395,7 @@ export function ConnectionsCanvas({
           );
         }
         const target = covered ? 0.2 : 1;
+        if (Math.abs(target - entry.node.dim) > 0.01) moving = true;
         entry.node.dim += (target - entry.node.dim) * (reduceMotion ? 1 : 0.2);
       }
 
@@ -455,20 +473,30 @@ export function ConnectionsCanvas({
           context.fillText(text, x, y + 1);
         }
       }
+      if (moving) start();
     };
 
     const start = () => {
-      if (!raf && !document.hidden) raf = requestAnimationFrame(frame);
+      if (!raf && onScreen && !document.hidden) raf = requestAnimationFrame(frame);
     };
     const stop = () => {
       cancelAnimationFrame(raf);
       raf = 0;
     };
+    wake.current = start;
     const onVisibility = () => (document.hidden ? stop() : start());
     document.addEventListener('visibilitychange', onVisibility);
+    const sight = new IntersectionObserver(([entry]) => {
+      onScreen = entry?.isIntersecting ?? true;
+      if (onScreen) start();
+      else stop();
+    });
+    sight.observe(stage);
     start();
     return () => {
       stop();
+      wake.current = () => {};
+      sight.disconnect();
       document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [phone, reduceMotion]);
@@ -482,6 +510,7 @@ export function ConnectionsCanvas({
     const active = () => {
       setHinted(true);
       engine.current.lastActive = performance.now();
+      wake.current();
     };
     const down = (event: PointerEvent) => {
       if ((event.target as HTMLElement).closest('[data-stage-control]')) return;
@@ -552,6 +581,7 @@ export function ConnectionsCanvas({
   const zoom = (factor: number | null) => {
     const state = engine.current;
     state.lastActive = performance.now();
+    wake.current();
     if (factor === null) {
       state.yaw = 0.6;
       state.pitch = -0.28;
@@ -573,6 +603,7 @@ export function ConnectionsCanvas({
     state.vy += step[0];
     state.vp += step[1];
     state.lastActive = performance.now();
+    wake.current();
   };
 
   const centreId = selection.nodes[0]?.node.id;
@@ -624,18 +655,22 @@ export function ConnectionsCanvas({
               }}
               onMouseEnter={() => {
                 engine.current.hover = id;
+                wake.current();
                 onPrefetch?.(id);
               }}
               onMouseLeave={() => {
                 if (engine.current.hover === id) engine.current.hover = null;
+                wake.current();
                 onPrefetch?.(null);
               }}
               onFocus={() => {
                 engine.current.hover = id;
+                wake.current();
                 onPrefetch?.(id);
               }}
               onBlur={() => {
                 if (engine.current.hover === id) engine.current.hover = null;
+                wake.current();
                 onPrefetch?.(null);
               }}
             >

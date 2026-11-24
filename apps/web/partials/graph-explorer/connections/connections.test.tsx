@@ -13,6 +13,8 @@ import { searchNodes } from './graph-search';
 import { GraphTopBar } from './graph-top-bar';
 
 const motion = vi.hoisted(() => ({ reduce: false }));
+/** IntersectionObserver callbacks, so a test can scroll the stage off-screen. */
+const sight = vi.hoisted(() => ({ callbacks: [] as IntersectionObserverCallback[] }));
 vi.mock('framer-motion', () => ({ useReducedMotion: () => motion.reduce }));
 vi.mock('~/design-system/prefetch-link', () => ({
   PrefetchLink: ({ children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => <a {...props}>{children}</a>,
@@ -59,6 +61,14 @@ let frames: FrameRequestCallback[] = [];
 let now = 0;
 
 beforeAll(() => {
+  globalThis.IntersectionObserver = class {
+    constructor(private callback: IntersectionObserverCallback) {
+      sight.callbacks.push(callback);
+    }
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof IntersectionObserver;
   globalThis.ResizeObserver = class {
     observe() {}
     unobserve() {}
@@ -70,6 +80,7 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  sight.callbacks = [];
   frames = [];
   now = 0;
   motion.reduce = false;
@@ -143,6 +154,41 @@ describe('ConnectionsCanvas', () => {
     motion.reduce = true;
     now = 0;
     expect(transformAfterIdle()).toBe(false);
+  });
+
+  it('sleeps once nothing moves, and wakes on input', () => {
+    motion.reduce = true;
+    render(<Canvas />);
+    runFrames(1200);
+    expect(frames).toHaveLength(0);
+    fireEvent.keyDown(screen.getByTestId('connections-stage'), { key: 'ArrowLeft' });
+    expect(frames).toHaveLength(1);
+  });
+
+  it('sleeps after the idle spin has run its course', () => {
+    render(<Canvas />);
+    runFrames(2600 + 45_000 + 500);
+    expect(frames).toHaveLength(0);
+  });
+
+  it('stops while the stage is off-screen and starts again when it is back', () => {
+    render(<Canvas />);
+    runFrames(100);
+    expect(frames).toHaveLength(1);
+    act(() =>
+      sight.callbacks.forEach(callback =>
+        callback([{ isIntersecting: false } as IntersectionObserverEntry], {} as never)
+      )
+    );
+    frames = [];
+    runFrames(200);
+    expect(frames).toHaveLength(0);
+    act(() =>
+      sight.callbacks.forEach(callback =>
+        callback([{ isIntersecting: true } as IntersectionObserverEntry], {} as never)
+      )
+    );
+    expect(frames).toHaveLength(1);
   });
 
   it('moves nodes to their places at once under reduced motion', () => {

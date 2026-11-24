@@ -103,6 +103,11 @@ vi.mock('~/core/utils/space/space-ranking', () => ({
 }));
 
 beforeAll(() => {
+  globalThis.IntersectionObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof IntersectionObserver;
   // jsdom has no layout; give the canvas a size so nodes render.
   globalThis.ResizeObserver = class {
     constructor(private callback: ResizeObserverCallback) {}
