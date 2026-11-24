@@ -140,6 +140,46 @@ export function NewsStoryTemplate({
           {/* Editorial header: title first, type/metadata strip below */}
           <header className="flex flex-col gap-3.5">
             <TemplateTitleRow
+              meta={
+                <>
+                  <TemplateBadge tone="story">News story</TemplateBadge>
+
+                  {model.outlet && (
+                    <div className="flex items-center gap-2">
+                      {model.outletInitials && (
+                        <span
+                          aria-hidden
+                          className="inline-grid size-6 shrink-0 place-items-center rounded text-[11px] font-semibold tracking-tight text-white"
+                          style={{ backgroundColor: model.outletColor ?? '#202020' }}
+                        >
+                          {model.outletInitials}
+                        </span>
+                      )}
+                      <span className="text-[15px] font-semibold text-text">{model.outlet}</span>
+                    </div>
+                  )}
+
+                  {metaParts.length > 0 && <span className="text-[14.5px] text-grey-04">{metaParts.join(' · ')}</span>}
+
+                  {!hasSideRail &&
+                    model.associatedTimelines &&
+                    model.associatedTimelines.map(tl =>
+                      tl.href ? (
+                        <Link
+                          key={tl.id}
+                          href={tl.href}
+                          className="inline-flex h-7 items-center rounded-md border border-divider bg-grey-01 px-2.5 text-[13.5px] font-medium text-text no-underline transition-colors hover:border-text hover:text-[#4c1fd4]"
+                        >
+                          {tl.title}
+                        </Link>
+                      ) : (
+                        <TemplateBadge key={tl.id} tone="neutral">
+                          {tl.title}
+                        </TemplateBadge>
+                      )
+                    )}
+                </>
+              }
               actions={
                 <>
                   <EntityContextTogglePill />
@@ -155,45 +195,6 @@ export function NewsStoryTemplate({
             >
               <h1 className="m-0 text-entityTitle text-pretty text-text">{model.headline}</h1>
             </TemplateTitleRow>
-
-            <div className="flex flex-wrap items-center gap-2.5">
-              <TemplateBadge tone="story">News story</TemplateBadge>
-
-              {model.outlet && (
-                <div className="flex items-center gap-2">
-                  {model.outletInitials && (
-                    <span
-                      aria-hidden
-                      className="inline-grid size-6 shrink-0 place-items-center rounded text-[11px] font-semibold tracking-tight text-white"
-                      style={{ backgroundColor: model.outletColor ?? '#202020' }}
-                    >
-                      {model.outletInitials}
-                    </span>
-                  )}
-                  <span className="text-[15px] font-semibold text-text">{model.outlet}</span>
-                </div>
-              )}
-
-              {metaParts.length > 0 && <span className="text-[14.5px] text-grey-04">{metaParts.join(' · ')}</span>}
-
-              {!hasSideRail &&
-                model.associatedTimelines &&
-                model.associatedTimelines.map(tl =>
-                  tl.href ? (
-                    <Link
-                      key={tl.id}
-                      href={tl.href}
-                      className="inline-flex h-7 items-center rounded-md border border-divider bg-grey-01 px-2.5 text-[13.5px] font-medium text-text no-underline transition-colors hover:border-text hover:text-[#4c1fd4]"
-                    >
-                      {tl.title}
-                    </Link>
-                  ) : (
-                    <TemplateBadge key={tl.id} tone="neutral">
-                      {tl.title}
-                    </TemplateBadge>
-                  )
-                )}
-            </div>
 
             <EntityInlineContext targetId={model.id} targetTitle={model.headline} targetKind="News story" />
 

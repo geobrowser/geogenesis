@@ -106,45 +106,71 @@ export function TemplateBadge({
 }
 
 /**
- * A template's title with its header actions (context pill, overflow menu). Beside each other when the
- * template is at least 560px wide; on a phone or in the side panel the actions sit on their own row
- * above the title, or they squeeze a sentence-long title into a column a few words wide.
+ * A template's title on its own full-width line, then the type row: the type chips (and any date or
+ * meta) on the left, the header actions (votes, history, menu) right-aligned on the same line. Long chip
+ * lists wrap inside their column, so the actions stay together beside the first chip line and nothing
+ * overflows sideways. With no chips, the actions get their own right-aligned row under the title.
+ *
+ * Renders a fragment, so the spacing between the title and the type row is the parent's gap.
  */
 export function TemplateTitleRow({
   children,
+  meta,
   actions,
-  actionsClassName = '@[560px]:pt-1.5',
+  singleLine = false,
 }: {
-  /** The title block: an `h1`, or the column that holds it. */
+  /** The title: an `h1`. */
   children: React.ReactNode;
-  actions: React.ReactNode;
-  /** Nudges the actions down to the title's first line when they sit beside it. */
-  actionsClassName?: string;
+  /** The type chips and meta shown under the title. */
+  meta?: React.ReactNode;
+  actions?: React.ReactNode;
+  /**
+   * Keeps the row to one line: chips that don't fit beside the actions drop to a second line, which
+   * is clipped, so whole chips disappear from the end instead of wrapping.
+   */
+  singleLine?: boolean;
 }) {
   return (
-    <div className="flex flex-col-reverse gap-2 @[560px]:flex-row @[560px]:items-start @[560px]:justify-between @[560px]:gap-4">
+    <>
       {children}
-      <div className={cx('flex shrink-0 items-center gap-2 self-end @[560px]:self-auto', actionsClassName)}>
-        {actions}
+      <div className="flex items-start justify-between gap-x-4">
+        {meta && (
+          <div
+            className={cx(
+              'flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1.5',
+              singleLine && 'h-7 overflow-hidden'
+            )}
+          >
+            {meta}
+          </div>
+        )}
+        {/* As tall as one chip line (h-7), so the actions center on the first line even when chips wrap. */}
+        {actions && <div className="ml-auto flex h-7 shrink-0 items-center gap-2">{actions}</div>}
       </div>
-    </div>
+    </>
   );
 }
+
+/** Ancestors keep their natural width up to 45% of the row, and only they shrink when the row is full. */
+const BREADCRUMB_ANCESTOR = 'max-w-[45%] min-w-0 truncate text-[15px] leading-[20px]';
 
 export function TemplateBreadcrumb({ items, className }: { items: readonly BreadcrumbItem[]; className?: string }) {
   if (items.length === 0) return null;
 
   return (
-    <nav aria-label="Breadcrumb" className={cx('flex flex-wrap items-center gap-x-1.5 gap-y-1', className)}>
+    // One line, so a chevron never wraps onto a line of its own. The current page takes the space the
+    // ancestors leave (at least 40% of the row; basis-0, so it never squeezes them), and truncates.
+    <nav aria-label="Breadcrumb" className={cx('flex min-w-0 items-center gap-x-1.5', className)}>
       {items.map((item, index) => {
         const isLast = index === items.length - 1;
         return (
           <React.Fragment key={item.id}>
-            {index > 0 && <ChevronRightIcon className="size-3.5 text-grey-03" />}
+            {index > 0 && <ChevronRightIcon className="size-3.5 shrink-0 text-grey-03" />}
             {item.href && !isLast ? (
               <Link
                 href={item.href}
-                className="text-[15px] leading-[20px] text-grey-04 no-underline transition-colors hover:text-text"
+                title={item.label}
+                className={cx(BREADCRUMB_ANCESTOR, 'text-grey-04 no-underline transition-colors hover:text-text')}
               >
                 {item.label}
               </Link>
@@ -152,7 +178,11 @@ export function TemplateBreadcrumb({ items, className }: { items: readonly Bread
               <button
                 type="button"
                 onClick={item.onSelect}
-                className="cursor-pointer border-0 bg-transparent p-0 text-[15px] leading-[20px] text-grey-04 transition-colors hover:text-text"
+                title={item.label}
+                className={cx(
+                  BREADCRUMB_ANCESTOR,
+                  'cursor-pointer border-0 bg-transparent p-0 text-left text-grey-04 transition-colors hover:text-text'
+                )}
               >
                 {item.label}
               </button>
@@ -161,8 +191,9 @@ export function TemplateBreadcrumb({ items, className }: { items: readonly Bread
                 aria-current={isLast ? 'page' : undefined}
                 title={item.label}
                 className={cx(
-                  'max-w-[380px] truncate text-[15px] leading-[20px]',
-                  isLast ? 'font-medium text-text' : 'text-grey-04'
+                  isLast
+                    ? 'min-w-[40%] flex-1 basis-0 truncate text-[15px] leading-[20px] font-medium text-text'
+                    : cx(BREADCRUMB_ANCESTOR, 'text-grey-04')
                 )}
               >
                 {item.label}

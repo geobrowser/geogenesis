@@ -53,6 +53,13 @@ export function EventTemplate({
     >
       <header className="flex flex-col gap-3.5">
         <TemplateTitleRow
+          meta={
+            <>
+              <TemplateBadge tone="event">Event</TemplateBadge>
+              {model.when && <TemplateBadge tone="neutral">{model.when}</TemplateBadge>}
+              {model.storyCountLabel && <TemplateBadge tone="neutral">{model.storyCountLabel}</TemplateBadge>}
+            </>
+          }
           actions={
             <>
               <EntityContextTogglePill />
@@ -64,12 +71,6 @@ export function EventTemplate({
         >
           <h1 className="m-0 text-entityTitle text-pretty text-text">{model.title}</h1>
         </TemplateTitleRow>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <TemplateBadge tone="event">Event</TemplateBadge>
-          {model.when && <TemplateBadge tone="neutral">{model.when}</TemplateBadge>}
-          {model.storyCountLabel && <TemplateBadge tone="neutral">{model.storyCountLabel}</TemplateBadge>}
-        </div>
 
         {model.summary && <p className="m-0 mt-0.5 text-[16.5px] leading-[25px] text-text/85">{model.summary}</p>}
         <EntityInlineContext targetId={model.id} targetTitle={model.title} targetKind="Event" />

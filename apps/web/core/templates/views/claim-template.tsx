@@ -36,6 +36,7 @@ import {
   TemplateBadge,
   type TemplateBadgeTone,
   TemplateShell,
+  TemplateTitleRow,
   TemplateVoteRows,
   TopicImagePills,
   VoteBox,
@@ -92,20 +93,24 @@ export function ClaimTemplate({
     >
       {/* Header (name first, type labels below) */}
       <header className="flex flex-col gap-3.5">
-        <div className="flex items-start justify-between gap-4">
+        <TemplateTitleRow
+          meta={
+            <>
+              <TemplateBadge tone="neutral">Claim</TemplateBadge>
+              <TemplateBadge tone={CLAIM_KIND_TONE[model.kind]}>{formatClaimKindLabel(model.kind)}</TemplateBadge>
+            </>
+          }
+          actions={
+            <>
+              <EntityContextTogglePill />
+              {headerActions ?? (
+                <EntityOverflowMenu target={{ id: model.id, kind: 'Claim', title: model.title }} isPageRoot size="md" />
+              )}
+            </>
+          }
+        >
           <h1 className="m-0 text-entityTitle text-pretty text-text">{model.title}</h1>
-          <div className="flex shrink-0 items-center gap-2 pt-1.5">
-            <EntityContextTogglePill />
-            {headerActions ?? (
-              <EntityOverflowMenu target={{ id: model.id, kind: 'Claim', title: model.title }} isPageRoot size="md" />
-            )}
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <TemplateBadge tone="neutral">Claim</TemplateBadge>
-          <TemplateBadge tone={CLAIM_KIND_TONE[model.kind]}>{formatClaimKindLabel(model.kind)}</TemplateBadge>
-        </div>
+        </TemplateTitleRow>
 
         <EntityInlineContext targetId={model.id} targetTitle={model.title} targetKind="Claim" />
       </header>
