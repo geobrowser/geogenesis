@@ -9,7 +9,7 @@ import { currentNavigationType } from '~/core/utils/navigation-type';
 import type { GraphKind } from './graph-kinds';
 import { graphShareLanding, takeGraphExplorerEntry } from './graph-share';
 
-// Graph explorer events (GEO-3829), registered in geobrowser/analytics. Sent unstamped: never
+// Graph explorer events (GEO-3826), registered in geobrowser/analytics. Sent unstamped: never
 // `measurement_version`, `source`, `session_id`, `name` or `duration*`, and no names or search text.
 
 export type GraphEntry = 'shared_link' | 'in_app' | 'reload' | 'history' | 'external_link' | 'direct' | 'internal_link';
