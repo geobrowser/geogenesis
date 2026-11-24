@@ -16,8 +16,9 @@ export type ClipFailureAction = 'retried' | 'skipped' | 'gave_up' | 'refreshed';
  * reports `profile_debates`.
  */
 export type ClipSurface = {
-  playback_surface: 'explore';
-  component: 'explore_feed_card';
+  /** An Explore card, or a card in the full-screen debate feed (the app's `fullscreen_moment`). */
+  playback_surface: 'explore' | 'fullscreen_moment';
+  component: 'explore_feed_card' | 'debate_feed_card';
   list_id?: string;
   target_id: string;
   target_type: 'debate';
@@ -49,7 +50,7 @@ type Viewing = {
  * One instance per card presentation. Within it, one *viewing* per moment watched: it opens when a
  * moment is on screen while the card is live (in view, in the foreground), and closes with one
  * `debate_moment_ended` saying why — the clip played out (`completed`), the viewer stepped or a
- * failed clip was skipped (`skipped`), the full screen was opened (`switched_to_full`), or the card
+ * failed clip was skipped (`skipped`), the card switched to the full debate (`switched_to_full`), or the card
  * stopped being live (`left`). Its playback intervals carry `asset_kind: 'clip'` and the clip's own
  * media times. Pure of React and the DOM, so every path is tested on its own.
  *
@@ -264,21 +265,6 @@ export class ClipPlaybackAnalytics {
       failure_action: action,
       failure_attempt: attempt,
     });
-  }
-
-  /** The card's expand: the debate opened full screen from this card. */
-  navigation() {
-    try {
-      capture('debate_navigation', {
-        measurement_version: 'growth-v2',
-        debate_id: this.debateId,
-        navigation_id: crypto.randomUUID(),
-        trigger: 'manual',
-        navigation_surface: 'explore_card',
-      });
-    } catch {
-      /* Navigation must work without analytics. */
-    }
   }
 
   dispose() {

@@ -236,6 +236,11 @@ type DebateFeedPlayerProps = {
   onJumpTransition?: (phase: 'start' | 'release' | 'cancel') => void;
   /** With `forceSound`: the browser refused sound, so this debate plays muted until `unmute()`. */
   onSoundBlockedChange?: (blocked: boolean) => void;
+  /**
+   * Drawn at the top right of the top tile — a card's Moments / Full debate button (GEO-3833). The
+   * tile's turn timer and round label move down under it.
+   */
+  topRight?: React.ReactNode;
   /** The editor's controls. Null on the combined-video fallback, which plays another clock. */
   ref?: React.Ref<DebateFeedPlayerHandle>;
 };
@@ -319,6 +324,7 @@ function PairedDebateFeedPlayer({
   measure = true,
   onJumpTransition,
   onSoundBlockedChange,
+  topRight,
   ref,
 }: DebateFeedPlayerProps) {
   const reducedOverlays = reducedOverlaysProp || editorMode;
@@ -1607,6 +1613,7 @@ function PairedDebateFeedPlayer({
           claimsOpen={claimsOpenFor(1)}
           onClaimsHoverChange={onTileHover(1)}
           topLeft={topSlot === 1 ? topControls : undefined}
+          topRight={topSlot === 1 ? topRight : undefined}
           scrubber={topSlot === 1 ? undefined : scrubberControl}
           {...tilePositionProps(1)}
         />
@@ -1651,6 +1658,7 @@ function PairedDebateFeedPlayer({
           onClaimsHoverChange={onTileHover(2)}
           {...tilePositionProps(2)}
           topLeft={topSlot === 2 ? topControls : undefined}
+          topRight={topSlot === 2 ? topRight : undefined}
           scrubber={topSlot === 1 ? scrubberControl : undefined}
         />
 
@@ -1878,6 +1886,7 @@ function DebaterVideo({
   onClaimsHoverChange,
   clearScrubber = 'never',
   topLeft,
+  topRight,
   scrubber,
   scrimClassName = 'h-14',
   inert = false,
@@ -1977,6 +1986,8 @@ function DebaterVideo({
    * of the scrubber, and whether it does so always or only while the player is hovered. */
   clearScrubber?: 'never' | 'on-hover' | 'always';
   topLeft?: React.ReactNode;
+  /** The card's mode button, top right; the turn timer and round label sit under it. */
+  topRight?: React.ReactNode;
   scrubber?: React.ReactNode;
   scrimClassName?: string;
 }) {
@@ -2383,8 +2394,17 @@ function DebaterVideo({
         <div className={cx('absolute top-3 left-3 flex items-center gap-2', stamped ? 'z-30' : 'z-10')}>{topLeft}</div>
       )}
 
-      {countdown && <CountdownBadge seconds={countdown.seconds} progress={countdown.progress} smooth={stamped} />}
-      {countdown && <DebateRoundBadge cue={roundBadge ?? null} stamped={stamped} />}
+      {topRight && <div className="absolute top-3 right-3 z-[12]">{topRight}</div>}
+
+      {countdown && (
+        <CountdownBadge
+          seconds={countdown.seconds}
+          progress={countdown.progress}
+          smooth={stamped}
+          lowered={Boolean(topRight)}
+        />
+      )}
+      {countdown && <DebateRoundBadge cue={roundBadge ?? null} stamped={stamped} lowered={Boolean(topRight)} />}
 
       {/* This debater's claims, in the bottom-right of their own tile. One corner each rather than
           one for the player: a viewer is looking at whoever is talking, and a shared corner asks
@@ -2628,10 +2648,13 @@ function CountdownBadge({
   seconds,
   progress,
   smooth = false,
+  lowered = false,
 }: {
   seconds: number;
   progress: number;
   smooth?: boolean;
+  /** Under the card's mode button, which takes the corner (GEO-3833). */
+  lowered?: boolean;
 }) {
   const remaining = 1 - Math.max(0, Math.min(1, progress));
   const ringMask = turnTimerRimMask('2px');
@@ -2639,7 +2662,7 @@ function CountdownBadge({
     <div
       data-turn-timer="steady"
       style={smooth ? { opacity: PLAYER_FURNITURE_OPACITY } : undefined}
-      className="absolute top-3 right-3 z-10 size-8"
+      className={cx('absolute right-3 z-10 size-8', lowered ? 'top-14' : 'top-3')}
     >
       <div className="grid size-8 place-items-center rounded-full bg-linear-to-b from-black/50 to-black/25">
         <span

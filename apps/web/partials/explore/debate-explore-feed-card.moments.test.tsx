@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -15,7 +15,8 @@ import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { DebateExploreFeedCard } from './debate-explore-feed-card';
 
 /**
- * The card's gate for the moments reel (GEO-3833): the env switch first, then the moments read.
+ * The card's video (GEO-3833): the moments read decides whether there is a reel, a reel starts on
+ * Moments, and the Moments / Full debate button switches between the reel and the two-tile player.
  * The players themselves are stood in for; each has its own suite.
  */
 
@@ -33,18 +34,12 @@ vi.mock('~/core/state/feature-flags', () => ({}));
 vi.mock('next/navigation', () => ({ usePathname: () => '/root/explore' }));
 
 const mocks = vi.hoisted(() => ({
-  switchOn: true,
   inlineUnavailable: false,
   moments: { status: 'loading', moments: [], slotNames: {} } as DebateMomentsState,
   momentsEnabled: [] as boolean[],
   isMobileLayout: false,
 }));
 
-vi.mock('~/core/debates/browse/feed-moments', () => ({
-  get DEBATE_CARD_PLAYS_MOMENTS() {
-    return mocks.switchOn;
-  },
-}));
 vi.mock('~/core/debates/browse/inline-playback', async importOriginal => ({
   ...(await importOriginal<typeof import('~/core/debates/browse/inline-playback')>()),
   useInlinePlaybackUnavailable: () => mocks.inlineUnavailable,
@@ -64,7 +59,21 @@ vi.mock('~/core/debates/browse/debate-claim-footer', () => ({
   DebateClaimFooter: ({ meta }: { meta: React.ReactNode }) => <div data-testid="claim-footer">{meta}</div>,
 }));
 vi.mock('~/core/debates/browse/debate-feed-player', () => ({
-  DebateFeedPlayer: () => <div data-testid="player" />,
+  DebateFeedPlayer: (props: {
+    topRight?: React.ReactNode;
+    holdFullPlayback?: boolean;
+    initialSeekSeconds?: number | null;
+    active: boolean;
+  }) => (
+    <div
+      data-testid="player"
+      data-hold={String(props.holdFullPlayback)}
+      data-seek={String(props.initialSeekSeconds ?? null)}
+      data-active={String(props.active)}
+    >
+      {props.topRight}
+    </div>
+  ),
 }));
 vi.mock('~/core/debates/moments-player/moments-card-player', () => ({
   MomentsCardPlayer: (props: {
@@ -74,6 +83,7 @@ vi.mock('~/core/debates/moments-player/moments-card-player', () => ({
     upNext: boolean;
     tapToPlay: boolean;
     topSlot: number;
+    onShowFullDebate: (seconds: number | null) => void;
   }) => (
     <div
       data-testid="reel"
@@ -83,7 +93,12 @@ vi.mock('~/core/debates/moments-player/moments-card-player', () => ({
       data-up-next={String(props.upNext)}
       data-tap-to-play={String(props.tapToPlay)}
       data-top-slot={props.topSlot}
-    />
+    >
+      {/* The real reel draws the button; this stands in for its "Full debate" half. */}
+      <button type="button" onClick={() => props.onShowFullDebate(22)}>
+        Full debate
+      </button>
+    </div>
   ),
 }));
 vi.mock('~/core/debates/browse/use-debate-share-action', () => ({
@@ -154,7 +169,6 @@ type Record = { callback: IntersectionObserverCallback; elements: Set<Element>; 
 let observers: Record[] = [];
 
 beforeEach(() => {
-  mocks.switchOn = true;
   mocks.inlineUnavailable = false;
   mocks.moments = { status: 'loading', moments: [], slotNames: {} };
   mocks.momentsEnabled = [];
@@ -221,14 +235,13 @@ function renderCard(feed = true) {
 }
 
 describe('DebateExploreFeedCard moments reel gate', () => {
-  it('with the switch off, never reads the moments and plays the two-tile player', () => {
-    mocks.switchOn = false;
+  it('reads the moments once the card nears the viewport, with no switch in front of it', () => {
     mocks.moments = READY;
     renderCard();
-    intersect(0.7);
-    expect(screen.getByTestId('player')).toBeInTheDocument();
-    expect(screen.queryByTestId('reel')).toBeNull();
     expect(mocks.momentsEnabled.every(enabled => !enabled)).toBe(true);
+    intersect(0.7);
+    expect(mocks.momentsEnabled).toContain(true);
+    expect(screen.getByTestId('reel')).toBeInTheDocument();
   });
 
   it('while the moments load, shows the stills and mounts nothing that loads the recordings', () => {
@@ -240,7 +253,7 @@ describe('DebateExploreFeedCard moments reel gate', () => {
     expect(mocks.momentsEnabled).toContain(true);
   });
 
-  it('plays the reel when the debate has one, with its own expand control in place of the meta row’s', () => {
+  it('starts a debate with moments on the reel, keeping the meta row’s full-screen link', () => {
     mocks.moments = READY;
     renderCard();
     intersect(0.7);
@@ -250,15 +263,60 @@ describe('DebateExploreFeedCard moments reel gate', () => {
     expect(reel).toHaveAttribute('data-mount-media', 'true');
     expect(reel).toHaveAttribute('data-top-slot', '2');
     expect(screen.queryByTestId('player')).toBeNull();
-    expect(screen.queryByRole('link', { name: 'Watch this debate full screen' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Watch this debate full screen' })).toBeInTheDocument();
   });
 
-  it('keeps the two-tile player for a debate with no reel', () => {
+  it('switches to the full debate at the moment on screen and back, one player at a time', () => {
+    mocks.moments = READY;
+    renderCard();
+    intersect(0.7);
+    fireEvent.click(screen.getByRole('button', { name: 'Full debate' }));
+    // The reel is gone (its elements with it); the two-tile player starts where the moment was,
+    // without the feeds' hold, since the viewer asked for it.
+    expect(screen.queryByTestId('reel')).toBeNull();
+    const player = screen.getByTestId('player');
+    expect(player).toHaveAttribute('data-seek', '22');
+    expect(player).toHaveAttribute('data-hold', 'false');
+    expect(player).toHaveAttribute('data-active', 'true');
+    expect(screen.getByRole('button', { name: 'Full debate' })).toHaveAttribute('aria-pressed', 'true');
+    const moments = screen.getByRole('button', { name: 'Moments' });
+    expect(moments).toHaveAttribute('aria-pressed', 'false');
+    expect(moments).toHaveAttribute('data-geo-analytics-label', 'Moments');
+    fireEvent.click(moments);
+    expect(screen.queryByTestId('player')).toBeNull();
+    expect(screen.getByTestId('reel')).toBeInTheDocument();
+  });
+
+  it('starts on the moments again each time the card comes back', () => {
+    mocks.moments = READY;
+    renderCard();
+    intersect(0.7);
+    fireEvent.click(screen.getByRole('button', { name: 'Full debate' }));
+    expect(screen.getByTestId('player')).toBeInTheDocument();
+    intersect(0);
+    intersect(0.7);
+    expect(screen.getByTestId('reel')).toBeInTheDocument();
+    expect(screen.queryByTestId('player')).toBeNull();
+  });
+
+  it('makes a tap-to-play card the one playing when the button is pressed', () => {
+    mocks.moments = READY;
+    renderCard(false);
+    intersect(0.7);
+    expect(screen.getByTestId('reel')).toHaveAttribute('data-active', 'false');
+    fireEvent.click(screen.getByRole('button', { name: 'Full debate' }));
+    expect(screen.getByTestId('player')).toHaveAttribute('data-active', 'true');
+  });
+
+  it('keeps the two-tile player, with no button, for a debate with no reel', () => {
     mocks.moments = { status: 'ready', moments: [], slotNames: {} };
     renderCard();
     intersect(0.7);
     expect(screen.getByTestId('player')).toBeInTheDocument();
+    expect(screen.getByTestId('player')).toHaveAttribute('data-hold', 'true');
     expect(screen.queryByTestId('reel')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Moments' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Full debate' })).toBeNull();
     expect(screen.getByRole('link', { name: 'Watch this debate full screen' })).toBeInTheDocument();
   });
 

@@ -10,6 +10,7 @@ import type { Debate } from '~/core/debates/api';
 import { DebateClaimFooter } from '~/core/debates/browse/debate-claim-footer';
 import { DebateFeedPlayer } from '~/core/debates/browse/debate-feed-player';
 import { DebateInteractionBar } from '~/core/debates/browse/debate-interaction-bar';
+import { DebateMediaModeToggle, useDebateMediaMode } from '~/core/debates/browse/debate-media-mode';
 import { DEBATE_FEED_HOLDS_FULL_PLAYBACK } from '~/core/debates/browse/feed-full-playback';
 import { useInlinePlaybackUnavailable } from '~/core/debates/browse/inline-playback';
 import { DebateShareDialog } from '~/core/debates/browse/lazy-share-dialog';
@@ -17,6 +18,7 @@ import { useDebateShareAction } from '~/core/debates/browse/use-debate-share-act
 import { compositeTopSlot } from '~/core/debates/composite-top-slot';
 import { clickAsksToPlay, useDebateCardPlayback } from '~/core/debates/debate-playback-gate';
 import { useDebate, useDebateMedia } from '~/core/debates/hooks';
+import { MomentsCardPlayer } from '~/core/debates/moments-player/moments-card-player';
 import { hasProcessedVideo, isWatchableDebate } from '~/core/debates/playback-utils';
 import { fallBackToDurableStill, speakerStillContentUrl } from '~/core/debates/speaker-still';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
@@ -301,6 +303,18 @@ export function DebateExploreFeedCard({
 
   const readyDebate = debate != null && watchable && processed ? debate : null;
 
+  /*
+   * Moments or the full debate (GEO-3833). A card with moments starts on them, and the button at the
+   * video's top right switches; a debate without any, or one whose moments could not be read, has
+   * the full debate and no button. See `useDebateMediaMode`.
+   *
+   * Nothing that loads the recordings mounts until the moments read settles, so a card does not
+   * sign two recordings and then swap them for clips.
+   */
+  const media = useDebateMediaMode(debateId, { enabled: nearViewport });
+  const reelMoments = media.reel;
+  const reelPending = media.pending;
+
   /**
    * Whether this card is carrying a debate's resources at all.
    *
@@ -310,6 +324,8 @@ export function DebateExploreFeedCard({
    * and keeps the reads it has started, which are cheap and cached.
    */
   const mediaMounted = readyDebate != null && nearViewport && !notWatchable;
+
+  const showReel = mediaMounted && reelMoments !== null && media.mode === 'moments';
 
   // Feed cards only: a click on a card that is not playing yet scrolls it into view. A tap-to-play
   // card does the same from `tapToPlayNow`, which only the player's own play controls call.
@@ -335,6 +351,24 @@ export function DebateExploreFeedCard({
     tap();
     if (!active) container?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
   }, [active, container, tap]);
+
+  /*
+   * The mode button. The other mode's player unmounts, which stops it and lets its elements go (back
+   * to the gesture pool on iOS, already granted sound); the one shown starts as a player arriving in
+   * view does, with the viewer's sound. On a tap-to-play card the press is also its Play.
+   */
+  const { showFull, showMoments: showMomentsMode } = media;
+  const showFullDebate = React.useCallback(
+    (startSeconds: number | null) => {
+      showFull(startSeconds);
+      if (tapToPlay) tapToPlayNow();
+    },
+    [showFull, tapToPlay, tapToPlayNow]
+  );
+  const showMoments = React.useCallback(() => {
+    showMomentsMode();
+    if (tapToPlay) tapToPlayNow();
+  }, [showMomentsMode, tapToPlay, tapToPlayNow]);
 
   // The panel is drawn by `ExploreDebateClaimsPanelHost`, so the app has one of it and a card that
   // unmounts (paging, or sitting inside the entity side panel this replaces) doesn't take it along.
@@ -408,14 +442,37 @@ export function DebateExploreFeedCard({
             here clips it, inset in the app's card at the app's 20px. */}
         <div
           data-debate-card-media=""
+          data-debate-card-reel={showReel || undefined}
           className={
-            compactChrome
-              ? undefined
-              : 'mx-auto w-[var(--debate-card-media-width)] max-w-full overflow-hidden rounded-[20px] bg-[#151515]'
+            showReel
+              ? // The reel draws its own moments row above its frame, so the frame is its own too.
+                compactChrome
+                ? undefined
+                : 'mx-auto w-[var(--debate-card-media-width)] max-w-full'
+              : compactChrome
+                ? undefined
+                : 'mx-auto w-[var(--debate-card-media-width)] max-w-full overflow-hidden rounded-[20px] bg-[#151515]'
           }
           onClickCapture={mediaMounted && !tapToPlay ? requestPlayback : undefined}
         >
-          {mediaMounted ? (
+          {showReel ? (
+            <MomentsCardPlayer
+              debate={readyDebate}
+              moments={reelMoments}
+              stills={item.debatePosters}
+              topSlot={topSlot}
+              active={playerActive}
+              // Only the cards being watched or about to be hold clip elements: on screen (paused
+              // until tapped, outside a feed, so the tap that plays it gives sound), and in a feed
+              // the one up next. Further cards show their stills and download nothing.
+              mountMedia={!coveredBySheet && (tapToPlay ? onScreen : onScreen || upNext || active)}
+              upNext={!tapToPlay && upNext && !active && !coveredBySheet}
+              tapToPlay={tapToPlay}
+              onPlaybackRequest={tapToPlay ? tapToPlayNow : undefined}
+              onShowFullDebate={showFullDebate}
+              turns={mediaQuery.data?.turn_segments}
+            />
+          ) : mediaMounted && !reelPending ? (
             // The recordings resolve while the card is still approaching. Crossing back out of
             // that same window unmounts this subtree instead of retaining two paused videos forever.
             <DebateCardVideos
@@ -428,6 +485,11 @@ export function DebateExploreFeedCard({
               onOpenClaims={openClaims}
               tapToPlay={tapToPlay}
               onPlaybackRequest={tapToPlay ? tapToPlayNow : undefined}
+              // With moments, the button back to them; chosen here, the full debate starts at the
+              // moment the viewer was on and without the feeds' hold, since they asked for it.
+              onShowMoments={reelMoments ? showMoments : undefined}
+              initialSeekSeconds={media.fullStartSeconds}
+              holdFullPlayback={DEBATE_FEED_HOLDS_FULL_PLAYBACK && !media.fullChosen}
             />
           ) : item.debatePosters ? (
             <DebatePosterSkeleton debateId={debateId} posters={item.debatePosters} topSlot={topSlot} />
@@ -517,6 +579,9 @@ const DebateCardVideos = React.memo(function DebateCardVideos({
   onOpenClaims,
   tapToPlay,
   onPlaybackRequest,
+  onShowMoments,
+  initialSeekSeconds,
+  holdFullPlayback,
 }: {
   debate: Debate;
   stills: ExploreFeedItem['debatePosters'];
@@ -527,6 +592,10 @@ const DebateCardVideos = React.memo(function DebateCardVideos({
   onOpenClaims: () => void;
   tapToPlay: boolean;
   onPlaybackRequest?: () => void;
+  /** Draws the Moments / Full debate button; absent for a debate with no moments. */
+  onShowMoments?: () => void;
+  initialSeekSeconds: number | null;
+  holdFullPlayback: boolean;
 }) {
   return (
     <DebateFeedPlayer
@@ -536,12 +605,18 @@ const DebateCardVideos = React.memo(function DebateCardVideos({
       preload
       buffer={upNext}
       releaseMedia={releaseMedia}
-      holdFullPlayback={DEBATE_FEED_HOLDS_FULL_PLAYBACK}
+      holdFullPlayback={holdFullPlayback}
+      initialSeekSeconds={initialSeekSeconds}
       reducedOverlays={reducedOverlays}
       framed
       onOpenClaims={onOpenClaims}
       tapToPlay={tapToPlay}
       onPlaybackRequest={onPlaybackRequest}
+      topRight={
+        onShowMoments ? (
+          <DebateMediaModeToggle mode="full" onChange={mode => mode === 'moments' && onShowMoments()} />
+        ) : undefined
+      }
     />
   );
 });

@@ -7,10 +7,12 @@ import { useAtomValue, useSetAtom, useStore } from 'jotai';
 
 import { capture } from '~/core/analytics';
 import { type Debate, GeoChatRequestError } from '~/core/debates/api';
+import { compositeTopSlot } from '~/core/debates/composite-top-slot';
 import type { DebatePageFeedState, DebatePagePlayerState } from '~/core/debates/debate-page-outcome';
 import { clickAsksToPlay, useFeedPlaybackYield } from '~/core/debates/debate-playback-gate';
 import { isRemovedDebateAnswer } from '~/core/debates/debate-removal';
-import { useDebate, useProcessedVideoDebateIds, useSpaceDebates } from '~/core/debates/hooks';
+import { useDebate, useDebateMedia, useProcessedVideoDebateIds, useSpaceDebates } from '~/core/debates/hooks';
+import { MomentsCardPlayer } from '~/core/debates/moments-player/moments-card-player';
 import { isWatchableDebate } from '~/core/debates/playback-utils';
 import { type DebatePageOutcome, useDebatePageOutcome } from '~/core/debates/use-debate-page-outcome';
 import { DEEP_LINK_MODALS } from '~/core/deep-links/modal-deep-link';
@@ -43,6 +45,7 @@ import { DebateFeedMobileBar } from './debate-feed-mobile-bar';
 import { DebateFeedPlayer } from './debate-feed-player';
 import { type DebateFeedSurface, debateFeedHref } from './debate-feed-url';
 import { DebateInteractionBar } from './debate-interaction-bar';
+import { DebateMediaModeToggle, useDebateMediaMode } from './debate-media-mode';
 import { DebateOverflowMenu, useCanRemoveDebate } from './debate-overflow-menu';
 import { DebateScrollHint, scrollHintBounceProps, useDebateScrollHint } from './debate-scroll-hint';
 import { DEBATE_FEED_HOLDS_FULL_PLAYBACK } from './feed-full-playback';
@@ -523,6 +526,7 @@ export function DebatesBrowseFeed({
           spaceName={space?.entity.name ?? 'Space'}
           spaceImage={space?.entity.image}
           active={activeId === debate.id}
+          linked={initialDebateId != null && ID.equals(debate.id, initialDebateId)}
           initialSeekSeconds={
             initialDebateId != null && ID.equals(debate.id, initialDebateId) ? initialSeekSeconds : null
           }
@@ -628,6 +632,7 @@ function DebateFeedItem({
   spaceName,
   spaceImage,
   active,
+  linked,
   initialSeekSeconds,
   preload,
   buffer,
@@ -647,6 +652,12 @@ function DebateFeedItem({
   spaceName: string;
   spaceImage?: string | null;
   active: boolean;
+  /**
+   * The debate the page's link opened. It starts on the full debate, as the link asked (with its
+   * `t`, if any), and its full player is the one the page's outcome follows; the button still
+   * switches it to its moments.
+   */
+  linked: boolean;
   initialSeekSeconds: number | null;
   preload: boolean;
   /** Buffer the recordings too — the card after the active one. See `DebateFeedPlayer`. */
@@ -680,6 +691,14 @@ function DebateFeedItem({
   // One player in the app (GEO-3812): a debate tapped in the side panel over this feed plays in
   // place of this one, and a click asking this one to play takes playback back.
   const { yielding, reclaim } = useFeedPlaybackYield();
+
+  // Moments or the full debate, as on an Explore card (GEO-3833): moments first, the button at the
+  // video's top right to switch, back on the moments once the card leaves the preload window.
+  const media = useDebateMediaMode(debate.id, { enabled: !releaseMedia, initialMode: linked ? 'full' : 'moments' });
+  const showReel = media.reel !== null && media.mode === 'moments';
+  // The turns put the moment on screen on the recordings' clock for the switch. Cached with the
+  // full player's own read.
+  const turns = useDebateMedia(debate.id, !releaseMedia && media.reel !== null).data?.turn_segments;
 
   React.useEffect(() => {
     const element = itemRef.current;
@@ -730,19 +749,53 @@ function DebateFeedItem({
                 : undefined
             }
           >
-            <DebateFeedPlayer
-              debate={debate}
-              active={active && !yielding}
-              preload={preload}
-              buffer={buffer}
-              holdFullPlayback={holdFullPlayback}
-              releaseMedia={releaseMedia}
-              initialSeekSeconds={initialSeekSeconds}
-              framed
-              onOpenClaims={onOpenClaims}
-              onPlaybackRequest={onPlaybackRequest}
-              onPlaybackState={onPlaybackState}
-            />
+            {media.pending && !linked ? (
+              // Until the moments read settles nothing loads the recordings, so the card does not
+              // sign two recordings and then swap them for clips. The reel's and the two tiles'
+              // frames are the same size, so nothing moves when either arrives.
+              <div
+                aria-hidden="true"
+                data-testid="debate-feed-media-pending"
+                className="aspect-480/578 w-full bg-grey-01"
+              />
+            ) : showReel ? (
+              <MomentsCardPlayer
+                debate={debate}
+                moments={media.reel!}
+                topSlot={compositeTopSlot(debate.participants)}
+                active={active && !yielding}
+                mountMedia={!releaseMedia}
+                upNext={buffer && !active}
+                tapToPlay={false}
+                onPlaybackRequest={onPlaybackRequest}
+                onShowFullDebate={media.showFull}
+                turns={turns}
+                barOverClip
+                framed
+                surface="debate_feed"
+              />
+            ) : (
+              <DebateFeedPlayer
+                debate={debate}
+                active={active && !yielding}
+                preload={preload}
+                buffer={buffer}
+                // Chosen with the button, the full debate plays at once and from the moment the
+                // viewer was on: they asked for it.
+                holdFullPlayback={holdFullPlayback && !media.fullChosen}
+                releaseMedia={releaseMedia}
+                initialSeekSeconds={media.fullChosen ? media.fullStartSeconds : initialSeekSeconds}
+                framed
+                onOpenClaims={onOpenClaims}
+                onPlaybackRequest={onPlaybackRequest}
+                onPlaybackState={onPlaybackState}
+                topRight={
+                  media.reel ? (
+                    <DebateMediaModeToggle mode="full" onChange={mode => mode === 'moments' && media.showMoments()} />
+                  ) : undefined
+                }
+              />
+            )}
           </div>
           <DebateClaimFooter
             claim={debate.claim}

@@ -46,6 +46,44 @@ const mocks = vi.hoisted(() => ({
   /** The page's path and query string, for the deep links the feed reads. */
   pathname: '/space/space-1/debate-1',
   search: '',
+  /** Each debate's moments read, by id; a debate not listed has no moments (GEO-3833). */
+  moments: {} as Record<string, { status: 'loading' | 'ready' | 'error'; moments: Array<{ id: string }> }>,
+}));
+
+vi.mock('../moments-player/use-debate-moments', () => ({
+  useDebateMoments: (id: string, { enabled }: { enabled?: boolean } = {}) =>
+    enabled
+      ? (mocks.moments[id] ?? { status: 'ready', moments: [], slotNames: {} })
+      : { status: 'loading', moments: [], slotNames: {} },
+}));
+vi.mock('~/core/debates/moments-player/moments-card-player', () => ({
+  MomentsCardPlayer: ({
+    debate,
+    active,
+    mountMedia,
+    barOverClip,
+    surface,
+    onShowFullDebate,
+  }: {
+    debate: Debate;
+    active: boolean;
+    mountMedia: boolean;
+    barOverClip?: boolean;
+    surface?: string;
+    onShowFullDebate: (seconds: number | null) => void;
+  }) => (
+    <div
+      data-testid={`reel-${debate.id}`}
+      data-active={String(active)}
+      data-mount-media={String(mountMedia)}
+      data-bar-over-clip={String(Boolean(barOverClip))}
+      data-surface={surface}
+    >
+      <button type="button" onClick={() => onShowFullDebate(41)}>
+        Full debate
+      </button>
+    </div>
+  ),
 }));
 
 vi.mock('~/core/analytics', () => ({
@@ -70,6 +108,7 @@ vi.mock('~/core/debates/hooks', () => ({
     isLoading: mocks.mediaLoading,
     hasError: mocks.mediaError,
   }),
+  useDebateMedia: () => ({ data: undefined, isError: false }),
   useDebate: (_id: string, enabled: boolean) => {
     mocks.anchorEnabled = enabled;
     return { data: mocks.anchorDebate, isLoading: mocks.anchorLoading, error: mocks.anchorError };
@@ -124,6 +163,8 @@ vi.mock('./debate-feed-player', async () => {
       framed,
       onOpenClaims,
       onPlaybackState,
+      initialSeekSeconds,
+      topRight,
     }: {
       debate: Debate;
       active: boolean;
@@ -134,6 +175,8 @@ vi.mock('./debate-feed-player', async () => {
       framed?: boolean;
       onOpenClaims?: () => void;
       onPlaybackState?: (state: typeof mocks.playerState) => void;
+      initialSeekSeconds?: number | null;
+      topRight?: React.ReactNode;
     }) => {
       const state = JSON.stringify(mocks.playerState);
       React.useEffect(() => onPlaybackState?.(JSON.parse(state)), [onPlaybackState, state]);
@@ -146,7 +189,9 @@ vi.mock('./debate-feed-player', async () => {
           data-release-media={releaseMedia ? 'true' : 'false'}
           data-hold-full-playback={holdFullPlayback ? 'true' : 'false'}
           data-framed={framed ? 'true' : 'false'}
+          data-seek={String(initialSeekSeconds ?? null)}
         >
+          {topRight}
           {/* Stands in for the claims chip on the video, now the only way into the claims panel. */}
           <button type="button" onClick={onOpenClaims}>
             Claims on the video
@@ -240,6 +285,7 @@ beforeEach(() => {
   mocks.captured.length = 0;
   mocks.search = '';
   mocks.pathname = '/space/space-1/debate-1';
+  mocks.moments = {};
 
   class MockIntersectionObserver implements IntersectionObserver {
     readonly root = null;
@@ -1724,5 +1770,64 @@ describe('DebatesBrowseFeed comments deep link', () => {
     );
 
     expect(screen.queryByText(/Comments panel for/)).not.toBeInTheDocument();
+  });
+});
+
+// GEO-3833: the same Moments / Full debate button as an Explore card, on every card of the feed.
+describe('DebatesBrowseFeed — moments or the full debate', () => {
+  const READY = { status: 'ready' as const, moments: [{ id: 'clip-0' }, { id: 'clip-1' }] };
+
+  beforeEach(() => {
+    mocks.debates = [
+      completedDebate('debate-1', 'First claim', '2026-07-02T00:01:10.000Z'),
+      completedDebate('debate-2', 'Second claim', '2026-07-02T00:02:10.000Z'),
+    ];
+  });
+
+  it('starts a card with moments on its reel, drawn to the two-tile frame', () => {
+    mocks.moments = { 'debate-1': READY };
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+    activateDebate('First claim');
+    const reel = screen.getByTestId('reel-debate-1');
+    expect(reel).toHaveAttribute('data-active', 'true');
+    expect(reel).toHaveAttribute('data-bar-over-clip', 'true');
+    expect(reel).toHaveAttribute('data-surface', 'debate_feed');
+    expect(screen.queryByTestId('player-debate-1')).toBeNull();
+    // No moments: the full debate, and no button.
+    expect(screen.getByTestId('player-debate-2')).toBeInTheDocument();
+    expect(within(screen.getByTestId('player-debate-2')).queryByRole('button', { name: 'Moments' })).toBeNull();
+  });
+
+  it('switches to the full debate at the moment on screen and back', () => {
+    mocks.moments = { 'debate-1': READY };
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+    activateDebate('First claim');
+    fireEvent.click(within(screen.getByTestId('reel-debate-1')).getByRole('button', { name: 'Full debate' }));
+    expect(screen.queryByTestId('reel-debate-1')).toBeNull();
+    const player = screen.getByTestId('player-debate-1');
+    expect(player).toHaveAttribute('data-seek', '41');
+    expect(player).toHaveAttribute('data-hold-full-playback', 'false');
+    expect(within(player).getByRole('button', { name: 'Full debate' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(within(player).getByRole('button', { name: 'Moments' }));
+    expect(screen.queryByTestId('player-debate-1')).toBeNull();
+    expect(screen.getByTestId('reel-debate-1')).toBeInTheDocument();
+  });
+
+  it('shows neither player while the moments load', () => {
+    mocks.moments = { 'debate-1': { status: 'loading', moments: [] } };
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+    activateDebate('First claim');
+    expect(screen.queryByTestId('player-debate-1')).toBeNull();
+    expect(screen.queryByTestId('reel-debate-1')).toBeNull();
+    expect(screen.getAllByTestId('debate-feed-media-pending').length).toBeGreaterThan(0);
+  });
+
+  it('opens the debate a link named on the full debate, with the button to its moments', () => {
+    mocks.moments = { 'debate-2': READY };
+    render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-2" fallback={<div>Entity page</div>} />);
+    const player = screen.getByTestId('player-debate-2');
+    expect(within(player).getByRole('button', { name: 'Full debate' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(within(player).getByRole('button', { name: 'Moments' }));
+    expect(screen.getByTestId('reel-debate-2')).toBeInTheDocument();
   });
 });

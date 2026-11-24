@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ClipPlaybackAnalytics } from './clip-playback-analytics';
+import type { DebateMoment } from './debate-moments';
+
 const mocks = vi.hoisted(() => ({ capture: vi.fn(), push: vi.fn() }));
 vi.mock('~/core/analytics', () => ({ capture: mocks.capture }));
 vi.mock('~/core/marketing-events', () => ({ WATCH_DEBATE_MS: 30_000, pushMarketingEvent: mocks.push }));
-
-import { ClipPlaybackAnalytics } from './clip-playback-analytics';
-import type { DebateMoment } from './debate-moments';
 
 const DEBATE = 'fd51f935-2063-4617-8039-7b672b23364c';
 
@@ -137,7 +137,8 @@ describe('ClipPlaybackAnalytics', () => {
   it('reports the card exposed once, after a second in view', () => {
     const a = analytics();
     a.show(moment('m1'), 0);
-    const tick = (now: number) => a.sample({ now, mediaMs: 0, durationMs: 0, eligible: false, muted: true, inView: true });
+    const tick = (now: number) =>
+      a.sample({ now, mediaMs: 0, durationMs: 0, eligible: false, muted: true, inView: true });
     tick(0);
     tick(600);
     expect(events('debate_exposed')).toEqual([]);
@@ -199,12 +200,11 @@ describe('ClipPlaybackAnalytics', () => {
     expect(controls[0]?.playback_instance_id).not.toBe(a.presentationId);
   });
 
-  it('reports failures and the expand navigation with the registered fields', () => {
+  it('reports failures with the registered fields', () => {
     const a = analytics();
     a.show(moment('m1'), 0);
     a.setLive(true);
     a.failed('unknown', 'skipped', 2);
-    a.navigation();
     expect(events('debate_playback_quality')[0]).toMatchObject({
       debate_id: DEBATE,
       quality_kind: 'failed',
@@ -212,11 +212,5 @@ describe('ClipPlaybackAnalytics', () => {
       failure_attempt: 2,
     });
     expect(events('debate_playback_quality')[0]?.playback_instance_id).toEqual(expect.any(String));
-    expect(events('debate_navigation')[0]).toMatchObject({
-      debate_id: DEBATE,
-      trigger: 'manual',
-      navigation_surface: 'explore_card',
-      navigation_id: expect.any(String),
-    });
   });
 });

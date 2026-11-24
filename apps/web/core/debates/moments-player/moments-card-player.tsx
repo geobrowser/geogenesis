@@ -19,15 +19,13 @@ import { reattachVideoSource, releaseVideo } from '~/core/utils/video/release-vi
 import { renderSwappedVideo } from '~/core/utils/video/swapped-video-frame';
 
 import { Avatar } from '~/design-system/avatar';
-import { Fullscreen } from '~/design-system/icons/full-screen';
-import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import type { Debate, DebateMediaTurnSegment, DebateParticipant } from '../api';
 import { useBlockedPageTap } from '../browse/blocked-page-tap';
+import { DebateMediaModeToggle } from '../browse/debate-media-mode';
 import { FeedVideo } from '../browse/feed-video';
 import { Speaker, SpeakerMuted } from '../browse/icons';
 import { useOpenDebaterProfile } from '../browse/use-open-debater-profile';
-import { withDebateTimecode } from '../debate-timecode';
 import { speakerShortLabel } from '../debater-name';
 import { useParticipantBylines } from '../participant-bylines';
 import { useFeedSoundPreference } from '../use-debate-playback';
@@ -65,12 +63,24 @@ export type MomentsCardPlayerProps = {
   tapToPlay: boolean;
   /** A tap-to-play card's Play, called inside the tap so the card becomes the active one. */
   onPlaybackRequest?: () => void;
-  /** The debate's full-screen page, which the expand control opens at the moment on screen. */
-  fullScreenHref: string;
-  entityId?: string;
-  spaceId?: string;
-  /** The debate's turns on both clocks, to open the full screen on the recordings' clock. */
+  /**
+   * The viewer switched this card to the full debate, with the button at the top right or from a
+   * reel that could not play. Told where the moment on screen is on the recordings' clock, in
+   * seconds, so the full debate can start there; null when it has no place there.
+   */
+  onShowFullDebate: (startSeconds: number | null) => void;
+  /** The debate's turns on both clocks, to place the moment on screen on the recordings' clock. */
   turns?: readonly DebateMediaTurnSegment[] | null;
+  /**
+   * Draw the moments bar over the clip on every size, as on a phone, so the reel takes exactly the
+   * two-tile player's height and switching between them moves nothing below (the full-screen feed,
+   * whose card is sized without a row above the video).
+   */
+  barOverClip?: boolean;
+  /** The host's frame clips the clip (the full-screen feed's card), so the clip draws no corners. */
+  framed?: boolean;
+  /** Where the card is, for its measurement: Explore (and the other card hosts), or the full-screen feed. */
+  surface?: 'explore' | 'debate_feed';
 };
 
 type SlotIndex = 0 | 1;
@@ -78,8 +88,8 @@ type SlotIndex = 0 | 1;
 /**
  * The Explore card's moments reel (GEO-3833), as the debates app's card plays it
  * (debates-react-native `LiveMomentPlayer.tsx`): the debate's moment clips one after another, a
- * bar per moment, thirds to step back, pause and step on, captions at the seam, and a button to
- * open the full debate at the moment on screen.
+ * bar per moment, thirds to step back, pause and step on, captions at the seam, and the button
+ * that switches the card to the full debate at the moment on screen (`DebateMediaModeToggle`).
  *
  * Two `<video>` elements, alternating as the app's two players do: while one plays its moment, the
  * other loads the next, and the swap waits for the new clip's first frame with the old one's last
@@ -109,10 +119,11 @@ function MomentsCardReel({
   upNext,
   tapToPlay,
   onPlaybackRequest,
-  fullScreenHref,
-  entityId,
-  spaceId,
+  onShowFullDebate,
   turns,
+  barOverClip = false,
+  framed = false,
+  surface = 'explore',
 }: MomentsCardPlayerProps) {
   const queryClient = useQueryClient();
   const [story, dispatch] = React.useReducer(storyReducer, moments.length, initialStoryState);
@@ -164,9 +175,9 @@ function MomentsCardReel({
       new ClipPlaybackAnalytics(debate.id, (): ClipSurface => {
         const scope = scopeRef.current;
         return {
-          playback_surface: 'explore',
-          component: 'explore_feed_card',
-          list_id: scope.list_id ?? 'explore',
+          playback_surface: surface === 'debate_feed' ? 'fullscreen_moment' : 'explore',
+          component: surface === 'debate_feed' ? 'debate_feed_card' : 'explore_feed_card',
+          list_id: scope.list_id ?? (surface === 'debate_feed' ? 'debate_feed' : 'explore'),
           target_id: debate.id,
           target_type: 'debate',
           item_position: scope.item_position,
@@ -590,11 +601,10 @@ function MomentsCardReel({
     }
   };
 
-  const expandSeconds = momentExpandSeconds(moment, clipMs, turns);
-  const expandHref = expandSeconds === null ? fullScreenHref : withDebateTimecode(fullScreenHref, expandSeconds);
-  const onExpand = () => {
+  /** To the full debate, at the moment on screen. This reel's media goes as it unmounts. */
+  const showFullDebate = () => {
     analytics.end('switched_to_full');
-    analytics.navigation();
+    onShowFullDebate(momentExpandSeconds(moment, clipMs, turns));
   };
 
   // Remember the place as it plays, for when the card lets its elements go and takes them back.
@@ -625,7 +635,11 @@ function MomentsCardReel({
       {/* The moments: a row of bars above the clip on a desktop, over its top edge on a phone. */}
       <div
         data-testid="moments-bar"
-        className="flex h-7 items-center gap-2 md:pointer-events-none md:absolute md:inset-x-0 md:top-0 md:z-30 md:h-auto md:gap-1 md:bg-gradient-to-b md:from-black/40 md:to-transparent md:px-3 md:pt-2.5 md:pb-4"
+        className={cx(
+          barOverClip
+            ? 'pointer-events-none absolute inset-x-0 top-0 z-30 flex items-center gap-1 bg-gradient-to-b from-black/40 to-transparent px-3 pt-2.5 pb-4'
+            : 'flex h-7 items-center gap-2 md:pointer-events-none md:absolute md:inset-x-0 md:top-0 md:z-30 md:h-auto md:gap-1 md:bg-gradient-to-b md:from-black/40 md:to-transparent md:px-3 md:pt-2.5 md:pb-4'
+        )}
       >
         {moments.map((m, i) => (
           <button
@@ -634,12 +648,20 @@ function MomentsCardReel({
             aria-label={`Moment ${i + 1} of ${count}`}
             aria-current={i === index ? 'true' : undefined}
             onClick={() => jump(i)}
-            className="group/segment flex h-full min-w-0 flex-1 cursor-pointer items-center md:pointer-events-auto md:h-3"
+            className={cx(
+              'group/segment flex min-w-0 flex-1 cursor-pointer items-center',
+              barOverClip ? 'pointer-events-auto h-3' : 'h-full md:pointer-events-auto md:h-3'
+            )}
           >
-            <span className="block h-1 w-full overflow-hidden rounded-full bg-[#ebebeb] md:h-[3px] md:bg-white/[0.38]">
+            <span
+              className={cx(
+                'block w-full overflow-hidden rounded-full',
+                barOverClip ? 'h-[3px] bg-white/[0.38]' : 'h-1 bg-[#ebebeb] md:h-[3px] md:bg-white/[0.38]'
+              )}
+            >
               <span
                 data-testid={`moment-segment-${i}`}
-                className="block h-full rounded-full bg-[#151515] md:bg-white"
+                className={cx('block h-full rounded-full', barOverClip ? 'bg-white' : 'bg-[#151515] md:bg-white')}
                 style={{ width: `${segmentFill(i, index, clipMs, clipLengthMs) * 100}%` }}
               />
             </span>
@@ -649,7 +671,10 @@ function MomentsCardReel({
 
       <div
         data-testid="moments-clip"
-        className="relative isolate aspect-[480/578] w-full overflow-hidden rounded-[20px] bg-[#151515] select-none"
+        className={cx(
+          'relative isolate aspect-[480/578] w-full overflow-hidden bg-[#151515] select-none',
+          !framed && 'rounded-[20px]'
+        )}
       >
         {mountMedia &&
           ([0, 1] as const).map(slot => {
@@ -791,16 +816,9 @@ function MomentsCardReel({
             <button type="button" disabled={retrying} onClick={() => void retry()} className="font-semibold">
               {retrying ? 'Refreshing video…' : 'Retry video'}
             </button>
-            <Link
-              href={expandHref}
-              entityId={entityId}
-              spaceId={spaceId}
-              data-entity-side-panel-full-page
-              onClick={onExpand}
-              className="font-semibold"
-            >
+            <button type="button" onClick={showFullDebate} className="font-semibold">
               Watch full debate
-            </Link>
+            </button>
           </div>
         ) : null}
 
@@ -809,23 +827,20 @@ function MomentsCardReel({
           type="button"
           aria-label={muted ? 'Unmute all videos' : 'Mute all videos'}
           onClick={toggleMute}
-          className="absolute top-3 left-3 z-[10] grid size-9 place-items-center rounded-full bg-[#151515]/60 text-white backdrop-blur-sm md:top-6"
+          className={cx(
+            'absolute left-3 z-[10] grid size-9 place-items-center rounded-full bg-[#151515]/60 text-white backdrop-blur-sm',
+            barOverClip ? 'top-6' : 'top-3 md:top-6'
+          )}
         >
           {muted ? <SpeakerMuted size={18} /> : <Speaker size={18} />}
         </button>
 
-        {/* The way into the debate at full size, at the moment on screen. */}
-        <Link
-          href={expandHref}
-          entityId={entityId}
-          spaceId={spaceId}
-          aria-label="Open full debate"
-          data-entity-side-panel-full-page
-          onClick={onExpand}
-          className="absolute top-3 right-3 z-[10] grid size-9 place-items-center rounded-full bg-[#151515]/60 text-white backdrop-blur-sm md:top-6"
-        >
-          <Fullscreen />
-        </Link>
+        {/* Moments or the full debate, top-right: the same button the full player draws there. */}
+        <DebateMediaModeToggle
+          mode="moments"
+          onChange={showFullDebate}
+          className={cx('absolute right-3', barOverClip ? 'top-6' : 'top-3 md:top-6')}
+        />
       </div>
     </div>
   );

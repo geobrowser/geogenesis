@@ -44,19 +44,6 @@ vi.mock('../participant-bylines', () => ({ useParticipantBylines: () => new Map(
 vi.mock('../browse/use-open-debater-profile', () => ({ useOpenDebaterProfile: () => () => {} }));
 vi.mock('~/core/follows/follow-button', () => ({ FollowButton: () => null }));
 vi.mock('~/design-system/avatar', () => ({ Avatar: () => null }));
-vi.mock('~/design-system/prefetch-link', () => ({
-  PrefetchLink: ({
-    href,
-    children,
-    entityId: _entityId,
-    spaceId: _spaceId,
-    ...rest
-  }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { entityId?: string; spaceId?: string }) => (
-    <a href={href} {...rest}>
-      {children}
-    </a>
-  ),
-}));
 vi.mock('~/core/utils/video/gesture-media-pool', async importOriginal => ({
   ...(await importOriginal<typeof import('~/core/utils/video/gesture-media-pool')>()),
   gestureUnlocksEachMediaElement: () => mocks.pooled,
@@ -101,7 +88,7 @@ function renderPlayer(
     mountMedia: true,
     upNext: false,
     tapToPlay: false,
-    fullScreenHref: '/space/s/e',
+    onShowFullDebate: () => {},
     ...overrides,
   };
   const ui = (next: Partial<MomentsCardPlayerProps> = {}) => (
@@ -292,19 +279,51 @@ describe('MomentsCardPlayer', () => {
     expect(screen.queryByTestId('moment-swap-canvas')).toBeNull();
   });
 
-  it('opens the full debate at the moment on screen, and reports the switch', () => {
-    renderPlayer();
+  it('switches to the full debate at the moment on screen, and reports the switch', () => {
+    const onShowFullDebate = vi.fn();
+    renderPlayer({ onShowFullDebate });
     act(() => {
       Object.defineProperty(videoIn(0), 'readyState', { configurable: true, value: 4 });
       Object.defineProperty(videoIn(0), 'currentTime', { configurable: true, writable: true, value: 3 });
       fireEvent.timeUpdate(videoIn(0));
     });
-    const link = screen.getByRole('link', { name: 'Open full debate' });
-    // 19.75 s + 3 s into the clip, no source times: 22 s.
-    expect(link.getAttribute('href')).toBe('/space/s/e?t=22');
-    fireEvent.click(link);
+    expect(screen.queryByRole('link', { name: 'Open full debate' })).toBeNull();
+    const moments = screen.getByRole('button', { name: 'Moments' });
+    const full = screen.getByRole('button', { name: 'Full debate' });
+    expect(moments).toHaveAttribute('aria-pressed', 'true');
+    expect(full).toHaveAttribute('aria-pressed', 'false');
+    expect(full).toHaveAttribute('data-geo-analytics-intent', 'debate_media_mode');
+    fireEvent.click(moments);
+    expect(onShowFullDebate).not.toHaveBeenCalled();
+    fireEvent.click(full);
+    // 19.75 s + 3 s into the clip, no source times: 22 s on the recordings' clock.
+    expect(onShowFullDebate).toHaveBeenCalledWith(22);
     expect(events('debate_moment_ended').at(-1)).toMatchObject({ end_reason: 'switched_to_full' });
-    expect(events('debate_navigation')).toHaveLength(1);
+    expect(events('debate_navigation')).toHaveLength(0);
+  });
+
+  it('offers the full debate in place when the reel cannot play', () => {
+    const onShowFullDebate = vi.fn();
+    renderPlayer({ moments: [MOMENTS[0]!], onShowFullDebate });
+    act(() => {
+      fireEvent.error(videoIn(0));
+    });
+    act(() => {
+      fireEvent.error(videoIn(0));
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Watch full debate' }));
+    expect(onShowFullDebate).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('link', { name: 'Watch full debate' })).toBeNull();
+  });
+
+  it('reports a full-screen feed card as the app does', () => {
+    renderPlayer({ surface: 'debate_feed', barOverClip: true, framed: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Full debate' }));
+    expect(events('debate_moment_ended').at(-1)).toMatchObject({
+      end_reason: 'switched_to_full',
+      playback_surface: 'fullscreen_moment',
+      component: 'debate_feed_card',
+    });
   });
 
   it('shows the moment’s caption', () => {
