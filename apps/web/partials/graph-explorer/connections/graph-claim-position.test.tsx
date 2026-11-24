@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   authenticated: true,
   submitResponse: vi.fn(),
   indexedViewerDirection: null as 'positive' | 'negative' | null,
+  counts: { positive: 5, negative: 2 },
 }));
 
 vi.mock('~/core/sync/use-store', () => ({
@@ -30,9 +31,9 @@ vi.mock('~/core/claims/browse/claim-response-summary', async importOriginal => (
     isLoading: false,
     isViewerResponseLoading: false,
     hasCounts: true,
-    positive: 5,
-    negative: 2,
-    total: 7,
+    positive: mocks.counts.positive,
+    negative: mocks.counts.negative,
+    total: mocks.counts.positive + mocks.counts.negative,
     indexedViewerDirection: mocks.indexedViewerDirection,
   }),
 }));
@@ -66,9 +67,9 @@ vi.mock('~/core/analytics-operations', () => ({ recordAction: vi.fn() }));
 
 vi.mock('~/core/claims/browse/claim-summary', async importOriginal => ({
   ...(await importOriginal<typeof import('~/core/claims/browse/claim-summary')>()),
-  ClaimSummary: ({ summary }: { summary: { positive: number; total: number } }) => (
+  ClaimSummary: ({ summary, detail }: { summary: { positive: number; total: number }; detail?: string }) => (
     <div data-testid="claim-summary">
-      {summary.positive} of {summary.total} agree
+      {summary.positive} of {summary.total} agree{detail ? ` · ${detail}` : ''}
     </div>
   ),
 }));
@@ -96,6 +97,7 @@ beforeEach(() => {
   mocks.authenticated = true;
   mocks.submitResponse.mockReset();
   mocks.indexedViewerDirection = null;
+  mocks.counts = { positive: 5, negative: 2 };
   vi.mocked(openSaveVotesPrompt).mockClear();
   vi.mocked(recordAction).mockClear();
   clearLocalVotes();
@@ -109,7 +111,7 @@ describe('the open claim’s Agree and Disagree', () => {
 
     const agree = screen.getByRole('button', { name: 'Agree' });
     const split = screen.getByTestId('claim-summary');
-    expect(split).toHaveTextContent('5 of 7 agree');
+    expect(split).toHaveTextContent('5 of 7 agree · 7 votes');
     // The split reads first, then the buttons that change it.
     expect(split.compareDocumentPosition(agree) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     // The box is grey: the split's responder faces ring in grey, not white.
@@ -141,6 +143,18 @@ describe('the open claim’s Agree and Disagree', () => {
     rerender();
     expect(screen.getByRole('button', { name: /^Agree.*your response/ })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: 'Disagree' })).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  // Preview test, ticket AC2: the vote count shows beside the percentage and moves with a vote.
+  it('says how many voted, and counts a vote once it lands', () => {
+    const { rerender } = renderActions();
+    expect(screen.getByTestId('claim-summary')).toHaveTextContent('· 7 votes');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Agree' }));
+    // The summary hook adds the viewer's side to the counts (stubbed here as the counts it returns).
+    mocks.counts = { positive: 6, negative: 2 };
+    rerender();
+    expect(screen.getByTestId('claim-summary')).toHaveTextContent('6 of 8 agree · 8 votes');
   });
 
   it('labels the buttons for click analytics as the graph explorer’s', () => {

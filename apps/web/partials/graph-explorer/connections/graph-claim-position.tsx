@@ -2,8 +2,10 @@
 
 import * as React from 'react';
 
+import { GREY_SURFACE_RING_STYLE } from '~/core/claims/browse/claim-summary';
 import { DebateClaimControls } from '~/core/debates/browse/debate-claim-controls';
 import { useDebateClaimResponse } from '~/core/debates/browse/use-debate-claim-response';
+import { votesLabel } from '~/core/graph-explorer/panel-sections';
 import { useQueryEntities } from '~/core/sync/use-store';
 
 /**
@@ -30,7 +32,7 @@ export function GraphClaimPosition({ claimId, spaceId }: { claimId: string; spac
   return (
     // The box is grey, so the split's responder faces ring in grey rather than white, as the inline
     // split does on the debate card's grey footer.
-    <div className="flex flex-col gap-3" style={GREY_SURFACE_RING}>
+    <div className="flex flex-col gap-3" style={GREY_SURFACE_RING_STYLE}>
       <DebateClaimControls
         claimId={claimId}
         spaceId={spaceId}
@@ -39,9 +41,10 @@ export function GraphClaimPosition({ claimId, spaceId }: { claimId: string; spac
         // The split reads first, then the buttons that change it.
         summaryLayout="stacked"
         summaryPlacement="before"
+        // The panel has always said how many voted ("71% agree · 7 votes"), and the count moves with
+        // a press: the summary counts the viewer's side optimistically.
+        summaryDetail={votesLabel(response.summary.total)}
       />
     </div>
   );
 }
-
-const GREY_SURFACE_RING = { '--avatar-group-ring': 'var(--color-grey-01)' } as React.CSSProperties;

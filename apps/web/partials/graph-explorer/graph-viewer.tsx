@@ -319,6 +319,7 @@ export function GraphViewer({
         }}
         showClaims={rawCentre.kind !== 'claim'}
         summary={summary}
+        summaryFirst={rawCentre.kind === 'claim'}
       />
     );
   }

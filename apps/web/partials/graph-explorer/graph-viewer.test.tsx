@@ -428,6 +428,19 @@ describe('GraphViewer', () => {
     expect(screen.queryByRole('heading', { name: /^Claims/ })).toBeNull();
     expect(screen.queryByText(/No claims/)).toBeNull();
   });
+
+  // GEO-3841: a claim centre's vote block sits above its description, so the buttons are on screen.
+  it('puts a claim centre’s vote block above its description', () => {
+    hooks.hopFor.mockImplementation(() => ({
+      ...hops[TOPIC],
+      centre: { ...hops[TOPIC].centre!, types: [{ id: CLAIM_TYPE_ID, name: 'Claim' }] },
+    }));
+    render(<Viewer start={TOPIC} scope={scope} />);
+    const respond = screen.getByRole('region', { name: 'Respond' });
+    expect(
+      respond.compareDocumentPosition(screen.getByText('A topic.')) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
 });
 
 /** The page's session around the viewer, with a way to move history as browser Back would. */

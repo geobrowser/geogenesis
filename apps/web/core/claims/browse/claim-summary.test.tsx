@@ -34,11 +34,11 @@ function summary(overrides: Partial<ClaimResponseSummary> = {}): ClaimResponseSu
   };
 }
 
-function renderSummary(value: ClaimResponseSummary) {
+function renderSummary(value: ClaimResponseSummary, detail?: string) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <ClaimSummary entityId={ENTITY} spaceId={SPACE} responseKind="stance" summary={value} />
+      <ClaimSummary entityId={ENTITY} spaceId={SPACE} responseKind="stance" summary={value} detail={detail} />
     </QueryClientProvider>
   );
 }
@@ -57,6 +57,20 @@ describe('ClaimSummary', () => {
     renderSummary(summary({ ...summarizeClaimResponses(17, 3) }));
 
     expect(screen.getByText('85%')).toBeInTheDocument();
+  });
+
+  it('says nothing after the share unless the host gives it something to say', () => {
+    const { container } = renderSummary(summary({ ...summarizeClaimResponses(17, 3) }));
+
+    expect(container).not.toHaveTextContent('·');
+  });
+
+  // The graph explorer's open claim (GEO-3841) keeps the panel's "62% agree · 140 votes".
+  it('reads a host’s detail after the share', () => {
+    renderSummary(summary({ ...summarizeClaimResponses(17, 3) }), '20 votes');
+
+    // In the share's own run, so it stays on the percentage's line rather than wrapping off alone.
+    expect(screen.getByText('85%').parentElement).toContainElement(screen.getByText('· 20 votes'));
   });
 
   it('draws nothing where the counts never answered, whatever the total says', () => {

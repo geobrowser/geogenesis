@@ -64,7 +64,7 @@ describe('panelClaims', () => {
 describe('EntityPanel summary placement', () => {
   afterEach(cleanup);
 
-  const renderPanel = (kind: GraphNode['kind']) =>
+  const renderPanel = (kind: GraphNode['kind'], showClaims = kind !== 'claim') =>
     render(
       <EntityPanel
         centre={{ ...claimNode(9, 's'), description: 'A long description of the centre.', texts: [] } as GraphCentre}
@@ -84,7 +84,8 @@ describe('EntityPanel summary placement', () => {
         moreKinds={[]}
         emptyMessages={{ relationships: '', claims: '', description: '' }}
         summary={<div data-testid="summary" />}
-        showClaims={kind !== 'claim'}
+        showClaims={showClaims}
+        summaryFirst={kind === 'claim'}
       />
     );
   const summaryFollowsDescription = () =>
@@ -101,6 +102,13 @@ describe('EntityPanel summary placement', () => {
 
   it('keeps a topic’s summary under its description', () => {
     renderPanel('topic');
+    expect(summaryFollowsDescription()).toBe(true);
+  });
+
+  // Review round 2: placement follows the centre being a claim, not the claims list being shown, so
+  // a filter that hides a topic's claims (GEO-3842) cannot lift its summary above its description.
+  it('keeps a topic’s summary under its description when its claims list is hidden', () => {
+    renderPanel('topic', false);
     expect(summaryFollowsDescription()).toBe(true);
   });
 });

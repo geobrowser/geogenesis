@@ -30,6 +30,7 @@ export function DebateClaimControls({
   className,
   summaryLayout,
   summaryPlacement = 'after',
+  summaryDetail,
   summaryClassName,
 }: {
   claimId: string;
@@ -48,6 +49,8 @@ export function DebateClaimControls({
   summaryLayout?: 'stacked' | 'inline';
   /** Where the split sits: after the pills (every debate surface), or before them (the graph explorer). */
   summaryPlacement?: 'before' | 'after';
+  /** Said after the split's share; see `ClaimSummary`'s `detail`. */
+  summaryDetail?: string;
   summaryClassName?: string;
 }) {
   const split =
@@ -58,6 +61,7 @@ export function DebateClaimControls({
         responseKind={responseKind}
         summary={summary}
         layout={summaryLayout}
+        detail={summaryDetail}
         className={summaryClassName}
       />
     ) : null;
