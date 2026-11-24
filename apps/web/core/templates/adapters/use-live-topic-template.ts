@@ -358,6 +358,7 @@ export function useLiveTopicTemplate({
     first: LIVE_CLAIMS_LIMIT,
     rankInSpaceId: spaceId,
     spaceIds,
+    scopeRelationToSpaces: true,
   });
 
   const { entities: linkedEvents } = useTopicLinkedEntities({
@@ -365,6 +366,7 @@ export function useLiveTopicTemplate({
     typeIds: [TEMPLATE_ONTOLOGY.NEWS_EVENT_TYPE_ID],
     first: 8,
     spaceIds,
+    scopeRelationToSpaces: true,
   });
 
   // Sources the viewed space both holds and tagged with this Topic itself.

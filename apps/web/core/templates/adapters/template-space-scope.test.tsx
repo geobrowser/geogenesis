@@ -361,6 +361,15 @@ describe('Topic template', () => {
       linked('c2', 'Claim elsewhere', OTHER, [CLAIM_TYPE_ID], TOPICS_PROPERTY_ID),
       linked('e1', 'Event here', SPACE, [TEMPLATE_ONTOLOGY.NEWS_EVENT_TYPE_ID], TOPICS_PROPERTY_ID),
       linked('e2', 'Event elsewhere', OTHER, [TEMPLATE_ONTOLOGY.NEWS_EVENT_TYPE_ID], TOPICS_PROPERTY_ID),
+      // In the viewed space, but tagged with this topic only from another space.
+      {
+        ...linked('c3', 'Claim tagged elsewhere', SPACE, [CLAIM_TYPE_ID], TOPICS_PROPERTY_ID),
+        relations: [relation(TOPICS_PROPERTY_ID, PAGE, OTHER)],
+      },
+      {
+        ...linked('e3', 'Event tagged elsewhere', SPACE, [TEMPLATE_ONTOLOGY.NEWS_EVENT_TYPE_ID], TOPICS_PROPERTY_ID),
+        relations: [relation(TOPICS_PROPERTY_ID, PAGE, OTHER)],
+      },
     ];
     state.coverage = [
       { entityId: 'r1', spaceId: SPACE, title: 'Source here' },
