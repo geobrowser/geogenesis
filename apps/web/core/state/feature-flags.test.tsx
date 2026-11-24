@@ -52,6 +52,7 @@ describe('feature flags', () => {
       bountiesTab: true,
       signInRecoveryAutoOpen: true,
       entityTemplatesV2: true,
+      templateListRanking: false,
     });
   });
 
@@ -90,6 +91,7 @@ describe('feature flags', () => {
       bountiesTab: true,
       signInRecoveryAutoOpen: true,
       entityTemplatesV2: true,
+      templateListRanking: false,
     });
   });
 

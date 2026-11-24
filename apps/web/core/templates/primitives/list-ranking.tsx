@@ -5,6 +5,8 @@ import * as React from 'react';
 import cx from 'classnames';
 import { createPortal } from 'react-dom';
 
+import { useFeatureFlag } from '~/core/state/feature-flags';
+
 import { OrderDots } from '~/design-system/icons/order-dots';
 import { RankingChart } from '~/design-system/icons/ranking-chart';
 
@@ -63,18 +65,22 @@ function writeStoredOrder(storageKey: string, ids: readonly string[]) {
 /**
  * Manages personal ranking state (`My ranking` vs `Global` view) for any template list section.
  * Hydrates from `localStorage` inside `useEffect` so SSR and initial client hydration always match.
+ *
+ * Behind `templateListRanking` (off) until a ranking publishes to the graph (GEO-3835). While it is
+ * off, an order saved earlier in this browser is ignored, so lists keep their global order.
  */
 export function useListRanking<T extends { id: string }>({ listKey, items }: { listKey: string; items: readonly T[] }) {
+  const enabled = useFeatureFlag('templateListRanking');
   const storageKey = `${STORAGE_PREFIX}${listKey}`;
   const [myOrder, setMyOrder] = React.useState<string[]>([]);
   const [viewMode, setViewMode] = React.useState<ListRankingViewMode>('global');
   const [isOpen, setIsOpen] = React.useState(false);
 
   React.useEffect(() => {
-    const stored = readStoredOrder(storageKey);
-    setMyOrder(stored);
+    setMyOrder(enabled ? readStoredOrder(storageKey) : []);
     setViewMode('global');
-  }, [storageKey]);
+    if (!enabled) setIsOpen(false);
+  }, [enabled, storageKey]);
 
   const itemIdSet = React.useMemo(() => new Set(items.map(item => item.id)), [items]);
 
@@ -122,8 +128,10 @@ export function useListRanking<T extends { id: string }>({ listKey, items }: { l
     hasMyRanking,
     viewMode: hasMyRanking ? viewMode : ('global' as ListRankingViewMode),
     setViewMode,
-    isOpen,
-    open: () => setIsOpen(true),
+    isOpen: enabled && isOpen,
+    open: () => {
+      if (enabled) setIsOpen(true);
+    },
     close: () => setIsOpen(false),
     publish,
     clear,
@@ -151,7 +159,8 @@ export function ListRankingHeaderControl({
   onOpen: () => void;
   disabled?: boolean;
 }) {
-  if (disabled) return null;
+  const enabled = useFeatureFlag('templateListRanking');
+  if (disabled || !enabled) return null;
 
   const buttonLabel = hasMyRanking ? `Edit my ranking for ${title}` : `Rank ${title}`;
 
