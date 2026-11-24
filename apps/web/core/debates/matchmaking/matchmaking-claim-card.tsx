@@ -1350,8 +1350,8 @@ export function PositionRow({
   /**
    * `'app'` is the debates app's vote row (GEO-3833): 44px outlined pills and the end slot on the same
    * row at every width, the labels giving way to their thumbs where the row is too narrow for
-   * "Disagree" whole. `'app-dark'` is the same row on a dark surface. The host shows the "Not counted
-   * yet" note under its results instead of under a pill — see `DebateClaimControls`.
+   * "Disagree" whole. The host shows the "Not counted yet" note under its results instead of under a
+   * pill — see `DebateClaimControls`.
    */
   look?: PositionLook;
 }) {
@@ -1556,7 +1556,6 @@ function PositionButton({
         title={title}
         localOnly={localOnly}
         analytics={analytics}
-        dark={look === 'app-dark'}
       />
     );
   }
@@ -1623,13 +1622,12 @@ function PositionButton({
   );
 }
 
-export type PositionLook = 'default' | 'app' | 'app-dark';
+export type PositionLook = 'default' | 'app';
 
 /**
  * One of the debates app's vote pills (debates-react-native `VoteChoice.tsx`): 44px, a 1px #8a8a8a
  * outline, the thumb and "Agree"/"Disagree" at 14px semibold. Picked, the outline goes dark, the
  * thumb fills and the label goes bold — the pill never fills, so the two read as a pair either way.
- * Dark (`app-dark`) swaps the outline for translucent white and white once picked.
  *
  * The label drops to the thumb alone when the row is under 300px, as the app's does when "Disagree"
  * no longer fits — `sr-only` rather than hidden, so the button keeps its name. Faces are not drawn:
@@ -1646,7 +1644,6 @@ function AppPositionButton({
   title,
   localOnly,
   analytics,
-  dark,
 }: {
   label: string;
   responseKind: ResponseKind;
@@ -1658,14 +1655,11 @@ function AppPositionButton({
   title?: string;
   localOnly: boolean;
   analytics?: DebateAnalyticsAttributes;
-  dark: boolean;
 }) {
   const className = cx(
     'flex h-11 min-w-0 items-center justify-center gap-1 rounded-full border bg-transparent px-1 text-[14px] leading-none tracking-[-0.3px]',
-    dark ? 'text-white' : 'text-[#151515]',
-    selected
-      ? cx('font-bold', dark ? 'border-white' : 'border-[#151515]')
-      : cx('font-semibold', dark ? 'border-white/60' : 'border-[#8a8a8a]')
+    'text-[#151515]',
+    selected ? 'border-[#151515] font-bold' : 'border-[#8a8a8a] font-semibold'
   );
   const content = (
     <>
@@ -1689,7 +1683,7 @@ function AppPositionButton({
       actionTitle={title}
       onPress={() => onRespond(position)}
       className={cx(className, 'transition-colors disabled:opacity-60')}
-      hoverClassName={selected ? undefined : dark ? 'hover:border-white' : 'hover:border-[#151515]'}
+      hoverClassName={selected ? undefined : 'hover:border-[#151515]'}
       buttonProps={analytics}
     >
       {content}

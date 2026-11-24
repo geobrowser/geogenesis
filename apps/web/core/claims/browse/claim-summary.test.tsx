@@ -177,16 +177,9 @@ describe('ControversialTag', () => {
 
 // GEO-3833: the debates app's results row, revealed under the vote pills once the viewer has voted.
 describe('ClaimSummary results layout', () => {
-  function renderResults(value: ClaimResponseSummary, tone?: 'light' | 'dark') {
+  function renderResults(value: ClaimResponseSummary) {
     return render(
-      <ClaimSummary
-        entityId={ENTITY}
-        spaceId={SPACE}
-        responseKind="stance"
-        summary={value}
-        layout="results"
-        tone={tone}
-      />
+      <ClaimSummary entityId={ENTITY} spaceId={SPACE} responseKind="stance" summary={value} layout="results" />
     );
   }
 
@@ -225,12 +218,5 @@ describe('ClaimSummary results layout', () => {
     const { container } = renderResults(summary());
 
     expect(container).toBeEmptyDOMElement();
-  });
-
-  it('draws white on a dark surface', () => {
-    const { container } = renderResults(summary({ ...summarizeClaimResponses(3, 1) }), 'dark');
-
-    expect(container.querySelector('[data-claim-results] [role="img"] > div')).toHaveClass('bg-white');
-    expect(screen.getByText('4 Votes')).toHaveClass('text-white/70');
   });
 });

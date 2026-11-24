@@ -34,10 +34,9 @@ type InteractionBarProps = {
   className?: string;
   /**
    * `'circles'` is the debates app's (GEO-3833): two 44px icon-only circles, the comment count said
-   * in the accessible name instead of shown. `tone` `'dark'` draws them for a dark surface.
+   * in the accessible name instead of shown.
    */
   variant?: 'pills' | 'circles';
-  tone?: 'light' | 'dark';
 };
 
 type DebateActionKind = 'comments' | 'share';
@@ -65,12 +64,11 @@ export function DebateInteractionBar({
   overflow,
   className,
   variant = 'pills',
-  tone = 'light',
 }: InteractionBarProps) {
   if (variant === 'circles') {
     const circleClass = cx(
       'flex size-11 shrink-0 items-center justify-center rounded-full transition-colors [&_svg]:size-5',
-      tone === 'dark' ? 'bg-white/22 text-white hover:bg-white/30' : 'bg-[#efefef] text-[#151515] hover:bg-[#e3e3e3]'
+      'bg-[#efefef] text-[#151515] hover:bg-[#e3e3e3]'
     );
     return (
       <div className={cx('flex items-center gap-1.5', className)}>
