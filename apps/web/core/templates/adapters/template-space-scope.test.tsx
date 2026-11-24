@@ -19,11 +19,8 @@ import { useLivePostTemplate } from './use-live-post-template';
 import { useLiveSourceTemplate } from './use-live-source-template';
 import { useLiveTopicTemplate } from './use-live-topic-template';
 
-/**
- * Each template page lists only what the viewed space published (GEO-3828). The store is faked by
- * the real local `where` matcher over a small corpus, so a list that leaves out its space clause
- * picks up the other space's entities here as it would against the API.
- */
+// Template lists hold only the viewed space's items. The store runs the real local `where`
+// matcher, so a query missing its space clause lists the other space's entities.
 
 const SPACE = '89bd89bf28ff8a0963faf92a8c905e20';
 const OTHER = 'b5a31f8182b042437ede0f84ee02f104';
