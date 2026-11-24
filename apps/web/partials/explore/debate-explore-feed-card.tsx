@@ -314,8 +314,14 @@ export function DebateExploreFeedCard({
   const inlinePlaybackUnavailable = useInlinePlaybackUnavailable();
   const reelSwitch = DEBATE_CARD_PLAYS_MOMENTS && !inlinePlaybackUnavailable;
   const momentsRead = useDebateMoments(debateId, { enabled: reelSwitch && nearViewport });
-  const reelMoments =
+  const readyReel =
     reelSwitch && momentsRead.status === 'ready' && momentsRead.moments.length > 0 ? momentsRead.moments : null;
+  // The reel's own Retry re-reads the moments. A failed re-read puts the read in `error` though the
+  // reel was showing: keep that reel, so it can say the refresh failed, instead of swapping in the
+  // two-tile player. Only a first read that fails falls back.
+  const [shownReel, setShownReel] = React.useState(readyReel);
+  if (readyReel && readyReel !== shownReel) setShownReel(readyReel);
+  const reelMoments = readyReel ?? (reelSwitch && momentsRead.status === 'error' ? shownReel : null);
   const reelPending = reelSwitch && momentsRead.status === 'loading';
 
   /**

@@ -96,9 +96,11 @@ vi.mock('~/design-system/prefetch-link', () => ({
     entityId: _entityId,
     spaceId: _spaceId,
     ...rest
-  }: { children: React.ReactNode; entityId?: string; spaceId?: string } & React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
-    <a {...rest}>{children}</a>
-  ),
+  }: {
+    children: React.ReactNode;
+    entityId?: string;
+    spaceId?: string;
+  } & React.AnchorHTMLAttributes<HTMLAnchorElement>) => <a {...rest}>{children}</a>,
 }));
 vi.mock('~/design-system/fallback-image', () => ({ FallbackImage: () => null }));
 vi.mock('~/partials/entity-page/entity-row-actions', () => ({
@@ -109,7 +111,13 @@ vi.mock('./explore-join-space-button', () => ({ ExploreJoinSpaceButton: () => nu
 const DEBATE = {
   id: 'fd51f935-2063-4617-8039-7b672b23364c',
   status: 'complete',
-  claim: { id: 'c', space_id: '52c7ae149838b6d47ce0f3b2a5974546', claim_entity_id: 'claim-1', claim: 'X', description: null },
+  claim: {
+    id: 'c',
+    space_id: '52c7ae149838b6d47ce0f3b2a5974546',
+    claim_entity_id: 'claim-1',
+    claim: 'X',
+    description: null,
+  },
   recordings: [{ participant_slot: 1 }, { participant_slot: 2 }],
   participants: [
     { participant_slot: 1, position_label: 'Disagree' },
@@ -203,11 +211,13 @@ function intersect(ratio: number, top = 0, filter: (record: Record) => boolean =
 function renderCard(feed = true) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const card = <DebateExploreFeedCard item={item} fallback={<div data-testid="fallback" />} />;
-  return render(
+  const tree = (
     <QueryClientProvider client={client}>
       <Provider>{feed ? <DebateFeedAutoplay>{card}</DebateFeedAutoplay> : card}</Provider>
     </QueryClientProvider>
   );
+  const result = render(tree);
+  return { ...result, update: () => result.rerender(tree) };
 }
 
 describe('DebateExploreFeedCard moments reel gate', () => {
@@ -259,6 +269,18 @@ describe('DebateExploreFeedCard moments reel gate', () => {
     expect(screen.getByTestId('player')).toBeInTheDocument();
   });
 
+  it('keeps the reel when its own Retry fails to re-read the moments, so it can say so', () => {
+    mocks.moments = READY;
+    const { update } = renderCard();
+    intersect(0.7);
+    expect(screen.getByTestId('reel')).toBeInTheDocument();
+    // A failed refetch puts the read in `error` though it was ready.
+    mocks.moments = { status: 'error', moments: [], slotNames: {} };
+    update();
+    expect(screen.getByTestId('reel')).toHaveAttribute('data-count', '2');
+    expect(screen.queryByTestId('player')).toBeNull();
+  });
+
   it('hands an in-app browser that cannot play inline (TikTok) to the two-tile player', () => {
     mocks.inlineUnavailable = true;
     mocks.moments = READY;
@@ -272,7 +294,11 @@ describe('DebateExploreFeedCard moments reel gate', () => {
     mocks.moments = READY;
     renderCard();
     // In the near-viewport window but not on screen, and not up next: stills only.
-    intersect(0.7, 0, record => record.options?.rootMargin !== undefined && record.options.rootMargin !== '0px 0px 100% 0px');
+    intersect(
+      0.7,
+      0,
+      record => record.options?.rootMargin !== undefined && record.options.rootMargin !== '0px 0px 100% 0px'
+    );
     expect(screen.getByTestId('reel')).toHaveAttribute('data-mount-media', 'false');
     // Up next: the first clip loads ahead.
     intersect(0.5, 600, record => record.options?.rootMargin === '0px 0px 100% 0px');
