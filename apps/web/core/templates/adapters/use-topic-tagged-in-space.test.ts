@@ -7,7 +7,7 @@ const SPACE = '89bd89bf28ff8a0963faf92a8c905e20';
 
 describe('fetchTopicTaggedInSpace', () => {
   it('asks once per distinct id, walks every page and returns hex ids', async () => {
-    const fetchPage = vi.fn(async ({ after }: { after: string | undefined }) =>
+    const fetchPage = vi.fn(async ({ after }: { fromEntityIds: string[]; after: string | undefined }) =>
       after
         ? { items: ['bbbbbbbb-0000-4000-8000-000000000002'], endCursor: '2', hasNextPage: false }
         : { items: ['aaaaaaaa000040008000000000000001'], endCursor: '1', hasNextPage: true }
