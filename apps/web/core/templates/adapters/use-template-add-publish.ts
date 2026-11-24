@@ -53,11 +53,8 @@ export function parseTemplateAddIntent(intent: string | undefined): TemplateAddA
   return null;
 }
 
-/**
- * Publishes a template add on submit, then writes it to the store already published, so nothing
- * reaches Review edits. Drafts made while a new account's space is created are queued; every failure
- * is shown in the status bar (`usePublish` reports its own).
- */
+// Publishes a template add, then stores it as published so nothing reaches Review edits. Drafts
+// made while a new account's space is created are queued; failures show in the status bar.
 export function useTemplateAddPublish({ owner, pageSpaceId }: { owner: TemplateAddOwner; pageSpaceId: string }) {
   const { authenticated } = usePrivy();
   const queryClient = useQueryClient();
