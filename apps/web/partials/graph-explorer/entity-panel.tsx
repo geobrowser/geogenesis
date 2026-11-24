@@ -114,7 +114,8 @@ export function EntityPanel({
   );
 }
 
-const NO_CLAIMS_ASKED: ClaimsState = {
+/** No claims asked about the centre: nothing loading, nothing to report. */
+export const NO_CLAIMS_ASKED: ClaimsState = {
   isLoading: false,
   isError: false,
   hasNextPage: false,

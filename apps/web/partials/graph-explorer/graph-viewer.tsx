@@ -27,7 +27,7 @@ import { ConnectionsStage, PHONE_QUERY } from './connections/connections-view';
 import { GraphSearch } from './connections/graph-search';
 import { GraphTopBar } from './connections/graph-top-bar';
 import { claimsEmptyMessage, descriptionEmptyMessage, relationshipsEmptyMessage } from './empty-states';
-import { type ClaimsState, EntityPanel } from './entity-panel';
+import { EntityPanel, NO_CLAIMS_ASKED } from './entity-panel';
 import { TopicOverview } from './panel-sections';
 
 /**
@@ -102,6 +102,11 @@ export function GraphViewer({
     [centreId, hop1]
   );
   const panelSpokes = React.useMemo(() => spokesOfKind(spokes, hop1Nodes, kindFilter), [spokes, hop1Nodes, kindFilter]);
+  // The panel's "first N of each kind" note counts only the kinds the chip leaves in it.
+  const panelMoreKinds = React.useMemo(() => {
+    const more = hop1?.moreKinds ?? [];
+    return kindFilter === 'all' ? more : more.filter(kind => kind === kindFilter);
+  }, [hop1, kindFilter]);
   // Dated news can come from hop 1 or from the map's second ring.
   const loadedNodes = React.useMemo(
     () => [...hop1Nodes.values(), ...(neighbourhood.selection?.nodes.map(entry => entry.node) ?? [])],
@@ -321,10 +326,10 @@ export function GraphViewer({
                 isFetchingNextPage: claims.isFetchingNextPage,
                 fetchNextPage: () => void claims.fetchNextPage(),
               }
-            : CLAIMS_HIDDEN
+            : NO_CLAIMS_ASKED
         }
         onOpen={goTo}
-        moreKinds={hop1.moreKinds}
+        moreKinds={panelMoreKinds}
         emptyMessages={{
           relationships: relationshipsEmptyMessage(filter),
           claims: showsClaims ? claimsEmptyMessage(filter, topicName) : null,
@@ -339,13 +344,6 @@ export function GraphViewer({
 
 const NO_NODES: GraphNode[] = [];
 const NO_CLAIM_PAGES: ClaimAbout[][] = [];
-const CLAIMS_HIDDEN: ClaimsState = {
-  isLoading: false,
-  isError: false,
-  hasNextPage: false,
-  isFetchingNextPage: false,
-  fetchNextPage: () => {},
-};
 
 function StageNote({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (

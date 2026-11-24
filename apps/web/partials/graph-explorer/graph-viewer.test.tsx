@@ -440,7 +440,7 @@ describe('GraphViewer under a kind chip', () => {
   const topicScope = { ...scope, topicId: TOPIC, topicSpaceId: SPACE };
 
   /** The topic with a person, a dated story and another topic around it, and a claim about it. */
-  function mixedNeighbourhood() {
+  function mixedNeighbourhood(moreKinds: string[] = []) {
     const base = neighbourhood({ centreId: TOPIC, filter: {} });
     const person = base.selection!.nodes[1].node;
     const story = {
@@ -451,7 +451,13 @@ describe('GraphViewer under a kind chip', () => {
       date: '2026-11-01',
       types: [{ id: 'cccccccccccccccccccccccccccccccc', name: 'News story' }],
     };
-    const topic = { ...person, id: OTHER_TOPIC, name: 'Gaza ceasefire', kind: 'topic', types: [{ id: TOPIC_TYPE_ID, name: 'Topic' }] };
+    const topic = {
+      ...person,
+      id: OTHER_TOPIC,
+      name: 'Gaza ceasefire',
+      kind: 'topic',
+      types: [{ id: TOPIC_TYPE_ID, name: 'Topic' }],
+    };
     const edgeTo = (id: string, n: number) => ({
       id: `e${n}`,
       fromId: id,
@@ -473,7 +479,7 @@ describe('GraphViewer under a kind chip', () => {
         links: neighbours.map(({ edge }) => ({ hop: 1, edge })),
       },
       kinds: ['topic', 'ent', 'story'],
-      hop1: { isError: false, data: { centre, neighbours, moreKinds: [] } },
+      hop1: { isError: false, data: { centre, neighbours, moreKinds } },
       centre,
     });
     hooks.useClaimsAbout.mockReturnValue({
@@ -504,6 +510,14 @@ describe('GraphViewer under a kind chip', () => {
     expect(heading('Topics · 1')).toBeTruthy();
     expect(heading('People and groups · 1')).toBeTruthy();
     expect(screen.queryByRole('heading', { name: /^Claims/ })).toBeTruthy();
+  });
+
+  it('notes capped kinds only for the groups the chip leaves in the panel', () => {
+    mixedNeighbourhood(['topic']);
+    render(<Viewer start={TOPIC} scope={scope} />);
+    expect(screen.queryByText(/Showing the first/)).toBeTruthy();
+    fireEvent.click(chips().getByRole('button', { name: 'News' }));
+    expect(screen.queryByText(/Showing the first/)).toBeNull();
   });
 
   it('keeps claims about the centre under Claims, and nothing else', () => {
