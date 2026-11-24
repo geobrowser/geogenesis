@@ -13,13 +13,19 @@ import { entityResponseCountsQueryKey } from '~/core/responses/entity-response';
 import { useClaimResponseSummaryBatch } from '~/core/responses/use-claim-response-summaries';
 import type { ResponseCounts } from '~/core/responses/use-entity-response-scores';
 
+/** Split label for a row whose counts are read in the claim's own space, not the page's. */
+export const OWN_SPACE_LABEL = "Claim's space";
+
 /** A claim row and the space it votes in — its `voteTarget.spaceId`. */
 export type ClaimVoteCountTarget = { claimId: string; spaceId: string };
 
 export type TemplateClaimVoteCounts = {
   /** The claim's stance counts in its vote space, or null until they are known. */
   countsFor: (claimId: string) => ResponseCounts | null;
-  /** What to call a row's split bar: the page's own label in its space, else "Everyone", never another space's name. */
+  /**
+   * What to call a row's split bar. Counts are read in the row's vote space, so a row from another
+   * space says so without naming it.
+   */
   labelFor: (spaceId: string, pageSpaceLabel: string) => string;
 };
 
@@ -108,7 +114,7 @@ export function useTemplateClaimVoteCounts({
   return React.useMemo(
     () => ({
       countsFor: claimId => countsByClaim.get(ID.uuidToHex(claimId)) ?? null,
-      labelFor: (spaceId, pageSpaceLabel) => (spaceId === pageSpaceId ? pageSpaceLabel : 'Everyone'),
+      labelFor: (spaceId, pageSpaceLabel) => (ID.equals(spaceId, pageSpaceId) ? pageSpaceLabel : OWN_SPACE_LABEL),
     }),
     [countsByClaim, pageSpaceId]
   );

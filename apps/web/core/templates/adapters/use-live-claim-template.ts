@@ -13,6 +13,7 @@ import { useSpace } from '~/core/hooks/use-space';
 import { ID } from '~/core/id';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import { Entities } from '~/core/utils/entity';
+import { normId } from '~/core/utils/norm-id';
 import { resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -127,7 +128,7 @@ export function useLiveClaimTemplate({
   const incomingSupportsWhere = React.useMemo(
     () => ({
       types: [{ id: { equals: CLAIM_TYPE_ID } }],
-      spaces: [{ equals: spaceId }],
+      spaces: [{ equals: normId(spaceId) }],
       relations: [
         {
           typeOf: { id: { equals: TEMPLATE_ONTOLOGY.CLAIM_SUPPORTS_PROPERTY_ID } },
@@ -140,7 +141,7 @@ export function useLiveClaimTemplate({
   const incomingOpposesWhere = React.useMemo(
     () => ({
       types: [{ id: { equals: CLAIM_TYPE_ID } }],
-      spaces: [{ equals: spaceId }],
+      spaces: [{ equals: normId(spaceId) }],
       relations: [
         {
           typeOf: { id: { equals: TEMPLATE_ONTOLOGY.CLAIM_OPPOSES_PROPERTY_ID } },
@@ -153,7 +154,7 @@ export function useLiveClaimTemplate({
   const incomingQuotesWhere = React.useMemo(
     () => ({
       types: [{ id: { equals: TEMPLATE_ONTOLOGY.QUOTE_TYPE_ID } }],
-      spaces: [{ equals: spaceId }],
+      spaces: [{ equals: normId(spaceId) }],
       relations: [
         {
           typeOf: { id: { equals: TEMPLATE_ONTOLOGY.CLAIM_SUPPORTS_PROPERTY_ID } },

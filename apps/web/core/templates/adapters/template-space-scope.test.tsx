@@ -26,6 +26,8 @@ const SPACE = '89bd89bf28ff8a0963faf92a8c905e20';
 const OTHER = 'b5a31f8182b042437ede0f84ee02f104';
 const VIEWER = 'dddddddddddddddddddddddddddddddd';
 const PAGE = '4ed3162278994f29bde7a6f7cf60e28e';
+/** `SPACE` as a dashed, uppercase UUID: the store's space ids are dashless lowercase. */
+const SPACE_DASHED = '89BD89BF-28FF-8A09-63FA-F92A8C905E20';
 
 const state = vi.hoisted(() => ({
   page: null as Entity | null,
@@ -194,13 +196,12 @@ beforeEach(() => {
   mocks.useTopicConnectionCounts.mockReset().mockReturnValue({ countsByTopicId: null });
   mocks.useTopicCoverage
     .mockReset()
-    .mockImplementation(({ spaceIds, enabled = true }: { spaceIds?: string[]; enabled?: boolean }) => ({
+    // Rows come back even while disabled, as a cached query's would.
+    .mockImplementation(({ spaceIds }: { spaceIds?: string[] }) => ({
       page: {
-        rows: enabled
-          ? state.coverage
-              .filter(row => spaceIds === undefined || spaceIds.includes(row.spaceId))
-              .map(row => ({ ...row, types: [], createdAtSec: 0, description: null, imageUrl: null }))
-          : [],
+        rows: state.coverage
+          .filter(row => spaceIds === undefined || spaceIds.includes(row.spaceId))
+          .map(row => ({ ...row, types: [], createdAtSec: 0, description: null, imageUrl: null })),
         endCursor: null,
         hasNextPage: false,
       },
@@ -246,6 +247,29 @@ describe('Claim template', () => {
 
     // No `spaceIds`: the record then scopes to `spaceId` only.
     expect(mocks.useClaimRecord).toHaveBeenCalledWith({ claimId: PAGE, spaceId: SPACE, topicIds: ['topic'] });
+  });
+});
+
+describe('A route space id written differently', () => {
+  it('still matches the store for Claim, Source and Event lists', () => {
+    const sources = TEMPLATE_ONTOLOGY.SOURCES_PROPERTY_ID;
+    state.corpus = [
+      linked('a1', 'Supports, here', SPACE, [CLAIM_TYPE_ID], TEMPLATE_ONTOLOGY.CLAIM_SUPPORTS_PROPERTY_ID),
+      linked('c1', 'Cites, here', SPACE, [CLAIM_TYPE_ID], sources),
+      linked('e1', 'Related, here', SPACE, [CLAIM_TYPE_ID], TEMPLATE_ONTOLOGY.RELATED_ENTITIES_PROPERTY_ID),
+    ];
+
+    state.page = pageEntity(CLAIM_TYPE_ID);
+    const claim = renderHook(() => useLiveClaimTemplate({ entityId: PAGE, spaceId: SPACE_DASHED }));
+    expect(claim.result.current.data!.subClaims?.map(item => item.title)).toEqual(['Supports, here']);
+
+    state.page = pageEntity(TEMPLATE_ONTOLOGY.ARTICLE_TYPE_ID);
+    const source = renderHook(() => useLiveSourceTemplate({ entityId: PAGE, spaceId: SPACE_DASHED }));
+    expect(source.result.current.data!.supportedClaims.map(item => item.title)).toEqual(['Cites, here']);
+
+    state.page = pageEntity(ContentIds.NEWS_EVENT_TYPE);
+    const event = renderHook(() => useLiveEventTemplate({ entityId: PAGE, spaceId: SPACE_DASHED }));
+    expect(event.result.current.data!.claims.map(item => item.title)).toEqual(['Related, here']);
   });
 });
 
@@ -354,13 +378,18 @@ describe('Topic template', () => {
     ]);
   });
 
-  it('reads no second coverage when the viewer’s space is the page’s', () => {
+  it.each([
+    ['the viewer’s space is the page’s', SPACE],
+    ['there is no viewer', null],
+  ])('reads no second coverage when %s, and lists none of its cached rows', async (_, viewerSpaceId) => {
     topicCorpus();
-    state.viewerSpaceId = SPACE;
-    renderHook(() => useLiveTopicTemplate({ entityId: PAGE, spaceId: SPACE }));
+    state.viewerSpaceId = viewerSpaceId;
+    const { result } = renderHook(() => useLiveTopicTemplate({ entityId: PAGE, spaceId: SPACE }));
 
     const viewerRead = mocks.useTopicCoverage.mock.calls.at(-1)![0];
     expect(viewerRead.enabled).toBe(false);
+    await waitFor(() => expect(result.current.data?.sections).toBeDefined());
+    expect(result.current.data!.sections?.[0]?.items.map(item => item.title)).toEqual(['Source here']);
   });
 
   it('labels a claim split "Everyone", never another space', async () => {

@@ -7,6 +7,7 @@ import { ID } from '~/core/id';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import type { Entity, Relation } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
+import { normId } from '~/core/utils/norm-id';
 import { resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -66,7 +67,7 @@ export function useLiveSourceTemplate({
   const citingClaimsWhere = React.useMemo(
     () => ({
       types: [{ id: { equals: TEMPLATE_ONTOLOGY.CLAIM_TYPE_ID } }],
-      spaces: [{ equals: spaceId }],
+      spaces: [{ equals: normId(spaceId) }],
       relations: [
         { typeOf: { id: { equals: TEMPLATE_ONTOLOGY.SOURCES_PROPERTY_ID } }, toEntity: { id: { equals: entityId } } },
       ],
@@ -77,7 +78,7 @@ export function useLiveSourceTemplate({
   const quotesWhere = React.useMemo(
     () => ({
       types: [{ id: { equals: TEMPLATE_ONTOLOGY.QUOTE_TYPE_ID } }],
-      spaces: [{ equals: spaceId }],
+      spaces: [{ equals: normId(spaceId) }],
       relations: [
         { typeOf: { id: { equals: TEMPLATE_ONTOLOGY.SOURCES_PROPERTY_ID } }, toEntity: { id: { equals: entityId } } },
       ],
@@ -88,7 +89,7 @@ export function useLiveSourceTemplate({
   const citingStoriesWhere = React.useMemo(
     () => ({
       types: [{ id: { equals: TEMPLATE_ONTOLOGY.NEWS_STORY_TYPE_ID } }],
-      spaces: [{ equals: spaceId }],
+      spaces: [{ equals: normId(spaceId) }],
       relations: [
         { typeOf: { id: { equals: TEMPLATE_ONTOLOGY.SOURCES_PROPERTY_ID } }, toEntity: { id: { equals: entityId } } },
       ],
