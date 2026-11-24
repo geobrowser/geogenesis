@@ -12,7 +12,7 @@ import { useSpace } from '~/core/hooks/use-space';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 import { useQueryEntity } from '~/core/sync/use-store';
-import { resolveEntityTemplateFromTypes } from '~/core/templates/registry';
+import { type EntityTemplateId, resolveEntityTemplateFromTypes } from '~/core/templates/registry';
 import {
   LiveClaimTemplateView,
   LiveEventTemplateView,
@@ -164,6 +164,8 @@ function EditorFooter({
  * derived across every space either way, so this is about consistency with the controls the pages
  * render rather than about reaching a type a scoped read would miss.
  */
+const RECORD_VIEW_TEMPLATES: ReadonlySet<EntityTemplateId | undefined> = new Set(['claim', 'topic']);
+
 function useCustomBrowseView(entityId: string, spaceId: string, isEditing: boolean) {
   const { entity, isLoading } = useQueryEntity({ id: entityId });
   const enableV2Templates = useFeatureFlag('entityTemplatesV2');
@@ -185,10 +187,10 @@ function useCustomBrowseView(entityId: string, spaceId: string, isEditing: boole
   );
 
   return {
-    // A templated entity being edited: its read view (and its record tabs) come back on leaving
-    // edit mode.
-    isEditingTemplate:
-      isEditing && !!entity && resolveEntityTemplateFromTypes(entity.types, { includeV2: enableV2Templates }) !== null,
+    // A Claim or Topic being edited: the views with record tabs (debates, claims...), which come
+    // back on leaving edit mode.
+    isEditingRecordView:
+      isEditing && RECORD_VIEW_TEMPLATES.has(resolveEntityTemplateFromTypes(entity?.types ?? [])?.id),
     customView: customBrowseView({
       entityId,
       entity,
@@ -206,7 +208,7 @@ function useCustomBrowseView(entityId: string, spaceId: string, isEditing: boole
 export function EntityPageBody(props: EntityPageBodyProps) {
   const { entityId, spaceId, initialTabRelations, tabEntities } = props;
   const isEditing = useUserIsEditing(spaceId);
-  const { customView, enableV2Templates, entity, isEditingTemplate } = useCustomBrowseView(
+  const { customView, enableV2Templates, entity, isEditingRecordView } = useCustomBrowseView(
     entityId,
     spaceId,
     isEditing
@@ -450,7 +452,7 @@ export function EntityPageBody(props: EntityPageBodyProps) {
       spaceId={spaceId}
       initialTabRelations={initialTabRelations}
       tabEntities={tabEntities}
-      keepRecordTabSelection={isEditingTemplate}
+      keepRecordTabSelection={isEditingRecordView}
     />
   );
 

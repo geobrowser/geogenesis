@@ -46,13 +46,21 @@ describe('entity tab navigation', () => {
   });
 
   it('keeps Overview selected on a record route when asked to (GEO-3820)', () => {
-    const overview = (fullPath: string, activeOnSubpaths: boolean) =>
-      isEntityTabActive({ href: '/space/s/claim', activeTabId: null, fullPath, sidePanel: false, activeOnSubpaths });
+    const overview = (fullPath: string, activeOnRecordRoutes: boolean) =>
+      isEntityTabActive({
+        href: '/space/s/claim',
+        activeTabId: null,
+        fullPath,
+        sidePanel: false,
+        activeOnRecordRoutes,
+      });
     expect(overview('/space/s/claim/debates', true)).toBe(true);
     expect(overview('/space/s/claim', true)).toBe(true);
     expect(overview('/space/s/claim/debates', false)).toBe(false);
     // A sibling entity whose id starts the same is not below this one.
-    expect(overview('/space/s/claim2', true)).toBe(false);
+    expect(overview('/space/s/claim2', true)).toBe(false); // Only the record routes: Activity and the others keep their own selection.
+    expect(overview('/space/s/claim/activity', true)).toBe(false);
+    expect(overview('/space/s/claim/sources?x=1', true)).toBe(true);
   });
 
   it('keeps system and authored side-panel tabs mutually exclusive', () => {

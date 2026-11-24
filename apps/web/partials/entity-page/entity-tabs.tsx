@@ -89,7 +89,7 @@ export function EntityTabs({
 
   const overviewHref = NavUtils.toEntity(spaceId, entityId);
   const leadingSystemTabs = systemTabsBefore ?? [
-    { label: 'Overview', href: overviewHref, activeOnSubpaths: keepRecordTabSelection },
+    { label: 'Overview', href: overviewHref, activeOnRecordRoutes: keepRecordTabSelection },
   ];
   const systemTabKey = leadingSystemTabs.flatMap(tab => (tab.sidePanelKey ? [tab.sidePanelKey] : [])).join('\u0000');
   const activeSystemTab = sidePanelTab?.activeSystemTab ?? null;

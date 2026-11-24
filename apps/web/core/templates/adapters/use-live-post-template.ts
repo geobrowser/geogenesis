@@ -1,13 +1,16 @@
 'use client';
 
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+
 import * as React from 'react';
 
 import { useSpace } from '~/core/hooks/use-space';
 import { ID } from '~/core/id';
 import { claimResponseTargetKey } from '~/core/responses/claim-response-summaries';
 import { useClaimResponseSummaryBatch } from '~/core/responses/use-claim-response-summaries';
-import { useQueryEntity } from '~/core/sync/use-store';
+import { useQueryEntity, useValues } from '~/core/sync/use-store';
 import { Entities } from '~/core/utils/entity';
+import { normId } from '~/core/utils/norm-id';
 import { NavUtils } from '~/core/utils/utils';
 
 import type {
@@ -50,7 +53,19 @@ export function useLivePostTemplate({
 }): TemplateDataSource<PostTemplateModel> {
   const { entity, isLoading } = useQueryEntity({ id: entityId, spaceId });
   const { space } = useSpace(spaceId);
-  const [localNotes, setLocalNotes] = React.useState<PostContextNoteModel[]>([]);
+  // A note's tag (Description) and source (Web URL) live on the note entity, not the relation.
+  const noteIds = React.useMemo(
+    () =>
+      new Set(
+        readEntityRelations(entity, TEMPLATE_ONTOLOGY.COMMUNITY_NOTES_PROPERTY_ID).map(rel => normId(rel.toEntity.id))
+      ),
+    [entity]
+  );
+  const noteValues = useValues({
+    selector: v =>
+      noteIds.has(normId(v.entity.id)) &&
+      (v.property.id === SystemIds.DESCRIPTION_PROPERTY || v.property.id === TEMPLATE_ONTOLOGY.WEB_URL_PROPERTY_ID),
+  });
   const authorMeta = usePostAuthorMetadata(entity ? entityId : undefined);
 
   const claimRelations = React.useMemo(
@@ -180,16 +195,25 @@ export function useLivePostTemplate({
         };
       });
 
+    const noteValue = (noteId: string, propertyId: string) =>
+      noteValues.find(v => normId(v.entity.id) === normId(noteId) && v.property.id === propertyId)?.value;
     const graphNotes: PostContextNoteModel[] = communityNotes
       .filter(rel => Boolean(rel.toEntity.name))
-      .map(rel => ({
-        id: rel.toEntity.id,
-        tag: 'Community note',
-        status: 'shown',
-        statusLabel: 'Shown',
-        text: rel.toEntity.name ?? rel.toEntity.id,
-        sources: [],
-      }));
+      .map((rel): PostContextNoteModel => {
+        const id = rel.toEntity.id;
+        const sourceUrl = noteValue(id, TEMPLATE_ONTOLOGY.WEB_URL_PROPERTY_ID);
+        const isDraft = Boolean(rel.isLocal) && !rel.hasBeenPublished;
+        return {
+          id,
+          tag: noteValue(id, SystemIds.DESCRIPTION_PROPERTY) ?? 'Community note',
+          status: isDraft ? 'mine' : 'shown',
+          statusLabel: isDraft ? 'Added' : 'Shown',
+          text: rel.toEntity.name ?? id,
+          sources: sourceUrl ? [{ id: `${id}-source`, index: 1, title: sourceUrl, href: sourceUrl }] : [],
+        };
+      })
+      // The viewer's unpublished notes first.
+      .sort((a, b) => Number(b.status === 'mine') - Number(a.status === 'mine'));
 
     const sections: EntityListSectionModel[] = [];
 
@@ -266,36 +290,14 @@ export function useLivePostTemplate({
       mediaAlt: knownAuthor ?? '',
       breadcrumbs,
       claims,
-      // A note added here is already a staged Community notes relation in `graphNotes`, which owns
-      // it and its text. The draft's tag and source are kept locally and laid over it, newest first;
-      // they go when the relation does.
-      notes: [
-        ...localNotes.flatMap(local => {
-          const staged = graphNotes.find(note => ID.equals(note.id, local.id));
-          return staged ? [{ ...local, text: staged.text }] : [];
-        }),
-        ...graphNotes.filter(note => !localNotes.some(local => ID.equals(local.id, note.id))),
-      ],
+      // A note added here is staged as a Community notes relation, so it draws through `graphNotes`.
+      notes: graphNotes,
       onAddNote: draft => {
-        const noteId = actionCallbacks.onAddFlag?.(entity.id, {
+        actionCallbacks.onAddFlag?.(entity.id, {
           reason: draft.tag,
           body: draft.text,
           sourceUrl: draft.sourceUrl || undefined,
         });
-        if (!noteId) return;
-        setLocalNotes(prev => [
-          {
-            id: noteId,
-            tag: draft.tag,
-            status: 'mine',
-            statusLabel: 'Added',
-            text: draft.text,
-            sources: draft.sourceUrl
-              ? [{ id: `${noteId}-source`, index: 1, title: draft.sourceUrl, href: draft.sourceUrl }]
-              : [],
-          },
-          ...prev,
-        ]);
       },
       graphConnections: graphConnections.length > 0 ? graphConnections : undefined,
       contextByEntityId: buildEntityContextMap(entity.id, flags),
@@ -307,7 +309,7 @@ export function useLivePostTemplate({
     claimRelations,
     entity,
     hydratedSourceCards,
-    localNotes,
+    noteValues,
     responseBatch.data,
     serverCoverUrl,
     space?.entity?.name,

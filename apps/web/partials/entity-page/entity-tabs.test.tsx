@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
   canEdit: false,
   editable: false,
   editingSpace: null as string | null,
-  readTabs: null as Array<{ label: string; href: string; activeOnSubpaths?: boolean }> | null,
+  readTabs: null as Array<{ label: string; href: string; activeOnRecordRoutes?: boolean }> | null,
   sidePanel: null as null | {
     activeTabId: string | null;
     activeSystemTab: string | null;
@@ -175,7 +175,7 @@ describe('EntityTabs access and system tabs', () => {
     expect(setActiveSystemTab).not.toHaveBeenCalled();
     expect(setActiveTabId).not.toHaveBeenCalled();
     // On the full page, Overview stays selected on /debates.
-    expect(mocks.readTabs?.[0]).toMatchObject({ label: 'Overview', activeOnSubpaths: true });
+    expect(mocks.readTabs?.[0]).toMatchObject({ label: 'Overview', activeOnRecordRoutes: true });
   });
 
   it('still resets a generic entity’s unknown side-panel tab', () => {

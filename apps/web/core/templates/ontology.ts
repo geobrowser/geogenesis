@@ -441,7 +441,7 @@ export function outletInitialsFrom(name: string): string {
  * Second-level labels that ccTLDs register names under (example.co.uk, abc.net.au, folha.com.br).
  * Not the full public suffix list: enough to name a publisher, without a dependency for it.
  */
-const COUNTRY_SECOND_LEVEL_LABELS = new Set(['ac', 'co', 'com', 'edu', 'go', 'gob', 'gov', 'ne', 'net', 'or', 'org']);
+const COUNTRY_SECOND_LEVEL_LABELS = new Set(['ac', 'co', 'com', 'edu', 'gov', 'net', 'org']);
 
 /** The label a site registered: businessinsider in markets.businessinsider.com, bbc in bbc.co.uk. */
 function registrableLabel(parts: readonly string[]): string {

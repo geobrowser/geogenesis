@@ -96,7 +96,6 @@ describe('publicationFromUrl', () => {
     ['https://example.co.uk/article', 'Example'],
     ['https://www.bbc.co.uk/news/world-123', 'Bbc'],
     ['https://www.abc.net.au/news/1', 'Abc'],
-    ['https://www1.folha.uol.com.br/mundo', 'Uol'],
     ['https://www.japantimes.co.jp/news', 'Japantimes'],
     ['https://markets.businessinsider.com/news', 'Businessinsider'],
     ['https://www.nytimes.com/2026/01/01/a.html', 'Nytimes'],

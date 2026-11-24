@@ -48,6 +48,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('~/core/sync/use-store', () => ({
+  useValues: () => [],
   useQueryEntity: (args: { id?: string; spaceId?: string }) => {
     state.entityReads.push(args);
     return { entity: state.page, isLoading: false };
