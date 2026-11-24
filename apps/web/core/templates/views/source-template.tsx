@@ -19,6 +19,7 @@ import {
   TemplateBadge,
   TemplateEmptyState,
   TemplateShell,
+  TemplateTitleRow,
   TopicImagePills,
 } from '../primitives';
 
@@ -68,19 +69,22 @@ export function SourceTemplate({
       className={className}
     >
       <header className="flex flex-col gap-3.5">
-        <div className="flex items-start justify-between gap-4">
+        <TemplateTitleRow
+          actions={
+            <>
+              <EntityContextTogglePill />
+              {headerActions ?? (
+                <EntityOverflowMenu
+                  target={{ id: model.id, kind: model.sourceType ?? 'Source', title: model.title }}
+                  isPageRoot
+                  size="md"
+                />
+              )}
+            </>
+          }
+        >
           <h1 className="m-0 text-entityTitle text-pretty text-text">{model.title}</h1>
-          <div className="flex shrink-0 items-center gap-2 pt-1.5">
-            <EntityContextTogglePill />
-            {headerActions ?? (
-              <EntityOverflowMenu
-                target={{ id: model.id, kind: model.sourceType ?? 'Source', title: model.title }}
-                isPageRoot
-                size="md"
-              />
-            )}
-          </div>
-        </div>
+        </TemplateTitleRow>
 
         <div className="flex flex-wrap items-center gap-2">
           <TemplateBadge tone="source">Source</TemplateBadge>

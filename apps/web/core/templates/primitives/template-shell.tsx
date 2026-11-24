@@ -105,6 +105,32 @@ export function TemplateBadge({
   );
 }
 
+/**
+ * A template's title with its header actions (context pill, overflow menu). Beside each other when the
+ * template is at least 560px wide; on a phone or in the side panel the actions sit on their own row
+ * above the title, or they squeeze a sentence-long title into a column a few words wide.
+ */
+export function TemplateTitleRow({
+  children,
+  actions,
+  actionsClassName = '@[560px]:pt-1.5',
+}: {
+  /** The title block: an `h1`, or the column that holds it. */
+  children: React.ReactNode;
+  actions: React.ReactNode;
+  /** Nudges the actions down to the title's first line when they sit beside it. */
+  actionsClassName?: string;
+}) {
+  return (
+    <div className="flex flex-col-reverse gap-2 @[560px]:flex-row @[560px]:items-start @[560px]:justify-between @[560px]:gap-4">
+      {children}
+      <div className={cx('flex shrink-0 items-center gap-2 self-end @[560px]:self-auto', actionsClassName)}>
+        {actions}
+      </div>
+    </div>
+  );
+}
+
 export function TemplateBreadcrumb({ items, className }: { items: readonly BreadcrumbItem[]; className?: string }) {
   if (items.length === 0) return null;
 

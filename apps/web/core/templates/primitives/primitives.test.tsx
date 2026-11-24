@@ -22,6 +22,7 @@ import {
   SourceChipList,
   SplitBars,
   TemplateBreadcrumb,
+  TemplateTitleRow,
   VoteBox,
 } from './index';
 
@@ -229,6 +230,46 @@ describe('RelatedListSection', () => {
     expect(screen.getByText('Key quote from the post.')).toBeInTheDocument();
     expect(document.querySelectorAll('[data-masonry-col]').length).toBeGreaterThan(0);
   });
+
+  it("puts an X post card's date under the author with the handle, not beside the card actions", () => {
+    render(
+      <RelatedListSection
+        section={{
+          id: 'x-sources',
+          title: 'Sources',
+          layout: 'cards',
+          items: [
+            {
+              id: 'tw-2',
+              kind: 'source',
+              kindLabel: 'Post',
+              mediaType: 'tweet',
+              title: 'Rates are going up',
+              publisher: 'Stella Example',
+              authorHandle: '@stella',
+              date: '3 Nov 2026',
+              excerpt: 'Rates are going up.',
+            },
+            {
+              id: 'tw-3',
+              kind: 'source',
+              kindLabel: 'Post',
+              mediaType: 'tweet',
+              title: 'No handle here',
+              publisher: 'Plain Account',
+              date: '4 Nov 2026',
+              excerpt: 'No handle here.',
+            },
+          ],
+        }}
+      />
+    );
+
+    const withHandle = screen.getByText('@stella · 3 Nov 2026');
+    expect(withHandle.parentElement).toHaveTextContent('Stella Example');
+    const dateOnly = screen.getByText('4 Nov 2026');
+    expect(dateOnly.parentElement).toHaveTextContent('Plain Account');
+  });
 });
 
 describe('TemplateBreadcrumb', () => {
@@ -246,6 +287,36 @@ describe('TemplateBreadcrumb', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Topic root' }));
     expect(onRoot).toHaveBeenCalledTimes(1);
     expect(screen.getByText('Current claim')).toHaveAttribute('aria-current', 'page');
+  });
+});
+
+describe('TemplateTitleRow', () => {
+  it('stacks the actions above the title below 560px and puts them beside it from 560px', () => {
+    render(
+      <TemplateTitleRow actions={<button type="button">Menu</button>}>
+        <h1>A sentence-long event title</h1>
+      </TemplateTitleRow>
+    );
+
+    const actions = screen.getByRole('button', { name: 'Menu' }).parentElement!;
+    const row = actions.parentElement!;
+    // The actions come after the title in the DOM (reading order) and column-reverse draws them on top.
+    expect(row.lastElementChild).toBe(actions);
+    expect(row.firstElementChild).toBe(screen.getByRole('heading', { name: 'A sentence-long event title' }));
+    expect(row).toHaveClass('flex-col-reverse', '@[560px]:flex-row', '@[560px]:justify-between');
+    expect(actions).toHaveClass('shrink-0', 'self-end', '@[560px]:self-auto', '@[560px]:pt-1.5');
+  });
+
+  it('takes a different top offset for the actions', () => {
+    render(
+      <TemplateTitleRow actions={<button type="button">Menu</button>} actionsClassName="@[560px]:pt-1">
+        <h1>Show</h1>
+      </TemplateTitleRow>
+    );
+
+    const actions = screen.getByRole('button', { name: 'Menu' }).parentElement!;
+    expect(actions).toHaveClass('@[560px]:pt-1');
+    expect(actions).not.toHaveClass('@[560px]:pt-1.5');
   });
 });
 

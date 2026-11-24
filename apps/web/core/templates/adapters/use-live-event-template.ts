@@ -166,14 +166,15 @@ export function useLiveEventTemplate({
 
     const sections: EntityListSectionModel[] = [];
 
-    if (hydratedSourceCards.length > 0) {
-      sections.push({
-        id: 'sources',
-        title: 'Sources',
-        layout: 'cards',
-        items: hydratedSourceCards,
-      });
-    }
+    // Always drawn, empty or not, with the same shape as the News story's Sources section: every news
+    // claim now opens as an Event, and the section's "+" is how its first source gets added.
+    sections.push({
+      id: 'sources',
+      title: 'Sources',
+      layout: 'cards',
+      emptyText: 'No sources',
+      items: hydratedSourceCards,
+    });
 
     if (topics.length > 0) {
       sections.push({

@@ -23,6 +23,7 @@ import {
   TEMPLATE_CARD_SURFACE,
   TemplateBadge,
   TemplateShell,
+  TemplateTitleRow,
 } from '../primitives';
 import {
   PodcastArtwork,
@@ -102,7 +103,21 @@ export function PodcastEpisodeTemplate({
           />
 
           <div className="flex min-w-0 flex-1 flex-col gap-2.5">
-            <div className="flex items-start justify-between gap-4">
+            <TemplateTitleRow
+              actionsClassName="@[560px]:pt-1"
+              actions={
+                <>
+                  <EntityContextTogglePill />
+                  {headerActions ?? (
+                    <EntityOverflowMenu
+                      target={{ id: model.id, kind: 'Episode', title: model.title }}
+                      isPageRoot
+                      size="md"
+                    />
+                  )}
+                </>
+              }
+            >
               <div className="flex min-w-0 flex-col gap-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <TemplateBadge tone="episode">Episode</TemplateBadge>
@@ -141,18 +156,7 @@ export function PodcastEpisodeTemplate({
 
                 <h1 className="m-0 text-entityTitle text-pretty text-text">{model.title}</h1>
               </div>
-
-              <div className="flex shrink-0 items-center gap-2 pt-1">
-                <EntityContextTogglePill />
-                {headerActions ?? (
-                  <EntityOverflowMenu
-                    target={{ id: model.id, kind: 'Episode', title: model.title }}
-                    isPageRoot
-                    size="md"
-                  />
-                )}
-              </div>
-            </div>
+            </TemplateTitleRow>
 
             <PodcastTopicChips topics={model.topics} />
 

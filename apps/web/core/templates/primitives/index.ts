@@ -66,6 +66,7 @@ export {
   TemplateBreadcrumb,
   TemplateEmptyState,
   TemplateShell,
+  TemplateTitleRow,
   type TemplateBadgeTone,
 } from './template-shell';
 export { TopicImagePills } from './topic-image-pills';

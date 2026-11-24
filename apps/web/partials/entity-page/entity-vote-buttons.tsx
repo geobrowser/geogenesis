@@ -497,8 +497,10 @@ function EntityResponseButtons({
 
   // The two thumbs share `ResponseButton` with the claim pills, and the same submission window:
   // `isSubmittingResponse` clears once the bundler has the write.
+  // The ::after pads the 20px thumb to a 24x32 tap target without changing how it looks or
+  // reaching the count beside it.
   const thumbClassName = cx(
-    'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
+    'group/vote relative flex h-5 w-5 items-center justify-center rounded transition-colors after:absolute after:-inset-x-0.5 after:-inset-y-1.5',
     VOTE_BUTTON_RESTING_CLASS
   );
 

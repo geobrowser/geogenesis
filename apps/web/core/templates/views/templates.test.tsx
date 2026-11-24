@@ -13,6 +13,7 @@ import { DebateTemplate } from './debate-template';
 import { EventTemplate } from './event-template';
 import { NewsStoryTemplate } from './news-story-template';
 import { PodcastEpisodeTemplate } from './podcast-episode-template';
+import { PodcastExpandableDescription } from './podcast-shared';
 import { PodcastShowTemplate } from './podcast-show-template';
 import { PostTemplate } from './post-template';
 import { SourceLibraryTemplate } from './source-library-template';
@@ -720,5 +721,115 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     // Quiet empty states rendered cleanly
     expect(within(context).getByText('No context added yet.')).toBeInTheDocument();
     expect(within(disputes).getByText('No disputes')).toBeInTheDocument();
+  });
+});
+
+describe('GEO-3819 layout fixes', () => {
+  it('shows every loaded episode with only "Load more episodes", no page numbers', () => {
+    const onLoadMoreEpisodes = vi.fn();
+    render(
+      <PodcastShowTemplate
+        model={{
+          id: 'show-paging',
+          title: 'Long Show',
+          episodeCount: 25,
+          topics: [],
+          episodes: Array.from({ length: 25 }, (_, idx) => ({
+            id: `ep-${idx + 1}`,
+            title: `Paged episode ${idx + 1}`,
+            href: `/space/s/ep-${idx + 1}`,
+          })),
+          hosts: [],
+          listenOn: [],
+          hasMoreEpisodes: true,
+          onLoadMoreEpisodes,
+          graphConnections: [],
+        }}
+      />
+    );
+
+    expect(screen.getByText('Paged episode 1')).toBeInTheDocument();
+    expect(screen.getByText('Paged episode 25')).toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: /pages|pagination/i })).toBeNull();
+    expect(screen.queryByText(/^\d+\s*\/\s*\d+$/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Load more episodes' }));
+    expect(onLoadMoreEpisodes).toHaveBeenCalledTimes(1);
+  });
+
+  it('collapses a long episode description and links its URLs', () => {
+    // jsdom has no layout, so give the body a scroll height taller than its collapsed box.
+    const scrollHeight = vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(900);
+    const clientHeight = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(125);
+    try {
+      render(
+        <PodcastExpandableDescription
+          description={
+            'Today we talk about stablecoins.\nSponsored by Acme. Go to https://acme.example/pod. Or www.example.org/deal'
+          }
+        />
+      );
+
+      const body = screen.getByTestId('podcast-description-body');
+      expect(body).toHaveStyle({ maxHeight: '125px' });
+
+      const link = screen.getByRole('link', { name: 'https://acme.example/pod' });
+      expect(link).toHaveAttribute('href', 'https://acme.example/pod');
+      expect(link).toHaveAttribute('target', '_blank');
+      expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+      expect(screen.getByRole('link', { name: 'www.example.org/deal' })).toHaveAttribute(
+        'href',
+        'https://www.example.org/deal'
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'Show more' }));
+      expect(body.style.maxHeight).toBe('');
+      expect(screen.getByRole('button', { name: 'Show less' })).toHaveAttribute('aria-expanded', 'true');
+    } finally {
+      scrollHeight.mockRestore();
+      clientHeight.mockRestore();
+    }
+  });
+
+  it('draws the post author card with avatar and handle, and without them when the graph has none', () => {
+    const baseModel = {
+      id: 'post-1',
+      authorName: 'Shashank Joshi',
+      platform: 'X',
+      body: 'Striking to see the degree to which Israel has become a major dividing line within both parties.',
+      claims: [],
+      notes: [],
+      sections: [],
+    };
+    const { container, rerender } = render(
+      <PostTemplate model={{ ...baseModel, authorHandle: '@shashj', authorAvatarUrl: 'https://example.com/a.png' }} />
+    );
+
+    expect(screen.getByText('@shashj')).toBeInTheDocument();
+    expect(container.querySelector('article img[src="https://example.com/a.png"]')).not.toBeNull();
+    expect(screen.getByText(baseModel.body)).toBeInTheDocument();
+
+    rerender(<PostTemplate model={baseModel} />);
+    expect(screen.queryByText('@shashj')).toBeNull();
+    expect(container.querySelector('article img')).toBeNull();
+  });
+});
+
+describe('EventTemplate Sources section (GEO-3819)', () => {
+  it('shows "No sources" with an add button when the event has none', () => {
+    render(
+      <EventTemplate
+        model={{
+          id: 'event-1',
+          title: 'An event with no sources yet',
+          when: 'Nov 23, 2026',
+          claims: [],
+          sections: [{ id: 'sources', title: 'Sources', layout: 'cards', emptyText: 'No sources', items: [] }],
+        }}
+      />
+    );
+
+    const sources = screen.getByRole('region', { name: 'Sources' });
+    expect(within(sources).getByText('No sources')).toBeInTheDocument();
+    expect(within(sources).getByRole('button', { name: /add source/i })).toBeInTheDocument();
   });
 });

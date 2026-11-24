@@ -24,6 +24,7 @@ import {
   TEMPLATE_INTERACTIVE_CARD_SURFACE,
   TemplateBadge,
   TemplateShell,
+  TemplateTitleRow,
   TopicImagePills,
   VoteBox,
 } from '../primitives';
@@ -133,19 +134,22 @@ export function NewsStoryTemplate({
 
           {/* Editorial header: title first, type/metadata strip below */}
           <header className="flex flex-col gap-3.5">
-            <div className="flex items-start justify-between gap-4">
+            <TemplateTitleRow
+              actions={
+                <>
+                  <EntityContextTogglePill />
+                  {headerActions ?? (
+                    <EntityOverflowMenu
+                      target={{ id: model.id, kind: 'News story', title: model.headline }}
+                      isPageRoot
+                      size="md"
+                    />
+                  )}
+                </>
+              }
+            >
               <h1 className="m-0 text-entityTitle text-pretty text-text">{model.headline}</h1>
-              <div className="flex shrink-0 items-center gap-2 pt-1.5">
-                <EntityContextTogglePill />
-                {headerActions ?? (
-                  <EntityOverflowMenu
-                    target={{ id: model.id, kind: 'News story', title: model.headline }}
-                    isPageRoot
-                    size="md"
-                  />
-                )}
-              </div>
-            </div>
+            </TemplateTitleRow>
 
             <div className="flex flex-wrap items-center gap-2.5">
               <TemplateBadge tone="story">News story</TemplateBadge>
