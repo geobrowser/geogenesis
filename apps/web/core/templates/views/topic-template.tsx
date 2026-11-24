@@ -17,6 +17,7 @@ import {
   EntityFlagsSection,
   EntityInlineContext,
   EntityOverflowMenu,
+  ExpandableLede,
   GraphConnectionsStrip,
   RecentDebatesGallery,
   RelatedListSection,
@@ -64,6 +65,9 @@ export function TopicTemplate({
   );
   const addedTimelineTurns = usePendingAdds<TopicTimelineHighlightModel>(listedTimelineIds);
   const [subtopicsExpanded, setSubtopicsExpanded] = React.useState(false);
+  // Subtopics show only on request, so the description leads (GEO-3837).
+  const [subtopicsOpen, setSubtopicsOpen] = React.useState(false);
+  const subtopicsNavId = React.useId();
   const timelineHighlights = [...addedTimelineTurns.rows, ...(model.timelineHighlights ?? [])];
   const subtopics = model.subtopics ?? [];
   const visibleSubtopics = subtopicsExpanded ? subtopics : subtopics.slice(0, 10);
@@ -71,9 +75,17 @@ export function TopicTemplate({
   const hasContextOrLive = (model.graphConnections && model.graphConnections.length > 0) || Boolean(actionCallbacks);
   const hasFlagsOrLive = Boolean(model.contextByEntityId?.[model.id]?.flags?.length) || Boolean(actionCallbacks);
 
-  const subtopicsNav =
+  const subtopicsNav = (collapsible: boolean) =>
     subtopics.length > 0 ? (
-      <nav aria-label="Subtopics" className={cx('flex flex-wrap items-center gap-1.5', !embedded && 'mt-1')}>
+      <nav
+        id={collapsible ? subtopicsNavId : undefined}
+        aria-label="Subtopics"
+        className={cx(
+          'flex-wrap items-center gap-1.5',
+          collapsible && !subtopicsOpen ? 'hidden' : 'flex',
+          !embedded && 'mt-1'
+        )}
+      >
         {visibleSubtopics.map(sub =>
           sub.href ? (
             <Link
@@ -124,7 +136,7 @@ export function TopicTemplate({
     >
       {/* Hero header (omitted when embedded inside a Topic Space shell that renders the space header) */}
       {embedded ? (
-        subtopicsNav
+        subtopicsNav(false)
       ) : (
         <header className="flex flex-col gap-3.5">
           <TemplateTitleRow
@@ -155,11 +167,21 @@ export function TopicTemplate({
             <h1 className="m-0 text-entityTitle text-pretty text-text">{model.title}</h1>
           </TemplateTitleRow>
 
-          {model.lede && (
-            <p className="m-0 mt-1 max-w-[780px] text-[16.5px] leading-[25px] text-text/85">{model.lede}</p>
-          )}
+          {model.lede && <ExpandableLede text={model.lede} className="mt-1" />}
 
-          {subtopicsNav}
+          {subtopics.length > 0 && (
+            <button
+              type="button"
+              aria-expanded={subtopicsOpen}
+              aria-controls={subtopicsNavId}
+              onClick={() => setSubtopicsOpen(open => !open)}
+              className="inline-flex cursor-pointer items-center gap-1 self-start border-0 bg-transparent p-0 text-[14px] font-medium text-grey-04 transition-colors hover:text-text"
+            >
+              {subtopicsOpen ? 'Hide subtopics' : 'Show subtopics'}
+              <ChevronRightIcon className={cx('size-3.5', subtopicsOpen ? '-rotate-90' : 'rotate-90')} />
+            </button>
+          )}
+          {subtopicsNav(true)}
         </header>
       )}
 
@@ -266,7 +288,7 @@ export function TopicTemplate({
             </section>
           )}
 
-          {/* Sources & evidence (and additional structured sections) */}
+          {/* Evidence (and additional structured sections) */}
           {model.sections && model.sections.length > 0 && (
             <div id="sources-section" className="flex flex-col gap-8">
               {model.sections.map(section => (
@@ -327,30 +349,40 @@ function TimelineHighlightRow({
       </span>
 
       {isInteractive && (
-        <ChevronRightIcon className="mt-1 size-4 shrink-0 text-grey-03 transition-transform group-hover:translate-x-0.5 group-hover:text-[#4c1fd4]" />
+        // Desktop only: on phones the name takes this width (GEO-3837).
+        <ChevronRightIcon className="mt-1 hidden size-4 shrink-0 text-grey-03 transition-transform group-hover:translate-x-0.5 group-hover:text-[#4c1fd4] @[680px]:block" />
       )}
     </span>
   );
 
   return (
-    <li className="grid grid-cols-1 gap-2 @[680px]:grid-cols-[118px_28px_minmax(0,1fr)] @[680px]:gap-4">
-      {/* Left date */}
-      <div className="pt-4 text-[14px] font-semibold text-grey-04 @[680px]:pt-5 @[680px]:text-right">{turn.when}</div>
+    // Desktop: date | spine | event. Phones: a slim spine on the left, with the date just above its
+    // event's name beside it (GEO-3837).
+    <li className="grid grid-cols-[12px_minmax(0,1fr)] gap-x-3 @[680px]:grid-cols-[118px_28px_minmax(0,1fr)] @[680px]:gap-x-4">
+      {/* Date */}
+      <div className="col-start-2 row-start-1 pt-4 text-[14px] font-semibold text-grey-04 @[680px]:col-start-1 @[680px]:pt-5 @[680px]:text-right">
+        {turn.when}
+      </div>
 
-      {/* Continuous vertical timeline spine directly on page */}
-      <div className="relative hidden justify-center @[680px]:flex">
-        {!isFirst && <span aria-hidden className="absolute top-0 h-[28px] w-px bg-grey-02" />}
-        {!isLast && <span aria-hidden className="absolute top-[28px] bottom-0 w-px bg-grey-02" />}
+      {/* Continuous vertical timeline spine. The dot lines up with the date on phones, the name on desktop. */}
+      <div className="relative col-start-1 row-span-2 row-start-1 flex justify-center @[680px]:col-start-2 @[680px]:row-span-1">
+        {!isFirst && <span aria-hidden className="absolute top-0 h-[26px] w-px bg-grey-02 @[680px]:h-[28px]" />}
+        {!isLast && <span aria-hidden className="absolute top-[26px] bottom-0 w-px bg-grey-02 @[680px]:top-[28px]" />}
         <span
           aria-hidden
-          className="relative z-10 mt-[19px] inline-grid size-[18px] shrink-0 place-items-center rounded-full border border-grey-02 bg-white"
+          className="relative z-10 mt-[20px] inline-grid size-3 shrink-0 place-items-center rounded-full border border-transparent bg-white @[680px]:mt-[19px] @[680px]:size-[18px] @[680px]:border-grey-02"
         >
           <span className="size-2 rounded-full bg-text" />
         </span>
       </div>
 
       {/* Right: event milestone headline + concise summary + overflow menu */}
-      <div className={cx('flex min-w-0 flex-col gap-2.5 py-4 @[680px]:py-5', !isLast && 'border-b border-divider/90')}>
+      <div
+        className={cx(
+          'col-start-2 row-start-2 flex min-w-0 flex-col gap-2.5 pt-1 pb-4 @[680px]:col-start-3 @[680px]:row-start-1 @[680px]:py-5',
+          !isLast && 'border-b border-divider/90'
+        )}
+      >
         <div className="flex min-w-0 items-start justify-between gap-3">
           {turn.href ? (
             <Link href={turn.href} className="group flex min-w-0 flex-1 text-left text-text no-underline">

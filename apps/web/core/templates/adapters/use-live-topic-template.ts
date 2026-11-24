@@ -191,7 +191,7 @@ function parseDebateTitle(
  *   (`Disputed` / `Accepted` tabs and interactive inline voting).
  * - Live `Recent debates` horizontal gallery (via `/api/topics/feed` for `DEBATE_TYPE_ID`).
  * - Live `Timeline` combining `News events` (`Event date`) and dated `News stories`.
- * - Rich 2-column format-aware `Sources & evidence` media cards (`layout: 'cards'`).
+ * - Rich 2-column format-aware `Evidence` media cards (`layout: 'cards'`).
  * - Header stats (`countsByTopicId`), compact clickable `Subtopics` chips, `Context` relation
  *   pills, `Flags` (`Community notes` / `Disclaimer`), and live `useMutate` actions.
  *
@@ -394,7 +394,7 @@ export function useLiveTopicTemplate({
     [coverage.page.rows, viewerCoverageRows]
   );
 
-  // Batch-hydrate Tweet / Post author names, @handles, and avatars for Sources & evidence cards
+  // Batch-hydrate Tweet / Post author names, @handles, and avatars for Evidence cards
   const tweetCoverageIds = React.useMemo(() => {
     const ids: string[] = [];
     for (const row of coverageRows) {
@@ -780,7 +780,7 @@ export function useLiveTopicTemplate({
       .slice(0, 8)
       .map(entry => entry.item);
 
-    // 4. Sources & evidence: rich format-aware 2-column media cards
+    // 4. Evidence: rich format-aware 2-column media cards
     const directStories = readEntityRelations(entity, TEMPLATE_ONTOLOGY.STORIES_PROPERTY_ID);
     const seenCoverageIds = new Set<string>();
     const coverageItems: EntityLinkRowModel[] = [];
@@ -852,7 +852,7 @@ export function useLiveTopicTemplate({
     const sections: EntityListSectionModel[] = [
       {
         id: 'coverage',
-        title: 'Sources & evidence',
+        title: 'Evidence',
         layout: 'cards',
         items: coverageItems,
         emptyText: 'No sources',

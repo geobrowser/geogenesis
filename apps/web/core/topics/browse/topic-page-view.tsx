@@ -5,13 +5,10 @@ import * as React from 'react';
 import { CURATED_TOPIC_TAG_ID, TAG_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/constants';
 import { readTypes } from '~/core/database/entities';
 import { TopicFollowControl } from '~/core/follows/follow-control';
-import { markGraphExplorerEntry } from '~/core/graph-explorer/graph-share';
-import { graphExplorerHref } from '~/core/graph-explorer/href';
 import { ID } from '~/core/id';
 import { useActiveTabIdForEditor, useEditorInstance } from '~/core/state/editor/editor-provider';
 import { useBlocks } from '~/core/state/editor/use-blocks';
 import { useEntitySidePanelActiveTab } from '~/core/state/entity-side-panel-active-tab';
-import { useFeatureFlag } from '~/core/state/feature-flags';
 import { useQueryEntity } from '~/core/sync/use-store';
 import type { Relation, TabEntity } from '~/core/types';
 import { resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
@@ -119,7 +116,6 @@ export function TopicPageView({
   tabEntities?: TabEntity[];
 }) {
   const { entity, isLoading } = useQueryEntity({ id: entityId, spaceId });
-  const graphExplorerEnabled = useFeatureFlag('graphExplorer');
   const activeAuthoredTabId = useActiveTabIdForEditor();
   const sidePanelTab = useEntitySidePanelActiveTab();
   const fullTopicSpaceIds = useTopicSpaceScope(spaceId);
@@ -305,21 +301,13 @@ export function TopicPageView({
                 </span>
               ))}
               {isCurated && <span className={TOPIC_META_CHIP_CLASS}>Curated</span>}
-              {graphExplorerEnabled && (
-                <Link
-                  href={graphExplorerHref({ entityId, topicId: entityId, spaceId })}
-                  onClick={() => markGraphExplorerEntry('topic_page')}
-                  className={`${TOPIC_META_CHIP_CLASS} transition-colors hover:text-text`}
-                >
-                  Explore graph
-                </Link>
-              )}
             </div>
             {/* GEO-3191: following is a topic's one action, so it stands where the votes were. */}
             <EntityPageActions
               entityId={entityId}
               spaceId={spaceId}
               leading={<TopicFollowControl topic={{ id: entityId, name: entity.name }} />}
+              variant="template"
             />
           </div>
 

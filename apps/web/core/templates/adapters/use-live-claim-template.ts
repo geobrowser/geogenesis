@@ -426,7 +426,6 @@ export function useLiveClaimTemplate({
               percent: agreePercent,
               voterCount: summary.total,
               isEveryone: true,
-              userLabel: userVote ? `You: ${userVote === 'agree' ? 'Agree' : 'Disagree'}` : undefined,
             },
           ]
         : [];
@@ -610,7 +609,7 @@ export function useLiveClaimTemplate({
 
     sections.push({
       id: 'sources',
-      title: 'Sources & evidence',
+      title: 'Evidence',
       layout: 'cards',
       items: hydratedSourceCards,
       emptyText: 'No sources',

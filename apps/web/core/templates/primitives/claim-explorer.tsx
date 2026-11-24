@@ -33,7 +33,10 @@ export interface ClaimExplorerProps {
   contestedClaims: readonly ClaimSummaryModel[];
   agreedClaims: readonly ClaimSummaryModel[];
   title?: string;
-  /** Topic lists drop the Factual / Judgment chip below 760px to keep each row short (GEO-3819). */
+  /**
+   * Below 760px the Factual / Judgment chip is dropped to keep each row short (GEO-3819). On for
+   * every template claim list (GEO-3837); pass `false` for a list where the kind matters on phones.
+   */
   hideKindOnPhone?: boolean;
   className?: string;
 }
@@ -49,7 +52,7 @@ export function ClaimExplorer({
   contestedClaims,
   agreedClaims,
   title = 'Claims',
-  hideKindOnPhone = false,
+  hideKindOnPhone = true,
   className,
 }: ClaimExplorerProps) {
   const ctx = useEntityActionContext();
@@ -225,7 +228,7 @@ export function ClaimExplorer({
                   item_position: startIndex + index + 1,
                 }}
               >
-                <RankedClaimRow
+                <ClaimListRow
                   rank={startIndex + index + 1}
                   claim={claim}
                   isAgreed={activeTab === 'agreed'}
@@ -246,17 +249,23 @@ export function ClaimExplorer({
   );
 }
 
-function RankedClaimRow({
-  rank,
-  claim,
-  isAgreed,
-  hideKindOnPhone,
-}: {
+export interface ClaimListRowProps {
   rank: number;
   claim: ClaimSummaryModel;
-  isAgreed: boolean;
-  hideKindOnPhone: boolean;
-}) {
+  /** Marks the title with a check, for a list's Accepted tab. */
+  isAgreed?: boolean;
+  /** See {@link ClaimExplorerProps.hideKindOnPhone}. */
+  hideKindOnPhone?: boolean;
+  /** Extra lines under the vote controls, such as a sub-claim's note and source chips. */
+  details?: React.ReactNode;
+}
+
+/**
+ * One claim in a template claim list: rank, title, kind, vote pills, split and "…". Every template
+ * list of claims draws its rows with this, so the phone layout (GEO-3819) is the same everywhere
+ * (GEO-3837). Wrap it in a `divide-y` card and a `TemplateVoteRows` for its vote batch.
+ */
+export function ClaimListRow({ rank, claim, isAgreed = false, hideKindOnPhone = true, details }: ClaimListRowProps) {
   const voteMetaIndex = claim.meta?.findIndex(part => /\bvotes?\b/i.test(part)) ?? -1;
   const debateMetaIndex = claim.meta?.findIndex(part => /\bdebates?\b/i.test(part)) ?? -1;
 
@@ -317,8 +326,6 @@ function RankedClaimRow({
     claim.split.rows.length > 0 && claim.split.totalVotes !== 0
       ? claim.split.rows.map(row => ({
           ...row,
-          // The vote pills already show the viewer's side.
-          userLabel: undefined,
           voterCount: row.voterCount ?? (claim.split.rows.length === 1 ? claim.split.totalVotes : undefined),
         }))
       : [];
@@ -423,6 +430,13 @@ function RankedClaimRow({
                   )}
                 </span>
               )}
+            </div>
+          )}
+
+          {details && (
+            // After the split on phones (both are `order-last`, so the DOM order holds).
+            <div className="order-last mt-3 flex basis-full flex-col gap-2 @[760px]:order-none @[760px]:mt-0">
+              {details}
             </div>
           )}
 

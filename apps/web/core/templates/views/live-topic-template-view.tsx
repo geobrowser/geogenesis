@@ -67,6 +67,7 @@ export function LiveTopicTemplateView({
             entityId={entityId}
             spaceId={spaceId}
             compact={compact}
+            variant="template"
             leading={<TopicFollowControl topic={{ id: entityId, name: data.title }} />}
           />
         )

@@ -239,7 +239,7 @@ describe('stageIngestionLink', () => {
   });
 
   it('stages nothing for an enrich of a row the section lists, even when the store has no backlink', () => {
-    // A Topic's "Sources & evidence" rows come from a query that never reaches the store, so the
+    // A Topic's "Evidence" rows come from a query that never reaches the store, so the
     // store has nothing here; the section's own rows (UUID-form ids from GraphQL) are what tell.
     const listed = { ...topicLink, listedEntityIds: ['cccccccc-cccc-cccc-cccc-cccccccccccc'] };
     expect(

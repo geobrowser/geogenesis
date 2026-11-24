@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -9,12 +9,17 @@ import { EntityPageActions } from './entity-page-actions';
 
 const mocks = vi.hoisted(() => ({
   isEditing: false,
+  graphExplorer: true,
   /** Every `(entityId, spaceId)` pair the component asked a name for. */
   nameCalls: [] as unknown[][],
   /** Args `useEntityHistory` was called with. */
   historyArgs: null as Record<string, unknown> | null,
   contextMenu: null as Record<string, unknown> | null,
   voteButtons: null as Record<string, unknown> | null,
+}));
+
+vi.mock('~/core/state/feature-flags', () => ({
+  useFeatureFlag: (id: string) => (id === 'graphExplorer' ? mocks.graphExplorer : false),
 }));
 
 vi.mock('~/core/hooks/use-user-is-editing', () => ({ useUserIsEditing: () => mocks.isEditing }));
@@ -73,6 +78,7 @@ vi.mock('~/design-system/prefetch-link', () => ({
 
 beforeEach(() => {
   mocks.isEditing = false;
+  mocks.graphExplorer = true;
   mocks.nameCalls = [];
   mocks.historyArgs = null;
   mocks.contextMenu = null;
@@ -160,5 +166,43 @@ describe('EntityPageActions', () => {
     render(<EntityPageActions entityId="entity-1" spaceId="space-1" />);
 
     expect(screen.queryByRole('link', { name: 'Create new entity' })).toBeNull();
+  });
+
+  describe('on entity templates (GEO-3837)', () => {
+    it('puts a graph link where history was while the flag is on, opening this entity in this space', () => {
+      render(<EntityPageActions entityId="entity-1" spaceId="space-1" variant="template" />);
+
+      const graph = screen.getByRole('link', { name: 'Explore graph' });
+      expect(graph).toHaveAttribute('href', '/explore/graph/entity-1?topic=entity-1&space=space-1');
+      expect(graph).toHaveAttribute('data-geo-analytics-label', 'Explore graph');
+      expect(screen.queryByTestId('history')).toBeNull();
+      expectInDocumentOrder([graph, screen.getByTestId('context-menu')]);
+    });
+
+    it('shows no graph link while the graphExplorer flag is off, and history stays in the menu', () => {
+      mocks.graphExplorer = false;
+      render(<EntityPageActions entityId="entity-1" spaceId="space-1" variant="template" />);
+
+      expect(screen.queryByRole('link', { name: 'Explore graph' })).toBeNull();
+      expect(screen.queryByTestId('history')).toBeNull();
+      expect(mocks.contextMenu?.versionHistory).toBeTypeOf('function');
+    });
+
+    it('hands version history to the menu, fetching only while it is open', () => {
+      render(<EntityPageActions entityId="entity-1" spaceId="space-1" variant="template" />);
+
+      expect(mocks.contextMenu?.versionHistory).toBeTypeOf('function');
+      expect(mocks.historyArgs).toMatchObject({ entityId: 'entity-1', spaceId: 'space-1', enabled: false });
+
+      act(() => (mocks.contextMenu?.onVersionHistoryOpenChange as (open: boolean) => void)(true));
+      expect(mocks.historyArgs).toMatchObject({ enabled: true });
+    });
+
+    it('keeps history beside the menu on ordinary entity pages', () => {
+      render(<EntityPageActions entityId="entity-1" spaceId="space-1" />);
+
+      expect(screen.queryByRole('link', { name: 'Explore graph' })).toBeNull();
+      expect(mocks.contextMenu?.versionHistory).toBeUndefined();
+    });
   });
 });

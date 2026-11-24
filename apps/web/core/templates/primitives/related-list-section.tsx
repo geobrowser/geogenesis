@@ -180,17 +180,19 @@ export function RelatedListSection({ section, className }: RelatedListSectionPro
     scroller.scrollBy({ left: direction * (colWidth + 16), behavior: 'smooth' });
   }, []);
 
-  const isSourceSection = /source/i.test(title);
+  const isSourceSection = /source|evidence/i.test(title);
   const addLabel = 'Add source';
 
   return (
     <section aria-label={title} className={cx('flex flex-col gap-3', className)}>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-col gap-1">
+      {/* One line at any width (GEO-3837): a long title wraps beside the actions instead of the
+          actions dropping under it. */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 flex-col gap-1">
           <h2 className="m-0 text-mediumTitle font-semibold text-text">{title}</h2>
           {subtitle && <p className="m-0 text-[15px] leading-[21px] text-grey-04">{subtitle}</p>}
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex shrink-0 items-center gap-1.5">
           {action &&
             (action.href ? (
               <Link
@@ -314,7 +316,7 @@ const RAIL_COLUMN_WIDTH_CLASS = 'w-[84cqw] @[540px]:w-[calc((100cqw-1rem)/2)] @[
  * Horizontally scrollable masonry rail:
  * - For 1–3 cards (e.g. News story Sources), renders a single horizontal snap-scroll row with
  *   one card per column (widths from `RAIL_COLUMN_WIDTH_CLASS`).
- * - For 4+ cards (e.g. Topic `Sources & evidence`), packs cards into balanced 2-card vertical
+ * - For 4+ cards (e.g. Topic `Evidence`), packs cards into balanced 2-card vertical
  *   masonry columns inside a horizontal snap-scroll strip so tall media cards never leave awkward
  *   vertical whitespace AND users can smoothly swipe or click `←` `→` horizontally through all cards.
  */

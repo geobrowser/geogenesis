@@ -3,13 +3,13 @@
 import * as React from 'react';
 
 import cx from 'classnames';
-import Link from 'next/link';
 
 import type { EntityActionCallbacks, PostContextNoteModel, PostTemplateModel } from '../models';
 import { resolveTemplateImageUrl } from '../ontology';
 import {
   ArrowUpRightIcon,
   CheckIcon,
+  ClaimListRow,
   EntityContextAndDisputes,
   EntityContextTogglePill,
   EntityOverflowMenu,
@@ -21,6 +21,7 @@ import {
   TemplateBadge,
   TemplateShell,
   TemplateTitleRow,
+  TemplateVoteRows,
 } from '../primitives';
 import { TEMPLATE_ACTIONS } from '../template-actions';
 
@@ -175,35 +176,24 @@ export function PostTemplate({
         {/* Right: claims + bridging context notes */}
         <div className="flex min-w-0 flex-col gap-6">
           {model.claims.length > 0 && (
-            <section aria-label="Claims in this post" className={cx('flex flex-col gap-3 p-5', TEMPLATE_CARD_SURFACE)}>
-              <h2 className="m-0 text-smallTitle text-text">Claims in this post</h2>
-              <div className="divide-y divide-divider">
-                {model.claims.map(({ claim, stanceLabel }) => (
-                  <div key={claim.id} className="flex flex-col gap-2.5 py-3.5 first:pt-1 last:pb-0">
-                    <div className="flex items-start justify-between gap-3">
-                      {claim.href ? (
-                        <Link
-                          href={claim.href}
-                          className="text-[17px] leading-[23px] font-semibold text-text no-underline hover:text-[#4c1fd4]"
-                        >
-                          {claim.title}
-                        </Link>
-                      ) : claim.onSelect ? (
-                        <button
-                          type="button"
-                          onClick={claim.onSelect}
-                          className="cursor-pointer border-0 bg-transparent p-0 text-left text-[17px] leading-[23px] font-semibold text-text hover:text-[#4c1fd4]"
-                        >
-                          {claim.title}
-                        </button>
-                      ) : (
-                        <span className="text-[17px] leading-[23px] font-semibold text-text">{claim.title}</span>
-                      )}
-                      <TemplateBadge tone="neutral">{stanceLabel}</TemplateBadge>
-                    </div>
-                    <SplitBars rows={claim.split.rows} density="compact" />
-                  </div>
-                ))}
+            // The same rows as every other template claim list (GEO-3837); the post's stance on the
+            // claim joins its meta line.
+            <section aria-label="Claims in this post" className="flex flex-col gap-3">
+              <h2 className="m-0 text-mediumTitle font-semibold text-text">Claims in this post</h2>
+              <div className={cx('divide-y divide-divider overflow-hidden', TEMPLATE_CARD_SURFACE)}>
+                <TemplateVoteRows targets={model.claims.map(({ claim }) => claim.voteTarget)}>
+                  {model.claims.map(({ claim, stanceLabel }, index) => (
+                    <ClaimListRow
+                      key={claim.id}
+                      rank={index + 1}
+                      claim={
+                        stanceLabel && stanceLabel !== 'Claim'
+                          ? { ...claim, meta: [...(claim.meta ?? []), stanceLabel] }
+                          : claim
+                      }
+                    />
+                  ))}
+                </TemplateVoteRows>
               </div>
             </section>
           )}

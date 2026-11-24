@@ -151,26 +151,41 @@ export function TemplateTitleRow({
   );
 }
 
-/** Ancestors keep their natural width up to 45% of the row, and only they shrink when the row is full. */
-const BREADCRUMB_ANCESTOR = 'max-w-[45%] min-w-0 truncate text-[15px] leading-[20px]';
+/**
+ * Ancestors keep their natural width up to 45% of the row, and only they shrink when the row is full.
+ * Phones show the parent alone, at full width (GEO-3837).
+ */
+const BREADCRUMB_ANCESTOR = 'min-w-0 truncate text-[15px] leading-[20px] @[600px]:max-w-[45%]';
+/** Only the parent is shown on phones; every other crumb and chevron is desktop-only. */
+const DESKTOP_ONLY = 'hidden @[600px]:block';
 
 export function TemplateBreadcrumb({ items, className }: { items: readonly BreadcrumbItem[]; className?: string }) {
   if (items.length === 0) return null;
+  const parentIndex = items.length - 2;
 
   return (
-    // One line, so a chevron never wraps onto a line of its own. The current page takes the space the
-    // ancestors leave (at least 40% of the row; basis-0, so it never squeezes them), and truncates.
+    // Desktop: one line, so a chevron never wraps onto a line of its own. The current page takes the
+    // space the ancestors leave (at least 40% of the row; basis-0, so it never squeezes them), and
+    // truncates. Phones: a single "‹ Parent" back link, since five crumbs squeezed into 360px are all
+    // ellipses and the page title sits right below.
     <nav aria-label="Breadcrumb" className={cx('flex min-w-0 items-center gap-x-1.5', className)}>
       {items.map((item, index) => {
         const isLast = index === items.length - 1;
+        const isParent = index === parentIndex;
+        const visibility = isParent ? undefined : DESKTOP_ONLY;
         return (
           <React.Fragment key={item.id}>
-            {index > 0 && <ChevronRightIcon className="size-3.5 shrink-0 text-grey-03" />}
+            {isParent && <ChevronRightIcon className="size-3.5 rotate-180 text-grey-04 @[600px]:hidden" />}
+            {index > 0 && <ChevronRightIcon className="hidden size-3.5 shrink-0 text-grey-03 @[600px]:block" />}
             {item.href && !isLast ? (
               <Link
                 href={item.href}
                 title={item.label}
-                className={cx(BREADCRUMB_ANCESTOR, 'text-grey-04 no-underline transition-colors hover:text-text')}
+                className={cx(
+                  BREADCRUMB_ANCESTOR,
+                  visibility,
+                  'text-grey-04 no-underline transition-colors hover:text-text'
+                )}
               >
                 {item.label}
               </Link>
@@ -181,6 +196,7 @@ export function TemplateBreadcrumb({ items, className }: { items: readonly Bread
                 title={item.label}
                 className={cx(
                   BREADCRUMB_ANCESTOR,
+                  visibility,
                   'cursor-pointer border-0 bg-transparent p-0 text-left text-grey-04 transition-colors hover:text-text'
                 )}
               >
@@ -192,8 +208,11 @@ export function TemplateBreadcrumb({ items, className }: { items: readonly Bread
                 title={item.label}
                 className={cx(
                   isLast
-                    ? 'min-w-[40%] flex-1 basis-0 truncate text-[15px] leading-[20px] font-medium text-text'
-                    : cx(BREADCRUMB_ANCESTOR, 'text-grey-04')
+                    ? cx(
+                        'min-w-[40%] flex-1 basis-0 truncate text-[15px] leading-[20px] font-medium text-text',
+                        DESKTOP_ONLY
+                      )
+                    : cx(BREADCRUMB_ANCESTOR, visibility, 'text-grey-04')
                 )}
               >
                 {item.label}
@@ -265,7 +284,14 @@ export function TemplateShell({
           )}
           style={compact || embedded ? undefined : { maxWidth }}
         >
-          {!embedded && breadcrumbs && breadcrumbs.length > 0 && <TemplateBreadcrumb items={breadcrumbs} />}
+          {!embedded && breadcrumbs && breadcrumbs.length > 0 && (
+            // The trail sits closer to the cover and the title than the section gap (32px on phones,
+            // 44px on desktop), so it reads as part of the header (GEO-3837).
+            <TemplateBreadcrumb
+              items={breadcrumbs}
+              className={compact ? undefined : '-mt-3 -mb-4 @[600px]:-mt-2 @[600px]:-mb-6'}
+            />
+          )}
           {children}
         </div>
       </div>

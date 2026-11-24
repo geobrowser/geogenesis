@@ -25,6 +25,13 @@ export interface VoteBoxProps {
  */
 export function VoteBox({ prompt, split, control, className }: VoteBoxProps) {
   const { userVote, countSummary, hint, impactNote, disabled, onVote, onClear } = control;
+  // Pressing the filled button takes the vote back and the other one switches it, so the buttons
+  // alone change or clear a vote. The filled button is the only "your vote" mark: no "You: Agree"
+  // pill and no "You agreed. Change" line, at any width (GEO-3837).
+  const press = (choice: 'agree' | 'disagree') => {
+    if (userVote === choice && onClear) onClear();
+    else onVote(choice);
+  };
 
   return (
     <section
@@ -63,7 +70,7 @@ export function VoteBox({ prompt, split, control, className }: VoteBoxProps) {
               type="button"
               disabled={disabled}
               aria-pressed={userVote === 'agree'}
-              onClick={() => onVote('agree')}
+              onClick={() => press('agree')}
               className={cx(
                 'inline-flex h-9 cursor-pointer items-center justify-center gap-1.5 rounded-full border px-3.5 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50',
                 userVote === 'agree'
@@ -79,7 +86,7 @@ export function VoteBox({ prompt, split, control, className }: VoteBoxProps) {
               type="button"
               disabled={disabled}
               aria-pressed={userVote === 'disagree'}
-              onClick={() => onVote('disagree')}
+              onClick={() => press('disagree')}
               className={cx(
                 'inline-flex h-9 cursor-pointer items-center justify-center gap-1.5 rounded-full border px-3.5 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50',
                 userVote === 'disagree'
@@ -104,21 +111,6 @@ export function VoteBox({ prompt, split, control, className }: VoteBoxProps) {
               </span>
             )}
           </div>
-
-          {userVote && (
-            <div className="flex items-center gap-2.5 text-[14.5px] text-grey-04">
-              <span className="font-medium text-text">{userVote === 'agree' ? 'You agreed.' : 'You disagreed.'}</span>
-              {onClear && (
-                <button
-                  type="button"
-                  onClick={onClear}
-                  className="cursor-pointer border-0 bg-transparent p-0 text-[14.5px] font-medium text-ctaPrimary hover:text-ctaHover"
-                >
-                  Change
-                </button>
-              )}
-            </div>
-          )}
 
           {(impactNote || (!userVote && hint)) && (
             <div className="flex flex-col gap-1 text-[13.5px] leading-[19px] text-grey-04">

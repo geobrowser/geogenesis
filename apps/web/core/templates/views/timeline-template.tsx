@@ -6,7 +6,7 @@ import cx from 'classnames';
 import Link from 'next/link';
 
 import type { TimelineTemplateModel, TimelineTurnModel } from '../models';
-import { ArrowRightIcon, TEMPLATE_CARD_SURFACE, TemplateBadge, TemplateShell } from '../primitives';
+import { ArrowRightIcon, ExpandableLede, TEMPLATE_CARD_SURFACE, TemplateBadge, TemplateShell } from '../primitives';
 
 export interface TimelineTemplateProps {
   model: TimelineTemplateModel;
@@ -72,7 +72,7 @@ export function TimelineTemplate({ model, headerActions, footer, className }: Ti
           {headerActions}
         </div>
         <h1 className="m-0 text-entityTitle text-pretty text-text">{model.title}</h1>
-        {model.lede && <p className="m-0 max-w-[760px] text-[16.5px] leading-[25px] text-text/85">{model.lede}</p>}
+        {model.lede && <ExpandableLede text={model.lede} className="max-w-[760px]" />}
       </header>
 
       {/* Filter controls */}

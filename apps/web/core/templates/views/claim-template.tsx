@@ -2,8 +2,6 @@
 
 import * as React from 'react';
 
-import Link from 'next/link';
-
 import { ActionContextProvider } from '~/core/action-context-provider';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -19,8 +17,7 @@ import {
 import {
   AddClaimPopover,
   CheckCircleIcon,
-  ClaimVoteBinding,
-  ClaimVotePills,
+  ClaimListRow,
   EntityContextAndDisputes,
   EntityContextTogglePill,
   EntityInlineContext,
@@ -32,7 +29,6 @@ import {
   RecentDebatesGallery,
   RelatedListSection,
   SourceChipList,
-  SplitBars,
   TEMPLATE_CARD_SURFACE,
   TemplateBadge,
   type TemplateBadgeTone,
@@ -223,30 +219,6 @@ export function ClaimTemplate({
   );
 }
 
-function DebateCountLink({ count, href, onSelect }: { count: number; href?: string; onSelect?: () => void }) {
-  const text = `${count} ${count === 1 ? 'debate' : 'debates'}`;
-  const linkClasses =
-    'ml-1 text-[14px] font-medium text-grey-04 underline decoration-grey-02 underline-offset-2 transition-colors hover:text-[#4c1fd4] hover:decoration-[#4c1fd4]';
-
-  if (href) {
-    return (
-      <Link href={href} className={linkClasses}>
-        {text}
-      </Link>
-    );
-  }
-
-  if (onSelect) {
-    return (
-      <button type="button" onClick={onSelect} className={`cursor-pointer border-0 bg-transparent p-0 ${linkClasses}`}>
-        {text}
-      </button>
-    );
-  }
-
-  return <span className="ml-1 text-[14px] text-grey-04">{text}</span>;
-}
-
 const SUBCLAIMS_PER_PAGE = 6;
 
 function GroupedSubClaimSections({
@@ -434,93 +406,17 @@ function SubClaimGroupSection({
   );
 }
 
+/** A sub-claim drawn as the Topic page draws its claims, with its note and sources under the votes. */
 function SubClaimRow({ rank, subClaim }: { rank: number; subClaim: SubClaimModel }) {
-  const totalVotes = subClaim.split.totalVotes;
-  const voteCountLabel =
-    totalVotes !== undefined && totalVotes > 0
-      ? `${formatCompactCount(totalVotes)} ${totalVotes === 1 ? 'vote' : 'votes'}`
-      : '0 votes';
+  const details =
+    subClaim.stat || subClaim.sources.length > 0 ? (
+      <>
+        {subClaim.stat && <p className="m-0 text-[14.5px] leading-[21px] text-grey-04">{subClaim.stat}</p>}
+        {subClaim.sources.length > 0 && <SourceChipList sources={subClaim.sources} />}
+      </>
+    ) : undefined;
 
-  return (
-    <article className="flex flex-col gap-3 px-5 py-4 transition-colors hover:bg-grey-01/40 @[760px]:flex-row @[760px]:items-center @[760px]:justify-between @[760px]:gap-6">
-      <div className="flex min-w-0 flex-1 items-start gap-4">
-        <span className="w-6 shrink-0 pt-0.5 text-center text-[15px] font-medium text-grey-04 tabular-nums">
-          {rank}
-        </span>
-
-        <div className="flex min-w-0 flex-1 flex-col gap-2">
-          {subClaim.href ? (
-            <Link
-              href={subClaim.href}
-              className="text-[16px] leading-[22px] font-semibold text-pretty text-text no-underline transition-colors hover:text-[#4c1fd4]"
-            >
-              {subClaim.title}
-            </Link>
-          ) : subClaim.onSelect ? (
-            <button
-              type="button"
-              onClick={subClaim.onSelect}
-              className="cursor-pointer border-0 bg-transparent p-0 text-left text-[16px] leading-[22px] font-semibold text-pretty text-text transition-colors hover:text-[#4c1fd4]"
-            >
-              {subClaim.title}
-            </button>
-          ) : (
-            <h3 className="m-0 text-[16px] leading-[22px] font-semibold text-pretty text-text">{subClaim.title}</h3>
-          )}
-
-          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2">
-            {subClaim.kind && (
-              <TemplateBadge tone={CLAIM_KIND_TONE[subClaim.kind]} className="!h-6 !px-2 !text-[12.5px]">
-                {formatClaimKindLabel(subClaim.kind)}
-              </TemplateBadge>
-            )}
-
-            <ClaimVoteBinding
-              voteTarget={subClaim.voteTarget}
-              userVote={subClaim.userVote}
-              agreeCount={subClaim.agreeCount}
-              disagreeCount={subClaim.disagreeCount}
-              onVote={subClaim.onVote}
-              onClearVote={subClaim.onClearVote}
-            >
-              {vote => vote && <ClaimVotePills title={subClaim.title} vote={vote} />}
-            </ClaimVoteBinding>
-
-            {subClaim.debateCount !== undefined && subClaim.debateCount > 0 && (
-              <DebateCountLink count={subClaim.debateCount} href={subClaim.debatesHref} />
-            )}
-          </div>
-
-          {subClaim.stat && <p className="m-0 text-[14.5px] leading-[21px] text-grey-04">{subClaim.stat}</p>}
-
-          {subClaim.sources.length > 0 && <SourceChipList sources={subClaim.sources} className="pt-0.5" />}
-
-          <EntityInlineContext targetId={subClaim.id} targetTitle={subClaim.title} targetKind="Claim" />
-        </div>
-      </div>
-
-      <div className="flex shrink-0 items-center gap-3 pl-10 @[760px]:pl-0">
-        {subClaim.split.rows.length > 0 ? (
-          <SplitBars rows={subClaim.split.rows} density="compact" className="w-[240px] shrink-0" />
-        ) : (
-          <div className="hidden w-[240px] shrink-0 items-center gap-2 @[760px]:flex">
-            <div className="h-[5px] flex-1 overflow-hidden rounded-full bg-grey-01" />
-            <span className="w-[38px] text-right text-[12.5px] text-grey-03 tabular-nums">—</span>
-          </div>
-        )}
-
-        <span className="w-[68px] shrink-0 text-right text-[13px] whitespace-nowrap text-grey-04 tabular-nums">
-          {voteCountLabel}
-        </span>
-
-        {/* A pending row's id isn't an entity yet; the menu keeps its space but can't be used. */}
-        <EntityOverflowMenu
-          target={{ id: subClaim.id, kind: 'Claim', title: subClaim.title }}
-          className={subClaim.pending ? 'invisible' : undefined}
-        />
-      </div>
-    </article>
-  );
+  return <ClaimListRow rank={rank} claim={subClaim} details={details} />;
 }
 
 function StrongestCaseCard({ item }: { item: StrongestCaseModel }) {
