@@ -1256,7 +1256,7 @@ function TripleKeyValueList({
         })}
       </dl>
 
-      <InlinePagination page={safePage} totalPages={totalPages} onPageChange={setPage} label="Context pages" />
+      <InlinePagination page={safePage} totalPages={totalPages} onPageChange={setPage} label="Properties pages" />
     </div>
   );
 }
@@ -1710,11 +1710,11 @@ export function EntityActionProvider({
             {/* Context section with real section header & right-aligned borderless + anchored popover.
                 With Add context off (GEO-3819) it only shows when there is context to read. */}
             {(TEMPLATE_ACTIONS.addContext || viewerData.triples.length > 0) && (
-              <section aria-label="Context" className="flex flex-col gap-3">
+              <section aria-label="Properties" className="flex flex-col gap-3">
                 <div className="flex items-center justify-between gap-2">
                   <h4 className="m-0 inline-flex items-center gap-2 text-[17px] leading-[22px] font-semibold text-text">
                     <NetworkIcon className="size-4 text-grey-04" />
-                    <span>Context</span>
+                    <span>Properties</span>
                   </h4>
                   <AddContextPopover onSubmit={(pred, vals) => addTriple(activePaneTarget.id, pred, vals)} />
                 </div>
@@ -1730,7 +1730,7 @@ export function EntityActionProvider({
                     />
                   </div>
                 ) : (
-                  <p className="m-0 text-[14px] text-grey-04">No context added yet.</p>
+                  <p className="m-0 text-[14px] text-grey-04">No properties added yet.</p>
                 )}
               </section>
             )}

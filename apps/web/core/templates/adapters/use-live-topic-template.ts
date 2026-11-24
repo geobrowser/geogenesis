@@ -852,7 +852,7 @@ export function useLiveTopicTemplate({
     const sections: EntityListSectionModel[] = [
       {
         id: 'coverage',
-        title: 'Evidence',
+        title: 'Sources',
         layout: 'cards',
         items: coverageItems,
         emptyText: 'No sources',

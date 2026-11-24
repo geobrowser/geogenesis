@@ -2142,7 +2142,7 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
       sections: [
         {
           id: 'topic-sources',
-          title: 'Evidence',
+          title: 'Sources',
           layout: 'cards',
           items: ['s-il-icj', 's-idf-est', 's-coi', 's-unosat']
             .map(id => SOURCE_BY_ID[id])

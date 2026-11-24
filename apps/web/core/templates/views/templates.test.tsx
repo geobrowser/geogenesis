@@ -169,11 +169,11 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     expect(screen.queryByText('The facts it turns on')).toBeNull();
 
     // Verify Context relation pills + ContextPeekDrawer on Claim page
-    const contextSection = screen.getByRole('region', { name: 'Context' });
+    const contextSection = screen.getByRole('region', { name: 'Properties' });
     fireEvent.click(within(contextSection).getByRole('button', { name: 'International Court of Justice' }));
     const drawer = screen.getByRole('dialog');
     expect(within(drawer).getByRole('heading', { name: 'International Court of Justice' })).toBeInTheDocument();
-    expect(within(drawer).getByRole('region', { name: 'Context' })).toBeInTheDocument();
+    expect(within(drawer).getByRole('region', { name: 'Properties' })).toBeInTheDocument();
     fireEvent.click(within(drawer).getByRole('button', { name: 'Close' }));
 
     // Vote Agree
@@ -259,7 +259,7 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     const claims = screen.getByRole('region', { name: 'Claims' });
     const recentDebates = screen.getByRole('region', { name: 'Recent debates' });
     const timeline = screen.getByRole('region', { name: 'Timeline' });
-    const sources = screen.getByRole('region', { name: 'Evidence' });
+    const sources = screen.getByRole('region', { name: 'Sources' });
 
     expect(within(claims).getAllByRole('group', { name: /^Vote on /i })).toHaveLength(10);
     expect(within(claims).getByRole('button', { name: 'Add claim' })).toBeInTheDocument();
@@ -293,7 +293,7 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     const viewerDrawer = screen.getByRole('dialog', {
       name: /Context for Israel’s oral arguments at the ICJ/i,
     });
-    expect(within(viewerDrawer).getByRole('region', { name: 'Context' })).toBeInTheDocument();
+    expect(within(viewerDrawer).getByRole('region', { name: 'Properties' })).toBeInTheDocument();
     expect(within(viewerDrawer).getByRole('region', { name: 'Disputes' })).toBeInTheDocument();
     expect(within(viewerDrawer).queryByText(/Context \(\d+\)/)).toBeNull();
     expect(within(viewerDrawer).queryByText(/Disputes \(\d+\)/)).toBeNull();
@@ -461,7 +461,7 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     );
     expect(screen.getByRole('link', { name: /Spotify/i })).toHaveAttribute('href', 'https://open.spotify.com/show/1');
     expect(screen.getByText('Michael Barbaro')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Context' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Properties' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Disputes' })).toBeInTheDocument();
 
     const filter = screen.getByRole('searchbox', { name: 'Filter episodes' });
@@ -515,7 +515,7 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     expect(screen.getByText(/Helium bottlenecks ripple immediately across wafer fabs/i)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Luke Vargas/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Shelby Holliday/i })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Context' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Properties' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Disputes' })).toBeInTheDocument();
 
     // Toggle inline audio player
@@ -634,7 +634,7 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
           sections: [
             {
               id: 'sources',
-              title: 'Evidence',
+              title: 'Sources',
               items: [],
               emptyText: 'No sources',
             },
@@ -647,7 +647,7 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     const opposing = screen.getByRole('region', { name: 'Opposing claims' });
     const debates = screen.getByRole('region', { name: 'Debates' });
     const topics = screen.getByRole('region', { name: 'Topics' });
-    const context = screen.getByRole('region', { name: 'Context' });
+    const context = screen.getByRole('region', { name: 'Properties' });
     const disputes = screen.getByRole('region', { name: 'Disputes' });
 
     expect(supporting.compareDocumentPosition(opposing) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -668,8 +668,8 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     expect(topicLink).toHaveAttribute('href', '/space/s/top-1');
     expect(topicLink.querySelector('img')).toHaveAttribute('src', '/topic-ai-safety.png');
 
-    // Evidence empty state copy
-    const sourcesSection = screen.getByRole('region', { name: 'Evidence' });
+    // Sources empty state copy
+    const sourcesSection = screen.getByRole('region', { name: 'Sources' });
     expect(within(sourcesSection).getByText('No sources')).toBeInTheDocument();
 
     // Disputes empty state copy
@@ -718,7 +718,7 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     const sources = screen.getByRole('region', { name: 'Sources' });
     const rail = screen.getByRole('complementary', { name: 'Story connections' });
     const topics = within(rail).getByRole('region', { name: 'Topics' });
-    const context = screen.getByRole('region', { name: 'Context' });
+    const context = screen.getByRole('region', { name: 'Properties' });
     const disputes = screen.getByRole('region', { name: 'Disputes' });
 
     expect(sources.compareDocumentPosition(context) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -738,7 +738,7 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     expect(aiPill.querySelector('img')).toHaveAttribute('src', '/topic-ai.png');
 
     // Quiet empty states rendered cleanly
-    expect(within(context).getByText('No context added yet.')).toBeInTheDocument();
+    expect(within(context).getByText('No properties added yet.')).toBeInTheDocument();
     expect(within(disputes).getByText('No disputes')).toBeInTheDocument();
   });
 });
@@ -906,7 +906,7 @@ describe('Add context and Dispute switched off (GEO-3819 defaults)', () => {
   it('shows no Add context / Dispute entry point and no empty Context or Disputes section', () => {
     render(<NewsStoryTemplate model={story} />);
 
-    expect(screen.queryByRole('region', { name: 'Context' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Properties' })).toBeNull();
     expect(screen.queryByRole('region', { name: 'Disputes' })).toBeNull();
     expect(screen.queryByRole('button', { name: /add context|add dispute|dispute|challenge/i })).toBeNull();
     expect(screen.queryByText(/^(Add context|Dispute|Challenge)$/)).toBeNull();
@@ -937,7 +937,7 @@ describe('Add context and Dispute switched off (GEO-3819 defaults)', () => {
     TEMPLATE_ACTIONS.dispute = true;
     try {
       render(<NewsStoryTemplate model={story} />);
-      expect(screen.getByRole('region', { name: 'Context' })).toBeInTheDocument();
+      expect(screen.getByRole('region', { name: 'Properties' })).toBeInTheDocument();
       expect(screen.getByRole('region', { name: 'Disputes' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Add context' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Add dispute' })).toBeInTheDocument();
@@ -953,7 +953,7 @@ describe('Topic Context & Disputes row with nothing in it (GEO-3819)', () => {
       <TopicTemplate model={{ id: 'topic-empty', title: 'Quiet topic', lede: '' }} actionCallbacks={{}} />
     );
     // Live (callbacks set), but no context and no disputes: both sections hide themselves.
-    expect(screen.queryByRole('region', { name: 'Context' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Properties' })).toBeNull();
     expect(screen.queryByRole('region', { name: 'Disputes' })).toBeNull();
     // jsdom applies no Tailwind; the wrapper must be empty and carry the class that hides it.
     const wrapper = container.querySelector('[class~="empty:hidden"]');
@@ -1138,20 +1138,22 @@ describe('GEO-3837 phone tidy-ups', () => {
     expect(onVote).toHaveBeenCalledWith('agree');
   });
 
-  it('names the sources section "Evidence" and keeps its "+" adding a source', () => {
+  it('names the sources section "Sources" and keeps its "+" adding a source (GEO-3846)', () => {
     render(
       <TopicTemplate
         model={{
           id: 'topic-gaza',
           title: 'Gaza',
           lede: '',
-          sections: [{ id: 'sources', title: 'Evidence', items: [] }],
+          sections: [{ id: 'sources', title: 'Sources', items: [] }],
         }}
       />
     );
 
-    const evidence = screen.getByRole('region', { name: 'Evidence' });
-    expect(within(evidence).getByRole('button', { name: 'Add source' })).toBeInTheDocument();
+    const sources = screen.getByRole('region', { name: 'Sources' });
+    expect(within(sources).getByRole('heading', { name: 'Sources' })).toBeInTheDocument();
+    expect(within(sources).getByRole('button', { name: 'Add source' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Evidence' })).toBeNull();
     expect(screen.queryByText(/Sources (&|and) evidence/)).toBeNull();
   });
 });
