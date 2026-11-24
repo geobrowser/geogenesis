@@ -24,6 +24,10 @@ vi.mock('~/core/responses/use-claim-response-summaries', () => ({
   useClaimResponseSummaryBatch: () => ({ data: undefined }),
 }));
 vi.mock('./use-live-entity-actions', () => ({ useLiveEntityActions: () => ({}) }));
+// Viewer personal-space sources (GEO-3819 #3172) read the wallet; these tests have no viewer.
+vi.mock('./use-viewer-sources', () => ({
+  useEntityWithViewerSources: ({ entity }: { entity: Entity | null }) => entity,
+}));
 vi.mock('./use-hydrated-source-cards', () => ({
   useHydratedSourceCards: () => ({ items: state.sourceCards }),
   usePostAuthorMetadata: () => state.authorMeta,
@@ -120,7 +124,15 @@ describe('useLiveEventTemplate with a Claim + News event entity', () => {
     expect(model.summary).toBeUndefined();
     // Sources stays, empty, so the first source can be added from its "+"; Topics drops out.
     expect(model.sections).toEqual([
-      { id: 'sources', title: 'Sources', layout: 'cards', emptyText: 'No sources', items: [] },
+      {
+        id: 'sources',
+        title: 'Sources',
+        layout: 'cards',
+        emptyText: 'No sources',
+        items: [],
+        // The "+" that adds the first source (#3172's ingestion link on #3174's always-shown section).
+        ingestionLink: expect.objectContaining({ targetSpaceId: SPACE }),
+      },
     ]);
     expect(model.breadcrumbs).toBeUndefined();
   });
