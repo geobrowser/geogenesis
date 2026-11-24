@@ -4,8 +4,11 @@ import * as React from 'react';
 
 import Link from 'next/link';
 
+import { NavUtils } from '~/core/utils/utils';
+
 import { sourcesIngestionLink } from '../adapters/source-ingestion-links';
 import {
+  type ClaimKind,
   type ClaimSummaryModel,
   type ClaimTopicPillModel,
   type EntityActionCallbacks,
@@ -29,6 +32,7 @@ import {
   TopicImagePills,
   VoteBox,
 } from '../primitives';
+import { PUBLISHING_LABEL, usePendingAdds } from '../primitives/use-pending-adds';
 
 export interface NewsStoryTemplateProps {
   model: NewsStoryTemplateModel;
@@ -61,7 +65,28 @@ export function NewsStoryTemplate({
   className,
   spaceId,
 }: NewsStoryTemplateProps) {
-  const [addedClaimsByGroup, setAddedClaimsByGroup] = React.useState<Record<string, ClaimSummaryModel[]>>({});
+  const listedClaimIds = React.useMemo(
+    () => [...model.reportedClaims, ...(model.claimGroups ?? []).flatMap(group => group.claims)].map(claim => claim.id),
+    [model.claimGroups, model.reportedClaims]
+  );
+  const addedClaims = usePendingAdds<ClaimSummaryModel & { groupId: string }>(listedClaimIds);
+  const addedClaimsByGroup = React.useMemo(() => {
+    const byGroup: Record<string, ClaimSummaryModel[]> = {};
+    for (const claim of addedClaims.rows) (byGroup[claim.groupId] ??= []).push(claim);
+    return byGroup;
+  }, [addedClaims.rows]);
+  const addClaimTo = (groupId: string, draft: { title: string; kind: ClaimKind; note?: string }) =>
+    addedClaims.add(
+      state => ({
+        groupId,
+        title: draft.title,
+        kind: draft.kind,
+        pending: state.status === 'pending',
+        split: { rows: [], isSplit: false },
+        href: state.status === 'published' ? NavUtils.toEntity(state.spaceId, state.id) : undefined,
+      }),
+      actionCallbacks?.onAddClaim?.(draft)
+    );
 
   const hasClaimGroups = Boolean(model.claimGroups && model.claimGroups.length > 0);
   const flatClaims = [...(addedClaimsByGroup['flat'] ?? []), ...model.reportedClaims];
@@ -267,21 +292,8 @@ export function NewsStoryTemplate({
                           </div>
                           <AddClaimPopover
                             label={`Add claim to ${group.title}`}
-                            onSubmit={draft => {
-                              actionCallbacks?.onAddClaim?.(draft);
-                              setAddedClaimsByGroup(prev => ({
-                                ...prev,
-                                [group.id]: [
-                                  {
-                                    id: `story-claim-${Date.now()}`,
-                                    title: draft.title,
-                                    kind: draft.kind,
-                                    split: { rows: [], isSplit: false },
-                                  },
-                                  ...(prev[group.id] ?? []),
-                                ],
-                              }));
-                            }}
+                            canOpen={actionCallbacks?.canOpenAddForm}
+                            onSubmit={draft => addClaimTo(group.id, draft)}
                           />
                         </div>
                         <NewsClaimBulletList claims={claims} />
@@ -295,21 +307,8 @@ export function NewsStoryTemplate({
                     <h2 className="m-0 text-mediumTitle font-semibold text-text">Claims</h2>
                     <AddClaimPopover
                       label="Add claim"
-                      onSubmit={draft => {
-                        actionCallbacks?.onAddClaim?.(draft);
-                        setAddedClaimsByGroup(prev => ({
-                          ...prev,
-                          flat: [
-                            {
-                              id: `story-claim-${Date.now()}`,
-                              title: draft.title,
-                              kind: draft.kind,
-                              split: { rows: [], isSplit: false },
-                            },
-                            ...(prev.flat ?? []),
-                          ],
-                        }));
-                      }}
+                      canOpen={actionCallbacks?.canOpenAddForm}
+                      onSubmit={draft => addClaimTo('flat', draft)}
                     />
                   </div>
                   <NewsClaimBulletList claims={flatClaims} />
@@ -604,6 +603,8 @@ function NewsClaimBulletList({ claims }: { claims: readonly ClaimSummaryModel[] 
                   <span>{claim.title}</span>
                 )}
 
+                {claim.pending && <span className="ml-2 text-[12px] text-grey-04">{PUBLISHING_LABEL}</span>}
+
                 {hasAgreement && (
                   <span className="ml-2 inline-flex items-center rounded-md border border-divider bg-grey-01 px-1.5 py-0.5 align-middle text-[12px] leading-none font-medium text-grey-04 tabular-nums">
                     {formatPercentInt(claim.overallPercent!)} agree
@@ -611,17 +612,22 @@ function NewsClaimBulletList({ claims }: { claims: readonly ClaimSummaryModel[] 
                 )}
               </div>
 
-              <div className="shrink-0 opacity-60 transition-opacity group-focus-within/claim-bullet:opacity-100 group-hover/claim-bullet:opacity-100">
-                <EntityOverflowMenu target={{ id: claim.id, kind: 'Claim', title: claim.title }} />
-              </div>
+              {/* A pending row's id isn't an entity yet, so nothing can be attached to it. */}
+              {!claim.pending && (
+                <div className="shrink-0 opacity-60 transition-opacity group-focus-within/claim-bullet:opacity-100 group-hover/claim-bullet:opacity-100">
+                  <EntityOverflowMenu target={{ id: claim.id, kind: 'Claim', title: claim.title }} />
+                </div>
+              )}
             </div>
 
-            <EntityInlineContext
-              targetId={claim.id}
-              targetTitle={claim.title}
-              targetKind="Claim"
-              className="pl-[17px]"
-            />
+            {!claim.pending && (
+              <EntityInlineContext
+                targetId={claim.id}
+                targetTitle={claim.title}
+                targetKind="Claim"
+                className="pl-[17px]"
+              />
+            )}
           </li>
         );
       })}

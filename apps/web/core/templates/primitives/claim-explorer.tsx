@@ -6,6 +6,7 @@ import cx from 'classnames';
 import Link from 'next/link';
 
 import { ActionContextProvider } from '~/core/action-context-provider';
+import { NavUtils } from '~/core/utils/utils';
 
 import { type ClaimKind, type ClaimSummaryModel, formatClaimKindLabel, formatCompactCount } from '../models';
 import {
@@ -20,6 +21,7 @@ import { ListRankingHeaderControl, ListRankingWorkspace, type RankableListItem, 
 import { SplitBars } from './split-bars';
 import { ClaimVoteBinding, ClaimVotePills, TemplateVoteRows } from './template-claim-vote';
 import { TEMPLATE_CARD_SURFACE, TemplateBadge, type TemplateBadgeTone } from './template-shell';
+import { PUBLISHING_LABEL, usePendingAdds } from './use-pending-adds';
 
 const CLAIM_KIND_TONE: Record<ClaimKind, TemplateBadgeTone> = {
   fact: 'fact',
@@ -51,10 +53,18 @@ export function ClaimExplorer({
   className,
 }: ClaimExplorerProps) {
   const ctx = useEntityActionContext();
-  const [addedByTab, setAddedByTab] = React.useState<{ split: ClaimSummaryModel[]; agreed: ClaimSummaryModel[] }>({
-    split: [],
-    agreed: [],
-  });
+  const listedIds = React.useMemo(
+    () => [...contestedClaims, ...agreedClaims].map(claim => claim.id),
+    [agreedClaims, contestedClaims]
+  );
+  const added = usePendingAdds<ClaimSummaryModel & { tab: 'split' | 'agreed' }>(listedIds);
+  const addedByTab = React.useMemo(
+    () => ({
+      split: added.rows.filter(claim => claim.tab === 'split'),
+      agreed: added.rows.filter(claim => claim.tab === 'agreed'),
+    }),
+    [added.rows]
+  );
   const [tab, setTab] = React.useState<'split' | 'agreed'>(contestedClaims.length > 0 ? 'split' : 'agreed');
   const [page, setPage] = React.useState(1);
 
@@ -123,19 +133,21 @@ export function ClaimExplorer({
           />
           <AddClaimPopover
             label="Add claim"
+            canOpen={ctx?.callbacks?.canOpenAddForm}
             onSubmit={draft => {
-              ctx?.callbacks?.onAddClaim?.(draft);
-              const newClaim: ClaimSummaryModel = {
-                id: `user-claim-${Date.now()}`,
-                title: draft.title,
-                kind: draft.kind,
-                meta: draft.note ? [draft.note] : undefined,
-                split: { rows: [], isSplit: activeTab === 'split', totalVotes: 0 },
-              };
-              setAddedByTab(prev => ({
-                ...prev,
-                [activeTab]: [newClaim, ...prev[activeTab]],
-              }));
+              const tab = activeTab;
+              added.add(
+                state => ({
+                  tab,
+                  pending: state.status === 'pending',
+                  title: draft.title,
+                  kind: draft.kind,
+                  meta: state.status === 'pending' ? [PUBLISHING_LABEL] : draft.note ? [draft.note] : undefined,
+                  split: { rows: [], isSplit: tab === 'split', totalVotes: 0 },
+                  href: state.status === 'published' ? NavUtils.toEntity(state.spaceId, state.id) : undefined,
+                }),
+                ctx?.callbacks?.onAddClaim?.(draft)
+              );
               setPage(1);
             }}
           />
@@ -441,7 +453,11 @@ function RankedClaimRow({
 
         <EntityOverflowMenu
           target={{ id: claim.id, kind: 'Claim', title: claim.title }}
-          className="-order-1 -my-[5px] self-start @[760px]:order-none @[760px]:my-0 @[760px]:w-[120px] @[760px]:justify-end @[760px]:self-auto [&>button[aria-haspopup]]:size-8 @[760px]:[&>button[aria-haspopup]]:size-7"
+          // A pending row's id isn't an entity yet; the menu keeps its space but can't be used.
+          className={cx(
+            '-order-1 -my-[5px] self-start @[760px]:order-none @[760px]:my-0 @[760px]:w-[120px] @[760px]:justify-end @[760px]:self-auto [&>button[aria-haspopup]]:size-8 @[760px]:[&>button[aria-haspopup]]:size-7',
+            claim.pending && 'invisible'
+          )}
         />
 
         {phoneSplitRows.length > 0 && (

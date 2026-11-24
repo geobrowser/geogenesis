@@ -198,13 +198,14 @@ export function useLiveNewsStoryTemplate({
     return map;
   }, [hydratedEntities]);
 
+  // With the viewer's own personal-space claims, so a non-editor who added one sees it (GEO-3836).
   const flatClaimRelations = React.useMemo(
     () =>
-      readEntityRelations(entity, [
+      readEntityRelations(sourcesEntity, [
         TEMPLATE_ONTOLOGY.NOTABLE_CLAIMS_PROPERTY_ID,
         TEMPLATE_ONTOLOGY.RELATED_CLAIMS_PROPERTY_ID,
       ]),
-    [entity]
+    [sourcesEntity]
   );
 
   // Resolve claim groups from hydrated Blocks (Collection item) and Perspectives (Notable claims)

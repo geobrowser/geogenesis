@@ -408,12 +408,10 @@ describe('Sources section +', () => {
     await waitFor(() => expect(screen.queryByPlaceholderText(/Paste news, podcast, tweet, blog URLs/)).toBeNull());
   });
 
-  it('keeps the free-text add popover on sections that are not Sources', () => {
+  it('has no add button on sections that are not Sources, which have nothing to publish', () => {
     auth.authenticated = true;
     renderSection({ id: 'cases', title: 'Cases', items: [] });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Add to cases' }));
-    expect(screen.getByText('Title')).toBeInTheDocument();
-    expect(screen.queryByPlaceholderText(/Paste news, podcast, tweet, blog URLs/)).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Add/ })).toBeNull();
   });
 });

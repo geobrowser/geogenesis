@@ -68,9 +68,12 @@ export function useLivePostTemplate({
   });
   const authorMeta = usePostAuthorMetadata(entity ? entityId : undefined);
 
+  // Page-space links plus the viewer's own personal-space ones, so a non-member who added a source
+  // (GEO-3819) or a claim (GEO-3836) sees it.
+  const sourcesEntity = useEntityWithViewerSources({ entity, entityId, spaceId });
   const claimRelations = React.useMemo(
-    () => readEntityRelations(entity, TEMPLATE_ONTOLOGY.RELATED_CLAIMS_PROPERTY_ID),
-    [entity]
+    () => readEntityRelations(sourcesEntity, TEMPLATE_ONTOLOGY.RELATED_CLAIMS_PROPERTY_ID),
+    [sourcesEntity]
   );
 
   const claimBatchTargets = React.useMemo(
@@ -92,9 +95,6 @@ export function useLivePostTemplate({
     ownerKind: 'post',
   });
 
-  // Page-space Sources plus the viewer's own personal-space ones, so a non-member who added a source
-  // sees it (GEO-3819).
-  const sourcesEntity = useEntityWithViewerSources({ entity, entityId, spaceId });
   const sourceSeeds = React.useMemo(
     () =>
       readEntityRelations(sourcesEntity, TEMPLATE_ONTOLOGY.SOURCES_PROPERTY_ID).map(rel => ({

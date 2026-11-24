@@ -13,12 +13,7 @@ import type {
   SourceQuoteModel,
 } from '../models';
 import { resolveTemplateImageUrl } from '../ontology';
-import {
-  AddEntityItemPopover,
-  EntityInlineContext,
-  EntityOverflowMenu,
-  InlinePagination,
-} from './entity-overflow-menu';
+import { EntityInlineContext, EntityOverflowMenu, InlinePagination } from './entity-overflow-menu';
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
@@ -93,9 +88,8 @@ const LIST_PAGE_SIZE = 8;
 
 export function RelatedListSection({ section, className }: RelatedListSectionProps) {
   const { title, subtitle, items, emptyText = 'Nothing linked yet.', action, layout } = section;
-  const [addedItems, setAddedItems] = React.useState<EntityLinkRowModel[]>([]);
   const [page, setPage] = React.useState(1);
-  const allItems = React.useMemo(() => [...addedItems, ...items], [addedItems, items]);
+  const allItems = items;
   // The rows this section shows, so a pasted link that enriches one of them isn't linked a second
   // time (GEO-3819).
   const ingestionLink = React.useMemo(
@@ -187,7 +181,7 @@ export function RelatedListSection({ section, className }: RelatedListSectionPro
   }, []);
 
   const isSourceSection = /source/i.test(title);
-  const addLabel = isSourceSection ? 'Add source' : `Add to ${title.toLowerCase()}`;
+  const addLabel = 'Add source';
 
   return (
     <section aria-label={title} className={cx('flex flex-col gap-3', className)}>
@@ -251,29 +245,10 @@ export function RelatedListSection({ section, className }: RelatedListSectionPro
             disabled={allItems.length < 2}
           />
 
-          {isSourceSection ? (
-            // Sources take a pasted link through the same ingestion as the Add data panel, and the
-            // new source is linked to this page (GEO-3819).
-            <SourceIngestionPopover label={addLabel} link={ingestionLink} />
-          ) : (
-            <AddEntityItemPopover
-              label={addLabel}
-              primaryLabel="Title"
-              primaryPlaceholder={`Add ${title.toLowerCase()}...`}
-              secondaryLabel="Details (optional)"
-              secondaryPlaceholder="Date or short summary..."
-              onSubmit={draft => {
-                const newItem: EntityLinkRowModel = {
-                  id: `user-${section.id}-${Date.now()}`,
-                  kind: allItems[0]?.kind ?? 'case',
-                  kindLabel: allItems[0]?.kindLabel ?? 'Item',
-                  title: draft.primary,
-                  meta: draft.secondary,
-                };
-                setAddedItems(prev => [newItem, ...prev]);
-              }}
-            />
-          )}
+          {/* Only Sources has a `+`: a pasted link becomes a source linked to this page through the same
+              ingestion as the Add data panel (GEO-3819). Other sections have no entity type to publish a
+              free-text row as, so they have none. */}
+          {isSourceSection && <SourceIngestionPopover label={addLabel} link={ingestionLink} />}
         </div>
       </div>
 

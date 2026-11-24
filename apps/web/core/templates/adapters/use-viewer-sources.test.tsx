@@ -188,6 +188,20 @@ describe('withViewerSources', () => {
   });
 });
 
+describe('withViewerSources and claims added from the page (GEO-3836)', () => {
+  it("appends the viewer's own Related claims / Subclaims / Notable claims / Quotes links", () => {
+    const page = { id: PAGE, relations: [sources(PAGE, SRC_PAGE, PAGE_SPACE)] } as Entity;
+    const added = [
+      relation(PAGE, CLAIM, TEMPLATE_ONTOLOGY.RELATED_CLAIMS_PROPERTY_ID, MY_SPACE),
+      relation(PAGE, CLAIM, TEMPLATE_ONTOLOGY.SUBCLAIMS_PROPERTY_ID, MY_SPACE),
+      relation(PAGE, CLAIM, TEMPLATE_ONTOLOGY.NOTABLE_CLAIMS_PROPERTY_ID, MY_SPACE),
+      relation(PAGE, CLAIM, TEMPLATE_ONTOLOGY.QUOTES_PROPERTY_ID, MY_SPACE),
+    ];
+    const viewer = { id: PAGE, relations: added } as Entity;
+    expect(withViewerSources(page, viewer)?.relations).toEqual([...page.relations, ...added]);
+  });
+});
+
 describe('Topic viewer sources', () => {
   let typeRels: Relation[] = [];
   beforeEach(() => {

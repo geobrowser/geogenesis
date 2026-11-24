@@ -4,6 +4,8 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { NavUtils } from '~/core/utils/utils';
+
 import type { ClaimSummaryModel, EntityActionCallbacks, SourceQuoteModel, SourceTemplateModel } from '../models';
 import {
   AddClaimPopover,
@@ -22,6 +24,7 @@ import {
   TemplateTitleRow,
   TopicImagePills,
 } from '../primitives';
+import { PUBLISHING_LABEL, usePendingAdds } from '../primitives/use-pending-adds';
 
 export interface SourceTemplateProps {
   model: SourceTemplateModel;
@@ -47,8 +50,10 @@ export function SourceTemplate({
   className,
 }: SourceTemplateProps) {
   const ctaLabel = (model.externalLabel ?? 'Open source').replace(/\s*↗\s*$/, '');
-  const [addedQuotes, setAddedQuotes] = React.useState<SourceQuoteModel[]>([]);
-  const [addedClaims, setAddedClaims] = React.useState<ClaimSummaryModel[]>([]);
+  const listedQuoteIds = React.useMemo(() => (model.quotes ?? []).map(quote => quote.id), [model.quotes]);
+  const { rows: addedQuotes, add: addQuote } = usePendingAdds<SourceQuoteModel>(listedQuoteIds);
+  const listedClaimIds = React.useMemo(() => model.supportedClaims.map(claim => claim.id), [model.supportedClaims]);
+  const { rows: addedClaims, add: addClaim } = usePendingAdds<ClaimSummaryModel>(listedClaimIds);
   const allQuotes = [...addedQuotes, ...(model.quotes ?? [])];
   const allClaims = React.useMemo(
     () => [...addedClaims, ...model.supportedClaims],
@@ -154,18 +159,19 @@ export function SourceTemplate({
                 <h2 className="m-0 text-mediumTitle font-semibold text-text">Claims</h2>
                 <AddClaimPopover
                   label="Add claim"
+                  canOpen={actionCallbacks?.canOpenAddForm}
                   onSubmit={draft => {
-                    actionCallbacks?.onAddClaim?.(draft);
-                    setAddedClaims(prev => [
-                      {
-                        id: `source-claim-${Date.now()}`,
+                    addClaim(
+                      state => ({
+                        pending: state.status === 'pending',
                         title: draft.title,
                         kind: draft.kind,
-                        meta: draft.note ? [draft.note] : undefined,
+                        meta: state.status === 'pending' ? [PUBLISHING_LABEL] : draft.note ? [draft.note] : undefined,
                         split: { rows: [], isSplit: true, totalVotes: 0 },
-                      },
-                      ...prev,
-                    ]);
+                        href: state.status === 'published' ? NavUtils.toEntity(state.spaceId, state.id) : undefined,
+                      }),
+                      actionCallbacks?.onAddClaim?.(draft)
+                    );
                   }}
                 />
               </div>
@@ -185,21 +191,21 @@ export function SourceTemplate({
                 tertiaryLabel="Page or section (optional)"
                 tertiaryPlaceholder="e.g. §86(1) or 07:12"
                 multilinePrimary
+                canOpen={actionCallbacks?.canOpenAddForm}
                 onSubmit={draft => {
-                  actionCallbacks?.onAddQuote?.({
-                    text: draft.primary,
-                    speaker: draft.secondary,
-                    location: draft.tertiary,
-                  });
-                  setAddedQuotes(prev => [
-                    {
-                      id: `user-q-${Date.now()}`,
+                  addQuote(
+                    state => ({
+                      pending: state.status === 'pending',
+                      text: draft.primary,
+                      speaker: draft.secondary,
+                      location: state.status === 'pending' ? PUBLISHING_LABEL : draft.tertiary,
+                    }),
+                    actionCallbacks?.onAddQuote?.({
                       text: draft.primary,
                       speaker: draft.secondary,
                       location: draft.tertiary,
-                    },
-                    ...prev,
-                  ]);
+                    })
+                  );
                 }}
               />
             </div>
@@ -222,7 +228,11 @@ export function SourceTemplate({
                           className="mt-1"
                         />
                       </div>
-                      <EntityOverflowMenu target={{ id: quote.id, kind: 'Quote', title: quote.text.slice(0, 80) }} />
+                      {/* A pending row's id isn't an entity yet; the menu keeps its space but can't be used. */}
+                      <EntityOverflowMenu
+                        target={{ id: quote.id, kind: 'Quote', title: quote.text.slice(0, 80) }}
+                        className={quote.pending ? 'invisible' : undefined}
+                      />
                     </blockquote>
                   );
                 })}

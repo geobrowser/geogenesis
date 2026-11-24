@@ -1,55 +1,29 @@
 import type { QueryClient } from '@tanstack/react-query';
 
-import { Either } from 'effect';
-
-import { type SendSpaceTransaction, ensureSpaceMembership } from '~/core/access/request-space-membership';
-import { getSpaceAccessById } from '~/core/access/space-access';
-import { runEffectEither } from '~/core/telemetry/effect-runtime';
+import { type WriteSpace, pickWriteSpace } from '~/core/access/pick-write-space';
+import type { SendSpaceTransaction } from '~/core/access/request-space-membership';
 
 /**
- * The space a Sources `+` import writes into (GEO-3819).
+ * The space a Sources `+` import writes into (GEO-3819): see `pickWriteSpace`.
  *
- * Someone who can edit the page's space imports into it, as before. Anyone else imports into their
- * own personal space, so the source and its link land right away, the way a vote is written to the
- * voter's own space: a membership request needs an editor to accept it, and until then nothing they
- * wrote into the page's space could be published.
- *
- * As after a vote, a non-member is also asked into the page's space in the background (the same
- * `ensureSpaceMembership` checks and dedupe). The import never waits on it, and a failed request
- * changes nothing here.
- *
- * A failed access read counts as not a member: the personal space is always writable, the page's
- * space might not be.
+ * Someone who can edit the page's space (an editor or a member) imports into it. Anyone else imports
+ * into their own personal space, so the source and its link land right away: a membership request
+ * needs an editor to accept it, and until then nothing they wrote into the page's space could be
+ * published.
  *
  * The pick says which of the two it is (`personal`), and that answer travels with the import, so
  * the assistant never has to work it out again from the route, which may have changed by the time a
  * queued import replays.
  */
-export type IngestionWriteSpace = {
-  spaceId: string;
-  /** The viewer's own personal space rather than the page's (a non-member's import). */
-  personal: boolean;
-};
+export type IngestionWriteSpace = WriteSpace;
 
-export async function pickIngestionSpace({
-  pageSpaceId,
-  personalSpaceId,
-  tx,
-  queryClient,
-}: {
+export function pickIngestionSpace(args: {
   pageSpaceId: string | null;
   personalSpaceId: string;
   tx: SendSpaceTransaction;
   queryClient: QueryClient;
 }): Promise<IngestionWriteSpace> {
-  const personal = { spaceId: personalSpaceId, personal: true };
-  if (!pageSpaceId) return personal;
-
-  const access = await runEffectEither(getSpaceAccessById(pageSpaceId, personalSpaceId));
-  if (Either.isRight(access) && access.right.canEdit) return { spaceId: pageSpaceId, personal: false };
-
-  void ensureSpaceMembership({ spaceId: pageSpaceId, personalSpaceId, tx, queryClient });
-  return personal;
+  return pickWriteSpace({ ...args, writers: 'members' });
 }
 
 /**

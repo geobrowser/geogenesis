@@ -26,21 +26,37 @@ export function useViewerSpaceId(pageSpaceId: string): string | null {
 }
 
 /**
- * The page entity with the viewer's personal-space `Sources` relations appended after its own. Only
- * `Sources` is taken from the viewer's space, and it goes last, so the readers that dedupe by target
- * (`readEntityRelations`, `getClaimSources`) keep the page's own link when both spaces have one.
+ * The links a viewer adds from a page into their personal space: Sources (GEO-3819), and the claims
+ * and quotes Add claim / Add quote link from the page (GEO-3836).
+ */
+const VIEWER_LINK_PROPERTY_IDS = [
+  TEMPLATE_ONTOLOGY.SOURCES_PROPERTY_ID,
+  TEMPLATE_ONTOLOGY.NOTABLE_CLAIMS_PROPERTY_ID,
+  TEMPLATE_ONTOLOGY.RELATED_CLAIMS_PROPERTY_ID,
+  TEMPLATE_ONTOLOGY.SUBCLAIMS_PROPERTY_ID,
+  TEMPLATE_ONTOLOGY.QUOTES_PROPERTY_ID,
+];
+
+/**
+ * The page entity with the viewer's personal-space links (`VIEWER_LINK_PROPERTY_IDS`) appended after
+ * its own. Only those properties are taken from the viewer's space, and they go last, so the readers
+ * that dedupe by target (`readEntityRelations`, `getClaimSources`) keep the page's own link when both
+ * spaces have one.
  */
 export function withViewerSources(entity: Entity | null, viewerEntity: Entity | null): Entity | null {
   if (!entity || !viewerEntity) return entity;
   const extra = viewerEntity.relations.filter(
-    relation => relation.isDeleted !== true && ID.equals(relation.type.id, TEMPLATE_ONTOLOGY.SOURCES_PROPERTY_ID)
+    relation =>
+      relation.isDeleted !== true &&
+      VIEWER_LINK_PROPERTY_IDS.some(propertyId => ID.equals(relation.type.id, propertyId))
   );
   if (extra.length === 0) return entity;
   return { ...entity, relations: [...entity.relations, ...extra] };
 }
 
 /**
- * For News story / Claim / Event / Post Sources. The second read is the same entity scoped to the
+ * For News story / Claim / Event / Post Sources, and the claim and quote lists Add claim / Add quote
+ * link from the page (News story, Post, Episode, Claim sub-claims). The second read is the same entity scoped to the
  * viewer's space: hydration is keyed by entity id alone, so it shares the page's request and costs
  * no extra fetch. Signed out (no personal space) it is disabled outright.
  */

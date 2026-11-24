@@ -34,6 +34,7 @@ import {
 import { formatPodcastDuration } from '../views/podcast-shared';
 import { useLiveEntityActions } from './use-live-entity-actions';
 import { useTemplateClaimVoteCounts } from './use-template-claim-vote-counts';
+import { useEntityWithViewerSources } from './use-viewer-sources';
 
 function fallbackPlatformUrl(name: string): string | null {
   const lower = name.toLowerCase();
@@ -100,17 +101,20 @@ export function useLivePodcastEpisodeTemplate({
     () => readEntityRelations(entity, TEMPLATE_ONTOLOGY.AVATAR_PROPERTY_ID),
     [entity]
   );
+  // With the viewer's own personal-space claims and quotes, so a non-editor who added one sees it
+  // (GEO-3836).
+  const viewerLinksEntity = useEntityWithViewerSources({ entity, entityId, spaceId });
   const claimRelations = React.useMemo(
     () =>
-      readEntityRelations(entity, [
+      readEntityRelations(viewerLinksEntity, [
         TEMPLATE_ONTOLOGY.NOTABLE_CLAIMS_PROPERTY_ID,
         TEMPLATE_ONTOLOGY.RELATED_CLAIMS_PROPERTY_ID,
       ]),
-    [entity]
+    [viewerLinksEntity]
   );
   const quoteRelations = React.useMemo(
-    () => readEntityRelations(entity, TEMPLATE_ONTOLOGY.QUOTES_PROPERTY_ID),
-    [entity]
+    () => readEntityRelations(viewerLinksEntity, TEMPLATE_ONTOLOGY.QUOTES_PROPERTY_ID),
+    [viewerLinksEntity]
   );
 
   // Batch 1: hydrate Episode's Avatar, parent Podcast Show, Hosts, Guests, Contributors, and Listen on relation entities

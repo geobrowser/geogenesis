@@ -47,7 +47,7 @@ import { useInitialHydrationGate } from './use-initial-hydration-gate';
 import { useLiveEntityActions } from './use-live-entity-actions';
 import { useTemplateClaimVoteCounts } from './use-template-claim-vote-counts';
 import { useTopicMediaBatch } from './use-topic-media-batch';
-import { useEntityWithViewerSources } from './use-viewer-sources';
+import { useEntityWithViewerSources, useViewerSpaceId } from './use-viewer-sources';
 
 function parseDebateTitle(rawTitle: string, fallbackClaim: string): { claimTitle: string; speakers: [string, string] } {
   const clean = rawTitle.trim();
@@ -181,6 +181,35 @@ export function useLiveClaimTemplate({
     first: 12,
     enabled: isMounted,
   });
+  // The viewer's own personal-space Supports / Opposes claims, so a non-editor who added one from
+  // this page sees it (GEO-3836). Disabled signed out or when the page is in their own space.
+  const viewerSpaceId = useViewerSpaceId(spaceId);
+  const viewerWhere = React.useCallback(
+    (propertyId: string) => ({
+      types: [{ id: { equals: CLAIM_TYPE_ID } }],
+      spaces: [{ equals: normId(viewerSpaceId ?? '') }],
+      relations: [{ typeOf: { id: { equals: propertyId } }, toEntity: { id: { equals: entityId } } }],
+    }),
+    [entityId, viewerSpaceId]
+  );
+  const viewerSupportsWhere = React.useMemo(
+    () => viewerWhere(TEMPLATE_ONTOLOGY.CLAIM_SUPPORTS_PROPERTY_ID),
+    [viewerWhere]
+  );
+  const viewerOpposesWhere = React.useMemo(
+    () => viewerWhere(TEMPLATE_ONTOLOGY.CLAIM_OPPOSES_PROPERTY_ID),
+    [viewerWhere]
+  );
+  const { entities: viewerSupportingClaims } = useQueryEntities({
+    where: viewerSupportsWhere,
+    first: 12,
+    enabled: isMounted && viewerSpaceId !== null,
+  });
+  const { entities: viewerOpposingClaims } = useQueryEntities({
+    where: viewerOpposesWhere,
+    first: 12,
+    enabled: isMounted && viewerSpaceId !== null,
+  });
   const { entities: incomingSupportingQuotes } = useQueryEntities({
     where: incomingQuotesWhere,
     first: 10,
@@ -253,7 +282,13 @@ export function useLiveClaimTemplate({
       byId.set(key, entry);
     };
 
-    for (const c of incomingSupportingClaims) {
+    // A disabled read can still return cached rows, so the viewer's are only taken with a viewer space.
+    const supporting = viewerSpaceId
+      ? [...incomingSupportingClaims, ...viewerSupportingClaims]
+      : incomingSupportingClaims;
+    const opposing = viewerSpaceId ? [...incomingOpposingClaims, ...viewerOpposingClaims] : incomingOpposingClaims;
+
+    for (const c of supporting) {
       if (!c.name) continue;
       upsert({
         id: c.id,
@@ -264,7 +299,7 @@ export function useLiveClaimTemplate({
         spaceId: resolveEntitySpaceId(c, spaceId),
       });
     }
-    for (const c of incomingOpposingClaims) {
+    for (const c of opposing) {
       if (!c.name) continue;
       upsert({
         id: c.id,
@@ -287,7 +322,8 @@ export function useLiveClaimTemplate({
       TEMPLATE_ONTOLOGY.CLAIM_OPPOSES_PROPERTY_ID,
       TEMPLATE_ONTOLOGY.INVERSE_CLAIMS_PROPERTY_ID,
     ]);
-    const outgoingAddresses = readEntityRelations(entity, [
+    // With the viewer's own personal-space Subclaims / Related claims (`withViewerSources`).
+    const outgoingAddresses = readEntityRelations(sourcesEntity, [
       TEMPLATE_ONTOLOGY.CLAIM_ADDRESSES_PROPERTY_ID,
       TEMPLATE_ONTOLOGY.SUBCLAIMS_PROPERTY_ID,
       TEMPLATE_ONTOLOGY.RELATED_CLAIMS_PROPERTY_ID,
@@ -325,7 +361,16 @@ export function useLiveClaimTemplate({
     }
 
     return Array.from(byId.values());
-  }, [entity, incomingOpposingClaims, incomingSupportingClaims, spaceId]);
+  }, [
+    entity,
+    incomingOpposingClaims,
+    incomingSupportingClaims,
+    sourcesEntity,
+    spaceId,
+    viewerOpposingClaims,
+    viewerSpaceId,
+    viewerSupportingClaims,
+  ]);
 
   // Hydrate outgoing subclaims whose `Is factual` value wasn't loaded from incoming entity queries
   const subClaimIdsToHydrate = React.useMemo(

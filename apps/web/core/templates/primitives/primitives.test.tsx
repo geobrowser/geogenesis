@@ -603,3 +603,60 @@ describe('Add context and Dispute switch (GEO-3819)', () => {
     expect(row).toHaveClass('empty:hidden');
   });
 });
+
+describe('Add claim on a live page (GEO-3836)', () => {
+  const listed: ClaimSummaryModel[] = [
+    { id: 'listed-c1', title: 'A listed claim', kind: 'fact', split: { rows: [], isSplit: true, totalVotes: 3 } },
+  ];
+
+  function submitClaim(title: string) {
+    fireEvent.change(screen.getByPlaceholderText(/Write a clear, testable statement/), { target: { value: title } });
+    fireEvent.submit(
+      screen.getByPlaceholderText(/Write a clear, testable statement/).closest('form') as HTMLFormElement
+    );
+  }
+
+  it('keeps the form shut when the page says no (signed out)', () => {
+    const canOpenAddForm = vi.fn(() => false);
+    render(
+      <EntityActionProvider callbacks={{ canOpenAddForm, onAddClaim: vi.fn() }}>
+        <ClaimExplorer contestedClaims={listed} agreedClaims={[]} />
+      </EntityActionProvider>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add claim' }));
+    expect(canOpenAddForm).toHaveBeenCalledTimes(1);
+    expect(screen.queryByPlaceholderText(/Write a clear, testable statement/)).toBeNull();
+  });
+
+  it('shows the claim as publishing, then as the published entity, and drops it on a failed publish', async () => {
+    let settle!: (result: { ok: true; id: string; spaceId: string } | { ok: false; error: string }) => void;
+    const onAddClaim = vi.fn(() => new Promise<never>(resolve => (settle = resolve as never)));
+    render(
+      <EntityActionProvider callbacks={{ canOpenAddForm: () => true, onAddClaim }}>
+        <ClaimExplorer contestedClaims={listed} agreedClaims={[]} />
+      </EntityActionProvider>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add claim' }));
+    submitClaim('Aid entered on Monday');
+    expect(onAddClaim).toHaveBeenCalledWith({ title: 'Aid entered on Monday', kind: 'fact', note: undefined });
+    expect(screen.getByText('Aid entered on Monday')).toBeInTheDocument();
+    expect(screen.getAllByText('Publishing…').length).toBeGreaterThan(0);
+
+    await React.act(async () =>
+      settle({ ok: true, id: 'cccccccccccccccccccccccccccccccc', spaceId: 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' })
+    );
+    expect(screen.queryByText('Publishing…')).toBeNull();
+    expect(screen.getByRole('link', { name: 'Aid entered on Monday' })).toHaveAttribute(
+      'href',
+      expect.stringContaining('cccccccccccccccccccccccccccccccc')
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add claim' }));
+    submitClaim('This one will fail');
+    expect(screen.getByText('This one will fail')).toBeInTheDocument();
+    await React.act(async () => settle({ ok: false, error: 'Could not publish.' }));
+    expect(screen.queryByText('This one will fail')).toBeNull();
+  });
+});

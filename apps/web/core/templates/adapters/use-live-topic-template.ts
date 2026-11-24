@@ -20,6 +20,7 @@ import { useTopicAncestors } from '~/core/topics/browse/use-topic-ancestors';
 import { useTopicConnectionCounts } from '~/core/topics/browse/use-topic-connection-counts';
 import { type TopicCoveragePage, useTopicCoverage } from '~/core/topics/browse/use-topic-coverage';
 import { useTopicLinkedEntities } from '~/core/topics/browse/use-topic-linked-entities';
+import type { Entity } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { normId } from '~/core/utils/norm-id';
 import { resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
@@ -73,6 +74,9 @@ const LIVE_CLAIMS_LIMIT = 40;
 const LIVE_COVERAGE_LIMIT = 12;
 const NO_COVERAGE_ROWS: TopicCoveragePage['rows'] = [];
 const NO_FEED_ITEMS: ExploreFeedItem[] = [];
+const NO_ENTITIES: Entity[] = [];
+/** How many of the viewer's own personal-space claims or events a Topic reads. */
+const VIEWER_ADDED_LIMIT = 8;
 
 async function fetchTopicFeedSlice({
   topicId,
@@ -364,6 +368,27 @@ export function useLiveTopicTemplate({
   // unscoped coverage key, so read its rows only while it is enabled.
   const viewerCoverageRows = viewerCoverageEnabled ? viewerCoverage.page.rows : NO_COVERAGE_ROWS;
   const viewerLocalSources = useViewerTopicSources(entityId, viewerSpaceId);
+  // The viewer's own personal-space claims and events tagged with this Topic, so a non-editor who
+  // added one sees it (GEO-3836). Only the viewer sees these.
+  const viewerSpaceIds = React.useMemo(() => (viewerSpaceId ? [normId(viewerSpaceId)] : undefined), [viewerSpaceId]);
+  const { entities: viewerClaimsRead } = useTopicLinkedEntities({
+    topicId: entityId,
+    typeIds: [CLAIM_TYPE_ID],
+    first: VIEWER_ADDED_LIMIT,
+    spaceIds: viewerSpaceIds,
+    scopeRelationToSpaces: true,
+    enabled: viewerCoverageEnabled,
+  });
+  const { entities: viewerEventsRead } = useTopicLinkedEntities({
+    topicId: entityId,
+    typeIds: [TEMPLATE_ONTOLOGY.NEWS_EVENT_TYPE_ID],
+    first: VIEWER_ADDED_LIMIT,
+    spaceIds: viewerSpaceIds,
+    scopeRelationToSpaces: true,
+    enabled: viewerCoverageEnabled,
+  });
+  const viewerLinkedClaims = viewerCoverageEnabled ? viewerClaimsRead : NO_ENTITIES;
+  const viewerLinkedEvents = viewerCoverageEnabled ? viewerEventsRead : NO_ENTITIES;
   const coverageRows = React.useMemo(
     () => (viewerCoverageRows.length > 0 ? [...coverage.page.rows, ...viewerCoverageRows] : coverage.page.rows),
     [coverage.page.rows, viewerCoverageRows]
@@ -455,8 +480,21 @@ export function useLiveTopicTemplate({
         spaceId: rel.toSpaceId ?? spaceId,
       });
     }
-    return seeds.slice(0, LIVE_CLAIMS_LIMIT);
-  }, [bestClaims, bestDebates, directClaimRels, linkedClaims, spaceId, topClaims]);
+    // After the cap, so the page's own claims never crowd out the viewer's additions.
+    const capped = seeds.slice(0, LIVE_CLAIMS_LIMIT);
+    for (const claim of viewerLinkedClaims) {
+      const hex = ID.uuidToHex(claim.id);
+      if (!claim.name?.trim() || seen.has(hex)) continue;
+      seen.add(hex);
+      capped.push({
+        id: claim.id,
+        title: claim.name,
+        spaceId: resolveEntitySpaceId(claim, spaceId),
+        kind: readClaimKind(claim.values),
+      });
+    }
+    return capped;
+  }, [bestClaims, bestDebates, directClaimRels, linkedClaims, spaceId, topClaims, viewerLinkedClaims]);
 
   // Batch-hydrate claim entities that came from `/api/topics/feed` so we read their real `Is factual` value
   const claimIdsToHydrate = React.useMemo(
@@ -701,7 +739,7 @@ export function useLiveTopicTemplate({
     const timelineCandidates: { item: TopicTimelineHighlightModel; sortTs: number }[] = [];
     const seenTimelineHex = new Set<string>();
 
-    for (const eventEntity of linkedEvents) {
+    for (const eventEntity of [...linkedEvents, ...viewerLinkedEvents]) {
       if (!eventEntity.name) continue;
       const hex = ID.uuidToHex(eventEntity.id);
       if (seenTimelineHex.has(hex)) continue;
@@ -886,6 +924,7 @@ export function useLiveTopicTemplate({
     entityId,
     hydratedClaimKindByHex,
     linkedEvents,
+    viewerLinkedEvents,
     orderedClaimSeeds,
     queryClient,
     serverCoverUrl,
