@@ -1,5 +1,12 @@
+import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
+
+import { Effect } from 'effect';
+import { parse } from 'graphql';
+
 import { ID } from '~/core/id';
+import { graphql } from '~/core/io/graphql-client';
 import { CLAIM_RESPONSE_KIND, responseKindToVoteKind } from '~/core/responses/entity-response';
+import { type CursorPage, collectCursorPages } from '~/core/sync/collect-cursor-pages';
 
 import type { VoteChoice } from '../models';
 
@@ -26,6 +33,83 @@ export type ClaimVoteRow = { userId: string; objectId: string; spaceId: string; 
 
 /** The vote kind an Agree / Disagree on a claim is published as: what the Claim page counts. */
 export const CLAIM_STANCE_VOTE_KIND = responseKindToVoteKind(CLAIM_RESPONSE_KIND);
+
+const MULTI_SPACE_CLAIM_VOTES_PAGE_SIZE = 1_000;
+
+const MULTI_SPACE_CLAIM_VOTES_QUERY = parse(/* GraphQL */ `
+  query MultiSpaceClaimVotes($objectIds: [UUID!]!, $voteKind: Int!, $first: Int!, $after: Cursor) {
+    userVotesConnection(
+      first: $first
+      after: $after
+      orderBy: [PRIMARY_KEY_ASC]
+      filter: {
+        objectType: { is: 0 }
+        voteKind: { is: $voteKind }
+        voteType: { in: [0, 1] }
+        objectId: { in: $objectIds }
+      }
+    ) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      nodes {
+        userId
+        objectId
+        spaceId
+        voteType
+        voteKind
+      }
+    }
+  }
+`) as TypedDocumentNode<
+  {
+    userVotesConnection?: {
+      pageInfo?: { hasNextPage?: boolean | null; endCursor?: string | null } | null;
+      nodes?: ClaimVoteRow[] | null;
+    } | null;
+  },
+  { objectIds: string[]; voteKind: number; first: number; after?: string }
+>;
+
+type FetchVotePage = (args: {
+  objectIds: string[];
+  first: number;
+  after: string | undefined;
+  signal?: AbortSignal;
+}) => Promise<CursorPage<ClaimVoteRow>>;
+
+function defaultFetchVotePage({ objectIds, first, after, signal }: Parameters<FetchVotePage>[0]) {
+  return Effect.runPromise(
+    graphql({
+      query: MULTI_SPACE_CLAIM_VOTES_QUERY,
+      variables: { objectIds, voteKind: CLAIM_STANCE_VOTE_KIND, first, after },
+      decoder: (data): CursorPage<ClaimVoteRow> => ({
+        items: data.userVotesConnection?.nodes ?? [],
+        endCursor: data.userVotesConnection?.pageInfo?.endCursor ?? null,
+        hasNextPage: data.userVotesConnection?.pageInfo?.hasNextPage ?? false,
+      }),
+      signal,
+    })
+  );
+}
+
+/**
+ * Every Agree / Disagree vote row on these claims, in every space, walked to the end of the cursor:
+ * totals, the Disputed / Accepted split and the viewer's baseline all derive from these rows.
+ */
+export function fetchMultiSpaceClaimVoteRows({
+  objectIds,
+  signal,
+  fetchPage = defaultFetchVotePage,
+}: {
+  objectIds: string[];
+  signal?: AbortSignal;
+  fetchPage?: FetchVotePage;
+}): Promise<ClaimVoteRow[]> {
+  if (objectIds.length === 0) return Promise.resolve([]);
+  return collectCursorPages(after => fetchPage({ objectIds, first: MULTI_SPACE_CLAIM_VOTES_PAGE_SIZE, after, signal }));
+}
 
 /**
  * The Agree / Disagree votes among a claim's vote rows, one per (claim, space, voter).

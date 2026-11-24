@@ -389,8 +389,8 @@ function SubClaimGroupSection({
       />
 
       <div className={`divide-y divide-divider overflow-hidden ${TEMPLATE_CARD_SURFACE}`}>
-        {/* One geo-chat lookup for the page of sub-claims, rather than one per row. */}
-        <TemplateVoteRows targets={visibleItems.map(subClaim => subClaim.voteTarget)}>
+        {/* Every page's sub-claims, so paging keeps the same lookup and batch. */}
+        <TemplateVoteRows targets={orderedItems.map(subClaim => subClaim.voteTarget)}>
           {visibleItems.map((subClaim, idx) => (
             // Names the list, the group (positions restart in each) and the row on every action taken
             // in it, a vote included.

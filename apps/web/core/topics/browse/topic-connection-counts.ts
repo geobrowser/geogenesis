@@ -41,7 +41,8 @@ export const EMPTY_TOPIC_CONNECTION_COUNTS: TopicConnectionCounts = { claims: 0,
  * Five topics measured ~0.75s against testnet, against five round trips for the same work.
  *
  * `scoped` adds a space clause for callers that show one space's content, such as the topic
- * template's header, which lists only what the viewed space published.
+ * template's header, which lists only what the viewed space published: the entity must be in the
+ * space and its Topics relation published there.
  */
 function buildCountsSource(topicCount: number, scoped: boolean): string {
   const declarations = [
@@ -56,9 +57,10 @@ function buildCountsSource(topicCount: number, scoped: boolean): string {
   const buckets = Array.from({ length: topicCount }, (_, index) => {
     const topic = `$topic${index}`;
 
-    const namesTopic = `relations: { some: { typeId: { is: $topicsPropertyId }, toEntityId: { is: ${topic} } } }${
-      scoped ? ', spaceIds: { overlaps: $spaceIds }' : ''
-    }`;
+    // Scoped, the Topics relation itself must be published in the space too, as the lists require.
+    const namesTopic = scoped
+      ? `relations: { some: { typeId: { is: $topicsPropertyId }, toEntityId: { is: ${topic} }, spaceId: { in: $spaceIds } } }, spaceIds: { overlaps: $spaceIds }`
+      : `relations: { some: { typeId: { is: $topicsPropertyId }, toEntityId: { is: ${topic} } } }`;
 
     return /* GraphQL */ `
       claims${index}: entitiesConnection(filter: { typeIds: { overlaps: $claimTypeIds }, ${namesTopic} }) {
@@ -146,7 +148,7 @@ export function topicCountBatches(topicIds: readonly string[]): string[][] {
 
 /**
  * One batch of `topicCountBatches`, answered. Shared by the hook and the server's seed.
- * With `spaceId`, counts only entities in that space.
+ * With `spaceId`, counts only entities in that space whose Topics relation that space published.
  */
 export function fetchTopicConnectionCountsBatch(ids: string[], signal?: AbortSignal, spaceId?: string) {
   return Effect.runPromise(
