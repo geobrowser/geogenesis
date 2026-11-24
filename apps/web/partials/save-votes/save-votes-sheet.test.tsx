@@ -10,9 +10,9 @@ import { useContinueWithGoogle } from '~/core/auth/continue-with-google';
 import { closeSignInBox, openSignInBox } from '~/core/auth/sign-in-box/sign-in-box-store';
 import { noteEmailArrival } from '~/core/deep-links/ref-email';
 import {
-  saveVotesHeading,
+  SAVE_VOTES_HEADING,
+  SAVE_VOTES_SUBTEXT,
   saveVotesNavLabel,
-  saveVotesSubtext,
   savedVotesCopy,
   savingVotesCopy,
 } from '~/core/save-votes-copy';
@@ -83,11 +83,13 @@ vi.mock('~/partials/explore/email-capture-account-step', () => ({
     classes,
     onChangeEmail,
     onSignInUnavailable,
+    onGiveUp,
   }: {
     email: string;
     classes?: unknown;
     onChangeEmail?: () => void;
     onSignInUnavailable?: () => void;
+    onGiveUp?: () => void;
   }) => {
     // Mounting the real step is what mails a code, so a remount is a second email.
     React.useEffect(() => {
@@ -107,10 +109,19 @@ vi.mock('~/partials/explore/email-capture-account-step', () => ({
             Privy did not load
           </button>
         ) : null}
+        {onGiveUp ? (
+          <button type="button" onClick={onGiveUp}>
+            Privy gave up
+          </button>
+        ) : null}
       </>
     );
   },
 }));
+
+/** The approved copy, word for word (GEO-3846). */
+const HEADING = 'Your vote didn’t count';
+const SUBTEXT = 'Add your email to make your vote count';
 
 const vote = (entityId: string, title = entityId) =>
   toggleLocalVote({ entityId, spaceId: 'space-1', responseKind: 'stance', direction: 'positive', title });
@@ -139,14 +150,8 @@ beforeEach(() => {
 
 describe('copy', () => {
   it('names the votes, singular and plural', () => {
-    expect(saveVotesHeading(1, false)).toBe('Save your vote');
-    expect(saveVotesHeading(2, false)).toBe('Save your 2 votes');
-    expect(saveVotesHeading(1, true)).toBe('You have 1 unsaved vote');
-    expect(saveVotesHeading(3, true)).toBe('You have 3 unsaved votes');
-    expect(saveVotesSubtext(1)).toBe('Add your email to make it count.');
-    expect(saveVotesSubtext(2)).toBe('Add your email to make them count.');
-    expect(saveVotesSubtext(1, true)).toBe('Log in to make it count.');
-    expect(saveVotesSubtext(3, true)).toBe('Log in to make them count.');
+    expect(SAVE_VOTES_HEADING).toBe(HEADING);
+    expect(SAVE_VOTES_SUBTEXT).toBe(SUBTEXT);
     expect(saveVotesNavLabel(1)).toBe('Save 1 vote');
     expect(saveVotesNavLabel(4)).toBe('Save 4 votes');
     expect([savingVotesCopy(1), savingVotesCopy(3)]).toEqual(['Saving your vote…', 'Saving 3 votes…']);
@@ -168,7 +173,7 @@ describe('SaveVotesSheet', () => {
     'asks once after the first %s vote (%s, already mounted: %s, lobby: %s, %s %s)',
     (surface, reason, alreadyMounted, lobbyName, responseKind, firstDirection) => {
       if (lobbyName) setSaveVotesPromptLobby(lobbyName);
-      const label = lobbyName ? 'Join the discussion' : 'Save your votes';
+      const label = lobbyName ? 'Join the discussion' : HEADING;
       const cast = (entityId: string, direction: 'positive' | 'negative' = 'positive') =>
         act(() => {
           castLocalVote({
@@ -194,7 +199,7 @@ describe('SaveVotesSheet', () => {
       if (!alreadyMounted) render(sheet);
 
       const dialog = screen.getByRole('dialog', { name: label });
-      expect(dialog).toHaveTextContent(lobbyName ?? 'Save your vote');
+      expect(dialog).toHaveTextContent(lobbyName ?? HEADING);
       expect(screen.queryByRole('region', { name: label })).not.toBeInTheDocument();
       expect(readLocalVotes().votes).toEqual([
         expect.objectContaining({ entityId: 'a', responseKind, direction: firstDirection }),
@@ -204,7 +209,8 @@ describe('SaveVotesSheet', () => {
       view?.rerender(sheet);
       expect(mocks.impression).toHaveBeenCalledOnce();
 
-      fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
+      // It can't be dismissed; it steps aside on its own (Privy's dialog taking over, say).
+      act(() => closeSaveVotesPrompt());
       expect(readLocalVotes().votes).toHaveLength(1);
       cast('a', firstDirection === 'positive' ? 'negative' : 'positive');
       expect(readSaveVotesPrompt()).toBeNull();
@@ -215,14 +221,14 @@ describe('SaveVotesSheet', () => {
       expect(mocks.impression).toHaveBeenCalledOnce();
 
       cast('e');
-      expect(screen.getByRole('dialog', { name: label })).toHaveTextContent(lobbyName ?? 'Save your 5 votes');
+      expect(screen.getByRole('dialog', { name: label })).toHaveTextContent(lobbyName ?? HEADING);
       expect(screen.queryByRole('region', { name: label })).not.toBeInTheDocument();
       expect(mocks.impression.mock.calls).toEqual([
         [reason, 1],
         ['repeat', 5],
       ]);
       expect(readLocalVotes().prompt.shownCount).toBe(2);
-      fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
+      act(() => closeSaveVotesPrompt());
       cast('f');
       expect(readSaveVotesPrompt()).toBeNull();
       expect(mocks.impression).toHaveBeenCalledTimes(2);
@@ -239,9 +245,9 @@ describe('SaveVotesSheet', () => {
     render(<SaveVotesSheet />);
 
     act(() => openSaveVotesPrompt('single_claim'));
-    const dialog = screen.getByRole('dialog', { name: 'Save your votes' });
-    expect(dialog).toHaveTextContent('Log in to save your vote');
-    expect(dialog).toHaveTextContent('Log in to make it count.');
+    const dialog = screen.getByRole('dialog', { name: HEADING });
+    expect(dialog).toHaveTextContent(HEADING);
+    expect(dialog).toHaveTextContent(SUBTEXT);
     expect(screen.getByRole('button', { name: 'Log in' })).toBeInTheDocument();
   });
 
@@ -252,10 +258,10 @@ describe('SaveVotesSheet', () => {
     render(<SaveVotesSheet />);
 
     act(() => openSaveVotesPrompt('email_link'));
-    const dialog = screen.getByRole('dialog', { name: 'Save your votes' });
-    expect(dialog).toHaveTextContent('Log in to save your vote');
+    const dialog = screen.getByRole('dialog', { name: HEADING });
+    expect(dialog).toHaveTextContent(HEADING);
     expect(screen.getByRole('list', { name: 'Your votes' })).toHaveTextContent('Couples should keep separate finances');
-    expect(screen.queryByRole('region', { name: 'Save your votes' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: HEADING })).not.toBeInTheDocument();
     expect(mocks.impression).toHaveBeenCalledWith('email_link', 1);
     // An automatic ask: it counts toward when the sheet asks again, as the pill's own first ask would.
     expect(readLocalVotes().prompt.shownCount).toBe(1);
@@ -267,7 +273,7 @@ describe('SaveVotesSheet', () => {
     render(<SaveVotesSheet />);
 
     act(() => openSaveVotesPrompt('single_claim'));
-    expect(screen.getByText('Save your vote')).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: HEADING })).toHaveTextContent(SUBTEXT);
     expect(screen.queryByRole('button', { name: 'Log in' })).not.toBeInTheDocument();
   });
 
@@ -275,14 +281,14 @@ describe('SaveVotesSheet', () => {
     vote('a');
     markPromptedThisSession();
     render(<SaveVotesSheet />);
-    expect(screen.queryByRole('region', { name: 'Save your votes' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: HEADING })).not.toBeInTheDocument();
   });
 
   it('asks on arrival when the visitor comes back with unsaved votes', () => {
     vote('a');
     vote('b');
     render(<SaveVotesSheet />);
-    expect(screen.getByText('You have 2 unsaved votes')).toBeInTheDocument();
+    expect(screen.getByText(HEADING)).toBeInTheDocument();
     expect(mocks.impression).toHaveBeenCalledWith('return_visit', 2);
   });
 
@@ -300,8 +306,8 @@ describe('SaveVotesSheet', () => {
 
     act(() => closeSaveVotesPrompt());
     act(() => openSaveVotesPrompt('single_claim'));
-    expect(screen.getByRole('dialog', { name: 'Save your votes' })).not.toHaveTextContent('Join the discussion');
-    expect(screen.getByText('Save your vote')).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: HEADING })).not.toHaveTextContent('Join the discussion');
+    expect(screen.getByRole('dialog', { name: HEADING })).toHaveTextContent(SUBTEXT);
   });
 
   it('counts an automatic ask toward the next one', () => {
@@ -310,7 +316,7 @@ describe('SaveVotesSheet', () => {
     markPromptedThisSession();
     render(<SaveVotesSheet />);
     act(() => openSaveVotesPrompt('threshold'));
-    expect(screen.getByText('Save your 2 votes')).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: HEADING })).toHaveTextContent(SUBTEXT);
     expect(readLocalVotes().prompt.shownCount).toBe(1);
   });
 
@@ -349,21 +355,51 @@ describe('SaveVotesSheet', () => {
     expect(screen.getByText('Enter the code we sent to sam@hey.com')).toBeInTheDocument();
   });
 
-  it('closing keeps the votes, withdraws the sign-in, and is remembered', () => {
+  // GEO-3846: the corner card can't be dismissed either.
+  it('has no close button and stays up on Escape, on either step', () => {
     vote('a');
     vote('b');
     markPromptedThisSession();
     render(<SaveVotesSheet />);
-    act(() => openSaveVotesPrompt('threshold'));
+    act(() => openSaveVotesPrompt('inline_save'));
+    const card = screen.getByRole('region', { name: HEADING });
+    expect(card).toHaveTextContent(HEADING);
+    expect(card).toHaveTextContent(SUBTEXT);
+    expect(
+      within(card)
+        .getAllByRole('button')
+        .map(button => button.textContent)
+    ).toEqual(['Save votes']);
+
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Email address' }), { key: 'Escape' });
+    expect(screen.getByRole('region', { name: HEADING })).toBeInTheDocument();
+
     fireEvent.change(screen.getByRole('textbox', { name: 'Email address' }), { target: { value: 'sam@hey.com' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save votes' }));
+    expect(screen.queryByRole('button', { name: /not now|close/i })).not.toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole('region', { name: HEADING }), { key: 'Escape' });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
-
-    expect(readSaveVotesPrompt()).toBeNull();
-    expect(mocks.cancelPrivyAuth).toHaveBeenCalled();
-    expect(readLocalVotes().prompt.dismissCount).toBe(1);
+    expect(readSaveVotesPrompt()).toBe('inline_save');
+    expect(screen.getByText('Enter the code we sent to sam@hey.com')).toBeInTheDocument();
+    expect(mocks.cancelPrivyAuth).not.toHaveBeenCalled();
     expect(readLocalVotes().votes).toHaveLength(2);
+  });
+
+  it('goes back to the email step, still up, when the code step gives up', () => {
+    vote('a');
+    markPromptedThisSession();
+    render(<SaveVotesSheet />);
+    act(() => openSaveVotesPrompt('single_claim'));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Email address' }), { target: { value: 'sam@hey.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save vote' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Privy gave up' }));
+
+    expect(mocks.cancelPrivyAuth).toHaveBeenCalledOnce();
+    expect(readSaveVotesPrompt()).toBe('single_claim');
+    expect(screen.getByRole('dialog', { name: HEADING })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save vote' })).toBeInTheDocument();
+    expect(readLocalVotes().votes).toHaveLength(1);
   });
 
   it('says what happens next under the button', () => {
@@ -372,7 +408,7 @@ describe('SaveVotesSheet', () => {
     render(<SaveVotesSheet />);
     act(() => openSaveVotesPrompt('single_claim'));
 
-    expect(screen.getByRole('dialog', { name: 'Save your votes' })).toHaveTextContent(
+    expect(screen.getByRole('dialog', { name: HEADING })).toHaveTextContent(
       'We’ll email you a 6-digit code. No password.'
     );
   });
@@ -413,7 +449,7 @@ describe('SaveVotesSheet', () => {
       expect(screen.getByRole('button', { name: 'Send code' })).toBeInTheDocument();
       expect(screen.queryByText('Check your email')).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Back to email' })).not.toBeInTheDocument();
-      expect(screen.getByRole('region', { name: 'Save your votes' })).toHaveTextContent(
+      expect(screen.getByRole('region', { name: HEADING })).toHaveTextContent(
         'We’ll email you a 6-digit code. No password.'
       );
       // Still the visitor's sign-in, and still their votes.
@@ -440,26 +476,6 @@ describe('SaveVotesSheet', () => {
 
       expect(mocks.accountStepClasses).toEqual(codeStepClasses(true));
     });
-
-    it('a fresh ask after leaving mid-edit is the plain email step again', () => {
-      sendCodeTo('sam@hey.con');
-      fireEvent.click(screen.getByRole('button', { name: 'Back to email' }));
-      fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
-      act(() => openSaveVotesPrompt('repeat'));
-
-      expect(screen.getByRole('button', { name: 'Save votes' })).toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Send code' })).not.toBeInTheDocument();
-    });
-
-    it('closing after going back still withdraws the sign-in', () => {
-      sendCodeTo('sam@hey.con');
-      fireEvent.click(screen.getByRole('button', { name: 'Back to email' }));
-      fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
-
-      expect(mocks.cancelPrivyAuth).toHaveBeenCalled();
-      expect(readSaveVotesPrompt()).toBeNull();
-      expect(readLocalVotes().votes).toHaveLength(2);
-    });
   });
 
   // GEO-3400: email is the sheet's one way in with the `googleSignIn` flag off; Privy's other methods
@@ -470,10 +486,10 @@ describe('SaveVotesSheet', () => {
     render(<SaveVotesSheet />);
     act(() => openSaveVotesPrompt('inline_save'));
 
-    expect(screen.getByRole('region', { name: 'Save your votes' })).not.toHaveTextContent('Other ways to sign in');
+    expect(screen.getByRole('region', { name: HEADING })).not.toHaveTextContent('Other ways to sign in');
     expect(
       screen.getAllByRole('button').map(button => button.textContent || button.getAttribute('aria-label'))
-    ).toEqual(['Not now', 'Save vote']);
+    ).toEqual(['Save vote']);
   });
 
   // GEO-3555: Google sign-in on, the sheet offers it beside the email, as a save sign-in.
@@ -508,28 +524,6 @@ describe('SaveVotesSheet', () => {
       );
       // Google's own sign-in starts the attempt; the email path's is not started as well.
       expect(mocks.beginPrivyAuth).not.toHaveBeenCalled();
-    });
-
-    it.each([false, true])('closing preserves a pending Google save (after editing email: %s)', editing => {
-      mocks.googleSignIn = vi.fn(() => new Promise<void>(() => {}));
-      vote('a');
-      markPromptedThisSession();
-      render(<SaveVotesSheet />);
-      act(() => openSaveVotesPrompt('navbar'));
-      if (editing) {
-        fireEvent.change(screen.getByRole('textbox', { name: 'Email address' }), {
-          target: { value: 'sam@hey.com' },
-        });
-        fireEvent.click(screen.getByRole('button', { name: 'Save vote' }));
-        fireEvent.click(screen.getByRole('button', { name: 'Back to email' }));
-      }
-
-      fireEvent.click(screen.getByRole('button', { name: 'Continue with Google' }));
-      fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
-
-      expect(mocks.cancelPrivyAuth).not.toHaveBeenCalled();
-      expect(readSaveVotesPrompt()).toBeNull();
-      expect(readLocalVotes().votes).toHaveLength(1);
     });
 
     it('blocks email when another surface starts Google, even before React renders', () => {
@@ -640,7 +634,7 @@ describe('SaveVotesSheet', () => {
   it('counts a return-visit ask toward the next one', () => {
     vote('a');
     render(<SaveVotesSheet />);
-    expect(screen.getByText('You have 1 unsaved vote')).toBeInTheDocument();
+    expect(screen.getByText(HEADING)).toBeInTheDocument();
     expect(readLocalVotes().prompt.shownCount).toBe(1);
   });
 
@@ -653,7 +647,7 @@ describe('SaveVotesSheet', () => {
     const { rerender } = render(<SaveVotesSheet />);
     act(() => openSaveVotesPrompt('return_visit'));
 
-    expect(screen.queryByRole('region', { name: 'Save your votes' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: HEADING })).not.toBeInTheDocument();
     expect(readLocalVotes().prompt.shownCount).toBe(0);
     expect(mocks.impression).not.toHaveBeenCalled();
 
@@ -683,11 +677,11 @@ describe('SaveVotesSheet', () => {
       </>
     );
     act(() => openSaveVotesPrompt('return_visit'));
-    expect(screen.queryByRole('region', { name: 'Save your votes' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: HEADING })).not.toBeInTheDocument();
     expect(mocks.impression).not.toHaveBeenCalled();
 
     rerender(<SaveVotesSheet />);
-    expect(screen.getByRole('region', { name: 'Save your votes' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: HEADING })).toBeInTheDocument();
   });
 
   it('waits behind our sign-in box while it is up', () => {
@@ -697,9 +691,9 @@ describe('SaveVotesSheet', () => {
     render(<SaveVotesSheet />);
     act(() => openSignInBox({ attemptId: 'attempt', attribution: { component: 'follow_button' } }));
     act(() => openSaveVotesPrompt('return_visit'));
-    expect(screen.queryByRole('region', { name: 'Save your votes' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: HEADING })).not.toBeInTheDocument();
     act(() => closeSignInBox());
-    expect(screen.getByRole('region', { name: 'Save your votes' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: HEADING })).toBeInTheDocument();
   });
 
   // Copilot on #2785 (round 4): an ask belongs to the votes it was about.
@@ -709,7 +703,7 @@ describe('SaveVotesSheet', () => {
     markPromptedThisSession();
     render(<SaveVotesSheet />);
     act(() => openSaveVotesPrompt('threshold'));
-    expect(screen.getByRole('dialog', { name: 'Save your votes' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: HEADING })).toBeInTheDocument();
 
     act(() => {
       removeLocalVote({ entityId: 'a', spaceId: 'space-1', responseKind: 'stance' });
@@ -719,7 +713,7 @@ describe('SaveVotesSheet', () => {
       vote('c');
     });
 
-    expect(screen.queryByRole('dialog', { name: 'Save your votes' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: HEADING })).not.toBeInTheDocument();
     expect(readSaveVotesPrompt()).toBeNull();
   });
 
@@ -768,18 +762,18 @@ describe('SaveVotesSheet from the navbar', () => {
     act(() => openSaveVotesPrompt('repeat'));
     fireEvent.click(screen.getByRole('button', { name: 'Back to email' }));
 
-    expect(screen.getByRole('dialog', { name: 'Save your votes' })).toHaveTextContent('Send code');
-    expect(screen.queryByRole('region', { name: 'Save your votes' })).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: HEADING })).toHaveTextContent('Send code');
+    expect(screen.queryByRole('region', { name: HEADING })).not.toBeInTheDocument();
   });
 
   it('is a centred modal dialog with the corner card’s content', () => {
     openFromNavbar();
 
-    const dialog = screen.getByRole('dialog', { name: 'Save your votes' });
-    expect(dialog).toHaveTextContent('Save your 2 votes');
+    const dialog = screen.getByRole('dialog', { name: HEADING });
+    expect(dialog).toHaveTextContent(HEADING);
     expect(dialog).not.toHaveTextContent('Other ways to sign in');
     expect(screen.getByRole('list', { name: 'Your votes' })).toHaveTextContent('Second claim');
-    expect(screen.queryByRole('region', { name: 'Save your votes' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: HEADING })).not.toBeInTheDocument();
     expect(mocks.impression).toHaveBeenCalledWith('navbar', 2);
   });
 
@@ -790,7 +784,7 @@ describe('SaveVotesSheet from the navbar', () => {
     render(<SaveVotesSheet />);
     act(() => openSaveVotesPrompt('debate_feed_bar'));
 
-    expect(screen.getByRole('dialog', { name: 'Save your votes' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: HEADING })).toBeInTheDocument();
     expect(mocks.impression).toHaveBeenCalledWith('debate_feed_bar', 1);
     expect(readLocalVotes().prompt.shownCount).toBe(0);
   });
@@ -804,7 +798,7 @@ describe('SaveVotesSheet from the navbar', () => {
   it('stays up while a modal is open, where the corner card would wait', () => {
     mocks.anyModalOpen = true;
     openFromNavbar();
-    expect(screen.getByRole('dialog', { name: 'Save your votes' })).toBeVisible();
+    expect(screen.getByRole('dialog', { name: HEADING })).toBeVisible();
   });
 
   it('tags its sign-in with the navbar', () => {
@@ -862,13 +856,22 @@ describe('SaveVotesSheet from the navbar', () => {
     opener.remove();
   });
 
-  it('closes on Escape and keeps the votes, like the corner card', () => {
+  // GEO-3846: it can't be dismissed.
+  it('has no close button, and stays up on Escape', () => {
     openFromNavbar();
-    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    const dialog = screen.getByRole('dialog', { name: HEADING });
+    expect(dialog).toHaveTextContent(HEADING);
+    expect(dialog).toHaveTextContent(SUBTEXT);
+    expect(
+      within(dialog)
+        .getAllByRole('button')
+        .map(button => button.textContent)
+    ).toEqual(['Save votes']);
 
-    expect(readSaveVotesPrompt()).toBeNull();
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(readLocalVotes().prompt.dismissCount).toBe(1);
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+
+    expect(readSaveVotesPrompt()).toBe('navbar');
+    expect(screen.getByRole('dialog', { name: HEADING })).toBeInTheDocument();
     expect(readLocalVotes().votes).toHaveLength(2);
   });
 
@@ -887,7 +890,7 @@ describe('SaveVotesSheet from the navbar', () => {
 
     act(() => openSaveVotesPrompt(reason));
 
-    expect(screen.getByRole('region', { name: 'Save your votes' })).toHaveTextContent('sam@hey.com');
+    expect(screen.getByRole('region', { name: HEADING })).toHaveTextContent('sam@hey.com');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(mocks.accountStepMounts).toBe(1);
     expect(mocks.impression).not.toHaveBeenCalled();
@@ -895,9 +898,9 @@ describe('SaveVotesSheet from the navbar', () => {
 
   // Copilot on #2933: Radix puts `pointer-events: auto` on its content, so content that filled the
   // screen took every press beside the card as a press inside it.
-  it('closes on a press beside the card, keeping the votes', async () => {
+  it('stays up on a press beside the card (GEO-3846)', async () => {
     openFromNavbar();
-    const card = screen.getByRole('dialog', { name: 'Save your votes' });
+    const card = screen.getByRole('dialog', { name: HEADING });
     // Radix starts listening for outside presses a tick after it opens.
     await act(() => new Promise(resolve => setTimeout(resolve, 0)));
 
@@ -906,8 +909,8 @@ describe('SaveVotesSheet from the navbar', () => {
     fireEvent.pointerDown(beside, { button: 0 });
     fireEvent.click(beside);
 
-    expect(readSaveVotesPrompt()).toBeNull();
-    expect(readLocalVotes().prompt.dismissCount).toBe(1);
+    expect(readSaveVotesPrompt()).toBe('navbar');
+    expect(screen.getByRole('dialog', { name: HEADING })).toBeInTheDocument();
     expect(readLocalVotes().votes).toHaveLength(2);
   });
 
@@ -916,14 +919,15 @@ describe('SaveVotesSheet from the navbar', () => {
   // every press beside the card (Radix sets `pointer-events: auto` on it), and none of them dismiss.
   it('makes the card itself the dialog, with nothing full-screen inside the backdrop', () => {
     openFromNavbar();
-    const dialog = screen.getByRole('dialog', { name: 'Save your votes' });
+    const dialog = screen.getByRole('dialog', { name: HEADING });
 
     expect(dialog).toHaveClass('w-[360px]');
     expect(dialog).not.toHaveClass('inset-0');
     expect(dialog.parentElement).toHaveClass('fixed', 'inset-0');
   });
 
-  // Copilot on #2933: with no Radix trigger, closing left focus on the page body.
+  // Copilot on #2933: with no Radix trigger, closing left focus on the page body. It closes on its own
+  // now (GEO-3846), here once every vote is taken back.
   it('hands focus back to what opened it', async () => {
     const opener = document.createElement('button');
     document.body.append(opener);
@@ -931,8 +935,12 @@ describe('SaveVotesSheet from the navbar', () => {
     openFromNavbar();
     await waitFor(() => expect(screen.getByRole('dialog')).toContainElement(document.activeElement as HTMLElement));
 
-    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    act(() => {
+      removeLocalVote({ entityId: 'a', spaceId: 'space-1', responseKind: 'stance' });
+      removeLocalVote({ entityId: 'b', spaceId: 'space-1', responseKind: 'stance' });
+    });
 
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     await waitFor(() => expect(document.activeElement).toBe(opener));
     opener.remove();
   });
@@ -943,10 +951,10 @@ describe('SaveVotesSheet from the navbar', () => {
     markPromptedThisSession();
     render(<SaveVotesSheet />);
     act(() => openSaveVotesPrompt('return_visit'));
-    expect(screen.getByRole('region', { name: 'Save your votes' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: HEADING })).toBeInTheDocument();
 
     act(() => openSaveVotesPrompt(reason));
-    expect(screen.queryByRole('region', { name: 'Save your votes' })).not.toBeInTheDocument();
-    expect(screen.getByRole('dialog', { name: 'Save your votes' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: HEADING })).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: HEADING })).toBeInTheDocument();
   });
 });
