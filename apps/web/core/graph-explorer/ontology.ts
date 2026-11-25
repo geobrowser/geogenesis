@@ -19,14 +19,17 @@ export { SUBTOPIC_RELATION_TYPE_ID, UNNAMED_SUBTOPIC_PROPERTY_ID, TOPICS_PROPERT
 /**
  * How a relation reads from each end. `out` is the property's own sense (centre → neighbour); `in`
  * is the same relation seen from its target. Ids not listed fall back to the property's name.
+ * `generic` marks a relation that only says the two ends are related, not how: no panel row shows it.
  */
-export const RELATION_LABELS: Record<string, { out: string; in: string }> = {
+export type RelationLabel = { out: string; in: string; generic?: true };
+
+export const RELATION_LABELS: Record<string, RelationLabel> = {
   [SUBTOPIC_RELATION_TYPE_ID]: { out: 'Subtopic', in: 'Broader topic' },
   [UNNAMED_SUBTOPIC_PROPERTY_ID]: { out: 'Subtopic', in: 'Broader topic' },
   [BROADER_TOPICS_PROPERTY_ID]: { out: 'Broader topic', in: 'Subtopic' },
-  [RELATED_PEOPLE_PROPERTY_ID]: { out: 'Related person', in: 'Related to' },
-  [RELATED_PROJECTS_PROPERTY_ID]: { out: 'Related project', in: 'Related to' },
-  [RELATED_ENTITIES_PROPERTY_ID]: { out: 'Related entity', in: 'Related to' },
+  [RELATED_PEOPLE_PROPERTY_ID]: { out: 'Related person', in: 'Related to', generic: true },
+  [RELATED_PROJECTS_PROPERTY_ID]: { out: 'Related project', in: 'Related to', generic: true },
+  [RELATED_ENTITIES_PROPERTY_ID]: { out: 'Related entity', in: 'Related to', generic: true },
   [ACTORS_PROPERTY_ID]: { out: 'Actor', in: 'Actor in' },
   [COUNTRY_PROPERTY_ID]: { out: 'Country', in: 'Country of' },
   [HEADQUARTERS_PROPERTY_ID]: { out: 'Headquarters', in: 'Headquarters of' },
