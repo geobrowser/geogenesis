@@ -59,6 +59,13 @@ export interface ClaimTemplateProps {
   compact?: boolean;
   /** Shows a calm skeleton below the VoteBox while async live sections coalesce in one smooth reveal. */
   isLoadingSections?: boolean;
+  /**
+   * Start the page at its Supporting claims, for a page that already shows the claim itself: the
+   * Debate page, below the debate (GEO-3869). Drops the cover, breadcrumbs, title, vote box and the
+   * Accepted and key-evidence panels, and the shell's top padding, so Supporting claims follows what
+   * is above it like the page's next section.
+   */
+  startAtSubClaims?: boolean;
   className?: string;
 }
 
@@ -75,45 +82,22 @@ export function ClaimTemplate({
   actionCallbacks,
   compact = false,
   isLoadingSections = false,
+  startAtSubClaims = false,
   className,
 }: ClaimTemplateProps) {
   return (
     <TemplateShell
       maxWidth={980}
-      breadcrumbs={model.breadcrumbs}
-      coverUrl={model.coverUrl}
+      breadcrumbs={startAtSubClaims ? undefined : model.breadcrumbs}
+      coverUrl={startAtSubClaims ? null : model.coverUrl}
+      flushTop={startAtSubClaims}
       coverAlt={model.title}
       compact={compact}
       contextByEntityId={model.contextByEntityId}
       actionCallbacks={actionCallbacks}
       className={className}
     >
-      {/* Header (name first, type labels below) */}
-      <header className="flex flex-col gap-3.5">
-        <TemplateTitleRow
-          meta={
-            <>
-              <TemplateBadge tone="neutral">Claim</TemplateBadge>
-              <TemplateBadge tone={CLAIM_KIND_TONE[model.kind]}>{formatClaimKindLabel(model.kind)}</TemplateBadge>
-            </>
-          }
-          actions={
-            <>
-              <EntityContextTogglePill />
-              {headerActions ?? (
-                <EntityOverflowMenu target={{ id: model.id, kind: 'Claim', title: model.title }} isPageRoot size="md" />
-              )}
-            </>
-          }
-        >
-          <h1 className="m-0 text-entityTitle text-pretty text-text">{model.title}</h1>
-        </TemplateTitleRow>
-
-        <EntityInlineContext targetId={model.id} targetTitle={model.title} targetKind="Claim" />
-      </header>
-
-      {/* Vote box + community split bars */}
-      <VoteBox split={model.split} control={model.voteBox} />
+      {!startAtSubClaims && <ClaimTemplateHeader model={model} headerActions={headerActions} />}
 
       {isLoadingSections ? (
         <div aria-busy="true" aria-label="Loading claim sections" className="flex flex-col gap-8">
@@ -143,7 +127,7 @@ export function ClaimTemplate({
       ) : (
         <div className="flex animate-fade-in flex-col gap-10">
           {/* Accepted basis (clean soft-shadow editorial panel) */}
-          {model.agreedBasis && (
+          {!startAtSubClaims && model.agreedBasis && (
             <section aria-label="Accepted" className={`flex flex-col gap-4 p-5 @[560px]:p-6 ${TEMPLATE_CARD_SURFACE}`}>
               <div className="flex items-center gap-2 text-ctaPrimary">
                 <CheckCircleIcon className="size-5" />
@@ -160,7 +144,7 @@ export function ClaimTemplate({
           )}
 
           {/* Key stat callout */}
-          {model.keyStat && (
+          {!startAtSubClaims && model.keyStat && (
             <section aria-label="Key evidence" className={`flex flex-col gap-3 p-5 ${TEMPLATE_CARD_SURFACE}`}>
               <p className="m-0 text-[15.5px] leading-[24px] text-text">{model.keyStat.text}</p>
               <SourceChipList sources={model.keyStat.sources} />
@@ -218,6 +202,40 @@ export function ClaimTemplate({
         </div>
       )}
     </TemplateShell>
+  );
+}
+
+/** The claim's title row, inline context and vote box: what the Claim page opens with. */
+function ClaimTemplateHeader({ model, headerActions }: { model: ClaimTemplateModel; headerActions?: React.ReactNode }) {
+  return (
+    <>
+      {/* Header (name first, type labels below) */}
+      <header className="flex flex-col gap-3.5">
+        <TemplateTitleRow
+          meta={
+            <>
+              <TemplateBadge tone="neutral">Claim</TemplateBadge>
+              <TemplateBadge tone={CLAIM_KIND_TONE[model.kind]}>{formatClaimKindLabel(model.kind)}</TemplateBadge>
+            </>
+          }
+          actions={
+            <>
+              <EntityContextTogglePill />
+              {headerActions ?? (
+                <EntityOverflowMenu target={{ id: model.id, kind: 'Claim', title: model.title }} isPageRoot size="md" />
+              )}
+            </>
+          }
+        >
+          <h1 className="m-0 text-entityTitle text-pretty text-text">{model.title}</h1>
+        </TemplateTitleRow>
+
+        <EntityInlineContext targetId={model.id} targetTitle={model.title} targetKind="Claim" />
+      </header>
+
+      {/* Vote box + community split bars */}
+      <VoteBox split={model.split} control={model.voteBox} />
+    </>
   );
 }
 
