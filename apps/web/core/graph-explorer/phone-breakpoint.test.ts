@@ -35,7 +35,8 @@ describe('graph explorer phone breakpoint', () => {
 
   it('compiles the variants to those exact media queries', async () => {
     const input = [
-      "@import 'tailwindcss/utilities';",
+      // source(none): no scan of the app; the inline source below is all the assertions need.
+      "@import 'tailwindcss/utilities' source(none);",
       ...VARIANTS,
       "@source inline('graph-phone:hidden graph-wide:hidden');",
     ].join('\n');
