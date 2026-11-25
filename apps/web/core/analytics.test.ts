@@ -223,6 +223,39 @@ describe('analytics', () => {
     expect(properties).not.toHaveProperty('wallet');
   });
 
+  it('puts the first-touch click id on signed_up and the geo_account_created push', async () => {
+    const signedUp = vi.fn();
+    window.lytics = { capture: vi.fn(), signedUp };
+    (window as any).dataLayer = [];
+    window.history.replaceState({}, '', '/?fbclid=test123&utm_source=fb');
+    const { initAnalytics, trackPrivyAuth } = await import('./analytics');
+    initAnalytics();
+    window.history.replaceState({}, '', '/');
+
+    trackPrivyAuth({
+      user: { id: 'did:privy:user-fb' },
+      isNewUser: true,
+      wasAlreadyAuthenticated: false,
+      loginMethod: 'email',
+      loginAccount: { type: 'email' },
+    } as any);
+
+    const [, properties] = signedUp.mock.calls[0];
+    expect(properties).toMatchObject({
+      first_touch_fbclid: 'test123',
+      fbc: expect.stringMatching(/^fb\.1\.\d+\.test123$/),
+      first_touch_utm_source: 'fb',
+    });
+    expect((window as any).dataLayer).toContainEqual(
+      expect.objectContaining({
+        event: 'geo_account_created',
+        user_id: 'did:privy:user-fb',
+        fbclid: 'test123',
+        fbc: properties.fbc,
+      })
+    );
+  });
+
   // GEO-3139: a Google-only user has no `user.email`; the address is on the google_oauth account.
   it('records the email and method of a Google sign-up', async () => {
     const signedUp = vi.fn();
