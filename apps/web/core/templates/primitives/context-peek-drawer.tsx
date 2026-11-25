@@ -2,7 +2,6 @@
 
 import * as React from 'react';
 
-import cx from 'classnames';
 import Link from 'next/link';
 
 import { RelationSmall } from '~/design-system/icons/relation-small';
@@ -36,8 +35,6 @@ import {
   FlagIcon,
   NetworkIcon,
   PlayIcon,
-  ThumbDownIcon,
-  ThumbUpIcon,
   TweetIcon,
 } from './icons';
 import { SourceChipList } from './source-chip-list';
@@ -673,40 +670,16 @@ function PeekFlagsSection({ initialFlags }: { initialFlags: readonly EntityFlagM
                   )}
                 </div>
                 <p className="m-0 text-[14px] leading-[20px] text-text/90">{flag.body}</p>
-                <div className="flex items-center gap-1.5 pt-0.5" role="group" aria-label="Vote on dispute">
-                  <button
-                    type="button"
-                    aria-pressed={vote === 'agree'}
-                    onClick={() =>
-                      setVotes(prev => ({ ...prev, [flag.id]: prev[flag.id] === 'agree' ? null : 'agree' }))
-                    }
-                    className={cx(
-                      'inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full border px-2.5 text-[12.5px] font-medium transition-colors',
-                      vote === 'agree'
-                        ? 'border-text bg-text text-white'
-                        : 'border-grey-02 bg-white text-text hover:border-text'
-                    )}
-                  >
-                    <ThumbUpIcon className="size-3" />
-                    <span>Agree</span>
-                  </button>
-                  <button
-                    type="button"
-                    aria-pressed={vote === 'disagree'}
-                    onClick={() =>
-                      setVotes(prev => ({ ...prev, [flag.id]: prev[flag.id] === 'disagree' ? null : 'disagree' }))
-                    }
-                    className={cx(
-                      'inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full border px-2.5 text-[12.5px] font-medium transition-colors',
-                      vote === 'disagree'
-                        ? 'border-text bg-text text-white'
-                        : 'border-grey-02 bg-white text-text hover:border-text'
-                    )}
-                  >
-                    <ThumbDownIcon className="size-3" />
-                    <span>Disagree</span>
-                  </button>
-                </div>
+                <DebateVoteButtons
+                  compact
+                  userVote={vote}
+                  label="Vote on dispute"
+                  onPress={choice =>
+                    setVotes(prev => ({ ...prev, [flag.id]: prev[flag.id] === choice ? null : choice }))
+                  }
+                  className="pt-0.5"
+                  buttonClassName="flex-none"
+                />
               </article>
             );
           })}

@@ -433,6 +433,70 @@ describe('ClaimExplorer voting', () => {
     expect(onVote).not.toHaveBeenCalled();
   });
 
+  // The buttons carry no counts (GEO-3845), so the row's result has to follow the viewer's press.
+  it("a row's result follows the viewer's vote at once, not only the fetched split", () => {
+    const noVotes = claim({
+      voteTarget: TARGET,
+      userVote: null,
+      agreeCount: 0,
+      disagreeCount: 0,
+      split: { rows: [], isSplit: true },
+    });
+    const view = render(
+      <EntityActionProvider>
+        <ClaimExplorer contestedClaims={[noVotes]} agreedClaims={[]} />
+      </EntityActionProvider>
+    );
+    expect(screen.getByText('No votes yet')).toBeInTheDocument();
+    expect(screen.queryAllByRole('meter')).toHaveLength(0);
+    view.unmount();
+
+    // The press is drawn: the control now holds Agree, the fetched split still says no votes.
+    setControl({ viewerPosition: true });
+    render(
+      <EntityActionProvider>
+        <ClaimExplorer contestedClaims={[noVotes]} agreedClaims={[]} />
+      </EntityActionProvider>
+    );
+    expect(screen.queryByText('No votes yet')).toBeNull();
+    expect(screen.getByText('1 vote')).toBeInTheDocument();
+    const meters = screen.getAllByRole('meter');
+    expect(meters.length).toBeGreaterThan(0);
+    for (const meter of meters) expect(meter).toHaveAttribute('aria-valuenow', '100');
+  });
+
+  it('a switched vote moves the inline percentage and keeps the total', () => {
+    setControl({ viewerPosition: false });
+    setState({ readiness: { response_kind: 'stance', viewer_response: { position: true } } });
+    render(
+      <EntityActionProvider>
+        <ClaimExplorer
+          contestedClaims={[
+            claim({
+              voteTarget: TARGET,
+              userVote: 'agree',
+              agreeCount: 5,
+              disagreeCount: 2,
+              split: {
+                rows: [
+                  { id: 'all', label: 'Everyone', color: '#202020', percent: 71, voterCount: 7, isEveryone: true },
+                ],
+                isSplit: true,
+                totalVotes: 7,
+              },
+            }),
+          ]}
+          agreedClaims={[]}
+        />
+      </EntityActionProvider>
+    );
+    expect(screen.getByText('7 votes')).toBeInTheDocument();
+    // 4 of 7 agree once the viewer's Agree turns into Disagree.
+    const meters = screen.getAllByRole('meter');
+    expect(meters.length).toBeGreaterThan(0);
+    for (const meter of meters) expect(meter).toHaveAttribute('aria-valuenow', '57');
+  });
+
   it('a row without a target (the fixture) keeps its local handler', () => {
     const onVote = vi.fn();
     render(

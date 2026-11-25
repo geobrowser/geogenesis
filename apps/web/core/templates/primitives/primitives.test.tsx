@@ -16,6 +16,7 @@ import { TEMPLATE_ACTIONS } from '../template-actions';
 import {
   ClaimExplorer,
   ClaimSummaryCard,
+  ContextPeekDrawer,
   EntityActionProvider,
   EntityContextAndDisputes,
   EntityFlagsSection,
@@ -903,5 +904,33 @@ describe('Add claim on a live page (GEO-3836)', () => {
     expect(screen.getByText('This one will fail')).toBeInTheDocument();
     await React.act(async () => settle({ ok: false, error: 'Could not publish.' }));
     expect(screen.queryByText('This one will fail')).toBeNull();
+  });
+});
+
+describe('Context drawer dispute votes (GEO-3845)', () => {
+  it("draw the debates app's Agree / Disagree, and pressing the held side takes the vote back", () => {
+    render(
+      <EntityActionProvider>
+        <ContextPeekDrawer
+          item={{
+            id: 'peek-1',
+            kind: 'source',
+            kindLabel: 'Source',
+            title: 'A report',
+            flags: [{ id: 'flag-1', reason: 'Misleading', body: 'The figure is from 2019.' }],
+          }}
+          onClose={() => {}}
+        />
+      </EntityActionProvider>
+    );
+    const group = screen.getByRole('group', { name: 'Vote on dispute' });
+    const agree = within(group).getByRole('button', { name: 'Agree' });
+    expect(agree).toHaveClass('border-[#8a8a8a]');
+    fireEvent.click(agree);
+    expect(agree).toHaveAttribute('aria-pressed', 'true');
+    expect(agree).toHaveClass('border-[#151515]');
+    expect(agree).not.toHaveClass('bg-text');
+    fireEvent.click(agree);
+    expect(agree).toHaveAttribute('aria-pressed', 'false');
   });
 });

@@ -26,7 +26,7 @@ import {
 import { CheckCircleIcon } from './icons';
 import { ListRankingHeaderControl, ListRankingWorkspace, type RankableListItem, useListRanking } from './list-ranking';
 import { SplitBars } from './split-bars';
-import { ClaimVoteBinding, ClaimVotePills, TemplateVoteRows } from './template-claim-vote';
+import { ClaimVoteBinding, ClaimVotePills, type TemplateVoteBinding, TemplateVoteRows } from './template-claim-vote';
 import { TEMPLATE_CARD_SURFACE, type TemplateBadgeTone } from './template-shell';
 import { PUBLISHING_LABEL, usePendingAdds } from './use-pending-adds';
 
@@ -282,15 +282,6 @@ export function ClaimListRow({ rank, claim, isAgreed = false, hideKindOnPhone = 
   // Debate counts aren't shown in claim lists (GEO-3845); a "N debates" meta part is dropped too.
   const debateMetaIndex = claim.meta?.findIndex(part => /\bdebates?\b/i.test(part)) ?? -1;
 
-  const voteCountLabel =
-    claim.split.totalVotes !== undefined
-      ? claim.split.totalVotes > 0
-        ? `${formatCompactCount(claim.split.totalVotes)} ${claim.split.totalVotes === 1 ? 'vote' : 'votes'}`
-        : undefined
-      : voteMetaIndex >= 0
-        ? claim.meta?.[voteMetaIndex]
-        : undefined;
-
   const metaParts: string[] = [];
   if (claim.meta && claim.meta.length > 0) {
     for (let i = 0; i < claim.meta.length; i++) {
@@ -301,39 +292,6 @@ export function ClaimListRow({ rank, claim, isAgreed = false, hideKindOnPhone = 
   const votes = Boolean(claim.voteTarget || claim.onVote);
   const youVotedLabel = claim.userVote && !votes ? (claim.userVote === 'agree' ? 'You agreed' : 'You disagreed') : null;
   const kindLabel = claim.kind ? formatClaimKindLabel(claim.kind) : null;
-
-  // No votes, no split, as in the Claim page's vote box.
-  const splitRows = claim.split.totalVotes !== 0 ? claim.split.rows : [];
-  // Wide rows draw the overall split inline beside the buttons; any per-space rows sit under it.
-  const primaryRow = splitRows.find(row => row.isEveryone) ?? splitRows[0];
-  const extraRows = splitRows.filter(row => row !== primaryRow);
-
-  // Phones: the split sits under the buttons as the Claim page's vote box draws it (dot, space, bar,
-  // "80% (5)"), so the count lives in the parentheses.
-  const phoneSplitRows = splitRows.map(row => ({
-    ...row,
-    voterCount: row.voterCount ?? (splitRows.length === 1 ? claim.split.totalVotes : undefined),
-  }));
-
-  // Quiet gray text after the result on wide rows: "7 votes · Judgment · <meta> · You agreed".
-  const wideMeta: React.ReactNode[] = [];
-  if (voteCountLabel) wideMeta.push(<span key="votes">{voteCountLabel}</span>);
-  else if (votes && !claim.pending) wideMeta.push(<span key="votes">No votes yet</span>);
-  if (kindLabel) {
-    wideMeta.push(
-      <span key="kind" data-testid="claim-kind-tag">
-        {kindLabel}
-      </span>
-    );
-  }
-  for (const part of metaParts) wideMeta.push(<span key={`meta-${part}`}>{part}</span>);
-  if (youVotedLabel) {
-    wideMeta.push(
-      <span key="you" className="font-medium text-text">
-        {youVotedLabel}
-      </span>
-    );
-  }
 
   // Phones show the kind only when the list asks for it.
   const phoneMeta: React.ReactNode[] = [];
@@ -358,20 +316,91 @@ export function ClaimListRow({ rank, claim, isAgreed = false, hideKindOnPhone = 
     </span>
   );
 
-  const voteButtons = votes ? (
-    <ClaimVoteBinding
-      voteTarget={claim.voteTarget}
-      userVote={claim.userVote}
-      agreeCount={claim.agreeCount}
-      disagreeCount={claim.disagreeCount}
-      onVote={claim.onVote}
-      onClearVote={claim.onClearVote}
-    >
-      {vote => vote && <ClaimVotePills title={claim.title} vote={vote} />}
-    </ClaimVoteBinding>
-  ) : null;
+  // The buttons, the result beside them and the split lines, from the row's vote binding (or none):
+  // the counts follow the viewer's press at once, as the old pill counts did.
+  const voteArea = (vote: TemplateVoteBinding | null) => {
+    const { splitRows, totalVotes } = claimRowResult(claim, vote);
+    const voteCountLabel =
+      totalVotes !== undefined
+        ? totalVotes > 0
+          ? `${formatCompactCount(totalVotes)} ${totalVotes === 1 ? 'vote' : 'votes'}`
+          : undefined
+        : voteMetaIndex >= 0
+          ? claim.meta?.[voteMetaIndex]
+          : undefined;
 
-  const hasWideResult = Boolean(primaryRow) || wideMeta.length > 0;
+    // Wide rows draw the overall split inline beside the buttons; any per-space rows sit under it.
+    const primaryRow = splitRows.find(row => row.isEveryone) ?? splitRows[0];
+    const extraRows = splitRows.filter(row => row !== primaryRow);
+
+    // Phones: the split sits under the buttons as the Claim page's vote box draws it (dot, space, bar,
+    // "80% (5)"), so the count lives in the parentheses.
+    const phoneSplitRows = splitRows.map(row => ({
+      ...row,
+      voterCount: row.voterCount ?? (splitRows.length === 1 ? totalVotes : undefined),
+    }));
+
+    // Quiet gray text after the result on wide rows: "7 votes · Judgment · <meta> · You agreed".
+    const wideMeta: React.ReactNode[] = [];
+    if (voteCountLabel) wideMeta.push(<span key="votes">{voteCountLabel}</span>);
+    else if (votes && !claim.pending) wideMeta.push(<span key="votes">No votes yet</span>);
+    if (kindLabel) {
+      wideMeta.push(
+        <span key="kind" data-testid="claim-kind-tag">
+          {kindLabel}
+        </span>
+      );
+    }
+    for (const part of metaParts) wideMeta.push(<span key={`meta-${part}`}>{part}</span>);
+    if (youVotedLabel) {
+      wideMeta.push(
+        <span key="you" className="font-medium text-text">
+          {youVotedLabel}
+        </span>
+      );
+    }
+
+    const voteButtons = vote ? <ClaimVotePills title={claim.title} vote={vote} /> : null;
+    const hasWideResult = Boolean(primaryRow) || wideMeta.length > 0;
+
+    return (
+      <>
+        {(voteButtons || hasWideResult) && (
+          <div
+            className={cx(
+              'flex-wrap items-center gap-x-4 gap-y-2 @[760px]:mt-2.5 @[760px]:flex',
+              voteButtons ? 'mt-2.5 flex' : 'hidden'
+            )}
+          >
+            {/* The debates app's Agree / Disagree (GEO-3845), across the row on phones. */}
+            {voteButtons && <div className="basis-full @[760px]:basis-auto">{voteButtons}</div>}
+
+            {hasWideResult && (
+              <div className="hidden min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[13.5px] leading-[18px] text-grey-04 tabular-nums @[760px]:flex">
+                {primaryRow && <InlineSplit row={primaryRow} />}
+                {wideMeta.map((node, i) => (
+                  <React.Fragment key={i}>
+                    {(i > 0 || primaryRow) && <span aria-hidden>·</span>}
+                    {node}
+                  </React.Fragment>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {extraRows.length > 0 && (
+          <span className="hidden @[760px]:contents">
+            <SplitBars rows={extraRows} density="compact" className="mt-2.5 w-full max-w-[420px]" />
+          </span>
+        )}
+
+        {phoneSplitRows.length > 0 && (
+          <SplitBars rows={phoneSplitRows} density="full" className="mt-3 @[760px]:hidden" />
+        )}
+      </>
+    );
+  };
 
   return (
     <div className="flex items-start gap-3 px-5 py-4 transition-colors hover:bg-bg @[760px]:gap-4">
@@ -409,38 +438,19 @@ export function ClaimListRow({ rank, claim, isAgreed = false, hideKindOnPhone = 
           </div>
         )}
 
-        {(voteButtons || hasWideResult) && (
-          <div
-            className={cx(
-              'flex-wrap items-center gap-x-4 gap-y-2 @[760px]:mt-2.5 @[760px]:flex',
-              voteButtons ? 'mt-2.5 flex' : 'hidden'
-            )}
+        {votes ? (
+          <ClaimVoteBinding
+            voteTarget={claim.voteTarget}
+            userVote={claim.userVote}
+            agreeCount={claim.agreeCount}
+            disagreeCount={claim.disagreeCount}
+            onVote={claim.onVote}
+            onClearVote={claim.onClearVote}
           >
-            {/* The debates app's Agree / Disagree (GEO-3845), across the row on phones. */}
-            {voteButtons && <div className="basis-full @[760px]:basis-auto">{voteButtons}</div>}
-
-            {hasWideResult && (
-              <div className="hidden min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[13.5px] leading-[18px] text-grey-04 tabular-nums @[760px]:flex">
-                {primaryRow && <InlineSplit row={primaryRow} />}
-                {wideMeta.map((node, i) => (
-                  <React.Fragment key={i}>
-                    {(i > 0 || primaryRow) && <span aria-hidden>·</span>}
-                    {node}
-                  </React.Fragment>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {extraRows.length > 0 && (
-          <span className="hidden @[760px]:contents">
-            <SplitBars rows={extraRows} density="compact" className="mt-2.5 w-full max-w-[420px]" />
-          </span>
-        )}
-
-        {phoneSplitRows.length > 0 && (
-          <SplitBars rows={phoneSplitRows} density="full" className="mt-3 @[760px]:hidden" />
+            {voteArea}
+          </ClaimVoteBinding>
+        ) : (
+          voteArea(null)
         )}
 
         {details && <div className="mt-3 flex flex-col gap-2">{details}</div>}
@@ -464,6 +474,32 @@ export function ClaimListRow({ rank, claim, isAgreed = false, hideKindOnPhone = 
       />
     </div>
   );
+}
+
+/**
+ * The split rows and vote total a claim row draws. With a vote binding that has counts, the overall
+ * ("Everyone") row and the total come from it, so a press moves the result at once (the binding adjusts
+ * for the viewer's own vote). Per-space rows keep the fetched numbers. No votes, no split, as in the
+ * Claim page's vote box.
+ */
+export function claimRowResult(
+  claim: Pick<ClaimSummaryModel, 'split'>,
+  vote: Pick<TemplateVoteBinding, 'agreeCount' | 'disagreeCount'> | null
+): { splitRows: readonly SplitRow[]; totalVotes: number | undefined } {
+  if (vote && vote.agreeCount !== undefined && vote.disagreeCount !== undefined) {
+    const total = vote.agreeCount + vote.disagreeCount;
+    if (total === 0) return { splitRows: [], totalVotes: 0 };
+    const percent = (vote.agreeCount / total) * 100;
+    const everyone = claim.split.rows.find(row => row.isEveryone);
+    const overall: SplitRow = everyone
+      ? { ...everyone, percent, voterCount: total }
+      : { id: 'all', label: 'Everyone', color: '#202020', percent, voterCount: total, isEveryone: true };
+    // A split with no Everyone row is per-space only; the live total leads it.
+    const others = claim.split.rows.filter(row => !row.isEveryone);
+    return { splitRows: [overall, ...others], totalVotes: total };
+  }
+  const totalVotes = claim.split.totalVotes;
+  return { splitRows: totalVotes !== 0 ? claim.split.rows : [], totalVotes };
 }
 
 /** The overall split drawn inline beside the vote buttons on a wide row: a short bar and its percentage. */

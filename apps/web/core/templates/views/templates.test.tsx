@@ -347,6 +347,9 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     const flagAgree = within(flagVoteGroup).getByRole('button', { name: 'Agree' });
     fireEvent.click(flagAgree);
     expect(flagAgree).toHaveAttribute('aria-pressed', 'true');
+    // The debates app's button (GEO-3845): ink outline on the held side, not the old black-filled pill.
+    expect(flagAgree).toHaveClass('border-[#151515]');
+    expect(flagAgree).not.toHaveClass('bg-text');
     fireEvent.click(within(claimContextDrawer).getByRole('button', { name: 'Close' }));
 
     // Adding a new key-value triple via `...` -> Add context increments the graph chip count (5 -> 7)
