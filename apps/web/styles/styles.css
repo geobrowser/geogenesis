@@ -898,14 +898,15 @@ body[data-slide-up-open] [data-radix-popper-content-wrapper] {
 }
 
 /* GEO-3569: "Opening sign-in…" from first paint; shown by core/auth/sign-in-pending.ts. Taps pass
-   through, so a dialog that never comes cannot lock the page. Below Privy's dialog. */
+   through, so a dialog that never comes cannot lock the page. Below Privy's dialog, above every app
+   layer in core/z-layers.ts (the save-votes prompt is 10010). */
 #sign-in-pending {
   display: none;
 }
 html[data-sign-in-pending] #sign-in-pending {
   position: fixed;
   inset: 0;
-  z-index: 10010;
+  z-index: 10011;
   display: flex;
   align-items: center;
   justify-content: center;

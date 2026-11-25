@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
   canEdit: false,
   editable: false,
   editingSpace: null as string | null,
-  readTabs: null as Array<{ label: string; href: string }> | null,
+  readTabs: null as Array<{ label: string; href: string; activeOnRecordRoutes?: boolean }> | null,
   sidePanel: null as null | {
     activeTabId: string | null;
     activeSystemTab: string | null;
@@ -154,5 +154,36 @@ describe('EntityTabs access and system tabs', () => {
     );
 
     expect(setActiveSystemTab).toHaveBeenCalledWith('overview');
+  });
+
+  it('keeps a templated entity’s record tab through edit mode, showing it as Overview (GEO-3820)', () => {
+    const setActiveSystemTab = vi.fn();
+    const setActiveTabId = vi.fn();
+    mocks.sidePanel = { activeTabId: null, activeSystemTab: 'debates', setActiveTabId, setActiveSystemTab };
+
+    render(
+      <EntityTabs
+        entityId="claim-1"
+        spaceId="space-1"
+        initialTabRelations={RELATIONS as never}
+        tabEntities={[]}
+        keepRecordTabSelection
+      />
+    );
+
+    // Not reset to Overview, so leaving edit mode returns to Debates.
+    expect(setActiveSystemTab).not.toHaveBeenCalled();
+    expect(setActiveTabId).not.toHaveBeenCalled();
+    // On the full page, Overview stays selected on /debates.
+    expect(mocks.readTabs?.[0]).toMatchObject({ label: 'Overview', activeOnRecordRoutes: true });
+  });
+
+  it('still resets a generic entity’s unknown side-panel tab', () => {
+    const setActiveTabId = vi.fn();
+    mocks.sidePanel = { activeTabId: null, activeSystemTab: 'debates', setActiveTabId, setActiveSystemTab: vi.fn() };
+
+    render(<EntityTabs entityId="claim-1" spaceId="space-1" initialTabRelations={[]} tabEntities={[]} />);
+
+    expect(setActiveTabId).toHaveBeenCalledWith(null);
   });
 });

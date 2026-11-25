@@ -109,6 +109,20 @@ export const featureFlagDefinitions = [
       'A page opened while an email code is outstanding from a page that is gone reopens sign-in, prefilled (GEO-3573). Turn off to stop the dialog opening by itself.',
     enabledByDefault: true,
   },
+  {
+    id: 'entityTemplatesV2',
+    label: 'Entity templates v2',
+    description:
+      'Enable the redesigned Topic and Claim templates and register structured templates for News stories, Sources, Posts, and Events.',
+    enabledByDefault: true,
+  },
+  {
+    id: 'templateListRanking',
+    label: 'Rank template lists',
+    description:
+      'Show the ranking control on template lists. Off until a ranking publishes to the graph (GEO-3835); it only saves to this browser.',
+    enabledByDefault: false,
+  },
 ] as const;
 
 export type FeatureFlagId = (typeof featureFlagDefinitions)[number]['id'];

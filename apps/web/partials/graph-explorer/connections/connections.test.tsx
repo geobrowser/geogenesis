@@ -644,7 +644,7 @@ describe('the top bar on a phone (GEO-3849)', () => {
 describe('BandLegend', () => {
   afterEach(cleanup);
 
-  it('drops to the three bands on a phone, wrapping only between whole items', () => {
+  it('drops to the three bands on a tablet, wrapping only between whole items, and hides on a phone', () => {
     render(<BandLegend />);
     const legend = screen.getByTestId('band-legend');
     // A forced single line overflows under the zoom controls at 320px (GEO-3849 review).
@@ -652,7 +652,8 @@ describe('BandLegend', () => {
     expect(legend.className).toContain('flex-wrap');
     for (const item of legend.children) expect(item.className).toContain('whitespace-nowrap');
     expect(legend.textContent).toContain('Widely agreed');
-    // Desktop keeps the fourth item; a phone drops it.
+    expect(legend.className).toContain('graph-phone:hidden');
+    // Desktop keeps the fourth item; a tablet drops it.
     const unvoted = screen.getByText('No responses yet');
     expect(unvoted.className).toContain('md:hidden');
     for (const band of ['Widely agreed', 'Contested', 'Widely rejected'])

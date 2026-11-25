@@ -511,8 +511,10 @@ function EntityResponseButtons({
 
   // The two thumbs share `ResponseButton` with the claim pills, and the same submission window:
   // `isSubmittingResponse` clears once the bundler has the write.
+  // The ::after pads the 20px thumb to a 24x32 tap target without changing how it looks or
+  // reaching the count beside it.
   const thumbClassName = cx(
-    'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
+    'group/vote relative flex h-5 w-5 items-center justify-center rounded transition-colors after:absolute after:-inset-x-0.5 after:-inset-y-1.5',
     VOTE_BUTTON_RESTING_CLASS
   );
 
@@ -624,7 +626,12 @@ function RespondersPopover({
           // floating over a row it no longer belongs to.
           collisionPadding={{ top: 52, right: 16, bottom: 16, left: 16 }}
           hideWhenDetached
-          className="z-100 w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
+          // Never taller than the room the padding leaves: on a short phone neither side fits the
+          // 356px list, and Radix keeps it below its trigger, running off the bottom of the screen
+          // (13px at 320x568 in the graph explorer's panel sheet, GEO-3849). As a flex column the
+          // list inside scrolls in what is left. Where the list fits, as it does on every taller
+          // screen, the cap is above its height and nothing changes.
+          className="z-100 flex max-h-(--radix-popover-content-available-height) w-[200px] flex-col overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
         >
           <RespondersPopoverContent
             entityId={entityId}

@@ -2,10 +2,14 @@
 
 import * as React from 'react';
 
+import { useSetAtom } from 'jotai';
+
 import { useGraphAnalytics } from '~/core/graph-explorer/graph-explorer-analytics';
 
 import { BottomSheet } from '~/design-system/bottom-sheet';
 import { ChevronUp } from '~/design-system/icons/chevron-up';
+
+import { slideUpPopoverContainersAtom } from '~/atoms';
 
 /**
  * On a phone the map has the screen (GEO-3849): the panel is a bottom sheet behind a pill at the
@@ -28,6 +32,28 @@ export function PhonePanelSheet({
   React.useEffect(() => {
     setOpen(false);
   }, [centreId]);
+
+  // Popovers opened from the panel (a claim's voters, for one) portal to the sheet on top's container,
+  // or to the body under this sheet's z-index and scroll lock. A host inside the sheet, registered
+  // like a slide-up's (slide-up.tsx), keeps them over it. The panel mounts only once the host is
+  // registered: under the React Compiler a reader like RespondersPopover keeps the container it read
+  // on its first render. Both steps run in layout effects, so the sheet never paints without its panel.
+  const [popoverHost, setPopoverHost] = React.useState<HTMLElement | null>(null);
+  const [hosted, setHosted] = React.useState(false);
+  const setPopoverContainers = useSetAtom(slideUpPopoverContainersAtom);
+  const token = React.useMemo(() => Symbol('graph-panel-sheet'), []);
+  React.useLayoutEffect(() => {
+    if (!popoverHost) return;
+    setPopoverContainers(current => [
+      ...current.filter(entry => entry.token !== token),
+      { token, container: popoverHost },
+    ]);
+    setHosted(true);
+    return () => {
+      setPopoverContainers(current => current.filter(entry => entry.token !== token));
+      setHosted(false);
+    };
+  }, [popoverHost, setPopoverContainers, token]);
 
   const onOpenChange = React.useCallback(
     (next: boolean) => {
@@ -58,7 +84,8 @@ export function PhonePanelSheet({
         </button>
       }
     >
-      {children}
+      {hosted ? children : null}
+      <div ref={setPopoverHost} data-testid="graph-panel-popovers" />
     </BottomSheet>
   );
 }

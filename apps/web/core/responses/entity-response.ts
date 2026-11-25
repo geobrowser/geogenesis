@@ -53,6 +53,8 @@ export type EntityResponseCopy = {
   viewResponders: string;
   signIn: string;
   connect: string;
+  /** Signed in with no personal space yet: a press reopens account setup. */
+  finishSetup: string;
 };
 
 export const ENTITY_RESPONSE_COPY: Record<ResponseKind, EntityResponseCopy> = {
@@ -67,6 +69,7 @@ export const ENTITY_RESPONSE_COPY: Record<ResponseKind, EntityResponseCopy> = {
     viewResponders: 'View voters',
     signIn: 'Sign in to vote',
     connect: 'Connect wallet to vote',
+    finishSetup: 'Finish setting up your account to vote',
   },
   stance: {
     positiveAction: 'Agree',
@@ -79,6 +82,7 @@ export const ENTITY_RESPONSE_COPY: Record<ResponseKind, EntityResponseCopy> = {
     viewResponders: 'View stances',
     signIn: 'Sign in to respond',
     connect: 'Connect wallet to respond',
+    finishSetup: 'Finish setting up your account to respond',
   },
 };
 
