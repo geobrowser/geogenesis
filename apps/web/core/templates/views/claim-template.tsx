@@ -121,12 +121,12 @@ export function ClaimTemplate({
             <div className="h-6 w-44 animate-pulse rounded-md bg-grey-01" />
             <div className={`flex flex-col divide-y divide-divider overflow-hidden ${TEMPLATE_CLAIM_LIST_SURFACE}`}>
               {Array.from({ length: 4 }, (_, idx) => (
-                <div key={idx} className="flex items-center justify-between gap-4 py-4 @[760px]:px-5">
+                <div key={idx} className="flex items-center justify-between gap-4 py-4 @[640px]:px-5">
                   <div className="flex min-w-0 flex-1 flex-col gap-2">
                     <div className="h-4 w-3/4 animate-pulse rounded bg-grey-01" />
                     <div className="h-6 w-48 animate-pulse rounded-full bg-grey-01" />
                   </div>
-                  <div className="hidden h-3 w-44 animate-pulse rounded-full bg-grey-01 @[760px]:block" />
+                  <div className="hidden h-3 w-44 animate-pulse rounded-full bg-grey-01 @[640px]:block" />
                 </div>
               ))}
             </div>
@@ -374,7 +374,7 @@ function SubClaimGroupSection({
         }}
       />
 
-      <div className={`divide-y divide-divider @[760px]:overflow-hidden ${TEMPLATE_CLAIM_LIST_SURFACE}`}>
+      <div className={`divide-y divide-divider @[640px]:overflow-hidden ${TEMPLATE_CLAIM_LIST_SURFACE}`}>
         {/* Every page's sub-claims, so paging keeps the same lookup and batch. */}
         <TemplateVoteRows targets={orderedItems.map(subClaim => subClaim.voteTarget)}>
           {visibleItems.map((subClaim, idx) => (
@@ -393,7 +393,7 @@ function SubClaimGroupSection({
           ))}
         </TemplateVoteRows>
         {totalPages > 1 && (
-          <div className="py-3 @[760px]:px-5">
+          <div className="py-3 @[640px]:px-5">
             <InlinePagination
               page={safePage}
               totalPages={totalPages}

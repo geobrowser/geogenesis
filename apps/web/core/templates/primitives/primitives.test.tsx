@@ -350,15 +350,15 @@ describe('ClaimExplorer row layout (GEO-3845)', () => {
     expect(screen.getAllByText('71%').find(node => node.tagName === 'STRONG')).toHaveClass('text-[17px]');
     // The rank sits on the title's first baseline, and the row pads itself only on the wide card.
     const row = title.closest('div.py-4');
-    expect(row).toHaveClass('items-baseline', '@[760px]:px-5');
+    expect(row).toHaveClass('items-baseline', '@[640px]:px-5');
     expect(row).not.toHaveClass('px-5');
     // Phones lose the card for a hairline above only, so no empty divider sits under the list; wide
     // lists keep the card.
     const surface = title.closest('.border-t');
-    expect(surface).toHaveClass('border-t', 'border-divider', '@[760px]:rounded-xl', '@[760px]:border');
+    expect(surface).toHaveClass('border-t', 'border-divider', '@[640px]:rounded-xl', '@[640px]:border');
     // Only the wide card clips (its rounded corners); phone rows touch the edge, so a clip would cut
     // the buttons' and the "…" menu's focus rings.
-    expect(surface).toHaveClass('@[760px]:overflow-hidden');
+    expect(surface).toHaveClass('@[640px]:overflow-hidden');
     expect(surface).not.toHaveClass('overflow-hidden');
     expect(surface).not.toHaveClass('border-y');
     expect(surface).not.toHaveClass('rounded-xl');
@@ -370,10 +370,19 @@ describe('ClaimExplorer row layout (GEO-3845)', () => {
     // The result group holds the short bar, its percentage, the vote count and the kind together,
     // on the same line as the buttons, and is hidden on phones.
     const group = tag.parentElement!;
-    expect(group).toHaveClass('hidden', '@[760px]:flex');
+    expect(group).toHaveClass('hidden', '@[640px]:flex');
     expect(within(group).getByRole('meter')).toHaveAttribute('aria-valuenow', '71');
     expect(group).toHaveTextContent('71%·7 votes·Judgment');
     expect(group.parentElement).toContainElement(agree);
+
+    // The whole list switches at one width (GEO-3870): no part of the row, card or buttons keeps the
+    // old 760px switch, so a 640-760px column (the Space home beside its sidebar) gets no mix of
+    // phone and wide parts. The bar is shorter below 720px so the result fits beside the buttons.
+    const classes = Array.from(surface!.querySelectorAll('[class]'), node => node.getAttribute('class') ?? '');
+    classes.push(surface!.getAttribute('class') ?? '');
+    const switches = new Set(classes.flatMap(name => name.match(/@\[\d+px\]/g) ?? []));
+    expect([...switches].sort()).toEqual(['@[640px]', '@[720px]']);
+    expect(within(group).getByRole('meter')).toHaveClass('w-[96px]', '@[720px]:w-[140px]');
   });
 
   it('says "No votes yet" beside the buttons when nobody has voted', () => {

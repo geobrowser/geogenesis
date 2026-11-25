@@ -311,12 +311,12 @@ export function ClaimVoteBinding({
 /**
  * The Agree / Disagree pair a claim list row draws from its binding: the debates app's buttons
  * (GEO-3845, see `debate-vote-buttons.tsx`). It spans the row on phones and keeps two natural-width
- * buttons in a wide (760px+) row. The counts live in the row's result, as in the app, so the buttons
+ * buttons in a wide (640px+) row. The counts live in the row's result, as in the app, so the buttons
  * carry none.
  */
 export function ClaimVotePills({ title, vote }: { title: string; vote: TemplateVoteBinding }) {
   return (
-    <span className="flex w-full flex-col gap-1 @[760px]:w-auto @[760px]:shrink-0">
+    <span className="flex w-full flex-col gap-1 @[640px]:w-auto @[640px]:shrink-0">
       <DebateVoteButtons
         userVote={vote.userVote}
         disabled={vote.disabled}
@@ -325,10 +325,10 @@ export function ClaimVotePills({ title, vote }: { title: string; vote: TemplateV
         titleFor={vote.titleFor}
         onPress={vote.press}
         className="w-full"
-        buttonClassName="flex-1 basis-0 @[760px]:min-w-[112px] @[760px]:flex-none"
+        buttonClassName="flex-1 basis-0 @[640px]:min-w-[112px] @[640px]:flex-none"
         // Phones stretch the pair across the row with the app's 4px padding, so "Disagree" fits at 320px;
         // wide rows give both buttons one width, as the app's pair.
-        buttonPaddingClassName="px-1 @[760px]:px-3.5"
+        buttonPaddingClassName="px-1 @[640px]:px-3.5"
       />
       {vote.error && (
         <span role="alert" className="text-[12.5px] text-red-01">
