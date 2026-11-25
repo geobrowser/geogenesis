@@ -9,7 +9,7 @@ import { type GraphNode, hop1AsGraphHop } from '~/core/graph-explorer/fetch-grap
 import { type RecentreMethod, useGraphAnalytics } from '~/core/graph-explorer/graph-explorer-analytics';
 import { type GraphFilterOverrides, type GraphScope, resolveGraphFilter } from '~/core/graph-explorer/graph-filter';
 import { shareGraph } from '~/core/graph-explorer/graph-share';
-import { type GraphHistory, goBack, recentre } from '~/core/graph-explorer/history';
+import { type GraphHistory, goBack, jumpBack, recentre } from '~/core/graph-explorer/history';
 import { spokesOfKind } from '~/core/graph-explorer/panel-sections';
 import { GRAPH_PHONE_QUERY } from '~/core/graph-explorer/phone-breakpoint';
 import { DESKTOP_GRAPH_CAPS, type GraphKindFilter, PHONE_GRAPH_CAPS } from '~/core/graph-explorer/select-graph';
@@ -198,13 +198,22 @@ export function GraphViewer({
         },
       }
     : null;
-  const trail = [...history.back, centreId].flatMap(id => (names[id] ? [names[id]] : []));
+  // Each step keeps its place in the back stack, so a step whose name isn't known yet can drop out
+  // of the path without the others jumping to the wrong centre.
+  const trail = [...history.back, centreId].flatMap((id, index) => (names[id] ? [{ name: names[id], index }] : []));
+  const jumpTo = (index: number) => {
+    const target = history.back[index];
+    if (!target) return;
+    analytics?.tag('trail', normId(target));
+    onNavigate(jumpBack(history, index));
+  };
   const selection = neighbourhood.selection;
 
   const topBar = (
     <GraphTopBar
       back={back}
-      trail={trail.length ? trail : topicName ? [topicName] : []}
+      trail={trail.length ? trail : topicName ? [{ name: topicName, index: history.back.length }] : []}
+      onStep={jumpTo}
       search={
         <GraphSearch
           nodes={selection?.nodes.slice(1).map(entry => entry.node) ?? []}
