@@ -1761,6 +1761,8 @@ describe('DebatesBrowseFeed — the Debate page scrolls into its claim, not the 
     expect(screen.getAllByTestId(/^player-/)).toHaveLength(1);
     // The debate is as tall as itself, so the claim's content follows on rather than after a screen.
     expect(screen.getByTestId('player-debate-2').closest('section')?.className).not.toMatch(/\bh-full\b|snap-start/);
+    // A section's gap below it, no more.
+    expect(screen.getByTestId('player-debate-2').closest('section')?.className).toMatch(/\bpb-10\b/);
     // The load-more sentinel is the only observed element that is not a debate card.
     const observed = observers.flatMap(record => [...record.elements]);
     expect(observed.every(element => element.tagName === 'SECTION')).toBe(true);

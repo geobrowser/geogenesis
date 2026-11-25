@@ -120,9 +120,9 @@ function DebateEntityViewBody({ spaceId, debateId, editView, removedView }: Omit
  * down, rather than into the space's next debate (GEO-3869). Nothing for a debate with no claim.
  */
 export function debatedClaimContent(debate: Debate): React.ReactNode {
-  const { claim_entity_id: claimId, space_id: claimSpaceId, claim: title } = debate.claim ?? {};
+  const { claim_entity_id: claimId, space_id: claimSpaceId } = debate.claim ?? {};
   if (!claimId || !claimSpaceId) return null;
-  return <LiveClaimSectionsView entityId={claimId} spaceId={claimSpaceId} title={title ?? ''} />;
+  return <LiveClaimSectionsView entityId={claimId} spaceId={claimSpaceId} />;
 }
 
 /**

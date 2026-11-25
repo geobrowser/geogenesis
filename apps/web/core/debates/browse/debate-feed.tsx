@@ -749,8 +749,8 @@ function DebateFeedItem({
       // mobile: Tailwind emits variant utilities after unprefixed ones, so no `md:pt-3` needed.
       className={cx(
         'flex items-start justify-center px-4 pt-5',
-        // Room below for the out-of-flow scroll nudge, so it doesn't sit on the claim's content.
-        fitsContent ? 'pb-14 md:pt-3' : 'h-full snap-start md:h-auto md:min-h-full md:py-3'
+        // A section's gap below the debate, the room the out-of-flow scroll nudge hangs in.
+        fitsContent ? 'pb-10 md:pt-3' : 'h-full snap-start md:h-auto md:min-h-full md:py-3'
       )}
     >
       {/* The whole debate lifts with the nudge — media, claim and controls together — so the

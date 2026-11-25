@@ -18,8 +18,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('~/core/templates/views/live-claim-template-view', () => ({
-  LiveClaimSectionsView: (props: { entityId: string; spaceId: string; title: string }) => (
-    <div data-testid="claim-sections">{`${props.spaceId}/${props.entityId}: ${props.title}`}</div>
+  LiveClaimSectionsView: (props: { entityId: string; spaceId: string }) => (
+    <div data-testid="claim-sections">{`${props.spaceId}/${props.entityId}`}</div>
   ),
 }));
 
@@ -176,7 +176,7 @@ describe('DebateEntityView claim below the debate (GEO-3869)', () => {
     expect(mocks.belowLinkedDebate).toBe(debatedClaimContent);
 
     render(<>{debatedClaimContent(debateAbout({}))}</>);
-    expect(screen.getByTestId('claim-sections')).toHaveTextContent('space-2/claim-1: Debates are useful');
+    expect(screen.getByTestId('claim-sections')).toHaveTextContent('space-2/claim-1');
   });
 
   it('adds nothing for a debate with no claim', () => {

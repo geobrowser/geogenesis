@@ -263,6 +263,7 @@ export function TemplateShell({
   coverAlt = '',
   compact = false,
   embedded = false,
+  flushTop = false,
   contextByEntityId,
   actionCallbacks,
   className,
@@ -276,6 +277,11 @@ export function TemplateShell({
   compact?: boolean;
   /** Omit outer max-width, horizontal padding, cover, and breadcrumbs when embedded inside a Space shell. */
   embedded?: boolean;
+  /**
+   * No top padding: the shell continues content above it on the same page (the Debate page's debate,
+   * GEO-3869), which already leaves a section's worth of space below itself.
+   */
+  flushTop?: boolean;
   contextByEntityId?: Readonly<Record<string, EntityContextDataModel>>;
   actionCallbacks?: EntityActionCallbacks;
   className?: string;
@@ -306,8 +312,11 @@ export function TemplateShell({
               ? 'gap-9 pt-1 pb-10'
               : cx(
                   'mx-auto',
-                  compact ? 'gap-7 px-4 py-5' : 'gap-8 px-5 py-8 @[600px]:gap-11 @[600px]:px-6',
-                  !compact && (resolvedCoverUrl ? '@[600px]:pt-7 @[600px]:pb-10' : '@[600px]:py-10')
+                  compact ? 'gap-7 px-4 py-5' : 'gap-8 px-5 @[600px]:gap-11 @[600px]:px-6',
+                  !compact &&
+                    (flushTop
+                      ? 'pt-0 pb-8 @[600px]:pb-10'
+                      : cx('py-8', resolvedCoverUrl ? '@[600px]:pt-7 @[600px]:pb-10' : '@[600px]:py-10'))
                 ),
             className
           )}

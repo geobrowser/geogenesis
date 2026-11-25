@@ -62,11 +62,10 @@ export interface ClaimTemplateProps {
   /**
    * Start the page at its Supporting claims, for a page that already shows the claim itself: the
    * Debate page, below the debate (GEO-3869). Drops the cover, breadcrumbs, title, vote box and the
-   * Accepted and key-evidence panels, and shows `intro` in their place.
+   * Accepted and key-evidence panels, and the shell's top padding, so Supporting claims follows what
+   * is above it like the page's next section.
    */
   startAtSubClaims?: boolean;
-  /** Shown above the sections when `startAtSubClaims` is set. */
-  intro?: React.ReactNode;
   className?: string;
 }
 
@@ -84,7 +83,6 @@ export function ClaimTemplate({
   compact = false,
   isLoadingSections = false,
   startAtSubClaims = false,
-  intro,
   className,
 }: ClaimTemplateProps) {
   return (
@@ -92,13 +90,14 @@ export function ClaimTemplate({
       maxWidth={980}
       breadcrumbs={startAtSubClaims ? undefined : model.breadcrumbs}
       coverUrl={startAtSubClaims ? null : model.coverUrl}
+      flushTop={startAtSubClaims}
       coverAlt={model.title}
       compact={compact}
       contextByEntityId={model.contextByEntityId}
       actionCallbacks={actionCallbacks}
       className={className}
     >
-      {startAtSubClaims ? intro : <ClaimTemplateHeader model={model} headerActions={headerActions} />}
+      {!startAtSubClaims && <ClaimTemplateHeader model={model} headerActions={headerActions} />}
 
       {isLoadingSections ? (
         <div aria-busy="true" aria-label="Loading claim sections" className="flex flex-col gap-8">
