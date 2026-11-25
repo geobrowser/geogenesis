@@ -6,7 +6,7 @@ import type React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { CURATED_TOPIC_TAG_ID, TAG_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/constants';
+import { TOPIC_TYPE_ID } from '~/core/constants';
 import { entityTabIdFromHref } from '~/core/utils/entity-tab-navigation';
 
 import { ENTITY_PAGE_CONTENT_MAX_WIDTH } from '~/partials/entity-page/entity-page-layout';
@@ -31,11 +31,8 @@ const mocks = vi.hoisted(() => ({
    */
   maxLines: 5,
   topicSpaceIds: ['11111111111111111111111111111111'],
-  /** Props the editable Types group received, or null if the page rendered none. */
-  typesEditor: null as Record<string, unknown> | null,
   /** The topic's own block relations — what the Overview tab would have to draw. */
   blocks: [] as unknown[],
-  canEdit: true,
   /** Props the votes/history/menu cluster received, or null if the page rendered none. */
   pageActions: null as Record<string, unknown> | null,
   /** Side-panel tab selection, or null when the view is on a route rather than in the panel. */
@@ -49,15 +46,6 @@ const mocks = vi.hoisted(() => ({
 vi.mock('~/partials/entity-page/entity-page-inline-description', () => ({
   ENTITY_DESCRIPTION_MAX_LINES: mocks.maxLines,
   EntityPageInlineDescription: () => <div data-testid="editable-description" />,
-}));
-vi.mock('~/partials/entity-page/editable-entity-header', () => ({
-  EditableHeading: () => <div data-testid="editable-heading" />,
-}));
-vi.mock('~/partials/entity-page/editable-entity-page', () => ({
-  RelationsGroup: (props: Record<string, unknown>) => {
-    mocks.typesEditor = props;
-    return <div data-testid="types-editor" />;
-  },
 }));
 vi.mock('~/partials/entity-page/entity-tabs', () => ({
   EntityTabs: (props: Record<string, unknown>) => {
@@ -110,7 +98,7 @@ vi.mock('~/core/state/entity-side-panel-active-tab', () => ({
   useEntitySidePanelActiveTab: () => mocks.panel,
 }));
 vi.mock('~/core/hooks/use-user-is-editing', () => ({
-  useCanUserEdit: () => mocks.canEdit,
+  useCanUserEdit: () => true,
   useUserIsEditing: () => false,
 }));
 // Votes, history and the overflow menu each reach for the sync engine and the wallet. What this
@@ -165,9 +153,7 @@ beforeEach(() => {
   mocks.composition = null;
   mocks.tabs = null;
   mocks.topicSpaceIds = ['11111111111111111111111111111111'];
-  mocks.typesEditor = null;
   mocks.blocks = [];
-  mocks.canEdit = true;
   mocks.pageActions = null;
   mocks.panel = null;
   mocks.editorInstance = { id: 'topic-1', initialBlockRelations: [] };
@@ -291,44 +277,15 @@ describe('TopicPageView composition', () => {
   });
 });
 
-/**
- * A topic's types used to be a literal `<span>Topic</span>` in both modes, so there was no way to
- * add a type to a topic or take one off it — not on this page, and not in the edit-mode property
- * sheet either, which drops `Types` as a system property "editable elsewhere". Edit mode now hands
- * the row to the same `RelationsGroup` the generic metadata header uses, chips, X and all.
- */
+/** The type chips: Topic first, then the topic's other types in the viewed space. */
 describe('TopicPageView types', () => {
   it('prints the type as a plain chip while browsing', () => {
     render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
 
     expect(screen.getByText('Topic')).toBeInTheDocument();
-    expect(screen.queryByTestId('types-editor')).toBeNull();
-  });
-
-  it('swaps that chip for the editable Types relations in edit mode', () => {
-    render(<TopicPageView entityId="topic-1" spaceId="space-1" isEditing />);
-
-    expect(screen.getByTestId('types-editor')).toBeInTheDocument();
-    // The literal is gone, not merely joined: leaving it in would draw an undeletable "Topic"
-    // beside the real, deletable one.
-    expect(screen.queryByText('Topic')).toBeNull();
-  });
-
-  // The same property the generic header edits, on the entity the page is actually showing — a
-  // group pointed at the wrong id or property would render an empty picker that silently writes
-  // relations somewhere else.
-  it("points that editor at this entity's Types property", () => {
-    render(<TopicPageView entityId="topic-1" spaceId="space-1" isEditing />);
-
-    expect(mocks.typesEditor).toEqual({
-      id: 'topic-1',
-      spaceId: 'space-1',
-      propertyId: SystemIds.TYPES_PROPERTY,
-    });
   });
 
   // A topic typed as something else too read as a plain Topic, because the row was one literal.
-  // Edit mode showed those types and browse mode did not, which is the drift this closes.
   it("lists the topic's other types beside the Topic chip while browsing", () => {
     mocks.entity = { ...topicEntity('A description.'), relations: [typeRelation('Project')] };
 
@@ -341,8 +298,8 @@ describe('TopicPageView types', () => {
   /*
    * `entity.types` is not space-scoped: `GeoStore.getEntity` derives it from every space's
    * relations and only then filters `entity.relations` down to the one being read. Reading it left
-   * browse mode advertising a type another space contributed — which edit mode, scoped like every
-   * other types control in the app, could neither show nor take off.
+   * browse mode advertising a type another space contributed, which the space-scoped types editor
+   * can neither show nor take off.
    */
   it('leaves out a type only another space contributed', () => {
     mocks.entity = {
@@ -380,24 +337,6 @@ describe('TopicPageView types', () => {
 
     expect(screen.getAllByText('Topic')).toHaveLength(1);
   });
-
-  it('keeps the curated chip alongside the editor', () => {
-    mocks.entity = {
-      ...topicEntity('A description.'),
-      relations: [
-        {
-          isDeleted: false,
-          type: { id: TAG_PROPERTY_ID },
-          toEntity: { id: CURATED_TOPIC_TAG_ID },
-        },
-      ],
-    };
-
-    render(<TopicPageView entityId="topic-1" spaceId="space-1" isEditing />);
-
-    expect(screen.getByTestId('types-editor')).toBeInTheDocument();
-    expect(screen.getByText('Curated')).toBeInTheDocument();
-  });
 });
 
 /**
@@ -426,6 +365,15 @@ describe('TopicPageView parity with the generic entity page', () => {
     expect(mocks.pageActions?.leading).toBeTruthy();
   });
 
+  it('leaves the graph entry to the header graph button, not a chip beside the types (GEO-3837)', () => {
+    render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
+
+    expect(mocks.pageActions?.variant).toBe('template');
+    // GEO-3866: the graph link records that it was opened from a topic page.
+    expect(mocks.pageActions?.graphEntryPoint).toBe('topic_page');
+    expect(screen.queryByText('Explore graph')).toBeNull();
+  });
+
   it('keeps them in the header, beside the types, where the entity page puts them', () => {
     render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
 
@@ -433,13 +381,6 @@ describe('TopicPageView parity with the generic entity page', () => {
     expect(actions.closest('header')).not.toBeNull();
     // Same row as the type chips, not a line of its own.
     expect(actions.parentElement?.textContent).toContain('Topic');
-  });
-
-  it('keeps them in edit mode, where the types turn into an editor', () => {
-    render(<TopicPageView entityId="topic-1" spaceId="space-1" isEditing />);
-
-    expect(screen.getByTestId('entity-page-actions')).toBeInTheDocument();
-    expect(screen.getByTestId('types-editor')).toBeInTheDocument();
   });
 });
 
@@ -466,21 +407,6 @@ describe('TopicPageView Overview tab', () => {
     // The rule rides Overview instead. Two would claim the row splits in two places.
     expect(mocks.tabs?.divideBeforeAuthored).toBe(false);
     expect(mocks.tabs?.reservedSystemLabels).toEqual(['Explore', 'Overview']);
-  });
-
-  it('shows it to an editor with an empty body, since that is the only way to start one', () => {
-    render(<TopicPageView entityId="topic-1" spaceId="space-1" isEditing />);
-
-    expect(mocks.tabs?.systemTabsBefore).toContainEqual(overviewTab);
-  });
-
-  // Edit *intent* survives the access check to keep the page from flickering on hydration; a
-  // control that writes must not. Same line `EntityTabs` draws for the Add tab button.
-  it('withholds it from someone with edit intent but no write access and no body', () => {
-    mocks.canEdit = false;
-    render(<TopicPageView entityId="topic-1" spaceId="space-1" isEditing />);
-
-    expect(mocks.tabs?.systemTabsBefore).not.toContainEqual(overviewTab);
   });
 
   /*

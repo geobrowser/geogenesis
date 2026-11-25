@@ -1,5 +1,7 @@
 import { normId } from '~/core/utils/norm-id';
 
+import { parseGraphFilterOverrides } from './graph-filter';
+
 /** The back stack's URL param: previous centres, oldest first. */
 export const GRAPH_TRAIL_PARAM = 'trail';
 
@@ -34,6 +36,34 @@ export function goBack(history: GraphHistory): GraphHistory {
   return { centreId: previous, back: history.back.slice(0, -1) };
 }
 
+/**
+ * Re-centre on the trail's `index`th step (an index into `back`), as if Back were pressed until
+ * it was the centre: the steps after it drop off, so Back still walks the trail that is shown.
+ */
+export function jumpBack(history: GraphHistory, index: number): GraphHistory {
+  const target = history.back[index];
+  if (target === undefined) return history;
+  return { centreId: target, back: history.back.slice(0, index) };
+}
+
+/** Trails longer than this fold their middle steps into "…". */
+export const TRAIL_COLLAPSE_AFTER = 3;
+
+export type TrailPart<T> = { kind: 'step'; step: T } | { kind: 'more'; steps: T[] };
+
+/**
+ * The breadcrumb for `steps` (the centre last): up to three show whole; past that the first step
+ * and the centre stay and everything between folds into one "…" part that holds them in order.
+ */
+export function collapseTrail<T>(steps: readonly T[]): TrailPart<T>[] {
+  if (steps.length <= TRAIL_COLLAPSE_AFTER) return steps.map(step => ({ kind: 'step', step }));
+  return [
+    { kind: 'step', step: steps[0] },
+    { kind: 'more', steps: steps.slice(1, -1) },
+    { kind: 'step', step: steps[steps.length - 1] },
+  ];
+}
+
 export function sameHistory(a: GraphHistory, b: GraphHistory): boolean {
   return a.centreId === b.centreId && a.back.join(',') === b.back.join(',');
 }
@@ -49,9 +79,14 @@ export function historyFromUrl(centreId: string, params: Pick<URLSearchParams, '
   return { centreId: centre, back: back.slice(-GRAPH_HISTORY_LIMIT) };
 }
 
-/** The URL for `history`, keeping every other param (topic, space, filters) as it is. */
+/**
+ * The URL for `history`, keeping every other param (topic, space, filters) as it is. A one-kind
+ * `kinds` is the chip a shared link opened on, read once: hops leave it behind, so a reload or a
+ * copied address doesn't bring back a chip the viewer has since left.
+ */
 export function graphHistoryHref(history: GraphHistory, params: URLSearchParams): string {
   const next = new URLSearchParams(params);
+  if (parseGraphFilterOverrides(next).chip) next.delete('kinds');
   if (history.back.length > 0) next.set(GRAPH_TRAIL_PARAM, history.back.join(','));
   else next.delete(GRAPH_TRAIL_PARAM);
   const query = next.toString();

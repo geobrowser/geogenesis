@@ -3,8 +3,9 @@
 import * as React from 'react';
 
 import { ClaimSummary } from '~/core/claims/browse/claim-summary';
+import { LocalVoteNote } from '~/core/claims/browse/local-vote-note';
 import type { DebateActionAnalyticsSurface } from '~/core/debates/matchmaking/hub-analytics';
-import { PositionRow } from '~/core/debates/matchmaking/matchmaking-claim-card';
+import { type PositionLook, PositionRow } from '~/core/debates/matchmaking/matchmaking-claim-card';
 
 import { Text } from '~/design-system/text';
 
@@ -14,7 +15,7 @@ import type { useDebateClaimResponse } from './use-debate-claim-response';
  * A claim's Agree/Disagree pills, the error a failed response leaves, and — where the host wants it
  * — the claim's split, for a claim inside a debate.
  *
- * The claims panel, the end card and the debate card all draw this from the same
+ * The claims panel, the end card, the debate card and the graph explorer's open claim all draw this from the same
  * `useDebateClaimResponse` result. They were three copies of the same wiring, and the part worth
  * having once is the part that drifts: which `control` field feeds which pill prop, and that the
  * split waits for its counts rather than drawing an empty bar.
@@ -30,10 +31,20 @@ export function DebateClaimControls({
   className,
   summaryLayout,
   summaryClassName,
+  outline,
+  look = 'default',
+  resultsPending = false,
 }: {
   claimId: string;
   spaceId: string;
   response: Pick<ReturnType<typeof useDebateClaimResponse>, 'responseKind' | 'summary' | 'control'>;
+  /**
+   * The `'results'` row reads as loading whatever the counts say. For a host whose claim is still
+   * being read: until it lands the counts hook is held back and reports "not loading, no counts",
+   * the shape of a failed read, while a device vote already shows the row. Only while the read is
+   * in flight — a read that failed or found nothing should say "Results unavailable".
+   */
+  resultsPending?: boolean;
   /** See `PositionRow`: off where the host already shows who voted. */
   showParticipants?: boolean;
   /** Actions drawn at the end of the row, dropping under the pills when the row is narrow. */
@@ -43,10 +54,22 @@ export function DebateClaimControls({
   analyticsSurface?: DebateActionAnalyticsSurface;
   /** On the wrapper of the pills and the error, not on the split. */
   className?: string;
-  /** Draw the claim's split after the pills, in this layout. Omitted: the host draws its own, or none. */
-  summaryLayout?: 'stacked' | 'inline';
+  /**
+   * Draw the claim's split after the pills, in this layout. Omitted: the host draws its own, or none.
+   *
+   * `'results'` is the debates app's row (GEO-3833), drawn only once the viewer holds a side — the
+   * app reveals the count as the answer to a vote, not before it.
+   */
+  summaryLayout?: 'stacked' | 'inline' | 'results';
   summaryClassName?: string;
+  /** See `PositionRow`: `'solid'` only for the graph explorer's open claim. */
+  outline?: 'dashed' | 'solid';
+  /** See `PositionRow`. The app looks also move "Not counted yet" under the results. */
+  look?: PositionLook;
 }) {
+  const appLook = look !== 'default';
+  const holdsSide = control.viewerPosition !== null || control.localVoteSide != null;
+  const results = summaryLayout === 'results';
   return (
     <>
       <div className={className}>
@@ -63,6 +86,8 @@ export function DebateClaimControls({
           endSlot={endSlot}
           endSlotWraps={endSlot == null ? undefined : wideEndSlot ? 'wide' : 'compact'}
           analyticsSurface={analyticsSurface}
+          outline={outline}
+          look={look}
         />
         {control.responseError ? (
           <div role="alert" className="mt-1.5">
@@ -72,7 +97,18 @@ export function DebateClaimControls({
           </div>
         ) : null}
       </div>
-      {summaryLayout && !summary.isLoading ? (
+      {results ? (
+        holdsSide ? (
+          <ClaimSummary
+            entityId={claimId}
+            spaceId={spaceId}
+            responseKind={responseKind}
+            summary={resultsPending ? { ...summary, isLoading: true } : summary}
+            layout="results"
+            className={summaryClassName}
+          />
+        ) : null
+      ) : summaryLayout && !summary.isLoading ? (
         <ClaimSummary
           entityId={claimId}
           spaceId={spaceId}
@@ -82,6 +118,7 @@ export function DebateClaimControls({
           className={summaryClassName}
         />
       ) : null}
+      {appLook && control.localVoteSide != null ? <LocalVoteNote /> : null}
     </>
   );
 }

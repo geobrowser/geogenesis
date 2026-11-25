@@ -4,9 +4,12 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { type GraphExplorerEntryPoint, markGraphExplorerEntry } from '~/core/graph-explorer/graph-share';
+import { graphExplorerHref } from '~/core/graph-explorer/href';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useName } from '~/core/state/entity-page-store/entity-store';
+import { NetworkIcon } from '~/core/templates/primitives/icons';
 import { NavUtils } from '~/core/utils/utils';
 
 import { SmallButton } from '~/design-system/button';
@@ -22,7 +25,7 @@ import { useEntityHistory } from '../history/use-entity-history';
 import { EntityPageContextMenu } from './entity-page-context-menu';
 import { EntityVoteButtons } from './entity-vote-buttons';
 
-interface EntityPageActionsProps {
+type EntityPageActionsProps = {
   entityId: string;
   spaceId: string;
   isVoteable?: boolean;
@@ -30,9 +33,18 @@ interface EntityPageActionsProps {
   compact?: boolean;
   /** The entity's own primary action, ahead of the votes — a topic's Follow, which replaces them. */
   leading?: React.ReactNode;
-  /** The edit-mode create link. Off where the row is the entity's own controls only, as on a claim. */
-  showCreate?: boolean;
-}
+} & (
+  | { variant?: 'page'; graphEntryPoint?: never }
+  | {
+      /**
+       * `template`: the entity template header (GEO-3837). Version history moves into the "…" menu,
+       * and a graph link takes the history icon's place.
+       */
+      variant: 'template';
+      /** Which template page the graph link sits on, recorded as the explorer's entry point (GEO-3866). */
+      graphEntryPoint: GraphExplorerEntryPoint;
+    }
+);
 
 /** Votes, create, history, and menu — separate from type metadata */
 export function EntityPageActions({
@@ -41,7 +53,8 @@ export function EntityPageActions({
   isVoteable = false,
   compact = false,
   leading,
-  showCreate = true,
+  variant = 'page',
+  graphEntryPoint,
 }: EntityPageActionsProps) {
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
   const editable = useUserIsEditing(spaceId);
@@ -58,11 +71,48 @@ export function EntityPageActions({
     clearDiffSelection,
   } = useEntityHistory({ entityId, spaceId, enabled: isHistoryOpen });
 
+  const versionList = (onPicked: () => void) => (
+    <>
+      {!isFetching && allVersions.length === 0 && <HistoryEmpty />}
+      {allVersions.map((v, index) => (
+        <EntityVersionItem
+          key={v.editId}
+          createdAt={v.createdAt}
+          name={v.name}
+          createdById={v.createdById}
+          createdBy={v.createdBy}
+          onClick={() => {
+            onVersionClick(v, index);
+            onPicked();
+          }}
+        />
+      ))}
+      {isFetching && allVersions.length === 0 && (
+        <div className="flex h-12 w-full items-center justify-center bg-white">
+          <Dots />
+        </div>
+      )}
+      {hasNextPage && (
+        <div className="flex h-12 w-full shrink-0 items-center justify-center bg-white">
+          {isFetchingNextPage ? (
+            <Dots />
+          ) : (
+            <SmallButton variant="secondary" onClick={() => fetchNextPage()}>
+              Show more
+            </SmallButton>
+          )}
+        </div>
+      )}
+    </>
+  );
+
+  const isTemplate = variant === 'template';
+
   return (
     <div className={cx('ml-auto flex shrink-0 items-center', compact ? 'gap-4' : 'gap-5')}>
       {leading}
       {isVoteable && <EntityVoteButtons entityId={entityId} spaceId={spaceId} showInlineError={!compact} />}
-      {editable && showCreate && (
+      {editable && (
         // The label keeps this icon-only link from announcing as its bare URL. `PrefetchLink`
         // matches the space header and includes hover prefetching.
         <Link
@@ -73,39 +123,32 @@ export function EntityPageActions({
           <Create />
         </Link>
       )}
-      <HistoryPanel open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
-        {!isFetching && allVersions.length === 0 && <HistoryEmpty />}
-        {allVersions.map((v, index) => (
-          <EntityVersionItem
-            key={v.editId}
-            createdAt={v.createdAt}
-            name={v.name}
-            createdById={v.createdById}
-            createdBy={v.createdBy}
-            onClick={() => {
-              onVersionClick(v, index);
-              setIsHistoryOpen(false);
-            }}
-          />
-        ))}
-        {isFetching && allVersions.length === 0 && (
-          <div className="flex h-12 w-full items-center justify-center bg-white">
-            <Dots />
-          </div>
-        )}
-        {hasNextPage && (
-          <div className="flex h-12 w-full shrink-0 items-center justify-center bg-white">
-            {isFetchingNextPage ? (
-              <Dots />
-            ) : (
-              <SmallButton variant="secondary" onClick={() => fetchNextPage()}>
-                Show more
-              </SmallButton>
-            )}
-          </div>
-        )}
-      </HistoryPanel>
-      <EntityPageContextMenu entityId={entityId} entityName={name || ''} spaceId={spaceId} />
+      {isTemplate ? (
+        graphEntryPoint && (
+          <Link
+            href={graphExplorerHref({ entityId, topicId: entityId, spaceId })}
+            onClick={() => markGraphExplorerEntry(graphEntryPoint)}
+            aria-label="Explore graph"
+            title="Explore graph"
+            data-geo-analytics-label="Explore graph"
+            data-geo-analytics-intent="open_graph_explorer"
+            className="inline-flex text-grey-04 transition-colors duration-75 hover:text-text"
+          >
+            <NetworkIcon className="size-4" />
+          </Link>
+        )
+      ) : (
+        <HistoryPanel open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
+          {versionList(() => setIsHistoryOpen(false))}
+        </HistoryPanel>
+      )}
+      <EntityPageContextMenu
+        entityId={entityId}
+        entityName={name || ''}
+        spaceId={spaceId}
+        versionHistory={isTemplate ? versionList : undefined}
+        onVersionHistoryOpenChange={isTemplate ? setIsHistoryOpen : undefined}
+      />
       <HistoryDiffSlideUp selection={diffSelection} onClose={clearDiffSelection} />
     </div>
   );

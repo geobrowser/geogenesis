@@ -16,12 +16,15 @@ const mocks = vi.hoisted(() => ({
   viewerPosition: null as boolean | null,
   localVoteSide: null as boolean | null,
   summaryLoading: false,
+  // What the claim's graph read returns: the entity, or none with the read in flight or settled.
+  claimRead: 'found' as 'found' | 'pending' | 'missing',
 }));
 
 vi.mock('~/core/sync/use-store', () => ({
   useQueryEntities: ({ enabled }: { enabled: boolean }) => {
     mocks.queryEnabled.push(enabled);
-    return { entities: enabled ? [{ id: 'claim-entity' }] : [], isLoading: false };
+    const found = enabled && mocks.claimRead === 'found';
+    return { entities: found ? [{ id: 'claim-entity' }] : [], isLoading: enabled && mocks.claimRead === 'pending' };
   },
 }));
 
@@ -30,6 +33,7 @@ vi.mock('./use-debate-claim-response', () => ({
     mocks.hookArgs.push(args);
     return {
       responseKind: 'stance',
+      isResponseKindResolved: args.entity != null,
       summary: { isLoading: mocks.summaryLoading },
       control: {
         optimisticPositions: mocks.positions,
@@ -47,8 +51,24 @@ vi.mock('./use-debate-claim-response', () => ({
 
 // Its tiers, bar and responder list have their own suite; here it only has to be placed.
 vi.mock('~/core/claims/browse/claim-summary', () => ({
-  ClaimSummary: ({ entityId, layout, className }: { entityId: string; layout?: string; className?: string }) => (
-    <div data-testid="claim-summary" data-entity={entityId} data-layout={layout} className={className} />
+  ClaimSummary: ({
+    entityId,
+    layout,
+    className,
+    summary,
+  }: {
+    entityId: string;
+    layout?: string;
+    className?: string;
+    summary: { isLoading: boolean };
+  }) => (
+    <div
+      data-testid="claim-summary"
+      data-entity={entityId}
+      data-layout={layout}
+      data-loading={String(summary.isLoading)}
+      className={className}
+    />
   ),
 }));
 
@@ -80,6 +100,7 @@ beforeEach(() => {
   mocks.viewerPosition = null;
   mocks.localVoteSide = null;
   mocks.summaryLoading = false;
+  mocks.claimRead = 'found';
 });
 
 afterEach(cleanup);
@@ -276,5 +297,129 @@ describe('DebateClaimFooter', () => {
     const slot = screen.getByRole('button', { name: 'Comments (2)' }).parentElement!;
     expect(slot).toHaveClass('col-span-2', 'claim-row-wide-end-inline:col-span-1');
     expect(slot).not.toHaveClass('claim-row-end-inline:col-span-1');
+  });
+});
+
+// GEO-3833: the debates app's card — Geo's meta row under the video, then the claim, the vote row
+// and the results once voted.
+describe('DebateClaimFooter app look', () => {
+  const renderApp = (props: Partial<React.ComponentProps<typeof DebateClaimFooter>> = {}) =>
+    renderFooter({ look: 'app', ...props });
+  const follows = (a: Node, b: Node) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+  // The debates app's web fonts, over Geo's Calibre: the system stack, and Helvetica Neue for the claim.
+  it('sets the card in the debates app’s fonts, and leaves the default look in Geo’s', () => {
+    const { container, unmount } = renderApp({ className: 'px-4' });
+    const root = container.firstElementChild!;
+    expect(root.className).toContain("[font-family:-apple-system,BlinkMacSystemFont,'Segoe_UI',Roboto,Helvetica,Arial,sans-serif]");
+    expect(root.className).toContain('px-4');
+    expect(screen.getByRole('heading', { name: claim.claim }).parentElement!.className).toContain(
+      "[&_h2]:[font-family:'Helvetica_Neue',Arial,sans-serif]!"
+    );
+    unmount();
+
+    const plain = renderFooter();
+    expect(plain.container.innerHTML).not.toContain('font-family');
+  });
+
+  it('gives the claim the app’s 24px under the video when the host leaves the meta row out', () => {
+    const { container } = renderApp({ meta: null });
+    const titleWrapper = screen.getByRole('heading', { name: claim.claim }).parentElement!;
+    expect(titleWrapper.className).toMatch(/(^| )mt-6( |$)/);
+    expect(titleWrapper).toBe(container.firstElementChild!.firstElementChild);
+    expect(screen.queryByText('Relationships')).not.toBeInTheDocument();
+  });
+
+  it('keeps 20px above the claim under the meta row', () => {
+    renderApp();
+    expect(screen.getByRole('heading', { name: claim.claim }).parentElement!.className).toMatch(/(^| )mt-5( |$)/);
+  });
+
+  it('puts the meta row above the claim, then the vote row', () => {
+    renderApp();
+
+    const title = screen.getByRole('heading', { name: claim.claim });
+    const agree = screen.getByRole('button', { name: 'Agree' });
+    const meta = screen.getByText('Relationships');
+    expect(follows(meta, title)).toBe(true);
+    expect(follows(title, agree)).toBe(true);
+  });
+
+  it('draws the app’s 44px outlined pills, with the actions on the same row', () => {
+    renderApp();
+
+    const agree = screen.getByRole('button', { name: 'Agree' });
+    expect(agree).toHaveClass('h-11', 'rounded-full', 'border-[#8a8a8a]', 'font-semibold');
+    expect(agree).not.toHaveClass('border-dashed');
+    const grid = agree.parentElement!.parentElement!;
+    expect(grid).toHaveClass('grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]');
+    expect(grid.children).toHaveLength(3);
+    // The label gives way to the thumb in a narrow row, but stays the button's name.
+    expect(screen.getByText('Agree')).toHaveClass('@max-[300px]/debate-actions:sr-only');
+  });
+
+  it('shows no results before a vote', () => {
+    renderApp();
+
+    expect(screen.queryByTestId('claim-summary')).toBeNull();
+  });
+
+  it('reveals the results row once the viewer holds a side, and marks the picked pill', () => {
+    mocks.viewerPosition = false;
+    renderApp();
+
+    const disagree = screen.getByRole('button', { name: /^Disagree/ });
+    expect(disagree).toHaveAttribute('aria-pressed', 'true');
+    expect(disagree).toHaveClass('border-[#151515]', 'font-bold');
+    const results = screen.getByTestId('claim-summary');
+    expect(results).toHaveAttribute('data-layout', 'results');
+    expect(follows(disagree, results)).toBe(true);
+    expect(follows(screen.getByText('Relationships'), disagree)).toBe(true);
+  });
+
+  // Signed out: the vote is on this device only. The note moves from under the pill to under the
+  // results, where the app's row would show the count it is not yet part of.
+  it('notes a side held only on this device under the results, not under its pill', () => {
+    mocks.viewerPosition = true;
+    mocks.localVoteSide = true;
+    renderApp();
+
+    const note = screen.getByText(/^Not counted yet/);
+    const agree = screen.getByRole('button', { name: /^Agree/ });
+    expect(agree.parentElement!.contains(note)).toBe(false);
+    expect(follows(screen.getByTestId('claim-summary'), note)).toBe(true);
+    expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
+  });
+
+  it('holds a disabled app row while the debate is unresolved', () => {
+    renderApp({ claim: null });
+
+    expect(screen.getByRole('button', { name: 'Agree' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Agree' })).toHaveClass('h-11');
+    expect(screen.getByRole('button', { name: 'Comments (2)' })).toBeEnabled();
+  });
+});
+
+// GEO-3833: a device vote shows the results row before the claim's entity is read. Until that read
+// lands the counts are held back, so the row is told it is loading — but only while it is in
+// flight: a read that failed or found nothing must not say "Loading results…" forever.
+describe('DebateClaimFooter results row before the claim resolves', () => {
+  it.each([
+    ['pending', 'true'],
+    ['missing', 'false'],
+    ['found', 'false'],
+  ] as const)('with the claim read %s, the row reads loading=%s', (claimRead, loading) => {
+    mocks.claimRead = claimRead;
+    mocks.localVoteSide = true;
+    renderFooter({ look: 'app' });
+
+    expect(screen.getByTestId('claim-summary')).toHaveAttribute('data-loading', loading);
+  });
+
+  it('reads as loading on a card that has not asked for its claim yet', () => {
+    mocks.localVoteSide = true;
+    renderFooter({ look: 'app', enabled: false });
+
+    expect(screen.getByTestId('claim-summary')).toHaveAttribute('data-loading', 'true');
   });
 });

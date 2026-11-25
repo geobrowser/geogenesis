@@ -54,6 +54,8 @@ import { useDebatesBestOrder } from './use-debates-best-order';
 import { debateFeedPanelAtom, debateFullscreenActiveAtom, openDebateFeedPanelAtom } from '~/atoms';
 
 const PAGE_SIZE = 5;
+/** Below this much of the debate on screen, the Debate page counts it as scrolled away (GEO-3869). */
+const SCROLLED_AWAY_RATIO = 0.25;
 /** How many cards past the active one open their recordings. See the `preload` prop below. */
 const PRELOAD_AHEAD = 2;
 /**
@@ -64,15 +66,17 @@ const LINKED_START_HOLD_MS = 8_000;
 /**
  * How wide the debate card's column may get, which with its fixed-ratio media is really a height
  * budget: grow or shrink the media with the viewport while reserving the navbar, the 20px above the
- * card, and the card's chrome under the media — frame, meta row, a two-line claim, the pill row and
- * the split band. Measured in Chrome (GEO-3454), that chrome is 169px with two claim lines and 17px
- * more under a signed-out vote's "Not counted yet" note, so even then a 900px viewport ends the card
- * about 15px above the fold. Where the card is narrow enough for its actions to wrap, the wrapped
- * row is budgeted too; see `debateCardColumnWidth`.
+ * card, and the card's chrome under the media — frame, the meta line under the video, a two-line
+ * claim at the debates app's size and the app's 44px vote row (GEO-3833). That chrome is about
+ * 196px: 40 for the meta line and the 16px above it, 94 for the claim and its 20px above and below,
+ * 44 for the vote row, 16 under it and the frame — 27px more than the 169px the earlier, compact
+ * footer measured in Chrome (GEO-3454), which is the 1.4rem added to the budget below. The results
+ * row a vote reveals is not reserved, as in the app. The app's row never wraps (its labels give way to the thumbs instead), so the wrapped
+ * budget in `debateCardColumnWidth` only ever narrows a card that was already narrow.
  *
  * Phones get a budget of their own (`--debate-feed-phone-column-width`), since their chrome differs:
- * the feed's own 44px bar, 12px above and below the card, and the same 169px under the media, so
- * `width ≤ (dvh − 44 − 24 − 169 − 2) / 1.2042 + 2`, i.e. `83dvh − 197px`. `dvh` is what keeps the
+ * the feed's own 44px bar, 12px above and below the card, and the same 196px under the media, so
+ * `width ≤ (dvh − 44 − 24 − 196 − 2) / 1.2042 + 2`, i.e. `83dvh − 219px`. `dvh` is what keeps the
  * card inside the part of the screen a phone browser's toolbars leave. It does not reserve the
  * signed-out note: the item scrolls, so the note is reachable. Phone actions stay on one compact
  * row, so their budget does not subtract the desktop wrapped row. Claims open in the entity panel
@@ -81,8 +85,8 @@ const LINKED_START_HOLD_MS = 8_000;
  */
 const debateColumnStyle = (wrapsBelow: number) =>
   ({
-    '--debate-feed-column-width': `clamp(280px, min(calc(100cqw - 2rem), ${debateCardColumnWidth('82.9dvh - 13.65rem', wrapsBelow)}), 640px)`,
-    '--debate-feed-phone-column-width': 'clamp(240px, calc(83dvh - 197px), calc(100cqw - 2rem))',
+    '--debate-feed-column-width': `clamp(280px, min(calc(100cqw - 2rem), ${debateCardColumnWidth('82.9dvh - 15.05rem', wrapsBelow)}), 640px)`,
+    '--debate-feed-phone-column-width': 'clamp(240px, calc(83dvh - 219px), calc(100cqw - 2rem))',
   }) as React.CSSProperties;
 
 const DEBATE_COLUMN_STYLE = debateColumnStyle(DEBATE_CARD_WRAPS_BELOW);
@@ -96,6 +100,7 @@ export function DebatesBrowseFeed({
   fallback,
   removedView,
   surface = initialDebateId ? 'debate-page' : 'debates-tab',
+  belowLinkedDebate,
 }: {
   spaceId: string;
   initialDebateId?: string;
@@ -122,7 +127,16 @@ export function DebatesBrowseFeed({
    * tab passes it explicitly, since it anchors too when its URL names a debate.
    */
   surface?: DebateFeedSurface;
+  /**
+   * The Debate page's own content below the linked debate (GEO-3869). When given with
+   * {@link initialDebateId}, the feed stops being a feed: it shows only the linked debate, with
+   * whatever this returns for it below, in a plain scroll instead of one debate per snap. The rest
+   * of the space's debates never load, so scrolling down can't carry the viewer into another one.
+   * Returns null when there is nothing to add, and the debate then stands alone.
+   */
+  belowLinkedDebate?: (debate: Debate) => React.ReactNode;
 }) {
+  const linkedOnly = belowLinkedDebate != null && initialDebateId != null;
   const debatesQuery = useSpaceDebates(spaceId, true);
   // The visit's outcome is about a debate's own page. The tab anchors too when reloaded on a
   // `?debate=` URL, but that is still a visit to the tab.
@@ -151,12 +165,17 @@ export function DebatesBrowseFeed({
   // The directly-fetched anchor goes through the same gate as everything else — being navigated to
   // is not a reason to play a debate that has no video.
   const candidates = React.useMemo(() => {
-    const watchable = listedDebates.filter(isWatchableDebate);
+    const listedWatchable = listedDebates.filter(isWatchableDebate);
+    // Only the linked debate is a candidate when nothing else will be shown, so the others' media
+    // lookups are never made.
+    const watchable = linkedOnly
+      ? listedWatchable.filter(debate => ID.equals(debate.id, initialDebateId))
+      : listedWatchable;
     const anchor = anchorQuery.data;
     if (!anchor || !isWatchableDebate(anchor)) return watchable;
     if (watchable.some(debate => ID.equals(debate.id, anchor.id))) return watchable;
     return [...watchable, anchor];
-  }, [listedDebates, anchorQuery.data]);
+  }, [listedDebates, anchorQuery.data, linkedOnly, initialDebateId]);
   const candidateIds = React.useMemo(() => candidates.map(debate => debate.id), [candidates]);
   const {
     processedIds,
@@ -166,7 +185,10 @@ export function DebatesBrowseFeed({
 
   // The same ranking the explore page's "Best" sort uses, so what plays after the debate you
   // opened is what that sort would have put in front of you.
-  const { rankByDebateId, isLoading: bestOrderLoading } = useDebatesBestOrder(spaceId, candidateIds.length > 0);
+  const { rankByDebateId, isLoading: bestOrderLoading } = useDebatesBestOrder(
+    spaceId,
+    candidateIds.length > 0 && !linkedOnly
+  );
 
   // Every debate the viewer has reached, plus the ones already preloading after it, in the order they
   // were shown. Nothing may be inserted above or among them.
@@ -368,7 +390,13 @@ export function DebatesBrowseFeed({
   // Gated on what's actually on screen rather than on `debates`: that inherits the anchor
   // hold above, and holds the nudge back while the media lookups land one at a time and
   // the list re-sorts underneath the viewer. Nothing to nudge toward with one debate.
-  const scrollHint = useDebateScrollHint(!isLoading && visibleDebates.length > 1);
+  // On the Debate page the claim's content is what lies below (GEO-3869), when there is any.
+  const linkedDebate = linkedOnly ? (visibleDebates[0] ?? null) : null;
+  const belowContent = linkedDebate && belowLinkedDebate ? belowLinkedDebate(linkedDebate) : null;
+  const scrollHint = useDebateScrollHint(!isLoading && (visibleDebates.length > 1 || belowContent != null));
+  // Scrolled down into that content, the debate pauses, as it would on moving to the next debate in
+  // a feed, and picks up again on coming back to it.
+  const [linkedInView, setLinkedInView] = React.useState(true);
 
   // Keep an active debate whenever the list is non-empty — including when a
   // refetch, pagination, or space switch drops the current activeId out of view,
@@ -510,7 +538,12 @@ export function DebatesBrowseFeed({
         if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', ' '].includes(event.key))
           lastScrollIntent.current = performance.now();
       }}
-      className="no-scrollbar [container-type:inline-size] h-[calc(100dvh-2.75rem)] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth"
+      className={cx(
+        'no-scrollbar [container-type:inline-size] h-[calc(100dvh-2.75rem)] overflow-y-auto overscroll-contain scroll-smooth',
+        // A mandatory snap with one debate in it would pull every scroll back up to the debate.
+        !linkedOnly && 'snap-y snap-mandatory'
+      )}
+      data-debate-page-scroll={linkedOnly ? '' : undefined}
     >
       {visibleDebates.length === 0 && <FeedMessage>{emptyMessage}</FeedMessage>}
       {visibleDebates.map((debate, index) => (
@@ -520,7 +553,9 @@ export function DebatesBrowseFeed({
           spaceId={spaceId}
           spaceName={space?.entity.name ?? 'Space'}
           spaceImage={space?.entity.image}
-          active={activeId === debate.id}
+          // The debate's own page is already in its space, so the line naming it says nothing there.
+          showSpace={surface !== 'debate-page'}
+          active={activeId === debate.id && (!linkedOnly || linkedInView)}
           initialSeekSeconds={
             initialDebateId != null && ID.equals(debate.id, initialDebateId) ? initialSeekSeconds : null
           }
@@ -558,7 +593,12 @@ export function DebatesBrowseFeed({
           root={scrollEl}
           // Only the debate the viewer is looking at carries the nudge and lifts with it.
           scrollHint={index === 0 ? scrollHint : null}
-          onActivate={() => activateVisibleDebate(debate.id)}
+          onActivate={() => {
+            if (linkedOnly) setLinkedInView(true);
+            activateVisibleDebate(debate.id);
+          }}
+          onScrolledAway={linkedOnly ? () => setLinkedInView(false) : undefined}
+          firstScreen={linkedOnly}
           // Pressing a debate's own control makes it the active one rather than
           // waiting for the scroll observer: its bar is reachable from 0%
           // visibility but activation needs 60%, so mid-scroll the panel would
@@ -577,6 +617,7 @@ export function DebatesBrowseFeed({
       {!anchorPending && !orderPending && visibleCount < debates.length && (
         <LoadMoreSentinel root={scrollEl} onLoadMore={() => setVisibleCount(count => count + PAGE_SIZE)} />
       )}
+      {belowContent}
     </div>
   );
 
@@ -625,6 +666,7 @@ function DebateFeedItem({
   spaceId,
   spaceName,
   spaceImage,
+  showSpace,
   active,
   initialSeekSeconds,
   preload,
@@ -639,11 +681,15 @@ function DebateFeedItem({
   onPlaybackRequest,
   onPlaybackState,
   onStillShown,
+  onScrolledAway,
+  firstScreen = false,
 }: {
   debate: Debate;
   spaceId: string;
   spaceName: string;
   spaceImage?: string | null;
+  /** Draw the space's line above the claim. Off on the debate's own page. */
+  showSpace: boolean;
   active: boolean;
   initialSeekSeconds: number | null;
   preload: boolean;
@@ -661,6 +707,13 @@ function DebateFeedItem({
   onPlaybackRequest: () => void;
   onPlaybackState?: DebatePageOutcome['player'];
   onStillShown?: DebatePageOutcome['stillShown'];
+  /** The card has left the screen bar a sliver: on the Debate page, scrolled into the claim below. */
+  onScrolledAway?: () => void;
+  /**
+   * The Debate page's opening screen: the debate fills it, unsnapped, and the claim's content
+   * starts just below the fold (GEO-3869).
+   */
+  firstScreen?: boolean;
 }) {
   const itemRef = React.useRef<HTMLElement | null>(null);
   useStillFrameShown(itemRef, onStillShown);
@@ -686,13 +739,14 @@ function DebateFeedItem({
       entries => {
         for (const entry of entries) {
           if (entry.isIntersecting && entry.intersectionRatio >= 0.6) onActivate();
+          else if (onScrolledAway && entry.intersectionRatio < SCROLLED_AWAY_RATIO) onScrolledAway();
         }
       },
-      { root, threshold: [0.6] }
+      { root, threshold: onScrolledAway ? [SCROLLED_AWAY_RATIO, 0.6] : [0.6] }
     );
     observer.observe(element);
     return () => observer.disconnect();
-  }, [onActivate, root]);
+  }, [onActivate, onScrolledAway, root]);
 
   return (
     <section
@@ -700,7 +754,15 @@ function DebateFeedItem({
       // 20px below the navbar, per the design — the media sizing has slack to absorb it, so
       // the card doesn't need to sit flush against the chrome. `md:py-3` still wins on
       // mobile: Tailwind emits variant utilities after unprefixed ones, so no `md:pt-3` needed.
-      className="flex h-full snap-start items-start justify-center px-4 pt-5 md:h-auto md:min-h-full md:py-3"
+      className={cx(
+        'flex items-start justify-center px-4 pt-5',
+        // On the Debate page the debate fills the first screen and no more, so what follows it starts
+        // just below the fold: the scroller is the viewport less the navbar, in `dvh`, so a phone's
+        // browser bars don't move the fold. `min-h` rather than `h` lets a debate taller than the
+        // screen push it down; the padding (inside the height) keeps a section's gap below the debate
+        // there, and is the room the out-of-flow scroll nudge hangs in.
+        firstScreen ? 'min-h-full pb-10 md:pt-3' : 'h-full snap-start md:h-auto md:min-h-full md:py-3'
+      )}
     >
       {/* The whole debate lifts with the nudge — media, claim and controls together — so the
           gesture reads as the feed scrolling rather than as one element twitching. Shared
@@ -747,7 +809,7 @@ function DebateFeedItem({
             // The cards the feed is about to reach read theirs too, so a side is there to take
             // the moment one arrives.
             enabled={active || preload}
-            meta={<DebateMeta spaceId={spaceId} spaceName={spaceName} spaceImage={spaceImage} />}
+            meta={showSpace ? <DebateMeta spaceId={spaceId} spaceName={spaceName} spaceImage={spaceImage} /> : null}
             title={<DebateClaimTitle claim={debate.claim} />}
             actions={
               <DebateInteractionBar
@@ -755,6 +817,7 @@ function DebateFeedItem({
                 onComment={onOpenComments}
                 onShare={share.onOpen}
                 shareOpen={share.open}
+                variant="circles"
                 overflow={
                   hasMenu ? (
                     <span className="md:hidden">
@@ -765,6 +828,8 @@ function DebateFeedItem({
               />
             }
             wideActions={hasMenu}
+            look="app"
+            className="px-4 pb-4"
           />
         </div>
         {/* `top-full` hangs it just below the debate without taking part in the column's

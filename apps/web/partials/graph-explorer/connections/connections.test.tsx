@@ -12,9 +12,19 @@ import type { GraphSelection } from '~/core/graph-explorer/select-graph';
 import type { SelectedNode } from '~/core/graph-explorer/select-graph';
 import { SKELETON_SELECTION, isSkeletonNode } from '~/core/graph-explorer/skeleton-graph';
 
-import { ConnectionsCanvas, clearance, nodeScale, overlapShare, overlaps } from './connections-canvas';
+import {
+  ConnectionsCanvas,
+  centreCrossDim,
+  coveredLabels,
+  depthOrder,
+  nodeScale,
+  overlapShare,
+  tooSmallToRead,
+} from './connections-canvas';
+import { BandLegend } from './connections-view';
 import { GraphSearch, searchNodes } from './graph-search';
 import { GraphTopBar } from './graph-top-bar';
+import { SkeletonNode } from './skeleton-node';
 
 const motion = vi.hoisted(() => ({ reduce: false }));
 /** IntersectionObserver callbacks, so a test can scroll the stage off-screen. */
@@ -25,7 +35,12 @@ const resized = vi.hoisted(() => ({
   observed: [] as Array<{ callback: ResizeObserverCallback; target: Element }>,
 }));
 /** Every fit asked for, and the distance the last frame projected at. */
-const view = vi.hoisted(() => ({ fits: [] as Array<{ width: number; height: number; fit: number }>, distance: 0 }));
+const view = vi.hoisted(() => ({
+  fits: [] as Array<{ width: number; height: number; fit: number }>,
+  distance: 0,
+  /** Every point projected since the test last cleared it. */
+  projected: [] as Array<{ x: number; y: number; scale: number; depth: number }>,
+}));
 vi.mock('~/core/graph-explorer/layout-3d', async importOriginal => {
   const real = await importOriginal<typeof import('~/core/graph-explorer/layout-3d')>();
   return {
@@ -37,7 +52,10 @@ vi.mock('~/core/graph-explorer/layout-3d', async importOriginal => {
     },
     project: (...args: Parameters<typeof real.project>) => {
       view.distance = args[1].distance;
-      return real.project(...args);
+      const point = real.project(...args);
+      // A copy: the frame may move the point it was handed, as the old centre push did.
+      view.projected.push({ ...point });
+      return point;
     },
   };
 });
@@ -116,6 +134,7 @@ beforeEach(() => {
   resized.callbacks = [];
   resized.observed = [];
   view.fits = [];
+  view.projected = [];
   frames = [];
   now = 0;
   motion.reduce = false;
@@ -144,11 +163,11 @@ function runFrames(until: number) {
   });
 }
 
-function Canvas({ onSelect = vi.fn() }: { onSelect?: (node: GraphNode) => void }) {
+function Canvas({ onSelect = vi.fn(), phone = false }: { onSelect?: (node: GraphNode) => void; phone?: boolean }) {
   return (
     <ConnectionsCanvas
       selection={selection}
-      phone={false}
+      phone={phone}
       onSelect={onSelect}
       renderNode={entry => entry.node.name}
       labelFor={() => 'label'}
@@ -278,6 +297,114 @@ describe('ConnectionsCanvas', () => {
     expect(view.distance).toBe(zoomed);
   });
 
+  it('marks a hop-1 card far while zoomed out past reading size, never the centre, and drops it zoomed back in', () => {
+    motion.reduce = true;
+    render(<Canvas />);
+    runFrames(100);
+    const isaac = () => screen.getByRole('button', { name: 'Isaac Herzog' });
+    const centreButton = screen.getByRole('button', { name: 'Centre' });
+    const zoom = (name: 'Zoom in' | 'Zoom out', times: number) => {
+      for (let i = 0; i < times; i++) {
+        fireEvent.click(screen.getByRole('button', { name }));
+        runFrames(now + 100);
+      }
+    };
+    expect(isaac().dataset.far).toBeUndefined();
+    zoom('Zoom out', 8);
+    expect(isaac().dataset.far).toBe('');
+    expect(centreButton.dataset.far).toBeUndefined();
+
+    zoom('Zoom in', 8);
+    expect(isaac().dataset.far).toBeUndefined();
+  });
+
+  it('draws a hop-1 node on a phone as a pin: full size, its marker scaled by depth, never far', () => {
+    motion.reduce = true;
+    // The stage only: overlays keep jsdom's empty boxes, so nothing is in the names' way.
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const size = this.dataset.testid === 'connections-stage' ? { width: 390, height: 844 } : { width: 0, height: 0 };
+      return { ...size, x: 0, y: 0, top: 0, left: 0, right: size.width, bottom: size.height } as DOMRect;
+    });
+    render(<Canvas phone />);
+    runFrames(100);
+    const isaac = screen.getByRole('button', { name: 'Isaac Herzog' });
+    const centreButton = screen.getByRole('button', { name: 'Centre' });
+    const marker = () => Number(isaac.style.getPropertyValue('--pin-scale'));
+    expect(isaac.style.transform).toMatch(/scale\(1\.000\)$/);
+    expect(isaac.style.getPropertyValue('--pin-label')).toBe('1.000');
+    const before = marker();
+    for (let i = 0; i < 8; i++) {
+      fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }));
+      runFrames(now + 100);
+    }
+    expect(isaac.dataset.far).toBeUndefined();
+    expect(isaac.style.transform).toMatch(/scale\(1\.000\)$/);
+    expect(marker()).toBeLessThan(before);
+    expect(centreButton.style.getPropertyValue('--pin-scale')).toBe('');
+  });
+
+  it.each([
+    ['turns hop 2', { phone: true, hop: 2 as const }],
+    ['leaves the phone layout', { phone: false, hop: 1 as const }],
+  ])('drops `data-covered` from a covered pin that %s, so it stays tappable', (_, next) => {
+    motion.reduce = true;
+    const canvas = (phone: boolean, hop: 1 | 2) => (
+      <ConnectionsCanvas
+        selection={{ ...selection, nodes: [selection.nodes[0], { ...selection.nodes[1], hop }] }}
+        phone={phone}
+        onSelect={vi.fn()}
+        renderNode={entry => entry.node.name}
+        labelFor={() => 'label'}
+      />
+    );
+    // The loop restarts when `phone` flips; the old one's pending frame must really be cancelled.
+    const pending = new Map<number, FrameRequestCallback>();
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation(callback => {
+      frames.push(callback);
+      pending.set(pending.size + 1, callback);
+      return pending.size;
+    });
+    vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(id => {
+      frames = frames.filter(callback => callback !== pending.get(id));
+    });
+    // jsdom's stage is 0 by 0, so the pin's name has no place on it and counts as covered.
+    const { rerender } = render(canvas(true, 1));
+    runFrames(100);
+    const isaac = () => screen.getByRole('button', { name: 'Isaac Herzog' });
+    expect(isaac().dataset.covered).toBe('');
+    rerender(canvas(next.phone, next.hop));
+    runFrames(now + 1200);
+    expect(isaac().dataset.covered).toBeUndefined();
+  });
+
+  it('keeps desktop cards free of pin styles', () => {
+    motion.reduce = true;
+    render(<Canvas />);
+    runFrames(100);
+    expect(screen.getByRole('button', { name: 'Isaac Herzog' }).style.getPropertyValue('--pin-scale')).toBe('');
+  });
+
+  it('clears a `data-far` its button carries from before, once the card is drawn readable', () => {
+    // A node picked again while its button is still fading out keeps that button, and its
+    // `data-far`, but gets a fresh view; the frame must go by the button.
+    motion.reduce = true;
+    render(<Canvas />);
+    runFrames(100);
+    const isaac = screen.getByRole('button', { name: 'Isaac Herzog' });
+    isaac.dataset.far = '';
+    // Wakes the settled loop for a frame.
+    fireEvent.mouseEnter(isaac);
+    runFrames(now + 100);
+    expect(isaac.dataset.far).toBeUndefined();
+  });
+
+  it('draws the centre focus ring clear of its white ring', () => {
+    render(<Canvas />);
+    expect(screen.getByRole('button', { name: 'Centre' }).className).toContain('focus-visible:outline-offset-[9px]');
+    expect(screen.getByRole('button', { name: 'Centre' }).className).not.toContain('focus-visible:outline-offset-4');
+    expect(screen.getByRole('button', { name: 'Isaac Herzog' }).className).toContain('focus-visible:outline-offset-4');
+  });
+
   it('sleeps after the idle spin has run its course', () => {
     render(<Canvas />);
     runFrames(2600 + 45_000 + 500);
@@ -312,6 +439,123 @@ describe('ConnectionsCanvas', () => {
     const first = target.style.transform;
     runFrames(1200);
     expect(target.style.transform).toBe(first);
+  });
+
+  it('keeps a card crossing the centre on its projected path and under the centre, even when nearer, never pushed aside', () => {
+    // Cards this big always cover each other, so the old centre push would have moved Isaac.
+    const sizes = (['offsetWidth', 'offsetHeight'] as const).map(key => {
+      const old = Object.getOwnPropertyDescriptor(HTMLElement.prototype, key);
+      Object.defineProperty(HTMLElement.prototype, key, { configurable: true, get: () => 600 });
+      return () => old && Object.defineProperty(HTMLElement.prototype, key, old);
+    });
+    try {
+      render(<Canvas />);
+      const isaac = screen.getByRole('button', { name: 'Isaac Herzog' });
+      const centreButton = screen.getByRole('button', { name: 'Centre' });
+      const at = (element: HTMLElement) => {
+        const [, x, y] = /translate3d\(([-\d.]+)px,([-\d.]+)px/.exec(element.style.transform) ?? [];
+        return { x: Number(x), y: Number(y) };
+      };
+      const pointAt = (spot: { x: number; y: number }) =>
+        view.projected.find(point => Math.abs(point.x - spot.x) < 0.06 && Math.abs(point.y - spot.y) < 0.06);
+      // Settle the move in, then sample the idle spin frame by frame.
+      runFrames(2600 + 1000);
+      let farther = 0;
+      let nearer = 0;
+      let faintestNearer = 1;
+      let faintestFarther = 1;
+      for (let i = 0; i < 2400; i++) {
+        view.projected = [];
+        runFrames(now + 16);
+        const own = pointAt(at(isaac));
+        const middle = pointAt(at(centreButton));
+        expect(own).toBeDefined();
+        expect(middle).toBeDefined();
+        // Whichever side of the centre Isaac is in depth, the centre draws over him.
+        expect(Number(isaac.style.zIndex)).toBeLessThan(Number(centreButton.style.zIndex));
+        if (own!.depth > middle!.depth) {
+          farther++;
+          faintestFarther = Math.min(faintestFarther, Number(isaac.style.opacity));
+        } else {
+          nearer++;
+          faintestNearer = Math.min(faintestNearer, Number(isaac.style.opacity));
+        }
+      }
+      // The spin carried Isaac both behind the centre and nearer the camera than it. Behind, it
+      // covered him fully and he went faint; nearer (where depth fog leaves him fully opaque) he
+      // still passed under it and faded by the share it covered, so the centre's name reads.
+      expect(farther).toBeGreaterThan(0);
+      expect(nearer).toBeGreaterThan(0);
+      expect(faintestFarther).toBeLessThanOrEqual(0.121);
+      expect(faintestNearer).toBeLessThan(0.6);
+    } finally {
+      sizes.forEach(restore => restore());
+    }
+  });
+
+  it("keeps a hovered card's neighbour under the centre, and lifts only the hovered card over it", () => {
+    const sizes = (['offsetWidth', 'offsetHeight'] as const).map(key => {
+      const old = Object.getOwnPropertyDescriptor(HTMLElement.prototype, key);
+      Object.defineProperty(HTMLElement.prototype, key, { configurable: true, get: () => 600 });
+      return () => old && Object.defineProperty(HTMLElement.prototype, key, old);
+    });
+    // A hop-2 marker whose only neighbour is Isaac, so hovering it lifts Isaac over the other cards.
+    const marker = node(3, 'ent', 'Marker');
+    const withMarker: GraphSelection = {
+      nodes: [...selection.nodes, { node: marker, hop: 2, parentId: person.id }],
+      links: [
+        ...selection.links,
+        {
+          hop: 2,
+          edge: { id: 'e2', fromId: person.id, toId: marker.id, propertyId: 'p', propertyName: 'Knows', spaceId: 's' },
+        },
+      ],
+    };
+    try {
+      render(
+        <ConnectionsCanvas
+          selection={withMarker}
+          phone={false}
+          onSelect={vi.fn()}
+          renderNode={entry => entry.node.name}
+          labelFor={() => 'label'}
+        />
+      );
+      const isaac = screen.getByRole('button', { name: 'Isaac Herzog' });
+      const centreButton = screen.getByRole('button', { name: 'Centre' });
+      const markerButton = screen.getByRole('button', { name: 'Marker' });
+      runFrames(2600 + 1000);
+      fireEvent.mouseEnter(markerButton);
+      let faintest = 1;
+      for (let i = 0; i < 2400; i++) {
+        view.projected = [];
+        runFrames(now + 16);
+        expect(Number(markerButton.style.zIndex)).toBe(9500);
+        // Isaac, the marker's neighbour, is lifted over other cards but stays under the centre.
+        expect(Number(isaac.style.zIndex)).toBeLessThan(Number(centreButton.style.zIndex));
+        faintest = Math.min(faintest, Number(isaac.style.opacity));
+      }
+      expect(faintest).toBeLessThanOrEqual(0.121);
+      // The hovered card itself goes over the centre and is never faded by it.
+      fireEvent.mouseLeave(markerButton);
+      fireEvent.mouseEnter(isaac);
+      runFrames(now + 2000);
+      expect(Number(isaac.style.zIndex)).toBeGreaterThan(Number(centreButton.style.zIndex));
+      expect(Number(isaac.style.opacity)).toBe(1);
+    } finally {
+      sizes.forEach(restore => restore());
+    }
+  });
+});
+
+describe('SkeletonNode on a phone', () => {
+  it('draws a hop-1 placeholder as a dot over a name bar, and hop 2 as the bare dot', () => {
+    const shapes = (hop: 1 | 2) =>
+      render(<SkeletonNode kind="ent" isCentre={false} hop={hop} phone pulse={false} />).container.firstElementChild!
+        .children.length;
+    expect(shapes(1)).toBe(2);
+    cleanup();
+    expect(shapes(2)).toBe(1);
   });
 });
 
@@ -421,21 +665,82 @@ describe('ConnectionsCanvas leaving nodes', () => {
 });
 
 describe('GraphTopBar chips', () => {
-  const bar = (kinds: GraphKind[]) =>
-    render(
-      <GraphTopBar
-        back={null}
-        trail={['Centre']}
-        search={null}
-        kinds={kinds}
-        kindFilter="all"
-        onKindFilter={() => {}}
-        close={null}
-      />
-    );
+  const bar = (kinds: GraphKind[], kindFilter: GraphKind | 'all' = 'all') => (
+    <GraphTopBar
+      back={null}
+      trail={[{ name: 'Centre', index: 0 }]}
+      search={null}
+      kinds={kinds}
+      kindFilter={kindFilter}
+      onKindFilter={() => {}}
+      close={null}
+    />
+  );
+  const pressed = () =>
+    screen
+      .getAllByRole('button')
+      .filter(button => button.getAttribute('aria-pressed') === 'true')
+      .map(button => button.textContent);
+
+  it('keeps the chip in force, pressed and in kind order, when none of its kind is around', () => {
+    render(bar(['topic', 'ent', 'src'], 'claim'));
+    expect(screen.getAllByRole('button').map(button => button.textContent)).toEqual([
+      'Everything',
+      'People and groups',
+      'Claims',
+      'Sources',
+    ]);
+    expect(pressed()).toEqual(['Claims']);
+  });
+
+  it('keeps the row, so Everything is reachable, when only topics are around a filtered map', () => {
+    render(bar(['topic'], 'event'));
+    expect(pressed()).toEqual(['Events']);
+    expect(screen.getByRole('button', { name: 'Everything' })).toBeTruthy();
+  });
+
+  describe('in a row that scrolls', () => {
+    // jsdom has no layout: a 100px row whose chips sit 120px apart, so only the first fits.
+    const restore: Array<() => void> = [];
+    beforeEach(() => {
+      const original = HTMLElement.prototype.getBoundingClientRect;
+      HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) {
+        const row = this.closest('[role="group"]') as HTMLElement | null;
+        if (this.getAttribute('role') === 'group') return { left: 0, right: 100 } as DOMRect;
+        if (!row || this.tagName !== 'BUTTON') return original.call(this);
+        const left = [...row.children].indexOf(this) * 120 - row.scrollLeft;
+        return { left, right: left + 100 } as DOMRect;
+      };
+      restore.push(() => {
+        HTMLElement.prototype.getBoundingClientRect = original;
+      });
+    });
+    afterEach(() => restore.splice(0).forEach(undo => undo()));
+    const row = () => screen.getByRole('group', { name: 'Show' });
+
+    it('scrolls a pressed chip past the edge into view when it opens on it', () => {
+      render(bar(['ent', 'claim', 'story'], 'story'));
+      expect(row().scrollLeft).toBe(360);
+    });
+
+    it('leaves a chip already in view alone, and scrolls just far enough to one set for the viewer', () => {
+      const { rerender } = render(bar(['ent', 'claim', 'story']));
+      expect(row().scrollLeft).toBe(0);
+      rerender(bar(['ent', 'claim', 'story'], 'story'));
+      expect(row().scrollLeft).toBe(360);
+      rerender(bar(['ent', 'claim', 'story'], 'claim'));
+      expect(row().scrollLeft).toBe(240);
+    });
+
+    it('scrolls once the chips arrive, as they do after the first hop loads', () => {
+      const { rerender } = render(bar([], 'story'));
+      rerender(bar(['ent', 'claim', 'story'], 'story'));
+      expect(row().scrollLeft).toBe(360);
+    });
+  });
 
   it('offers Everything plus the kinds actually around the centre, never Topics', () => {
-    bar(['topic', 'ent', 'story']);
+    render(bar(['topic', 'ent', 'story']));
     expect(screen.getAllByRole('button').map(button => button.textContent)).toEqual([
       'Everything',
       'People and groups',
@@ -444,7 +749,7 @@ describe('GraphTopBar chips', () => {
   });
 
   it('shows no chips when nothing but topics is around', () => {
-    bar(['topic']);
+    render(bar(['topic']));
     expect(screen.queryByRole('group', { name: 'Show' })).toBeNull();
   });
 });
@@ -454,7 +759,7 @@ describe('GraphTopBar share', () => {
     render(
       <GraphTopBar
         back={null}
-        trail={['Centre']}
+        trail={[{ name: 'Centre', index: 0 }]}
         search={null}
         kinds={[]}
         kindFilter="all"
@@ -503,6 +808,102 @@ describe('GraphSearch', () => {
   });
 });
 
+// jsdom applies no media queries, so these read the phone (`md:`) classes the layout relies on.
+describe('the top bar on a phone (GEO-3849)', () => {
+  afterEach(cleanup);
+  const box = () => screen.getByRole('combobox', { name: 'Find on the map' });
+
+  it('folds the search into an icon that opens the field, focused, over the path', () => {
+    render(
+      <GraphTopBar
+        back={null}
+        trail={[{ name: 'Israel-Gaza war', index: 0 }]}
+        search={<GraphSearch nodes={[person]} onPick={vi.fn()} />}
+        kinds={['ent']}
+        kindFilter="all"
+        onKindFilter={() => {}}
+        close={{ href: '/explore', label: 'Close' }}
+      />
+    );
+    expect(box().className).toContain('md:hidden');
+    // The path gives way to the open field on a phone.
+    expect(screen.getByRole('navigation', { name: 'Your path' }).className).toContain(
+      'md:group-has-[[data-search-open]]/bar:hidden'
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Search the map' }));
+    expect(box().className).not.toContain('md:hidden');
+    expect(document.activeElement).toBe(box());
+    expect(box().closest('[data-search-open]')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Search the map' })).toBeNull();
+
+    fireEvent.blur(box());
+    expect(box().closest('[data-search-open]')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Search the map' })).toBeTruthy();
+  });
+
+  it('stays open while it holds a search, and folds again after a pick', () => {
+    const onPick = vi.fn();
+    render(<GraphSearch nodes={[person]} onPick={onPick} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Search the map' }));
+    fireEvent.change(box(), { target: { value: 'Isa' } });
+    fireEvent.blur(box());
+    expect(box().closest('[data-search-open]')).toBeTruthy();
+
+    fireEvent.focus(box());
+    fireEvent.click(screen.getByRole('option'));
+    expect(onPick).toHaveBeenCalledWith(person);
+    expect(box().closest('[data-search-open]')).toBeNull();
+  });
+
+  it('hands focus back to the icon when Escape folds an empty field', () => {
+    render(<GraphSearch nodes={[person]} onPick={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Search the map' }));
+    fireEvent.keyDown(box(), { key: 'Escape' });
+    expect(box().closest('[data-search-open]')).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Search the map' }));
+  });
+
+  it('leaves focus alone when the field loses it, say to a tap on the map', () => {
+    render(<GraphSearch nodes={[person]} onPick={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Search the map' }));
+    act(() => box().blur());
+    expect(box().closest('[data-search-open]')).toBeNull();
+    // Only Escape and a pick take focus to the icon; a blur must not pull it back from elsewhere.
+    expect(document.activeElement).not.toBe(screen.getByRole('button', { name: 'Search the map' }));
+  });
+
+  it('hands focus back to the icon after picking with Enter', () => {
+    const onPick = vi.fn();
+    render(<GraphSearch nodes={[person]} onPick={onPick} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Search the map' }));
+    fireEvent.change(box(), { target: { value: 'Isa' } });
+    fireEvent.keyDown(box(), { key: 'Enter' });
+    expect(onPick).toHaveBeenCalledWith(person);
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Search the map' }));
+  });
+});
+
+describe('BandLegend', () => {
+  afterEach(cleanup);
+
+  it('drops to the three bands on a tablet, wrapping only between whole items, and hides on a phone', () => {
+    render(<BandLegend />);
+    const legend = screen.getByTestId('band-legend');
+    // A forced single line overflows under the zoom controls at 320px (GEO-3849 review).
+    expect(legend.className).not.toContain('flex-nowrap');
+    expect(legend.className).toContain('flex-wrap');
+    for (const item of legend.children) expect(item.className).toContain('whitespace-nowrap');
+    expect(legend.textContent).toContain('Widely agreed');
+    expect(legend.className).toContain('graph-phone:hidden');
+    // Desktop keeps the fourth item; a tablet drops it.
+    const unvoted = screen.getByText('No responses yet');
+    expect(unvoted.className).toContain('md:hidden');
+    for (const band of ['Widely agreed', 'Contested', 'Widely rejected'])
+      expect(screen.getByText(band).className).not.toContain('md:hidden');
+  });
+});
+
 describe('searchNodes', () => {
   it('finds names containing the text, those starting with it first, ignoring case', () => {
     const nodes = [node(3, 'ent', 'Benjamin Netanyahu'), node(4, 'story', 'Netanyahu visits'), node(5, 'src', 'Other')];
@@ -511,22 +912,37 @@ describe('searchNodes', () => {
   });
 });
 
-describe('clearance', () => {
+describe('depthOrder', () => {
+  it('stacks nearer cards higher and pins the centre above all of them', () => {
+    expect(depthOrder(0, true)).toBe(8500);
+    expect(depthOrder(-200, false)).toBe(5200);
+    expect(depthOrder(300, false)).toBe(4700);
+    // However near the camera a card comes, it stays under the centre.
+    expect(depthOrder(-5000, false)).toBe(8499);
+  });
+
+  it("lifts a hovered card's neighbours over the other cards, still under the centre", () => {
+    expect(depthOrder(300, false, true)).toBe(6700);
+    expect(depthOrder(300, false, true)).toBeGreaterThan(depthOrder(-1000, false));
+    expect(depthOrder(-1500, false, true)).toBe(8499);
+  });
+
+  it("sinks a phone's hop-2 markers under the hop-1 pins, even when nearer", () => {
+    expect(depthOrder(-800, false, false, true)).toBeLessThan(depthOrder(800, false));
+    expect(depthOrder(-800, false, false, true)).toBeGreaterThan(0);
+  });
+});
+
+describe('centreCrossDim', () => {
   const centre = { left: 100, right: 200, top: 100, bottom: 160 };
 
-  it('leaves a card that clears the centre alone', () => {
-    expect(clearance(centre, { left: 220, right: 300, top: 100, bottom: 140 })).toEqual([0, 0]);
+  it('leaves a card clear of the centre alone', () => {
+    expect(centreCrossDim({ left: 220, right: 300, top: 100, bottom: 140 }, centre)).toBe(1);
   });
 
-  it('moves an overlapping card the shortest way off the centre, past a margin', () => {
-    expect(clearance(centre, { left: 180, right: 260, top: 110, bottom: 150 })).toEqual([30, 0]);
-    expect(clearance(centre, { left: 120, right: 180, top: 150, bottom: 190 })).toEqual([0, 20]);
-    expect(clearance(centre, { left: 120, right: 180, top: 80, bottom: 105 })).toEqual([0, -15]);
-  });
-
-  it('counts the margin as touching the centre', () => {
-    expect(overlaps(centre, { left: 205, right: 260, top: 110, bottom: 150 })).toBe(true);
-    expect(overlaps(centre, { left: 211, right: 260, top: 110, bottom: 150 })).toBe(false);
+  it('fades a card under the centre in step with how much of it is covered, down to faint', () => {
+    expect(centreCrossDim({ left: 120, right: 180, top: 110, bottom: 150 }, centre)).toBeCloseTo(0.12);
+    expect(centreCrossDim({ left: 170, right: 230, top: 110, bottom: 150 }, centre)).toBeCloseTo(0.56);
   });
 });
 
@@ -547,5 +963,149 @@ describe('nodeScale', () => {
     expect(nodeScale(true, 0, 2, true)).toBe(1);
     expect(nodeScale(false, 2, 1, false)).toBeCloseTo(0.95);
     expect(nodeScale(false, 1, 0.1, true)).toBe(0.3);
+  });
+});
+
+describe('coveredLabels', () => {
+  const box = (left: number, top = 0) => ({ left, right: left + 100, top, bottom: top + 40 });
+  const slot = (left: number, depth: number, extra: { keep?: boolean; shown?: boolean; top?: number } = {}) => ({
+    rect: box(left, extra.top),
+    depth,
+    keep: extra.keep ?? false,
+    shown: extra.shown ?? true,
+  });
+
+  it('fades the farther of two touching labels and leaves apart ones alone', () => {
+    expect(coveredLabels([slot(0, 50), slot(60, -20), slot(400, 90)])).toEqual([true, false, false]);
+    // Edges that only meet do not overlap.
+    expect(coveredLabels([slot(0, 50), slot(100, -20)])).toEqual([false, false]);
+  });
+
+  it('lets a label a faded one would have covered show, so a chain keeps every other card', () => {
+    expect(coveredLabels([slot(0, 0), slot(60, 10), slot(120, 20)])).toEqual([false, true, false]);
+  });
+
+  it('never fades the hovered card or its neighbours, and fades what they cover instead', () => {
+    expect(coveredLabels([slot(0, 100, { keep: true }), slot(60, -50)])).toEqual([false, true]);
+    expect(coveredLabels([slot(0, 100, { keep: true }), slot(60, -50, { keep: true })])).toEqual([false, false]);
+  });
+
+  it('keeps the one already showing when depths cross, so the pair does not flicker', () => {
+    expect(coveredLabels([slot(0, 10, { shown: true }), slot(60, 9, { shown: false })])).toEqual([false, true]);
+  });
+});
+
+describe('tooSmallToRead', () => {
+  it('turns a card into its marker below 0.6 and back only above 0.7, so it does not flap', () => {
+    expect(tooSmallToRead(0.59, false, false)).toBe(true);
+    expect(tooSmallToRead(0.65, false, false)).toBe(false);
+    expect(tooSmallToRead(0.65, true, false)).toBe(true);
+    expect(tooSmallToRead(0.71, true, false)).toBe(false);
+  });
+
+  it('cuts lower on phone, whose whole map is drawn smaller', () => {
+    expect(tooSmallToRead(0.55, false, true)).toBe(false);
+    expect(tooSmallToRead(0.49, false, true)).toBe(true);
+    expect(tooSmallToRead(0.55, true, true)).toBe(true);
+    expect(tooSmallToRead(0.59, true, true)).toBe(false);
+  });
+});
+
+describe('the top bar path (GEO-3852)', () => {
+  afterEach(cleanup);
+  const steps = (...names: string[]) => names.map((name, index) => ({ name, index }));
+  const bar = (trail: ReturnType<typeof steps>, onStep = vi.fn()) => {
+    render(
+      <GraphTopBar
+        back={null}
+        trail={trail}
+        onStep={onStep}
+        search={null}
+        kinds={[]}
+        kindFilter="all"
+        onKindFilter={() => {}}
+        close={null}
+      />
+    );
+    return onStep;
+  };
+  const path = () => screen.getByRole('navigation', { name: 'Your path' });
+
+  it('shows three steps or fewer whole, the centre last and current', () => {
+    bar(steps('Gaza', 'International criminal justice', 'There’s no genocide in Gaza'));
+    expect(path().textContent).toBe('Gaza›International criminal justice›There’s no genocide in Gaza');
+    expect(screen.queryByRole('button', { name: /more step/ })).toBeNull();
+    expect(screen.getByText('There’s no genocide in Gaza').getAttribute('aria-current')).toBe('location');
+  });
+
+  it('folds the middle of a longer path into "…", keeping the first step and the centre', () => {
+    bar(steps('Gaza', 'Justice', 'Simas vs. Scott', 'Kevin Garvey', 'There’s no genocide in Gaza'));
+    expect(path().textContent).toBe('Gaza›…›There’s no genocide in Gaza');
+    // The centre takes the room the earlier steps, each capped, leave it.
+    expect(screen.getByText('There’s no genocide in Gaza').className).toContain('flex-1');
+    expect(screen.getByRole('button', { name: 'Gaza' }).className).toContain('max-w-[min(220px,28%)]');
+  });
+
+  it('lists the folded steps, oldest first, and jumps back to the one picked', () => {
+    const onStep = bar(steps('Gaza', 'Justice', 'Simas vs. Scott', 'Kevin Garvey', 'Centre'));
+    fireEvent.click(screen.getByRole('button', { name: 'Show 3 more steps' }));
+    const items = ['Justice', 'Simas vs. Scott', 'Kevin Garvey'].map(name => screen.getByRole('button', { name }));
+    expect(items.map(item => item.textContent)).toEqual(['Justice', 'Simas vs. Scott', 'Kevin Garvey']);
+    fireEvent.click(items[1]);
+    expect(onStep).toHaveBeenCalledWith(2);
+    expect(screen.queryByRole('button', { name: 'Simas vs. Scott' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Gaza' }));
+    expect(onStep).toHaveBeenLastCalledWith(0);
+  });
+
+  /** A path that walks back the way the viewer does: the step picked becomes the centre. */
+  function Walk({ names }: { names: string[] }) {
+    const [count, setCount] = React.useState(names.length);
+    return (
+      <GraphTopBar
+        back={null}
+        trail={steps(...names.slice(0, count))}
+        onStep={index => setCount(index + 1)}
+        search={null}
+        kinds={[]}
+        kindFilter="all"
+        onKindFilter={() => {}}
+        close={null}
+      />
+    );
+  }
+
+  it('keeps keyboard focus on the path when the step pressed turns into the centre', () => {
+    render(<Walk names={['Gaza', 'Justice', 'Centre']} />);
+    const justice = screen.getByRole('button', { name: 'Justice' });
+    justice.focus();
+    fireEvent.click(justice);
+    expect(screen.queryByRole('button', { name: 'Justice' })).toBeNull();
+    expect(document.activeElement).toBe(path());
+  });
+
+  it('keeps keyboard focus on the path when a pick from "…" folds the "…" away', () => {
+    render(<Walk names={['Gaza', 'Justice', 'Simas vs. Scott', 'Kevin Garvey', 'Centre']} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Show 3 more steps' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Justice' }));
+    expect(path().textContent).toBe('Gaza›Justice');
+    expect(document.activeElement).toBe(path());
+  });
+
+  it('reports the "…" opening with how many steps it holds, as a count of its own', () => {
+    const session = startGraphExplorerSession({ entityId: 'c', topicId: 't', spaceId: null, trailDepth: 4 });
+    session.opened('ready', { layout: 'desktop', trailDepth: 4 });
+    render(
+      <GraphAnalyticsProvider value={session}>
+        <Walk names={['Gaza', 'Justice', 'Simas vs. Scott', 'Kevin Garvey', 'Centre']} />
+      </GraphAnalyticsProvider>
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Show 3 more steps' }));
+    const opened = vi
+      .mocked(captureSafely)
+      .mock.calls.filter(([name, props]) => name === 'graph_explorer_interacted' && props?.interaction === 'trail_menu')
+      .map(([, props]) => props);
+    expect(opened).toEqual([expect.objectContaining({ step_count: 3 })]);
+    expect(opened[0]).not.toHaveProperty('value');
   });
 });

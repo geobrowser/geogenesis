@@ -3,7 +3,9 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { type OperationDefinitionNode, print } from 'graphql';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { AVATAR_PROPERTY_ID } from '~/core/io/subgraph/space-image';
 import { HIDDEN_PROPERTY_ID } from '~/core/moderation/hidden';
+import { ARTICLE_TYPE_ID } from '~/core/topics/ontology';
 
 import {
   ENTITY_FIRST,
@@ -13,6 +15,7 @@ import {
   HOP2_FIRST_TRY_MS,
   type Hop1Side,
   NODES_MIN_MS,
+  PUBLISHER_PROPERTY_ID,
   declaredVariables,
   decodeCrossLinks,
   decodeHop1,
@@ -118,6 +121,32 @@ describe('decodeNode', () => {
     expect(decodeNode(raw('1'.repeat(32), null, [PERSON]))).toBeNull();
     expect(decodeNode(raw('1'.repeat(32), 'A page', [SystemIds.PAGE_TYPE]))).toBeNull();
     expect(decodeNode(raw('1'.repeat(32), 'A new type', ['f'.repeat(32)]))?.kind).toBe('other');
+  });
+
+  it('reads the first named publisher with its avatar, for a source row’s favicon', () => {
+    const avatar = (url: string) => ({ typeId: AVATAR_PROPERTY_ID, toEntity: { valuesList: [{ text: url }] } });
+    const node = decodeNode(
+      raw('1'.repeat(32), 'An article', [ARTICLE_TYPE_ID], {
+        publishers: [
+          { toEntity: null },
+          { toEntity: { id: 'B'.repeat(32), name: '  ', relationsList: [] } },
+          { toEntity: { id: 'C'.repeat(32), name: 'The Hindu', relationsList: [avatar('ipfs://QmHindu')] } },
+        ],
+      })
+    );
+    expect(node?.publisher).toEqual({ id: 'c'.repeat(32), name: 'The Hindu', image: 'ipfs://QmHindu' });
+    expect(decodeNode(raw('1'.repeat(32), 'No publisher', [ARTICLE_TYPE_ID]))?.publisher).toBeNull();
+  });
+
+  it('asks for publishers in the nodes request, on non-claims only', () => {
+    const field = 'publishers: relationsList(filter: {typeId: {is: $publisherPropertyId}})';
+    const printed = print(nodesDocument);
+    // Sources and stories come back under `others`; claims and the centre never show a publisher.
+    expect(printed.slice(printed.indexOf('others:'))).toContain(field);
+    expect(printed.slice(printed.indexOf('claims:'), printed.indexOf('others:'))).not.toContain('publishers:');
+    expect(declared(nodesDocument)).toContain('publisherPropertyId');
+    expect(print(hop1CentreDocument)).not.toContain('publishers:');
+    expect(declared(hop1CentreDocument)).not.toContain('publisherPropertyId');
   });
 
   it('always makes a centre a node, whatever its type', () => {
@@ -290,6 +319,9 @@ describe('placement', () => {
     const [call] = calls();
     expect(call.variables).toMatchObject({ ids: ['1'.repeat(32), '2'.repeat(32)], first: 2 });
     expect(call.variables.claimTypeIds).toEqual(GRAPH_KIND_TYPE_IDS.claim);
+    // Every declared variable is sent: a null for a `UUID!` fails the whole request.
+    for (const name of declared(nodesDocument)) expect(call.variables[name], name).not.toBeNull();
+    expect(call.variables.publisherPropertyId).toBe(PUBLISHER_PROPERTY_ID);
     expect(call.timeoutMs).toBe(GRAPH_REQUEST_TIMEOUT_MS);
     expect(nodes.get('1'.repeat(32))?.placedSpaceIds).toEqual(['b'.repeat(32)]);
     expect(nodes.get('2'.repeat(32))?.placedSpaceIds).toEqual([]);

@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   defaultFeatureFlags,
+  featureFlagDefinitions,
   featureFlagsAtom,
   featureFlagsStorageKey,
   normalizeFeatureFlags,
@@ -34,6 +35,7 @@ describe('feature flags', () => {
     expect(defaultFeatureFlags.googleSignIn).toBe(false);
     expect(defaultFeatureFlags.bountiesTab).toBe(true);
     expect(defaultFeatureFlags.signInRecoveryAutoOpen).toBe(true);
+    expect(defaultFeatureFlags.entityTemplatesV2).toBe(true);
     expect(normalizeFeatureFlags(null)).toEqual({
       playbackDiagnostics: false,
       debugDebatesPage: false,
@@ -47,14 +49,15 @@ describe('feature flags', () => {
       spaceChat: false,
       debateDeviceSwitchRecording: false,
       googleSignIn: false,
-      graphExplorer: false,
       bountiesTab: true,
       signInRecoveryAutoOpen: true,
+      entityTemplatesV2: true,
+      templateListRanking: false,
     });
   });
 
   // Claims, debates, scheduling, lobby joining, debate video, the sign-in box, calendar
-  // connections and Best debates ranking shipped to everyone. Every browser that ever opened the flags dialog still has the
+  // connections, Best debates ranking and the graph explorer's entry points shipped to everyone. Every browser that ever opened the flags dialog still has the
   // retired ids in storage, and they must not survive normalization — a stray `questionsTab` reaching the dialog would render a checkbox for a flag
   // nothing reads.
   it('drops the retired flags that are still in storage', () => {
@@ -70,6 +73,7 @@ describe('feature flags', () => {
         microsoftCalendar: true,
         debateDebugging: true,
         debateRankings: true,
+        graphExplorer: true,
       })
     ).toEqual({
       playbackDiagnostics: false,
@@ -84,10 +88,18 @@ describe('feature flags', () => {
       spaceChat: false,
       debateDeviceSwitchRecording: false,
       googleSignIn: false,
-      graphExplorer: false,
       bountiesTab: true,
       signInRecoveryAutoOpen: true,
+      entityTemplatesV2: true,
+      templateListRanking: false,
     });
+  });
+
+  // GEO-3865: the graph explorer's entry points show for everyone, so the flag is gone from the
+  // definitions, and with it from the flags dialog, which renders one checkbox per definition.
+  it('no longer lists graphExplorer', () => {
+    expect(featureFlagDefinitions.map(definition => definition.id)).not.toContain('graphExplorer');
+    expect(defaultFeatureFlags).not.toHaveProperty('graphExplorer');
   });
 
   it('persists only the flags set away from their default', () => {

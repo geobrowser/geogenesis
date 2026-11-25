@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ClaimResponseSummary } from './claim-response-summary';
 import { summarizeClaimResponses } from './claim-response-summary';
-import { ClaimSummary, ControversialTag } from './claim-summary';
+import { ClaimSplitBar, ClaimSummary, ControversialTag } from './claim-summary';
 
 // The faces and the list each run their own responder query, which is not what this is about. The
 // avatars still render something pressable, because where the popover lands is.
@@ -115,6 +115,22 @@ describe('the responder list’s portal', () => {
  * anything failing: the flame, and the red that is the design's `#ff523a`. There is no behaviour to
  * assert in their place.
  */
+// GEO-3841 added a mono tone for the graph explorer; every other host keeps the green/red split.
+describe('ClaimSplitBar', () => {
+  it('splits green and red on a grey-01 track unless the host asks for mono', () => {
+    const { unmount } = render(<ClaimSplitBar percent={70} />);
+    const split = screen.getByRole('img', { name: '70% agree, 30% disagree' });
+    expect(split).toHaveClass('bg-grey-01');
+    expect(Array.from(split.children, child => child.className)).toEqual(['bg-green', 'bg-red-01']);
+    unmount();
+
+    render(<ClaimSplitBar percent={70} tone="mono" />);
+    const mono = screen.getByRole('img', { name: '70% agree, 30% disagree' });
+    expect(mono).toHaveClass('bg-divider');
+    expect(Array.from(mono.children, child => child.className)).toEqual(['bg-text']);
+  });
+});
+
 describe('ControversialTag', () => {
   afterEach(cleanup);
 
@@ -156,5 +172,51 @@ describe('ControversialTag', () => {
     render(<ControversialTag className="ml-2" />);
 
     expect(screen.getByText('Controversial')).toHaveClass('ml-2');
+  });
+});
+
+// GEO-3833: the debates app's results row, revealed under the vote pills once the viewer has voted.
+describe('ClaimSummary results layout', () => {
+  function renderResults(value: ClaimResponseSummary) {
+    return render(
+      <ClaimSummary entityId={ENTITY} spaceId={SPACE} responseKind="stance" summary={value} layout="results" />
+    );
+  }
+
+  it('reads "{p}% Agree" and "{n} Votes", grouped the en-US way, with the bar filled to the share', () => {
+    const { container } = renderResults(summary({ ...summarizeClaimResponses(1500, 500) }));
+
+    expect(screen.getByText('75% Agree')).toBeInTheDocument();
+    expect(screen.getByText('2,000 Votes')).toBeInTheDocument();
+    const fill = container.querySelector('[data-claim-results] [role="img"] > div') as HTMLElement;
+    expect(fill.style.width).toBe('75%');
+    expect(fill).toHaveClass('bg-[#151515]');
+  });
+
+  it('says "1 Vote" for a single vote', () => {
+    renderResults(summary({ ...summarizeClaimResponses(1, 0) }));
+
+    expect(screen.getByText('100% Agree')).toBeInTheDocument();
+    expect(screen.getByText('1 Vote')).toBeInTheDocument();
+  });
+
+  it('says the results are loading rather than drawing nothing under a fresh vote', () => {
+    renderResults(summary({ isLoading: true, hasCounts: false }));
+
+    expect(screen.getByText('Loading results…')).toBeInTheDocument();
+    expect(screen.queryByText(/% Agree/)).toBeNull();
+  });
+
+  it('says the results are unavailable where the counts failed', () => {
+    renderResults(summary({ hasCounts: false }));
+
+    expect(screen.getByText('Results unavailable')).toBeInTheDocument();
+  });
+
+  // A signed-out vote on a claim nobody else has answered: "0% Agree" would contradict the vote.
+  it('draws nothing where no vote has been counted yet', () => {
+    const { container } = renderResults(summary());
+
+    expect(container).toBeEmptyDOMElement();
   });
 });

@@ -399,6 +399,14 @@ describe('DebatesBrowseFeed header links', () => {
     }
   );
 
+  // The debate's own page is already in its space: no space line above the claim there, as there is
+  // on the space's Debates tab.
+  it('leaves the space out above the claim on the debate page', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-1" fallback={<div>Entity page</div>} />);
+    expect(screen.getByRole('heading', { name: 'Debates are useful' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Fashion' })).not.toBeInTheDocument();
+  });
+
   // Truncation runs parent -> anchor -> text, and an anchor at its default `min-width: auto` would
   // refuse to shrink, overflowing the row instead of ellipsing the name.
   it('keeps the space link shrinkable so the name still truncates', () => {
@@ -446,12 +454,12 @@ describe('DebatesBrowseFeed layout and scroll nudge', () => {
       'md:w-[var(--debate-feed-phone-column-width)]'
     );
     expect(mediaColumn).toHaveStyle({
-      '--debate-feed-phone-column-width': 'clamp(240px, calc(83dvh - 197px), calc(100cqw - 2rem))',
+      '--debate-feed-phone-column-width': 'clamp(240px, calc(83dvh - 219px), calc(100cqw - 2rem))',
     });
     // 16px either side on a phone, not 8.
     expect(feedItem).not.toHaveClass('md:px-2');
     expect(mediaColumn).toHaveStyle({
-      '--debate-feed-column-width': `clamp(280px, min(calc(100cqw - 2rem), ${debateCardColumnWidth('82.9dvh - 13.65rem', DEBATE_CARD_WRAPS_BELOW)}), 640px)`,
+      '--debate-feed-column-width': `clamp(280px, min(calc(100cqw - 2rem), ${debateCardColumnWidth('82.9dvh - 15.05rem', DEBATE_CARD_WRAPS_BELOW)}), 640px)`,
     });
   });
 
@@ -463,8 +471,8 @@ describe('DebatesBrowseFeed layout and scroll nudge', () => {
     const footer = screen.getByTestId('claim-footer');
     expect(footer).toHaveAttribute('data-claim', 'claim-entity-debate-1');
     expect(footer).toHaveAttribute('data-enabled', 'true');
-    expect(within(footer).getByRole('button', { name: 'Comments (7)' })).toBeInTheDocument();
-    expect(within(footer).getByRole('button', { name: 'Share debate' })).toBeInTheDocument();
+    expect(within(footer).getByRole('button', { name: 'Open comments, 7 comments' })).toBeInTheDocument();
+    expect(within(footer).getByRole('button', { name: 'Share claim' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Claims \(/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /upvote|downvote/i })).not.toBeInTheDocument();
   });
@@ -717,7 +725,7 @@ describe('DebatesBrowseFeed layout and scroll nudge', () => {
     // budgets that wrapped row from the wider edge.
     expect(screen.getByTestId('claim-footer')).toHaveAttribute('data-wide-actions', 'true');
     expect(screen.getByTestId('claim-footer').parentElement?.parentElement).toHaveStyle({
-      '--debate-feed-column-width': `clamp(280px, min(calc(100cqw - 2rem), ${debateCardColumnWidth('82.9dvh - 13.65rem', DEBATE_CARD_WIDE_WRAPS_BELOW)}), 640px)`,
+      '--debate-feed-column-width': `clamp(280px, min(calc(100cqw - 2rem), ${debateCardColumnWidth('82.9dvh - 15.05rem', DEBATE_CARD_WIDE_WRAPS_BELOW)}), 640px)`,
     });
 
     // Once: the desktop rail beside the video, which drew a second one, is gone.
@@ -798,7 +806,7 @@ describe('DebatesBrowseFeed layout and scroll nudge', () => {
     const card = screen.getByTestId('player-debate-1').closest('.bounce-stub');
     assert(card, 'Expected the landing debate to be wrapped in the bouncing card');
     expect(card).toContainElement(screen.getByRole('heading', { name: 'Debates are useful' }));
-    expect(card.querySelectorAll('[aria-label^="Comments"]').length).toBeGreaterThan(0);
+    expect(card.querySelectorAll('[aria-label^="Open comments"]').length).toBeGreaterThan(0);
 
     expect(screen.getByTestId('player-debate-2').closest('.bounce-stub')).toBeNull();
   });
@@ -839,9 +847,10 @@ describe('DebatesBrowseFeed comments', () => {
   it('shows the comment count and opens the comments panel for the clicked debate', () => {
     render(<DebatesBrowseFeed spaceId="space-1" />);
 
-    const commentButtons = screen.getAllByRole('button', { name: /^Comments/ });
+    const commentButtons = screen.getAllByRole('button', { name: /^Open comments/ });
     expect(commentButtons.length).toBeGreaterThan(0);
-    expect(screen.getAllByText('7').length).toBeGreaterThan(0);
+    // The app's circle says the count to a screen reader rather than on screen (GEO-3833).
+    expect(commentButtons[0]).toHaveAccessibleName('Open comments, 7 comments');
 
     fireEvent.click(commentButtons[0]);
     expect(screen.getByText('Comments panel for debate-1')).toBeInTheDocument();
@@ -850,14 +859,14 @@ describe('DebatesBrowseFeed comments', () => {
   it('closes the claims panel when comments open, and vice versa', () => {
     render(<DebatesBrowseFeed spaceId="space-1" />);
 
-    fireEvent.click(screen.getAllByRole('button', { name: /^Comments/ })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: /^Open comments/ })[0]);
     expect(screen.getByText('Comments panel for debate-1')).toBeInTheDocument();
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Claims on the video' })[0]);
     expect(screen.getByText('Claims panel for debate-1')).toBeInTheDocument();
     expect(screen.queryByText('Comments panel for debate-1')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getAllByRole('button', { name: /^Comments/ })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: /^Open comments/ })[0]);
     expect(screen.getByText('Comments panel for debate-1')).toBeInTheDocument();
     expect(screen.queryByText(/^Claims panel for/)).not.toBeInTheDocument();
   });
@@ -873,7 +882,7 @@ describe('DebatesBrowseFeed panels follow the scrolled-to debate', () => {
 
   it('moves the comments panel to the next debate on scroll', () => {
     render(<DebatesBrowseFeed spaceId="space-1" />);
-    fireEvent.click(screen.getAllByRole('button', { name: /^Comments/ })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: /^Open comments/ })[0]);
     expect(screen.getByText('Comments panel for debate-1')).toBeInTheDocument();
 
     activateDebate('Adjacent debate');
@@ -901,7 +910,7 @@ describe('DebatesBrowseFeed panels follow the scrolled-to debate', () => {
     const adjacent = screen.getByRole('heading', { name: 'Adjacent debate' }).closest('section');
     assert(adjacent, 'Expected a section for the adjacent debate');
 
-    fireEvent.click(within(adjacent).getAllByRole('button', { name: /^Comments/ })[0]);
+    fireEvent.click(within(adjacent).getAllByRole('button', { name: /^Open comments/ })[0]);
 
     expect(screen.getByText('Comments panel for debate-2')).toBeInTheDocument();
     expect(screen.queryByText('Comments panel for debate-1')).not.toBeInTheDocument();
@@ -1723,5 +1732,91 @@ describe('DebatesBrowseFeed comments deep link', () => {
     );
 
     expect(screen.queryByText(/Comments panel for/)).not.toBeInTheDocument();
+  });
+});
+
+describe('DebatesBrowseFeed — the Debate page scrolls into its claim, not the next debate (GEO-3869)', () => {
+  const linked = () => completedDebate('debate-2', 'Linked debate', '2026-07-01T00:01:10.000Z');
+  const others = () => [
+    completedDebate('debate-1', 'Newest debate', '2026-07-03T00:01:10.000Z'),
+    completedDebate('debate-3', 'Older debate', '2026-06-30T00:01:10.000Z'),
+  ];
+  const below = (debate: Debate) => <div data-testid="claim-content">Supporting claims for {debate.claim.claim}</div>;
+  const scroller = () => document.querySelector('.overflow-y-auto') as HTMLElement;
+
+  it('shows only the linked debate, with the claim content below it, once everything has settled', () => {
+    mocks.debates = [linked(), ...others()];
+    mocks.bestOrderIds = ['debate-3', 'debate-1'];
+    render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-2" belowLinkedDebate={below} />);
+
+    expect(screen.getAllByTestId(/^player-/).map(el => el.dataset.testid)).toEqual(['player-debate-2']);
+    const content = screen.getByTestId('claim-content');
+    expect(content).toHaveTextContent('Supporting claims for Linked debate');
+    // Below the debate, inside the one scroll.
+    const card = screen.getByTestId('player-debate-2').closest('section');
+    expect(card?.compareDocumentPosition(content) ?? 0).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(scroller()).toContainElement(content);
+  });
+
+  it('is a plain scroll, with no snapping back to the debate and nothing that loads more debates', () => {
+    mocks.debates = [
+      linked(),
+      ...others(),
+      ...Array.from({ length: 8 }, (_, i) => completedDebate(`debate-x${i}`, `Extra ${i}`, '2026-06-01T00:01:10.000Z')),
+    ];
+    render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-2" belowLinkedDebate={below} />);
+
+    expect(scroller().className).not.toMatch(/snap-mandatory/);
+    expect(screen.getAllByTestId(/^player-/)).toHaveLength(1);
+    // The debate fills the first screen (at least), unsnapped, so the claim starts just below the fold,
+    // a section's gap below the debate.
+    const card = screen.getByTestId('player-debate-2').closest('section')?.className ?? '';
+    expect(card).toMatch(/\bmin-h-full\b/);
+    expect(card).toMatch(/\bpb-10\b/);
+    expect(card).not.toMatch(/snap-start|(^|\s)h-full\b|md:h-auto/);
+    // The load-more sentinel is the only observed element that is not a debate card.
+    const observed = observers.flatMap(record => [...record.elements]);
+    expect(observed.every(element => element.tagName === 'SECTION')).toBe(true);
+  });
+
+  it('pauses the debate when it is scrolled away into the claim, and plays it again on coming back', () => {
+    mocks.debates = [linked()];
+    render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-2" belowLinkedDebate={below} />);
+    expect(screen.getByTestId('player-debate-2')).toHaveAttribute('data-active', 'true');
+
+    const section = screen.getByTestId('player-debate-2').closest('section')!;
+    const fire = (ratio: number) => {
+      const observer = observers.find(record => record.elements.has(section))!;
+      act(() => {
+        observer.callback(
+          [
+            {
+              target: section,
+              isIntersecting: ratio > 0,
+              intersectionRatio: ratio,
+            } as unknown as IntersectionObserverEntry,
+          ],
+          observer.instance
+        );
+      });
+    };
+    fire(0.1);
+    expect(screen.getByTestId('player-debate-2')).toHaveAttribute('data-active', 'false');
+    fire(0.6);
+    expect(screen.getByTestId('player-debate-2')).toHaveAttribute('data-active', 'true');
+  });
+
+  it('adds nothing below a debate the content function has nothing for', () => {
+    mocks.debates = [linked(), ...others()];
+    render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-2" belowLinkedDebate={() => null} />);
+    expect(screen.getAllByTestId(/^player-/)).toHaveLength(1);
+    expect(screen.queryByTestId('claim-content')).not.toBeInTheDocument();
+  });
+
+  it('leaves the Debates tab a feed of the space’s debates', () => {
+    mocks.debates = [linked(), ...others()];
+    render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-2" surface="debates-tab" />);
+    expect(screen.getAllByTestId(/^player-/)).toHaveLength(3);
+    expect(scroller().className).toMatch(/snap-mandatory/);
   });
 });

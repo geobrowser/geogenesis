@@ -8,6 +8,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { captureSafely } from '~/core/analytics-capture-safely';
 import type { GraphHop } from '~/core/graph-explorer/graph-entity';
 import { GraphAnalyticsProvider, useGraphExplorerSession } from '~/core/graph-explorer/graph-explorer-analytics';
+import * as share from '~/core/graph-explorer/graph-share';
 import { type GraphHistory, recentre, startGraphHistory } from '~/core/graph-explorer/history';
 import {
   CLAIM_TYPE_ID,
@@ -15,6 +16,7 @@ import {
   RELATED_PEOPLE_PROPERTY_ID,
   TOPIC_TYPE_ID,
 } from '~/core/graph-explorer/ontology';
+import { NavUtils } from '~/core/utils/utils';
 
 import { GraphViewer } from './graph-viewer';
 
@@ -85,8 +87,11 @@ vi.mock('~/core/graph-explorer/use-graph-explorer', () => ({
   useTopicClaimsSummary: () => ({ isLoading: false, isError: false, data: topicSummary.data }),
 }));
 vi.mock('~/core/analytics-capture-safely', () => ({ captureSafely: vi.fn() }));
-vi.mock('~/core/hooks/use-media-query', () => ({ useMediaQuery: () => false }));
+const media = vi.hoisted(() => ({ phone: false }));
+vi.mock('~/core/hooks/use-media-query', () => ({ useMediaQuery: () => media.phone }));
 vi.mock('~/core/sync/use-store', () => ({ useQueryEntity: () => ({ entity: null, isLoading: false }) }));
+// The open claim's Agree/Disagree has its own suite.
+vi.mock('./connections/graph-claim-position', () => ({ GraphClaimPosition: () => null }));
 vi.mock('~/core/hooks/use-is-mobile-layout', () => ({ useIsMobileLayout: () => false }));
 vi.mock('~/design-system/prefetch-link', () => ({
   PrefetchLink: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
@@ -100,6 +105,10 @@ vi.mock('~/core/claims/browse/claim-response-summary', () => ({
   useClaimResponseSummary: () => ({ isLoading: false, hasCounts: false, positive: 0, negative: 0 }),
 }));
 vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({ EntityVoteButtons: () => <div /> }));
+vi.mock('~/core/graph-explorer/graph-share', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/graph-explorer/graph-share')>()),
+  shareGraph: vi.fn(async () => 'copied'),
+}));
 vi.mock('~/core/utils/space/space-ranking', () => ({
   getTopRankedSpaceId: (ids: string[]) => ids[0] ?? null,
 }));
@@ -202,6 +211,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  media.phone = false;
 });
 
 /** The viewer is controlled; this keeps its history the way the page's URL would. */
@@ -247,6 +257,20 @@ describe('GraphViewer', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Back to Israel-Gaza war' }));
     expect(hooks.useGraphNeighbourhood).toHaveBeenLastCalledWith(expect.objectContaining({ centreId: TOPIC }));
     expect(screen.queryByRole('button', { name: /^Back to/ })).toBeNull();
+  });
+
+  it('leaves the centre’s name block out of the panel on a phone, at the map’s phone breakpoint', () => {
+    render(<Viewer start={TOPIC} scope={scope} />);
+    // jsdom applies no media queries, so this pins the classes. The breakpoint must be the map's own
+    // (`graph-phone:`, pinned to GRAPH_PHONE_QUERY in phone-breakpoint.test.ts): with `md:` (767px), a
+    // 600-767px window cut the name on the map and had none here.
+    const header = screen.getByTestId('entity-panel-header');
+    const classes = header.className.split(' ');
+    expect(classes.filter(name => name.endsWith(':hidden'))).toEqual(['graph-phone:hidden']);
+    expect(
+      screen.getByRole('heading', { name: 'Israel-Gaza war' }).closest('[data-testid="entity-panel-header"]')
+    ).toBe(header);
+    expect(screen.getByText('A topic.').closest('[data-testid="entity-panel-header"]')).toBeNull();
   });
 
   it('shows the description, and says honestly that there are no claims', () => {
@@ -398,14 +422,24 @@ describe('GraphViewer', () => {
     expect(screen.getAllByText('A news story').length).toBeGreaterThan(0);
   });
 
-  it('says a cut-short topic summary is a lower bound', () => {
+  it('says a cut-short topic summary only counted its first claims, beside the band counts', () => {
     topicSummary.data = {
       claims: [{ id: 'c', name: 'A claim', spaceId: 's', positive: 3, negative: 0, band: 'agreed' }],
       truncated: true,
     };
     render(<Viewer start={TOPIC} scope={{ ...scope, topicId: TOPIC, topicSpaceId: SPACE }} />);
+    expect(screen.getByText('Only this topic’s first 2,000 claims were counted.')).toBeTruthy();
+    expect(screen.queryByText(/with 3\+ responses/)).toBeNull();
+  });
+
+  it('says a cut-short count is a lower bound while no claim has 3 responses', () => {
+    topicSummary.data = {
+      claims: [{ id: 'c', name: 'A claim', spaceId: 's', positive: 1, negative: 0, band: 'agreed' }],
+      truncated: true,
+    };
+    render(<Viewer start={TOPIC} scope={{ ...scope, topicId: TOPIC, topicSpaceId: SPACE }} />);
     expect(
-      screen.getByText('At least 1 claim with 3+ responses; only its first 2,000 claims were counted.')
+      screen.getByText('At least 1 claim has responses so far; only its first 2,000 claims were counted.')
     ).toBeTruthy();
   });
 
@@ -426,10 +460,253 @@ describe('GraphViewer', () => {
     expect(screen.queryByRole('heading', { name: /^Claims/ })).toBeNull();
     expect(screen.queryByText(/No claims/)).toBeNull();
   });
+
+  // The title is the way to the centre's page: a claim's in the space its vote is in, anything
+  // else's where its text was read. They differ when the scope picks a space other than the claim's home.
+  it('links a claim’s title to the claim’s own space and a person’s to the space it was read in', () => {
+    const OTHER_SPACE = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+    hooks.hopFor.mockImplementation((id: string) =>
+      id === TOPIC
+        ? {
+            ...hops[TOPIC],
+            centre: {
+              ...hops[TOPIC].centre!,
+              types: [{ id: CLAIM_TYPE_ID, name: 'Claim' }],
+              spaceIds: [OTHER_SPACE, SPACE],
+              namedSpaceIds: [OTHER_SPACE, SPACE],
+            },
+          }
+        : hops[id]
+    );
+    const titleHref = () =>
+      within(screen.getByRole('region', { name: /^About / }))
+        .getByRole('heading', { level: 2 })
+        .querySelector('a')
+        ?.getAttribute('href');
+
+    render(<Viewer start={TOPIC} scope={scope} />);
+    expect(titleHref()).toBe(NavUtils.toEntity(OTHER_SPACE, TOPIC));
+
+    cleanup();
+    render(<Viewer start={PERSON} scope={scope} />);
+    expect(titleHref()).toBe(NavUtils.toEntity(SPACE, PERSON));
+  });
+
+  // GEO-3841: a claim centre's vote block sits above its description, so the buttons are on screen.
+  it('puts a claim centre’s vote block above its description', () => {
+    hooks.hopFor.mockImplementation(() => ({
+      ...hops[TOPIC],
+      centre: { ...hops[TOPIC].centre!, types: [{ id: CLAIM_TYPE_ID, name: 'Claim' }] },
+    }));
+    render(<Viewer start={TOPIC} scope={scope} />);
+    const respond = screen.getByRole('region', { name: 'Respond' });
+    expect(
+      respond.compareDocumentPosition(screen.getByText('A topic.')) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
+});
+
+describe('GraphViewer under a kind chip', () => {
+  const STORY = '33333333333333333333333333333333';
+  const OTHER_TOPIC = '44444444444444444444444444444444';
+  const CLAIM = '55555555555555555555555555555555';
+  const topicScope = { ...scope, topicId: TOPIC, topicSpaceId: SPACE };
+
+  /** The topic with a person, a dated story and another topic around it, and a claim about it. */
+  function mixedNeighbourhood(moreKinds: string[] = []) {
+    const base = neighbourhood({ centreId: TOPIC, filter: {} });
+    const person = base.selection!.nodes[1].node;
+    const story = {
+      ...person,
+      id: STORY,
+      name: 'A news story',
+      kind: 'story',
+      date: '2026-11-01',
+      types: [{ id: 'cccccccccccccccccccccccccccccccc', name: 'News story' }],
+    };
+    const topic = {
+      ...person,
+      id: OTHER_TOPIC,
+      name: 'Gaza ceasefire',
+      kind: 'topic',
+      types: [{ id: TOPIC_TYPE_ID, name: 'Topic' }],
+    };
+    const edgeTo = (id: string, n: number) => ({
+      id: `e${n}`,
+      fromId: id,
+      toId: TOPIC,
+      propertyId: 'p',
+      propertyName: 'Topics',
+      spaceId: SPACE,
+    });
+    const neighbours = [
+      { node: person, edge: base.selection!.links[0].edge },
+      { node: story, edge: edgeTo(STORY, 2) },
+      { node: topic, edge: edgeTo(OTHER_TOPIC, 3) },
+    ];
+    const centre = base.selection!.nodes[0].node;
+    hooks.useGraphNeighbourhood.mockReturnValue({
+      ...base,
+      selection: {
+        nodes: [base.selection!.nodes[0], ...neighbours.map(({ node }) => ({ node, hop: 1, parentId: TOPIC }))],
+        links: neighbours.map(({ edge }) => ({ hop: 1, edge })),
+      },
+      kinds: ['topic', 'ent', 'story'],
+      hop1: { isError: false, data: { centre, neighbours, moreKinds } },
+      centre,
+    });
+    hooks.useClaimsAbout.mockReturnValue({
+      data: { pages: [{ claims: [{ id: CLAIM, name: 'A claim about it', spaceId: SPACE }], endCursor: null }] },
+      isLoading: false,
+      isError: false,
+      hasNextPage: false,
+      isFetchingNextPage: false,
+      fetchNextPage: vi.fn(),
+    });
+  }
+  const chips = () => within(screen.getByRole('group', { name: 'Show' }));
+  const heading = (name: string) => screen.queryByRole('heading', { name });
+
+  it('shows only the chosen kind’s group in the panel, and every group again under Everything', () => {
+    mixedNeighbourhood();
+    render(<Viewer start={TOPIC} scope={scope} />);
+    expect(heading('Topics · 1')).toBeTruthy();
+
+    fireEvent.click(chips().getByRole('button', { name: 'News' }));
+    expect(heading('News · 1')).toBeTruthy();
+    expect(heading('Topics · 1')).toBeNull();
+    expect(heading('People and groups · 1')).toBeNull();
+    expect(screen.queryByRole('heading', { name: /^Claims/ })).toBeNull();
+    expect(screen.queryByText(/No claims/)).toBeNull();
+
+    fireEvent.click(chips().getByRole('button', { name: 'Everything' }));
+    expect(heading('Topics · 1')).toBeTruthy();
+    expect(heading('People and groups · 1')).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: /^Claims/ })).toBeTruthy();
+  });
+
+  it('marks a capped kind in its own heading, with no "Showing the first N" footer', () => {
+    mixedNeighbourhood(['topic']);
+    render(<Viewer start={TOPIC} scope={scope} />);
+    expect(heading('Topics · 1+')).toBeTruthy();
+    expect(heading('People and groups · 1')).toBeTruthy();
+    expect(screen.queryByText(/Showing the first/)).toBeNull();
+  });
+
+  it('keeps claims about the centre under Claims, and nothing else', () => {
+    mixedNeighbourhood();
+    // No claim is on this map, so there is no Claims chip: open it the way a shared link does.
+    render(<Viewer start={TOPIC} scope={scope} overrides={{ chip: 'claim' }} />);
+    expect(screen.getByText('A claim about it')).toBeTruthy();
+    expect(heading('News · 1')).toBeNull();
+    expect(heading('Topics · 1')).toBeNull();
+  });
+
+  it('hides the topic overview’s People and Latest news under a chip, keeping the centre', () => {
+    mixedNeighbourhood();
+    render(<Viewer start={TOPIC} scope={topicScope} />);
+    expect(heading('People and groups')).toBeTruthy();
+    expect(heading('Latest news')).toBeTruthy();
+
+    fireEvent.click(chips().getByRole('button', { name: 'News' }));
+    expect(heading('People and groups')).toBeNull();
+    expect(heading('Latest news')).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Israel-Gaza war' })).toBeTruthy();
+  });
+
+  it('opens a ?kinds= link on that chip', () => {
+    mixedNeighbourhood();
+    render(<Viewer start={TOPIC} scope={scope} overrides={{ chip: 'story' }} />);
+    expect(chips().getByRole('button', { name: 'News' }).getAttribute('aria-pressed')).toBe('true');
+    expect(heading('Topics · 1')).toBeNull();
+  });
+
+  it('shares the chip in view', () => {
+    mixedNeighbourhood();
+    render(<Viewer start={TOPIC} scope={topicScope} />);
+    fireEvent.click(chips().getByRole('button', { name: 'News' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Copy link' }));
+    expect(share.shareGraph).toHaveBeenLastCalledWith(
+      expect.objectContaining({ entityId: TOPIC, topicId: TOPIC }),
+      expect.anything(),
+      { nativeShare: false, kindFilter: 'story' }
+    );
+  });
+
+  it('gives way to Everything when recentring on a topic under a chip', () => {
+    mixedNeighbourhood();
+    render(<Viewer start={TOPIC} scope={scope} />);
+    fireEvent.click(chips().getByRole('button', { name: 'News' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Gaza ceasefire' }));
+    expect(chips().getByRole('button', { name: 'Everything' }).getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('shows a shared chip pressed even with none of its kind around the centre', () => {
+    mixedNeighbourhood();
+    render(<Viewer start={TOPIC} scope={scope} overrides={{ chip: 'event' }} />);
+    expect(chips().getByRole('button', { name: 'Events' }).getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it.each([
+    ['the most-responded claim', true],
+    ['a widely agreed claim', false],
+  ] as const)('gives way to Everything when opening %s from the topic summary under a chip', (_, inHeadline) => {
+    mixedNeighbourhood();
+    topicSummary.data = {
+      claims: [{ id: CLAIM, name: 'A claim', spaceId: SPACE, positive: 3, negative: 0, band: 'agreed' }],
+      truncated: false,
+    };
+    render(<Viewer start={TOPIC} scope={topicScope} />);
+    fireEvent.click(chips().getByRole('button', { name: 'News' }));
+    const headline = screen.getByRole('region', { name: 'How people responded' });
+    const rows = screen.getAllByRole('button', { name: /A claim/ });
+    expect(rows).toHaveLength(2);
+    fireEvent.click(rows.find(row => headline.contains(row) === inHeadline)!);
+    expect(chips().getByRole('button', { name: 'Everything' }).getAttribute('aria-pressed')).toBe('true');
+  });
+
+  // The map's node of the same kind keeps the chip too, so these open the row inside the panel.
+  const panel = () => within(screen.getByRole('region', { name: 'About Israel-Gaza war' }));
+  const recentredKinds = () =>
+    vi
+      .mocked(captureSafely)
+      .mock.calls.filter(([event]) => event === 'graph_explorer_recentred')
+      .map(([, props]) => (props as Record<string, unknown>).kind_filter);
+
+  it('keeps the chip when opening a row of its kind from the panel, and reports the hop under it', () => {
+    mixedNeighbourhood();
+    const move: React.MutableRefObject<((next: GraphHistory) => void) | null> = { current: null };
+    render(<TrackedViewer move={move} />);
+    fireEvent.click(chips().getByRole('button', { name: 'News' }));
+    fireEvent.click(panel().getByRole('button', { name: /A news story/ }));
+    expect(chips().getByRole('button', { name: 'News' }).getAttribute('aria-pressed')).toBe('true');
+    expect(recentredKinds()).toEqual(['story']);
+  });
+
+  it('reports the hop under Everything when a summary claim opened under a chip', () => {
+    mixedNeighbourhood();
+    topicSummary.data = {
+      claims: [{ id: CLAIM, name: 'A claim', spaceId: SPACE, positive: 3, negative: 0, band: 'agreed' }],
+      truncated: false,
+    };
+    const move: React.MutableRefObject<((next: GraphHistory) => void) | null> = { current: null };
+    render(<TrackedViewer move={move} viewScope={topicScope} />);
+    fireEvent.click(chips().getByRole('button', { name: 'News' }));
+    fireEvent.click(
+      within(screen.getByRole('region', { name: 'How people responded' })).getByRole('button', { name: /A claim/ })
+    );
+    expect(recentredKinds()).toEqual(['all']);
+  });
 });
 
 /** The page's session around the viewer, with a way to move history as browser Back would. */
-function TrackedViewer({ move }: { move: React.MutableRefObject<((next: GraphHistory) => void) | null> }) {
+function TrackedViewer({
+  move,
+  viewScope = scope,
+}: {
+  move: React.MutableRefObject<((next: GraphHistory) => void) | null>;
+  viewScope?: React.ComponentProps<typeof GraphViewer>['scope'];
+}) {
   const [history, setHistory] = React.useState(() => startGraphHistory(TOPIC));
   const [client] = React.useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }));
   const session = useGraphExplorerSession({ entityId: TOPIC, topicId: TOPIC, spaceId: null, trailDepth: 0 });
@@ -437,7 +714,7 @@ function TrackedViewer({ move }: { move: React.MutableRefObject<((next: GraphHis
   return (
     <QueryClientProvider client={client}>
       <GraphAnalyticsProvider value={session}>
-        <GraphViewer scope={scope} history={history} onNavigate={setHistory} />
+        <GraphViewer scope={viewScope} history={history} onNavigate={setHistory} />
       </GraphAnalyticsProvider>
     </QueryClientProvider>
   );
@@ -475,6 +752,23 @@ describe('GraphViewer analytics', () => {
     ]);
   });
 
+  it('re-centres on a step picked from the path, dropping the steps after it, and reports it as a trail hop', () => {
+    const move: React.MutableRefObject<((next: GraphHistory) => void) | null> = { current: null };
+    render(<TrackedViewer move={move} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Isaac Herzog' }));
+    const path = () => within(screen.getByRole('navigation', { name: 'Your path' }));
+    expect(path().getByText('Isaac Herzog').getAttribute('aria-current')).toBe('location');
+
+    fireEvent.click(path().getByRole('button', { name: 'Israel-Gaza war' }));
+    expect(hooks.useGraphNeighbourhood).toHaveBeenLastCalledWith(expect.objectContaining({ centreId: TOPIC }));
+    expect(path().queryByText('Isaac Herzog')).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Back to/ })).toBeNull();
+    expect(events('graph_explorer_recentred').map(props => [props.method, props.entity_id])).toEqual([
+      ['node', PERSON],
+      ['trail', TOPIC],
+    ]);
+  });
+
   it('opens a new session with entry history when the page is restored from the back/forward cache', () => {
     const move: React.MutableRefObject<((next: GraphHistory) => void) | null> = { current: null };
     render(<TrackedViewer move={move} />);
@@ -503,5 +797,118 @@ describe('GraphViewer analytics', () => {
         .filter(props => props.interaction === 'filter')
         .map(props => props.value)
     ).toEqual(['ent', 'all']);
+  });
+});
+
+describe('GraphViewer on a phone', () => {
+  const sheet = () => screen.queryByRole('dialog');
+
+  it('gives the map the screen, with the panel closed behind a handle named for the centre', () => {
+    media.phone = true;
+    const { container } = render(<Viewer start={TOPIC} scope={scope} />);
+    // jsdom applies no media queries, so this pins the classes that undo the stacked md: layout.
+    const map = screen.getByTestId('graph-map').className.split(' ');
+    expect(map).toEqual(expect.arrayContaining(['graph-phone:flex-1', 'graph-phone:h-auto', 'graph-phone:min-h-0']));
+    expect(container.querySelector('aside')).toBeNull();
+    const handle = screen.getByRole('button', { name: 'Details for Israel-Gaza war' });
+    expect(handle.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.getByTestId('graph-map').contains(handle)).toBe(true);
+    expect(sheet()).toBeNull();
+    expect(screen.queryByText('A topic.')).toBeNull();
+  });
+
+  it('opens the panel as a sheet titled with the centre, and closes it with Close or Escape', () => {
+    media.phone = true;
+    render(<Viewer start={TOPIC} scope={scope} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Details for Israel-Gaza war' }));
+    const open = screen.getByRole('dialog', { name: 'Israel-Gaza war' });
+    expect(within(open).getByText('A topic.')).toBeTruthy();
+    fireEvent.click(within(open).getByRole('button', { name: 'Close israel-gaza war' }));
+    expect(sheet()).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Details for Israel-Gaza war' }));
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    expect(sheet()).toBeNull();
+  });
+
+  it('keeps the sheet closed on a map tap, closes it on a hop from inside it, and names the new centre', () => {
+    media.phone = true;
+    render(<Viewer start={TOPIC} scope={scope} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Isaac Herzog' }));
+    expect(hooks.useGraphNeighbourhood).toHaveBeenLastCalledWith(expect.objectContaining({ centreId: PERSON }));
+    expect(sheet()).toBeNull();
+    expect(screen.getByRole('button', { name: 'Details for Isaac Herzog' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Israel-Gaza war' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Details for Israel-Gaza war' }));
+    const open = screen.getByRole('dialog', { name: 'Israel-Gaza war' });
+    fireEvent.click(within(open).getAllByRole('button', { name: /Isaac Herzog/ })[0]!);
+    expect(hooks.useGraphNeighbourhood).toHaveBeenLastCalledWith(expect.objectContaining({ centreId: PERSON }));
+    expect(sheet()).toBeNull();
+    expect(screen.getByRole('button', { name: 'Details for Isaac Herzog' })).toBeTruthy();
+  });
+
+  it('reports each opening of the sheet', () => {
+    media.phone = true;
+    const move: React.MutableRefObject<((next: GraphHistory) => void) | null> = { current: null };
+    render(<TrackedViewer move={move} />);
+    for (let i = 0; i < 2; i++) {
+      fireEvent.click(screen.getByRole('button', { name: 'Details for Israel-Gaza war' }));
+      fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    }
+    const opens = vi
+      .mocked(captureSafely)
+      .mock.calls.filter(
+        ([name, props]) =>
+          name === 'graph_explorer_interacted' && (props as { interaction?: string }).interaction === 'panel_sheet'
+      );
+    expect(opens).toHaveLength(2);
+  });
+
+  it('swaps the legend for a key button in the zoom stack that toggles the three bands', () => {
+    media.phone = true;
+    render(<TrackedViewer move={{ current: null }} />);
+    expect(screen.queryByTestId('band-legend')).toBeNull();
+    const key = screen.getByRole('button', { name: 'Show color key' });
+    // Top of the zoom stack, above Zoom in.
+    expect(key.parentElement).toBe(screen.getByRole('button', { name: 'Zoom in' }).parentElement);
+    expect(key.nextElementSibling).toBe(screen.getByRole('button', { name: 'Zoom in' }));
+    expect(key.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByTestId('band-key-items')).toBeNull();
+
+    fireEvent.click(key);
+    expect(key.getAttribute('aria-expanded')).toBe('true');
+    const items = screen.getByTestId('band-key-items');
+    expect(items.textContent).toBe('Widely agreedContestedWidely rejected');
+    // Portalled out of the map, whose overflow would clip it.
+    expect(screen.getByTestId('graph-map').contains(items)).toBe(false);
+
+    fireEvent.click(key);
+    expect(screen.queryByTestId('band-key-items')).toBeNull();
+    fireEvent.click(key);
+    fireEvent.keyDown(screen.getByTestId('band-key-items'), { key: 'Escape' });
+    expect(screen.queryByTestId('band-key-items')).toBeNull();
+    expect(key.getAttribute('aria-expanded')).toBe('false');
+
+    const opens = vi
+      .mocked(captureSafely)
+      .mock.calls.filter(
+        ([name, props]) =>
+          name === 'graph_explorer_interacted' && (props as { interaction?: string }).interaction === 'legend'
+      );
+    expect(opens).toHaveLength(2);
+  });
+
+  it('keeps the legend and no key button off a phone', () => {
+    render(<Viewer start={TOPIC} scope={scope} />);
+    expect(screen.getByTestId('band-legend').textContent).toContain('Widely agreed');
+    expect(screen.queryByRole('button', { name: 'Show color key' })).toBeNull();
+  });
+
+  it('keeps the side panel and no handle off a phone', () => {
+    const { container } = render(<Viewer start={TOPIC} scope={scope} />);
+    expect(container.querySelector('aside')).not.toBeNull();
+    expect(screen.queryByTestId('graph-panel-handle')).toBeNull();
+    expect(screen.getByText('A topic.')).toBeTruthy();
   });
 });

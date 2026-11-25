@@ -3,12 +3,17 @@ import { copyShareLink, observeShareLinkHandoff } from '~/core/sharing/share-han
 import { type ShareAttribution, type ShareMethod, createShareLink, parseShareLink } from '~/core/sharing/share-link';
 
 import { graphExplorerCanonicalHref, graphExplorerCardHref } from './href';
+import type { GraphKindFilter } from './select-graph';
 
 export type GraphShareIds = { entityId: string; topicId: string; spaceId?: string | null };
 
-/** The link a share hands out: centre, topic and space only; the trail and filters stay behind. */
-export function graphShareUrl(origin: string, ids: GraphShareIds) {
-  return `${origin}${graphExplorerCanonicalHref(ids)}`;
+/**
+ * The link a share hands out: centre, topic, space and the chip in view (`kinds`), so a filtered
+ * view opens filtered. The trail and other filters stay behind.
+ */
+export function graphShareUrl(origin: string, ids: GraphShareIds, kindFilter: GraphKindFilter = 'all') {
+  const href = graphExplorerCanonicalHref(ids);
+  return `${origin}${href}${kindFilter === 'all' ? '' : `&kinds=${kindFilter}`}`;
 }
 
 const warmed = new Set<string>();
@@ -37,9 +42,9 @@ export type GraphShareResult = 'copied' | 'shared' | 'cancelled';
 export async function shareGraph(
   ids: GraphShareIds,
   context: ActionContext,
-  { nativeShare }: { nativeShare: boolean }
+  { nativeShare, kindFilter = 'all' }: { nativeShare: boolean; kindFilter?: GraphKindFilter }
 ): Promise<GraphShareResult> {
-  const url = graphShareUrl(window.location.origin, ids);
+  const url = graphShareUrl(window.location.origin, ids, kindFilter);
   const link = (method: ShareMethod) => createShareLink(url, 'graph', ids.entityId, method);
   warmGraphCard(ids);
   if (nativeShare && typeof navigator.share === 'function') {
@@ -75,16 +80,32 @@ export function graphShareLanding() {
   return landingShare;
 }
 
+/**
+ * The in-app pages with an "Explore graph" link, one per entity template (GEO-3866). Sent as
+ * `graph_explorer_opened.entry_point`, a free string in the analytics registry.
+ */
+export const GRAPH_EXPLORER_ENTRY_POINTS = [
+  'topic_page',
+  'claim_page',
+  'event_page',
+  'news_story_page',
+  'source_page',
+  'post_page',
+  'podcast_show_page',
+  'podcast_episode_page',
+] as const;
+export type GraphExplorerEntryPoint = (typeof GRAPH_EXPLORER_ENTRY_POINTS)[number];
+
 const ENTRY_TTL_MS = 60_000;
-let pendingEntry: { entryPoint: 'topic_page'; at: number } | null = null;
+let pendingEntry: { entryPoint: GraphExplorerEntryPoint; at: number } | null = null;
 
 /** Set by an in-app link into the explorer, in memory so a copied URL never claims it. */
-export function markGraphExplorerEntry(entryPoint: 'topic_page') {
+export function markGraphExplorerEntry(entryPoint: GraphExplorerEntryPoint) {
   pendingEntry = { entryPoint, at: Date.now() };
 }
 
 /** The in-app entry point within the last minute, consumed once. */
-export function takeGraphExplorerEntry(): 'topic_page' | null {
+export function takeGraphExplorerEntry(): GraphExplorerEntryPoint | null {
   const entry = pendingEntry;
   pendingEntry = null;
   return entry && Date.now() - entry.at <= ENTRY_TTL_MS ? entry.entryPoint : null;

@@ -1,4 +1,4 @@
-import { act, cleanup, render } from '@testing-library/react';
+import { act, cleanup, render, screen } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -9,17 +9,16 @@ import type { GraphFilter } from '~/core/graph-explorer/graph-filter';
 
 import { TopicClaimsSummary } from './centre-summary';
 
+const claims = vi.hoisted(() => ({
+  list: [{ id: 'c', name: 'A claim', spaceId: 's', positive: 3, negative: 0, band: 'agreed' }] as unknown[],
+}));
 vi.mock('~/core/graph-explorer/use-graph-explorer', () => ({
   useTopicClaimsSummary: () => ({
     isLoading: false,
     isError: false,
-    data: {
-      claims: [{ id: 'c', name: 'A claim', spaceId: 's', positive: 3, negative: 0, band: 'agreed' }],
-      truncated: false,
-    },
+    data: { claims: claims.list, truncated: false },
   }),
 }));
-vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({ EntityVoteButtons: () => null }));
 vi.mock('~/core/claims/browse/claim-response-summary', () => ({
   CLAIM_RESPONSE_OBJECT_TYPE: 0,
   useClaimResponseSummary: () => ({ hasCounts: false, isLoading: false, positive: 0, negative: 0 }),
@@ -65,6 +64,38 @@ afterEach(() => {
   cleanup();
   vi.useRealTimers();
   vi.unstubAllGlobals();
+});
+
+describe('the band counts', () => {
+  const claim = (id: string, positive: number, negative: number, band: string) => ({
+    id,
+    name: `Claim ${id}`,
+    spaceId: 's',
+    positive,
+    negative,
+    band,
+  });
+  const before = claims.list;
+  afterEach(() => {
+    claims.list = before;
+  });
+
+  it('stand in for the count of claims with 3+ responses', () => {
+    claims.list = [
+      claim('a', 9, 1, 'agreed'),
+      claim('b', 3, 2, 'contested'),
+      claim('c', 2, 1, 'agreed'),
+      claim('d', 1, 0, 'agreed'),
+    ];
+    render(summary('t1'));
+    expect(screen.queryByText(/with 3\+ responses/)).toBeNull();
+    expect(screen.queryByText(/first 2,000 claims/)).toBeNull();
+    const count = (label: string) => screen.getByText(label).closest('li')!.textContent;
+    expect(count('Widely agreed')).toBe('Widely agreed2');
+    expect(count('Contested')).toBe('Contested1');
+    expect(count('Widely rejected')).toBe('Widely rejected0');
+    expect(screen.getByText('Most responses')).toBeTruthy();
+  });
 });
 
 describe('summary_seen', () => {

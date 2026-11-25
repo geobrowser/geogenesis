@@ -50,13 +50,14 @@ function combineTopicConnectionCounts(queries: CountsQueryResult[]) {
  * order it asked in — which is the point, since the order it renders in is derived from these
  * numbers.
  */
-export function useTopicConnectionCounts(topicIds: string[]) {
+/** `spaceId` counts only entities in that space; omitted, a topic counts across the whole graph. */
+export function useTopicConnectionCounts(topicIds: string[], { spaceId }: { spaceId?: string } = {}) {
   const batches = React.useMemo(() => topicCountBatches(topicIds), [topicIds]);
 
   return useQueries({
     queries: batches.map(ids => ({
-      queryKey: topicConnectionCountsQueryKey(ids),
-      queryFn: ({ signal }: { signal: AbortSignal }) => fetchTopicConnectionCountsBatch(ids, signal),
+      queryKey: topicConnectionCountsQueryKey(ids, spaceId),
+      queryFn: ({ signal }: { signal: AbortSignal }) => fetchTopicConnectionCountsBatch(ids, signal, spaceId),
       staleTime: 30_000,
     })),
     combine: combineTopicConnectionCounts,

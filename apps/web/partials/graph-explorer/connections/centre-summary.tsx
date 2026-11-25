@@ -10,14 +10,10 @@ import { useGraphAnalytics } from '~/core/graph-explorer/graph-explorer-analytic
 import type { GraphFilter } from '~/core/graph-explorer/graph-filter';
 import { MAX_TOPIC_CLAIMS, claimsHeadline, summaryPercent } from '~/core/graph-explorer/topic-claims-summary';
 import { useTopicClaimsSummary } from '~/core/graph-explorer/use-graph-explorer';
-import { NavUtils } from '~/core/utils/utils';
 
-import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
-import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
-
-import { ClaimAgreementLine } from '../panel-sections';
+import { GraphClaimPosition } from './graph-claim-position';
 import { BAND_SWATCHES } from './node-card';
 
 /** The topic's claims by agreement in its space, from real responses, stated as sparse as it is. */
@@ -55,9 +51,19 @@ export function TopicClaimsSummary({
         </p>
       ) : (
         <>
-          <p className="text-metadata text-grey-04">
-            {truncated ? `At least ${headline.text}; ${counted}.` : `${headline.text}.`}
-          </p>
+          {/* The band counts below already add up to the claims with 3+ responses, so the count line
+              only stands in for them while no claim has 3 yet. A cut-short count still says so. */}
+          {!headline.bands ? (
+            <p className="text-metadata text-grey-04">
+              {truncated ? `At least ${headline.text}; ${counted}.` : `${headline.text}.`}
+            </p>
+          ) : (
+            truncated && (
+              <p className="text-metadata text-grey-04">
+                Only this topic’s first {MAX_TOPIC_CLAIMS.toLocaleString('en-US')} claims were counted.
+              </p>
+            )
+          )}
           {headline.bands && (
             <ul className="flex flex-col gap-1">
               {(Object.keys(CLAIM_BAND_LABELS) as ClaimBand[]).map(band => (
@@ -89,24 +95,18 @@ export function TopicClaimsSummary({
   );
 }
 
-/** Responding to a claim from the map, in the claim's own space. */
+/**
+ * Responding to a claim from the map, in the claim's own space. The way to the claim's page is the
+ * panel's title, as for every other kind.
+ */
 export function ClaimActions({ claimId, spaceId }: { claimId: string; spaceId: string }) {
-  const analytics = useGraphAnalytics();
   return (
-    <section aria-label="Respond" className="flex flex-col gap-3 rounded-xl bg-grey-01 p-3">
+    // On the panel's white rather than in a grey box, as in the prototype's map panel: the bar's grey
+    // track and the held pill's fill are the only greys in the block.
+    <section aria-label="Respond" className="flex flex-col gap-3">
       <ActionContextProvider value={{ list_id: 'graph_explorer_centre' }}>
-        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-          <ClaimAgreementLine claimId={claimId} spaceId={spaceId} />
-          <EntityVoteButtons entityId={claimId} spaceId={spaceId} responseKind="stance" hideClaimShare />
-        </div>
+        <GraphClaimPosition claimId={claimId} spaceId={spaceId} />
       </ActionContextProvider>
-      <Link
-        href={NavUtils.toEntity(spaceId, claimId)}
-        onClick={() => analytics?.interacted({ interaction: 'open_page', value: 'claim', target_id: claimId })}
-        className="self-start text-metadataMedium text-text underline-offset-2 hover:underline"
-      >
-        Open the claim →
-      </Link>
     </section>
   );
 }

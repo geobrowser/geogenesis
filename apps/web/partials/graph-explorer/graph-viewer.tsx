@@ -4,12 +4,14 @@ import * as React from 'react';
 
 import { useActionContext } from '~/core/action-context-provider';
 import { centreTextInSpace } from '~/core/graph-explorer/centre-text';
-import { nodeClaimSpaceId } from '~/core/graph-explorer/claims-about';
+import { type ClaimAbout, nodeClaimSpaceId } from '~/core/graph-explorer/claims-about';
 import { type GraphNode, hop1AsGraphHop } from '~/core/graph-explorer/fetch-graph-neighbourhood';
 import { type RecentreMethod, useGraphAnalytics } from '~/core/graph-explorer/graph-explorer-analytics';
 import { type GraphFilterOverrides, type GraphScope, resolveGraphFilter } from '~/core/graph-explorer/graph-filter';
 import { shareGraph } from '~/core/graph-explorer/graph-share';
-import { type GraphHistory, goBack, recentre } from '~/core/graph-explorer/history';
+import { type GraphHistory, goBack, jumpBack, recentre } from '~/core/graph-explorer/history';
+import { spokesOfKind } from '~/core/graph-explorer/panel-sections';
+import { GRAPH_PHONE_QUERY } from '~/core/graph-explorer/phone-breakpoint';
 import { DESKTOP_GRAPH_CAPS, type GraphKindFilter, PHONE_GRAPH_CAPS } from '~/core/graph-explorer/select-graph';
 import { SKELETON_SELECTION } from '~/core/graph-explorer/skeleton-graph';
 import { buildSpokes, entitySpaceId } from '~/core/graph-explorer/spokes';
@@ -22,12 +24,13 @@ import { normId } from '~/core/utils/norm-id';
 import { Skeleton } from '~/design-system/skeleton';
 
 import { ClaimActions, TopicClaimsSummary } from './connections/centre-summary';
-import { ConnectionsStage, PHONE_QUERY } from './connections/connections-view';
+import { ConnectionsStage } from './connections/connections-view';
 import { GraphSearch } from './connections/graph-search';
 import { GraphTopBar } from './connections/graph-top-bar';
-import { claimsEmptyMessage, descriptionEmptyMessage, relationshipsEmptyMessage } from './empty-states';
-import { EntityPanel } from './entity-panel';
+import { claimsEmptyMessage, relationshipsEmptyMessage } from './empty-states';
+import { EntityPanel, NO_CLAIMS_ASKED } from './entity-panel';
 import { TopicOverview } from './panel-sections';
+import { PhonePanelSheet } from './phone-panel-sheet';
 
 /**
  * The Connections view: a top bar, the 3D map of the centre's neighbourhood and a panel about the
@@ -52,10 +55,11 @@ export function GraphViewer({
   close?: { href: string; label: string } | null;
 }) {
   const filter = React.useMemo(() => (scope ? resolveGraphFilter(scope, overrides) : null), [scope, overrides]);
-  const [kindFilter, setKindFilter] = React.useState<GraphKindFilter>('all');
+  // A shared link opens on the chip it was shared with.
+  const [kindFilter, setKindFilter] = React.useState<GraphKindFilter>(() => overrides?.chip ?? 'all');
   // Names of entities already seen, for "Back to X" and the trail before a hop is refetched.
   const [names, setNames] = React.useState<Record<string, string>>({});
-  const phone = useMediaQuery(PHONE_QUERY);
+  const phone = useMediaQuery(GRAPH_PHONE_QUERY);
   const analytics = useGraphAnalytics();
 
   const centreId = history.centreId;
@@ -80,10 +84,11 @@ export function GraphViewer({
             onShare: () =>
               shareGraph({ entityId: centreId, topicId: hubId, spaceId: topicSpaceId }, getShareContext(), {
                 nativeShare: phone,
+                kindFilter,
               }),
           }
         : null,
-    [centreId, getShareContext, hubId, phone, topicSpaceId]
+    [centreId, getShareContext, hubId, kindFilter, phone, topicSpaceId]
   );
 
   // Hop 1 once it answers for this centre: the panel, its list and the map read the same data.
@@ -98,6 +103,12 @@ export function GraphViewer({
     () => new Map(hop1?.centre?.id === centreId ? hop1.neighbours.map(({ node }) => [normId(node.id), node]) : []),
     [centreId, hop1]
   );
+  const panelSpokes = React.useMemo(() => spokesOfKind(spokes, hop1Nodes, kindFilter), [spokes, hop1Nodes, kindFilter]);
+  // The panel's "first N of each kind" note counts only the kinds the chip leaves in it.
+  const panelMoreKinds = React.useMemo(() => {
+    const more = hop1?.moreKinds ?? [];
+    return kindFilter === 'all' ? more : more.filter(kind => kind === kindFilter);
+  }, [hop1, kindFilter]);
   // Dated news can come from hop 1 or from the map's second ring.
   const loadedNodes = React.useMemo(
     () => [...hop1Nodes.values(), ...(neighbourhood.selection?.nodes.map(entry => entry.node) ?? [])],
@@ -143,13 +154,28 @@ export function GraphViewer({
     },
     [analytics, history, onNavigate]
   );
+  // A chip that would hide the new centre gives way, as in the design.
+  const giveWayFor = React.useCallback(
+    (kind: GraphNode['kind']) => {
+      if (kindFilter !== 'all' && kind !== kindFilter) setKindFilter('all');
+    },
+    [kindFilter]
+  );
   const selectNode = React.useCallback(
     (node: GraphNode, method: RecentreMethod = 'node') => {
-      // A chip that would hide the new centre gives way, as in the design.
-      if (kindFilter !== 'all' && node.kind !== kindFilter && node.kind !== 'topic') setKindFilter('all');
+      giveWayFor(node.kind);
       goTo(node.id, node.name, method, node.kind);
     },
-    [goTo, kindFilter]
+    [giveWayFor, goTo]
+  );
+  // The topic summary keeps its claim rows under any chip, so opening one gives way like a map tap.
+  // (Its People and Latest news rows, the only other ones, show under Everything alone.)
+  const openClaim = React.useCallback(
+    (id: string, name: string | null, method: RecentreMethod = 'panel') => {
+      giveWayFor('claim');
+      goTo(id, name, method);
+    },
+    [giveWayFor, goTo]
   );
   const pickKind = React.useCallback(
     (next: GraphKindFilter) => {
@@ -172,13 +198,22 @@ export function GraphViewer({
         },
       }
     : null;
-  const trail = [...history.back, centreId].flatMap(id => (names[id] ? [names[id]] : []));
+  // Each step keeps its place in the back stack, so a step whose name isn't known yet can drop out
+  // of the path without the others jumping to the wrong centre.
+  const trail = [...history.back, centreId].flatMap((id, index) => (names[id] ? [{ name: names[id], index }] : []));
+  const jumpTo = (index: number) => {
+    const target = history.back[index];
+    if (!target) return;
+    analytics?.tag('trail', normId(target));
+    onNavigate(jumpBack(history, index));
+  };
   const selection = neighbourhood.selection;
 
   const topBar = (
     <GraphTopBar
       back={back}
-      trail={trail.length ? trail : topicName ? [topicName] : []}
+      trail={trail.length ? trail : topicName ? [{ name: topicName, index: history.back.length }] : []}
+      onStep={jumpTo}
       search={
         <GraphSearch
           nodes={selection?.nodes.slice(1).map(entry => entry.node) ?? []}
@@ -220,16 +255,33 @@ export function GraphViewer({
     stage = <StageNote role="status">This entity isn’t in the knowledge graph.</StageNote>;
   }
 
+  // On a phone the map takes the screen below the top bar and the panel is a sheet over it (GEO-3849).
+  // `graph-phone:` sorts after `md:`, so it undoes the stacked md: layout under 600px only.
   return (
-    <div className="flex h-full min-h-0 flex-col md:h-auto">
+    <div className="flex h-full min-h-0 flex-col md:h-auto graph-phone:h-full">
       {topBar}
-      <div className="flex min-h-0 flex-1 md:flex-none md:flex-col">
-        <div className="relative isolate min-w-0 flex-1 overflow-hidden bg-[#0b0b0c] md:h-[62vh] md:min-h-[400px] md:flex-none">
+      <div className="flex min-h-0 flex-1 md:flex-none md:flex-col graph-phone:flex-1">
+        {/* Tablet: the 76px the two-row top bar gave up (GEO-3849), so the panel still starts where
+            it did and its top still peeks above the fold for scrolling past the map. */}
+        <div
+          data-testid="graph-map"
+          className="relative isolate min-w-0 flex-1 overflow-hidden bg-[#0b0b0c] md:h-[calc(62vh+76px)] md:min-h-[400px] md:flex-none graph-phone:h-auto graph-phone:min-h-0 graph-phone:flex-1"
+        >
           {stage}
+          {phone ? (
+            <PhonePanelSheet
+              centreId={centreId}
+              centreName={hop1?.centre?.id === centreId ? hop1.centre.name : (names[centreId] ?? null)}
+            >
+              {renderPanel()}
+            </PhonePanelSheet>
+          ) : null}
         </div>
-        <aside className="w-[360px] shrink-0 overflow-y-auto border-l border-[#f0f0f0] bg-white p-6 md:w-auto md:overflow-visible md:border-t md:border-l-0 md:p-4">
-          {renderPanel()}
-        </aside>
+        {phone ? null : (
+          <aside className="w-[360px] shrink-0 overflow-y-auto border-l border-[#f0f0f0] bg-white p-6 md:w-auto md:overflow-visible md:border-t md:border-l-0 md:p-4">
+            {renderPanel()}
+          </aside>
+        )}
       </div>
     </div>
   );
@@ -273,6 +325,10 @@ export function GraphViewer({
     const node = rawCentre;
     const claimSpaceId = node.kind === 'claim' ? nodeClaimSpaceId(node, topicSpaceId) : null;
 
+    // The panel follows the chip as the map does: only that kind's group, and claims only under Claims.
+    const chipped = kindFilter !== 'all';
+    const showsClaims = !chipped || kindFilter === 'claim';
+
     let summary: React.ReactNode = null;
     if (claimSpaceId) summary = <ClaimActions claimId={centreId} spaceId={claimSpaceId} />;
     else if (centreId === hubId)
@@ -282,15 +338,16 @@ export function GraphViewer({
             topicId={centreId}
             filter={filter}
             topicSpaceId={topicSpaceId}
-            onOpenClaim={id => goTo(id, null, 'summary')}
+            onOpenClaim={id => openClaim(id, null, 'summary')}
           />
           <TopicOverview
             topicId={centreId}
             filter={filter}
             topicSpaceId={topicSpaceId}
-            selection={selection}
-            nodes={loadedNodes}
-            onOpen={goTo}
+            // Its People and Latest news lists are other kinds: under a chip they stay hidden.
+            selection={chipped ? null : selection}
+            nodes={chipped ? NO_NODES : loadedNodes}
+            onOpen={openClaim}
           />
         </>
       );
@@ -298,31 +355,40 @@ export function GraphViewer({
     return (
       <EntityPanel
         centre={centre}
-        centreSpaceId={centreSpaceId}
+        // A claim's page is in the claim's own space, where its vote is; any other kind's is where
+        // its text was read.
+        pageSpaceId={node.kind === 'claim' ? claimSpaceId : centreSpaceId}
         topicSpaceId={topicSpaceId}
-        spokes={spokes}
+        spokes={panelSpokes}
         nodes={hop1Nodes}
-        claimPages={claimPages}
-        claimsState={{
-          isLoading: claims.isLoading,
-          isError: claims.isError,
-          hasNextPage: claims.hasNextPage,
-          isFetchingNextPage: claims.isFetchingNextPage,
-          fetchNextPage: () => void claims.fetchNextPage(),
-        }}
+        claimPages={showsClaims ? claimPages : NO_CLAIM_PAGES}
+        claimsState={
+          showsClaims
+            ? {
+                isLoading: claims.isLoading,
+                isError: claims.isError,
+                hasNextPage: claims.hasNextPage,
+                isFetchingNextPage: claims.isFetchingNextPage,
+                fetchNextPage: () => void claims.fetchNextPage(),
+              }
+            : NO_CLAIMS_ASKED
+        }
         onOpen={goTo}
-        moreKinds={hop1.moreKinds}
+        moreKinds={panelMoreKinds}
         emptyMessages={{
           relationships: relationshipsEmptyMessage(filter),
-          claims: claimsEmptyMessage(filter, topicName),
-          description: descriptionEmptyMessage(centreSpaceId),
+          claims: showsClaims ? claimsEmptyMessage(filter, topicName) : null,
         }}
         showClaims={rawCentre.kind !== 'claim'}
         summary={summary}
+        summaryFirst={rawCentre.kind === 'claim'}
       />
     );
   }
 }
+
+const NO_NODES: GraphNode[] = [];
+const NO_CLAIM_PAGES: ClaimAbout[][] = [];
 
 function StageNote({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
