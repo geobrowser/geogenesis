@@ -13,6 +13,7 @@ import { assistantSeedAtom, isChatOpenAtom } from '~/core/state/chat-store';
 import { pendingActionsAtom } from '~/core/state/pending-actions';
 
 import type { EntityListSectionModel } from '../models';
+import { TEMPLATE_ACTIONS } from '../template-actions';
 import { RelatedListSection } from './related-list-section';
 
 const auth = vi.hoisted(() => ({ authenticated: false, promptSignIn: vi.fn() }));
@@ -108,7 +109,14 @@ function canEditPageSpace(canEdit: boolean) {
   membership.access.mockReturnValue(Effect.succeed({ canEdit, isEditor: canEdit, isMember: canEdit }));
 }
 
+// These tests cover the ingestion flow itself, so they switch the shipped-off Sources "+" on.
+const SHIPPED_ADD_SOURCE = TEMPLATE_ACTIONS.addSource;
+afterEach(() => {
+  TEMPLATE_ACTIONS.addSource = SHIPPED_ADD_SOURCE;
+});
+
 beforeEach(() => {
+  TEMPLATE_ACTIONS.addSource = true;
   auth.authenticated = false;
   auth.promptSignIn.mockReset();
   resolveSeed.mockReset();
@@ -134,6 +142,15 @@ async function submitLink(value = 'example.com/story') {
   });
 }
 afterEach(cleanup);
+
+describe('Sources section + while switched off', () => {
+  it('draws no Add source button with the shipped flag', () => {
+    TEMPLATE_ACTIONS.addSource = false;
+    render(<RelatedListSection section={{ id: 'sources', title: 'Sources', items: [] }} />);
+    expect(screen.getByRole('heading', { name: 'Sources' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add source' })).toBeNull();
+  });
+});
 
 describe('Sources section +', () => {
   it('is shown signed out, and the press opens sign-in instead of the form', () => {
