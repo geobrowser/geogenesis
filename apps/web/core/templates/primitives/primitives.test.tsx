@@ -595,6 +595,58 @@ describe('ListRanking header control & workspace', () => {
   });
 });
 
+describe('ClaimExplorer one list (GEO-3854)', () => {
+  const claim = (id: string, title: string, isSplit: boolean): ClaimSummaryModel => ({
+    id,
+    title,
+    kind: 'fact',
+    split: { rows: [], isSplit, totalVotes: 5 },
+  });
+  const contested = [claim('s-a', 'Split A', true), claim('s-b', 'Split B', true)];
+  const agreed = [claim('a-a', 'Settled A', false), claim('s-b', 'Split B', false), claim('a-b', 'Settled B', false)];
+  /** The phone rank that leads a title, e.g. `3` for the third row. */
+  const rankOf = (title: string) =>
+    screen.getByText((_, el) => el?.tagName === 'SPAN' && el.textContent === `${el.firstChild?.textContent}${title}`)
+      .firstChild?.textContent;
+
+  it('shows disputed then accepted claims in one list, ranked 1..N, with no Disputed / Accepted toggle', () => {
+    const { container } = render(
+      <EntityActionProvider>
+        <ClaimExplorer contestedClaims={contested} agreedClaims={agreed} />
+      </EntityActionProvider>
+    );
+
+    expect(screen.queryByRole('tablist')).toBeNull();
+    expect(screen.queryByRole('tab')).toBeNull();
+    const text = container.textContent ?? '';
+    const order = ['Split A', 'Split B', 'Settled A', 'Settled B'].map(title => text.indexOf(title));
+    expect(order.every(at => at >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    // A claim in both groups shows once, where it is disputed.
+    expect(text.split('Split B').length - 1).toBe(1);
+    expect(['Split A', 'Split B', 'Settled A', 'Settled B'].map(rankOf)).toEqual(['1', '2', '3', '4']);
+  });
+
+  it('puts an added claim at the top of the one list', () => {
+    const { container } = render(
+      <EntityActionProvider callbacks={{ canOpenAddForm: () => true, onAddClaim: () => new Promise<never>(() => {}) }}>
+        <ClaimExplorer contestedClaims={contested} agreedClaims={agreed} />
+      </EntityActionProvider>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add claim' }));
+    const input = screen.getByPlaceholderText(/Write a clear, testable statement/);
+    fireEvent.change(input, { target: { value: 'Brand new claim' } });
+    fireEvent.submit(input.closest('form') as HTMLFormElement);
+
+    const text = container.textContent ?? '';
+    expect(text.indexOf('Brand new claim')).toBeGreaterThanOrEqual(0);
+    expect(text.indexOf('Brand new claim')).toBeLessThan(text.indexOf('Split A'));
+    expect(rankOf('Brand new claim')).toBe('1');
+    expect(rankOf('Settled B')).toBe('5');
+  });
+});
+
 describe('EntityOverflowMenu trigger', () => {
   it('widens the small "..." tap target to 32px without changing its 28px look (GEO-3824)', () => {
     render(

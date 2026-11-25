@@ -222,8 +222,9 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
   it('renders accepted claim basis and peekable primary sources when inspecting an accepted claim', () => {
     render(<FixtureHarness />);
 
+    // Accepted claims follow the disputed ones in the one list (GEO-3854), past the first page here.
     const claimsSection = screen.getByRole('region', { name: 'Claims' });
-    fireEvent.click(within(claimsSection).getByRole('tab', { name: /Accepted/i }));
+    fireEvent.click(within(claimsSection).getByRole('button', { name: 'Next page' }));
     fireEvent.click(
       within(claimsSection).getByRole('button', { name: 'Most of Gaza’s buildings are damaged or destroyed' })
     );
@@ -263,8 +264,8 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
 
     expect(within(claims).getAllByRole('group', { name: /^Vote on /i })).toHaveLength(10);
     expect(within(claims).getByRole('button', { name: 'Add claim' })).toBeInTheDocument();
-    expect(within(claims).getByRole('tab', { name: /Disputed/i })).toBeInTheDocument();
-    expect(within(claims).getByRole('tab', { name: /Accepted/i })).toBeInTheDocument();
+    // One list, no Disputed / Accepted toggle (GEO-3854).
+    expect(within(claims).queryByRole('tab')).toBeNull();
     expect(within(claims).getAllByText('World affairs').length).toBeGreaterThan(0);
     expect(within(claims).getByText('18.2k votes')).toBeInTheDocument();
     // Rows draw debates and the split twice, once per layout; CSS shows one (GEO-3819).
@@ -1061,7 +1062,7 @@ describe('GEO-3837 phone tidy-ups', () => {
     expect(screen.queryByRole('button', { name: 'Show subtopics' })).toBeNull();
   });
 
-  it('keeps the timeline arrow to desktop, and gives phones a slim spine beside the date and name', () => {
+  it('keeps the timeline arrow to desktop, and puts the desktop circle in the phone margin', () => {
     render(
       <TopicTemplate
         model={{
@@ -1075,12 +1076,24 @@ describe('GEO-3837 phone tidy-ups', () => {
 
     const link = screen.getByRole('link', { name: /Attack on Israel/ });
     expect(link.querySelector('svg')).toHaveClass('hidden', '@[680px]:block');
-    // Phones: a slim spine column on the left, the date and the event stacked beside it.
+    // Phones: the spine column (18px + 12px gap) is pulled into the page margin, so the date and the
+    // event line up with the section headers (GEO-3854).
     const row = link.closest('li')!;
-    expect(row).toHaveClass('grid-cols-[12px_minmax(0,1fr)]', '@[680px]:grid-cols-[118px_28px_minmax(0,1fr)]');
+    expect(row).toHaveClass(
+      '-ml-[30px]',
+      'grid-cols-[18px_minmax(0,1fr)]',
+      'gap-x-3',
+      '@[680px]:ml-0',
+      '@[680px]:grid-cols-[118px_28px_minmax(0,1fr)]'
+    );
     const spine = row.querySelector('[class*="row-span-2"]')!;
     expect(spine).toHaveClass('col-start-1', 'flex');
     expect(spine).not.toHaveClass('hidden');
+    // The desktop circle on every width: 18px, grey-02 outline, 8px ink center.
+    const circle = spine.querySelector('.z-10')!;
+    expect(circle).toHaveClass('size-[18px]', 'border', 'border-grey-02', 'bg-white');
+    expect(circle).not.toHaveClass('size-3', 'border-transparent');
+    expect(circle.firstElementChild).toHaveClass('size-2', 'rounded-full', 'bg-text');
     expect(screen.getByText('Oct 2023')).toHaveClass('col-start-2', 'row-start-1');
   });
 
