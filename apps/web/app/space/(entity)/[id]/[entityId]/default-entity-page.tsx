@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { QuerySeed, type QuerySeedEntry } from '~/core/query-seed';
 import { RouteEditorProvider } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 
@@ -21,6 +22,11 @@ interface Props {
   belowBodySlot?: React.ReactNode;
   /** Hides the collapsible properties sheet (bounty pages render their own facts card). */
   hideProperties?: boolean;
+  /**
+   * React Query data read on the server for this page's template (the Topic sections), already
+   * started by the caller so it runs beside this page's own reads rather than after them.
+   */
+  querySeed?: Promise<QuerySeedEntry[]>;
 }
 
 export default async function DefaultEntityPage({
@@ -33,11 +39,12 @@ export default async function DefaultEntityPage({
   coverSlot,
   belowBodySlot,
   hideProperties,
+  querySeed,
 }: Props) {
   const isEditing = searchParams?.edit === 'true';
-  const props = await fetchEntityPageData(params.id, params.entityId);
+  const [props, seedEntries] = await Promise.all([fetchEntityPageData(params.id, params.entityId), querySeed ?? null]);
 
-  return (
+  const page = (
     <SpaceRedirect
       entityId={props.id}
       spaceId={props.spaceId}
@@ -75,4 +82,6 @@ export default async function DefaultEntityPage({
       </EntityStoreProvider>
     </SpaceRedirect>
   );
+
+  return seedEntries && seedEntries.length > 0 ? <QuerySeed entries={seedEntries}>{page}</QuerySeed> : page;
 }

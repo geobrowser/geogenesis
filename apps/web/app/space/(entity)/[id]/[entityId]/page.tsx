@@ -34,6 +34,7 @@ import {
 import DefaultEntityPage from './default-entity-page';
 import PostEntityPage from './post-entity-page';
 import { ProfileEntityServerContainer } from './profile-entity-server-container';
+import { prefetchTopicTemplateQueries } from './topic-template-prefetch';
 
 interface Props {
   params: Promise<{ id: string; entityId: string }>;
@@ -189,6 +190,23 @@ export default async function EntityTemplateStrategy(props: Props) {
         belowBodySlot={<BountyDetailSections spaceId={params.id} bountyId={params.entityId} />}
         // The facts card covers the bounty's structured properties, in read and edit mode alike.
         hideProperties
+      />
+    );
+  }
+
+  // A Topic's sections (Claims, Debates, Sources) are read here and handed to the client, so they are
+  // in the HTML rather than drawn seconds after hydration. Started now, awaited beside the page's
+  // own reads. Not in edit mode, which draws the raw entity page instead of the template.
+  if (result?.entity && searchParams.edit !== 'true' && entityBrowseViewFromTypes(result.entity.types) === 'topic') {
+    return (
+      <DefaultEntityPage
+        params={params}
+        searchParams={searchParams}
+        querySeed={prefetchTopicTemplateQueries({
+          topicId: params.entityId,
+          spaceId: params.id,
+          topic: result.entity,
+        })}
       />
     );
   }

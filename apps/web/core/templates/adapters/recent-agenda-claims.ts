@@ -1,5 +1,3 @@
-'use client';
-
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { useQuery } from '@tanstack/react-query';
@@ -305,10 +303,13 @@ async function listingsByTarget(
   return targets;
 }
 
+/** Shared with the Topic page's server prefetch. */
+export const RECENT_AGENDA_CLAIMS_QUERY_KEY = ['recent-agenda-claims', AGENDA_PIN_DAYS] as const;
+
 /** The recent agenda claims, read once for every Topic page. */
 export function useRecentAgendaClaims() {
   return useQuery({
-    queryKey: ['recent-agenda-claims', AGENDA_PIN_DAYS],
+    queryKey: RECENT_AGENDA_CLAIMS_QUERY_KEY,
     queryFn: ({ signal }) => fetchRecentAgendaClaims({ signal }),
     staleTime: 60_000,
   });

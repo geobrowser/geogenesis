@@ -1,5 +1,3 @@
-'use client';
-
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { useQuery } from '@tanstack/react-query';
 
@@ -108,6 +106,16 @@ export async function fetchTopicTaggedInSpace({
   return new Set(ids.map(id => ID.uuidToHex(id)));
 }
 
+/** The deduplicated, sorted hex ids the check is keyed and asked by. */
+export function topicTaggedInSpaceIds(entityIds: readonly string[]): string[] {
+  return [...new Set(entityIds.map(id => ID.uuidToHex(id)))].sort();
+}
+
+/** `ids` as {@link topicTaggedInSpaceIds} returns them. Shared with the Topic page's server prefetch. */
+export function topicTaggedInSpaceQueryKey(topicId: string, spaceId: string, ids: readonly string[]) {
+  return ['topic', 'tagged-in-space', ID.uuidToHex(topicId), ID.uuidToHex(spaceId), ids] as const;
+}
+
 /**
  * The feed entities whose Topics relation the space itself published, matching the header counts.
  * Null while loading or after a failure.
@@ -124,9 +132,9 @@ export function useTopicTaggedInSpace({
   /** False holds the check, and reports it loading, until the feed has settled. */
   enabled?: boolean;
 }): { tagged: Set<string> | null; isLoading: boolean } {
-  const ids = React.useMemo(() => [...new Set(entityIds.map(id => ID.uuidToHex(id)))].sort(), [entityIds]);
+  const ids = React.useMemo(() => topicTaggedInSpaceIds(entityIds), [entityIds]);
   const query = useQuery({
-    queryKey: ['topic', 'tagged-in-space', ID.uuidToHex(topicId), ID.uuidToHex(spaceId), ids],
+    queryKey: topicTaggedInSpaceQueryKey(topicId, spaceId, ids),
     queryFn: ({ signal }) => fetchTopicTaggedInSpace({ topicId, spaceId, entityIds: ids, signal }),
     enabled: enabled && ids.length > 0,
     staleTime: 60_000,
