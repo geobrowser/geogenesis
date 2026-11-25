@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 
 import { GRAPH_PAGE_FRAME } from '~/partials/graph-explorer/graph-explorer-shell';
 
-import { GRAPH_PHONE_QUERY } from './phone-breakpoint';
+import { GRAPH_PHONE_QUERY, isPhonePin, pinMarkerScale, pinShift } from './phone-breakpoint';
 
 const WEB = join(__dirname, '..', '..');
 const STYLES = readFileSync(join(WEB, 'styles', 'styles.css'), 'utf8');
@@ -95,5 +95,30 @@ describe('graph explorer phone breakpoint', () => {
       /\b(max|min)-\[\d+(\.\d+)?px\]:/.test(readFileSync(file, 'utf8'))
     );
     expect(offenders).toEqual([]);
+  });
+});
+
+describe('phone pins (GEO-3864)', () => {
+  it('makes a pin of hop 1 on a phone only, never the centre or hop 2', () => {
+    expect(isPhonePin(true, 1, false)).toBe(true);
+    expect(isPhonePin(true, 1, true)).toBe(false);
+    expect(isPhonePin(true, 2, false)).toBe(false);
+    expect(isPhonePin(true, 0, true)).toBe(false);
+    expect(isPhonePin(false, 1, false)).toBe(false);
+  });
+
+  it('scales a marker with depth, raised and bounded', () => {
+    expect(pinMarkerScale(0.6)).toBeCloseTo(0.84);
+    expect(pinMarkerScale(0.6)).toBeGreaterThan(pinMarkerScale(0.4));
+    expect(pinMarkerScale(0.05)).toBe(0.45);
+    expect(pinMarkerScale(3)).toBe(1.5);
+  });
+
+  it('slides a name in from either edge, no further than keeps it over its marker', () => {
+    expect(pinShift(195, 50, 390)).toBe(0);
+    expect(pinShift(30, 50, 390)).toBe(26);
+    expect(pinShift(360, 50, 390)).toBe(-26);
+    expect(pinShift(-100, 50, 390)).toBe(42);
+    expect(pinShift(500, 50, 390)).toBe(-42);
   });
 });

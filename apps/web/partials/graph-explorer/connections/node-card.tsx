@@ -9,6 +9,7 @@ import { type ClaimBand, claimBand } from '~/core/graph-explorer/claim-band';
 import type { GraphNode } from '~/core/graph-explorer/fetch-graph-neighbourhood';
 import { GRAPH_KIND_TYPE_IDS } from '~/core/graph-explorer/graph-kinds';
 import { rowPublisher } from '~/core/graph-explorer/panel-sections';
+import { isPhonePin } from '~/core/graph-explorer/phone-breakpoint';
 import { normId } from '~/core/utils/norm-id';
 
 import { entityImageSrc } from '../entity-avatar';
@@ -117,10 +118,13 @@ function labelClamp(
   return isCentre && phone ? 'line-clamp-4' : lines;
 }
 
-/** Label size: the design's 11px on phone and for far nodes, larger for the centre. */
+/**
+ * Label size: larger for the centre, the design's 11px for far nodes. On a phone every other node
+ * is a pin or a marker, so only the centre is a card there.
+ */
 function labelSize({ isCentre, phone, hop }: Pick<CardProps, 'isCentre' | 'phone' | 'hop'>) {
   if (isCentre) return cx('font-semibold', phone ? 'text-[13px]' : 'text-[14px]');
-  return phone || hop === 2 ? 'text-[11px]' : null;
+  return hop === 2 ? 'text-[11px]' : null;
 }
 
 /** What a node looks like, by kind. Claims read their space-scoped counts (`claimSpaceId`). */
@@ -138,13 +142,19 @@ export function NodeCard({
   );
 }
 
-/** Where a card sits decides its form: far nodes are a marker, hop 1 shrinks to one, the centre is the card. */
+/**
+ * Where a card sits decides its form: far nodes are a marker, hop 1 shrinks to one (on a phone it is
+ * a pin), the centre is the card.
+ */
 function Placed({
   node,
   hop,
   isCentre,
+  phone,
   children,
-}: Pick<CardProps, 'node' | 'hop' | 'isCentre'> & { children: React.ReactNode }) {
+}: Pick<CardProps, 'node' | 'hop' | 'isCentre' | 'phone'> & { children: React.ReactNode }) {
+  if (isPhonePin(phone, hop, isCentre))
+    return <PhonePin marker={<PinMarker node={node} band={null} />} name={node.name} />;
   const marker = <FarMarker node={node} band={null} />;
   if (isFarNode(hop, isCentre)) return marker;
   return isCentre ? children : <ShrinksToMarker marker={marker}>{children}</ShrinksToMarker>;
@@ -173,6 +183,36 @@ function FarMarker({ node, band }: { node: GraphNode; band: ClaimBand | null }) 
   );
 }
 
+/**
+ * A hop-1 node on a phone (GEO-3864): its marker, which the map scales with depth through
+ * `--pin-scale`, over its name at a fixed size, so the name reads however far back the node sits.
+ * `--pin-shift` slides the name in from a stage edge. The map fades a covered name through `--pin-label` and sets `data-covered` on the button, which
+ * then takes taps on the marker only.
+ */
+function PhonePin({ marker, name }: { marker: React.ReactNode; name: string | null }) {
+  return (
+    <span data-phone-pin className="flex w-max max-w-[108px] flex-col items-center gap-1 text-center">
+      <span
+        data-anchor
+        className="flex [scale:var(--pin-scale,1)] items-center justify-center p-1 group-data-[covered]:pointer-events-auto"
+      >
+        {marker}
+      </span>
+      <span
+        data-label
+        className="[translate:var(--pin-shift,0px)_0] rounded-md bg-[rgba(20,20,23,.8)] px-[6px] py-[2px] text-[#f2f2f2] opacity-[var(--pin-label,1)] shadow-[0_0_0_1px_rgba(255,255,255,.1)]"
+      >
+        <span className={cx(LABEL, 'line-clamp-2')}>{name}</span>
+      </span>
+    </span>
+  );
+}
+
+/** A pin's marker: the far marker's shape, without its hover name (the pin shows the name). */
+function PinMarker({ node, band }: { node: GraphNode; band: ClaimBand | null }) {
+  return <span aria-hidden className={cx('block', farMarkerClass(node.kind, band))} />;
+}
+
 /** Out of flow, so showing it never resizes the measured box. */
 function FarName({ name }: { name: string | null }) {
   return (
@@ -188,10 +228,7 @@ function TopicCard({ node, isCentre, phone }: CardProps) {
     return (
       <span
         data-label
-        className={cx(
-          'block rounded-full bg-grey-05 px-[10px] py-1 text-center text-grey-02 shadow-[0_0_0_1px_rgba(255,255,255,.1)]',
-          phone ? 'max-w-[130px]' : 'max-w-[170px]'
-        )}
+        className="block max-w-[170px] rounded-full bg-grey-05 px-[10px] py-1 text-center text-grey-02 shadow-[0_0_0_1px_rgba(255,255,255,.1)]"
       >
         <span className={cx(LABEL, 'line-clamp-2 text-[11px]')}>{node.name}</span>
       </span>
@@ -239,9 +276,20 @@ function EntityPhotoCard({
   src,
   onError,
 }: CardProps & { src: string; onError: () => void }) {
+  if (isPhonePin(phone, hop, isCentre))
+    return (
+      <PhonePin
+        marker={
+          <span className="block h-7 w-7 overflow-hidden rounded-full bg-[#333] shadow-[0_0_0_1px_rgba(255,255,255,.3)]">
+            <img src={src} alt="" draggable={false} className="h-full w-full object-cover" onError={onError} />
+          </span>
+        }
+        name={node.name}
+      />
+    );
   const far = isFarNode(hop, isCentre);
-  const size = isCentre ? (phone ? 64 : 84) : far ? 30 : phone ? 40 : 52;
-  const width = isCentre ? (phone ? 'w-[110px]' : 'w-[150px]') : far ? null : phone ? 'w-[84px]' : 'w-[112px]';
+  const size = isCentre ? (phone ? 64 : 84) : far ? 30 : 52;
+  const width = isCentre ? (phone ? 'w-[110px]' : 'w-[150px]') : far ? null : 'w-[112px]';
   return (
     <span className={cx('relative flex flex-col items-center gap-1 text-center', width)}>
       <span
@@ -294,7 +342,7 @@ const ITEM_STYLES: Record<string, string> = {
 
 /** Card width and padding for items and claims, by place and screen. */
 function cardBox({ isCentre, phone }: Pick<CardProps, 'isCentre' | 'phone'>, desktop: [string, string]) {
-  if (phone) return isCentre ? 'w-[170px] p-2' : 'w-[120px] p-2';
+  if (phone) return 'w-[170px] p-2';
   return cx('px-3 py-[10px]', isCentre ? desktop[0] : desktop[1]);
 }
 
@@ -312,7 +360,7 @@ function sourceBox({ isCentre, phone }: Pick<CardProps, 'isCentre' | 'phone'>) {
  * claim's, with more space between the eyebrow and the title.
  */
 function itemBox({ isCentre, phone }: Pick<CardProps, 'isCentre' | 'phone'>) {
-  if (phone) return cx('gap-[6px] rounded-xl', isCentre ? 'w-[176px] p-[14px]' : 'w-[128px] px-3 py-[10px]');
+  if (phone) return 'gap-[6px] rounded-xl w-[176px] p-[14px]';
   return cx('gap-[10px] rounded-xl', isCentre ? 'w-[240px] px-5 py-[18px]' : 'w-[184px] px-4 py-[14px]');
 }
 
@@ -370,6 +418,12 @@ function ClaimCard({ node, hop, isCentre, phone, spaceId }: CardProps & { spaceI
     </span>
   );
   if (isFarNode(hop, isCentre)) return marker;
+  if (isPhonePin(phone, hop, isCentre))
+    return (
+      <span data-band={state} className="contents">
+        <PhonePin marker={<PinMarker node={node} band={band} />} name={node.name} />
+      </span>
+    );
   const card = (
     <span
       data-band={state}

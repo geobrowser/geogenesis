@@ -162,11 +162,11 @@ function runFrames(until: number) {
   });
 }
 
-function Canvas({ onSelect = vi.fn() }: { onSelect?: (node: GraphNode) => void }) {
+function Canvas({ onSelect = vi.fn(), phone = false }: { onSelect?: (node: GraphNode) => void; phone?: boolean }) {
   return (
     <ConnectionsCanvas
       selection={selection}
-      phone={false}
+      phone={phone}
       onSelect={onSelect}
       renderNode={entry => entry.node.name}
       labelFor={() => 'label'}
@@ -315,6 +315,33 @@ describe('ConnectionsCanvas', () => {
 
     zoom('Zoom in', 8);
     expect(isaac().dataset.far).toBeUndefined();
+  });
+
+  it('draws a hop-1 node on a phone as a pin: full size, its marker scaled by depth, never far', () => {
+    motion.reduce = true;
+    render(<Canvas phone />);
+    runFrames(100);
+    const isaac = screen.getByRole('button', { name: 'Isaac Herzog' });
+    const centreButton = screen.getByRole('button', { name: 'Centre' });
+    const marker = () => Number(isaac.style.getPropertyValue('--pin-scale'));
+    expect(isaac.style.transform).toMatch(/scale\(1\.000\)$/);
+    expect(isaac.style.getPropertyValue('--pin-label')).toBe('1.000');
+    const before = marker();
+    for (let i = 0; i < 8; i++) {
+      fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }));
+      runFrames(now + 100);
+    }
+    expect(isaac.dataset.far).toBeUndefined();
+    expect(isaac.style.transform).toMatch(/scale\(1\.000\)$/);
+    expect(marker()).toBeLessThan(before);
+    expect(centreButton.style.getPropertyValue('--pin-scale')).toBe('');
+  });
+
+  it('keeps desktop cards free of pin styles', () => {
+    motion.reduce = true;
+    render(<Canvas />);
+    runFrames(100);
+    expect(screen.getByRole('button', { name: 'Isaac Herzog' }).style.getPropertyValue('--pin-scale')).toBe('');
   });
 
   it('clears a `data-far` its button carries from before, once the card is drawn readable', () => {

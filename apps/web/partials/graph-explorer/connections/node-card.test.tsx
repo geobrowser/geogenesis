@@ -201,15 +201,13 @@ describe('NodeCard names', () => {
     }
   );
 
-  it.each<[GraphKind, string]>([
-    ['ent', 'line-clamp-2'],
-    ['topic', 'line-clamp-2'],
-    ['story', 'line-clamp-3'],
-    ['claim', 'line-clamp-2'],
-  ])('still cuts the %s name of a card around the centre on a phone', (kind, clamp) => {
-    render(<NodeCard node={named(kind)} hop={1} isCentre={false} phone claimSpaceId="space" />);
-    expect(clamps()).toEqual([clamp]);
-  });
+  it.each<GraphKind>(['ent', 'topic', 'story', 'claim'])(
+    'cuts the %s name of a pin around the centre on a phone to two lines',
+    kind => {
+      render(<NodeCard node={named(kind)} hop={1} isCentre={false} phone claimSpaceId="space" />);
+      expect(clamps()).toEqual(['line-clamp-2']);
+    }
+  );
 
   it.each<[GraphKind, string]>([
     ['ent', 'line-clamp-2'],
@@ -256,7 +254,6 @@ describe('entities without a picture', () => {
   it.each([
     [false, false, 'w-[184px] px-4 py-[14px]', 'gap-[10px]'],
     [false, true, 'w-[240px] px-5 py-[18px]', 'gap-[10px]'],
-    [true, false, 'w-[128px] px-3 py-[10px]', 'gap-[6px]'],
     [true, true, 'w-[176px] p-[14px]', 'gap-[6px]'],
   ] as const)(
     "sizes a name card in the prototype's Geo geometry (phone %s, centre %s)",
@@ -330,5 +327,40 @@ describe('entities without a picture', () => {
     fireEvent.error(container.querySelector('img')!);
     expect(container.querySelector('img')).toBeNull();
     expect(container.querySelector('[data-far-marker]')).not.toBeNull();
+  });
+});
+
+describe('NodeCard on a phone (GEO-3864)', () => {
+  const phoneCard = (entry: GraphNode, hop: 0 | 1 | 2, isCentre = hop === 0) =>
+    render(<NodeCard node={entry} hop={hop} isCentre={isCentre} phone claimSpaceId={'s'.repeat(32)} />).container;
+
+  it('draws every hop-1 kind as a pin: a marker over its whole name, one label at 12px', () => {
+    for (const kind of ['claim', 'topic', 'story', 'event', 'case', 'src', 'ent', 'other'] as const) {
+      const container = phoneCard(node(kind), 1);
+      const pin = container.querySelector('[data-phone-pin]');
+      expect(pin, kind).not.toBeNull();
+      expect(pin!.querySelector('[data-anchor]')!.className).toContain('[scale:var(--pin-scale,1)]');
+      const labels = container.querySelectorAll('[data-label]');
+      expect(labels).toHaveLength(1);
+      expect(labels[0].textContent).toBe(`A ${kind}`);
+      expect(labels[0].querySelector('.text-\\[12px\\]')).not.toBeNull();
+      cleanup();
+    }
+  });
+
+  it("colors a claim pin's marker by its band and shows an entity's photo as its marker", () => {
+    const claim = phoneCard(node('claim'), 1);
+    expect(claim.querySelector('[data-band="agreed"] [data-phone-pin]')).not.toBeNull();
+    cleanup();
+    const person = phoneCard(node('ent', { image: 'ipfs://a' }), 1);
+    expect(person.querySelector('[data-phone-pin] [data-anchor] img')).not.toBeNull();
+  });
+
+  it('keeps the centre a card and hop 2 a marker', () => {
+    expect(phoneCard(node('claim'), 0).querySelector('[data-phone-pin]')).toBeNull();
+    cleanup();
+    const far = phoneCard(node('claim'), 2);
+    expect(far.querySelector('[data-phone-pin]')).toBeNull();
+    expect(far.querySelector('[data-far-marker]')).not.toBeNull();
   });
 });

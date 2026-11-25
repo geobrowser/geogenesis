@@ -19,6 +19,7 @@ import {
   simulateLayout,
   starfield,
 } from '~/core/graph-explorer/layout-3d';
+import { isPhonePin, pinMarkerScale, pinShift } from '~/core/graph-explorer/phone-breakpoint';
 import type { GraphSelection, SelectedNode } from '~/core/graph-explorer/select-graph';
 import { INITIAL_VIEW, isSkeletonNode, isSkeletonSelection } from '~/core/graph-explorer/skeleton-graph';
 
@@ -50,6 +51,8 @@ type NodeView = {
   entry: SelectedNode;
   /** Opacity factor while a nearer card covers its label, eased frame to frame. */
   dim: number;
+  /** A phone pin's name alone fades when covered (its marker stays); eased like `dim`. */
+  labelDim: number;
 };
 
 type DrawnLink = { a: string; b: string; hop: 1 | 2 | 3; edge: GraphEdge };
@@ -233,6 +236,7 @@ export function ConnectionsCanvas({
           died: 0,
           entry,
           dim: 1,
+          labelDim: 1,
         });
       }
     }
@@ -397,6 +401,11 @@ export function ConnectionsCanvas({
         isCentre: boolean;
         /** Shown as its marker; `data-far` on its button is the only copy kept across frames. */
         far: boolean;
+        /** A phone pin: drawn at scale 1, its marker scaled by `markerScale` (GEO-3864). */
+        pin: boolean;
+        markerScale: number;
+        /** A pin's name slid in from a stage edge, px; its rect below moves with it. */
+        shift: number;
       }> = [];
       for (const node of state.views.values()) {
         const element = elements.current.get(node.id);
@@ -404,12 +413,14 @@ export function ConnectionsCanvas({
         if (!element || !point) continue;
         const isCentre = node.id === state.centreId;
         const fog = Math.max(0.28, Math.min(1, 1 - (point.depth + 150) / 1100));
-        const scale = nodeScale(isCentre, node.hop, point.scale, phone);
+        // A pin's name keeps its size at any depth, so it never swaps to a marker.
+        const pin = isPhonePin(phone, node.hop, isCentre);
+        const scale = pin ? 1 : nodeScale(isCentre, node.hop, point.scale, phone);
         // Hop 2 is always a marker; a hop-1 card turns into one while drawn too small to read.
         // Read from the button, not the view: a node selected again while still fading out keeps
         // its button (and its `data-far`) but gets a fresh view.
         const wasFar = element.dataset.far !== undefined;
-        const far = !isCentre && node.hop === 1 && tooSmallToRead(scale, wasFar, phone);
+        const far = !pin && !isCentre && node.hop === 1 && tooSmallToRead(scale, wasFar, phone);
         if (far !== wasFar) {
           if (far) element.dataset.far = '';
           else delete element.dataset.far;
@@ -423,37 +434,70 @@ export function ConnectionsCanvas({
         }
         const box = measure(node.id, element);
         // Every card stays on its projected path; depth order and fading, not a push, keep the centre clear.
-        drawn.push({ node, element, point, box, scale, opacity, isCentre, far });
+        drawn.push({
+          node,
+          element,
+          point,
+          box,
+          scale,
+          opacity,
+          isCentre,
+          far,
+          pin,
+          markerScale: pin ? pinMarkerScale(point.scale) : 1,
+          shift: pin ? pinShift(point.x, box.width / 2, state.width) : 0,
+        });
       }
 
       // A labelled card a nearer one touches fades, so no two labels overlap; far markers carry no label.
       const labelled = drawn.filter(entry => !entry.isCentre && entry.node.alive && entry.node.hop < 2 && !entry.far);
+      // A pin's label is its name: the part below its marker, which ends at twice the anchor.
+      const labelRect = (entry: (typeof drawn)[number]) => {
+        const rect = rectAt(entry.point.x + entry.shift, entry.point.y, entry.box, entry.scale);
+        return entry.pin ? { ...rect, top: entry.point.y + entry.box.anchor } : rect;
+      };
       const hidden = coveredLabels(
         labelled.map(entry => ({
-          rect: rectAt(entry.point.x, entry.point.y, entry.box, entry.scale),
+          rect: labelRect(entry),
           depth: entry.point.depth,
           keep: entry.node.id === hover || neighbours.has(entry.node.id),
-          shown: entry.node.dim > 0.5,
+          shown: (entry.pin ? entry.node.labelDim : entry.node.dim) > 0.5,
         }))
       );
       const covered = new Set(labelled.filter((_, i) => hidden[i]).map(entry => entry.node));
+      const ease = (from: number, to: number) => {
+        if (Math.abs(to - from) > 0.01) moving = true;
+        return from + (to - from) * (reduceMotion ? 1 : 0.2);
+      };
       for (const entry of drawn) {
-        let target = covered.has(entry.node) ? COVERED_DIM : 1;
+        let isCovered = covered.has(entry.node);
+        let target = isCovered && !entry.pin ? COVERED_DIM : 1;
         // The centre draws over every card but the hovered one, so any other card crossing it fades.
-        if (centreRect && !entry.isCentre && entry.node.id !== hover)
-          target = Math.min(
-            target,
-            centreCrossDim(rectAt(entry.point.x, entry.point.y, entry.box, entry.scale), centreRect)
-          );
-        if (Math.abs(target - entry.node.dim) > 0.01) moving = true;
-        entry.node.dim += (target - entry.node.dim) * (reduceMotion ? 1 : 0.2);
+        if (centreRect && !entry.isCentre && entry.node.id !== hover) {
+          const rect = rectAt(entry.point.x, entry.point.y, entry.box, entry.scale);
+          target = Math.min(target, centreCrossDim(rect, centreRect));
+          // A pin's name drawn half under the centre doesn't read, so it goes as soon as the two touch.
+          if (entry.pin && overlapShare(labelRect(entry), centreRect) > 0) isCovered = true;
+        }
+        entry.node.dim = ease(entry.node.dim, target);
+        if (!entry.pin) continue;
+        entry.node.labelDim = ease(entry.node.labelDim, isCovered ? 0 : 1);
+        if (isCovered !== (entry.element.dataset.covered !== undefined)) {
+          if (isCovered) entry.element.dataset.covered = '';
+          else delete entry.element.dataset.covered;
+        }
       }
 
-      for (const { node, element, point, box, scale, opacity, isCentre } of drawn) {
+      for (const { node, element, point, box, scale, opacity, isCentre, pin, markerScale, shift } of drawn) {
         const anchor = box.anchor;
         element.style.transformOrigin = `50% ${anchor}px`;
         element.style.transform = `translate3d(${point.x.toFixed(1)}px,${point.y.toFixed(1)}px,0) translate(-50%,-${anchor}px) scale(${scale.toFixed(3)})`;
         element.style.opacity = (opacity * node.dim).toFixed(3);
+        if (pin) {
+          element.style.setProperty('--pin-scale', markerScale.toFixed(3));
+          element.style.setProperty('--pin-label', node.labelDim.toFixed(3));
+          element.style.setProperty('--pin-shift', `${shift.toFixed(1)}px`);
+        }
         element.style.zIndex = String(
           node.id === hover ? HOVER_ORDER : depthOrder(point.depth, isCentre, neighbours.has(node.id))
         );
@@ -724,7 +768,8 @@ export function ConnectionsCanvas({
               tabIndex={gone ? -1 : 0}
               className={cx(
                 'group absolute top-0 left-0 opacity-0 will-change-transform focus-visible:outline-2 focus-visible:outline-white',
-                gone && 'pointer-events-none',
+                // A covered pin's faded name lets taps through to what it covers; its marker still takes them.
+                gone ? 'pointer-events-none' : 'data-[covered]:pointer-events-none',
                 // The centre already wears a white ring (CENTRE_RING), so its focus ring sits clear of it.
                 isCentre
                   ? 'cursor-default focus-visible:outline-offset-[9px]'
