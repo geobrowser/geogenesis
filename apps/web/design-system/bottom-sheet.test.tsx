@@ -34,10 +34,12 @@ describe('BottomSheet', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
-  it('sits above every other layer', () => {
-    const { bottomSheet, bottomSheetBackdrop, ...rest } = Z_LAYERS;
+  // Except the save-votes prompt, which a vote inside a sheet opens on top of it (GEO-3849).
+  it('sits above every other layer but the save-votes prompt', () => {
+    const { bottomSheet, bottomSheetBackdrop, saveVotesDialog, ...rest } = Z_LAYERS;
     expect(bottomSheet).toBeGreaterThan(bottomSheetBackdrop);
     expect(bottomSheetBackdrop).toBeGreaterThan(Math.max(...Object.values(rest)));
+    expect(saveVotesDialog).toBeGreaterThan(bottomSheet);
   });
 
   // GEO-3463: the debates panel's Filters sheet opens inside the panel's own modal sheet.

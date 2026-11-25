@@ -15,18 +15,13 @@ import { beginPrivyAuth, cancelPrivyAuth } from '~/core/privy-auth-events';
 import { captureSaveVotesImpression, saveVotesSignInProperties } from '~/core/save-votes-analytics';
 import {
   SAVE_VOTES_FINE_PRINT,
+  SAVE_VOTES_HEADING,
   SAVE_VOTES_RESEND_LABEL,
-  saveVotesHeading,
+  SAVE_VOTES_SUBTEXT,
   saveVotesSubmitLabel,
-  saveVotesSubtext,
 } from '~/core/save-votes-copy';
 import { isChatOpenAtom } from '~/core/state/chat-store';
-import {
-  type LocalVote,
-  recordSavePromptDismissed,
-  recordSavePromptShown,
-  useLocalVotes,
-} from '~/core/state/local-votes';
+import { type LocalVote, recordSavePromptShown, useLocalVotes } from '~/core/state/local-votes';
 import {
   type SaveVotesPromptReason,
   closeSaveVotesPrompt,
@@ -56,7 +51,8 @@ const SAVE_VOTES_LABELS: SignInCardLabels = {
 
 /**
  * Asks that open on their own count toward when the sheet asks again; a press on "Save" does not. The
- * return-visit ask counts too, or closing it and voting once more would ask again straight away.
+ * return-visit ask counts too, or one that stepped aside (all its votes taken back, Privy's dialog
+ * taking over) would ask again at the very next vote.
  */
 const AUTOMATIC_REASONS: ReadonlySet<SaveVotesPromptReason> = new Set([
   'threshold',
@@ -78,6 +74,11 @@ const AUTOMATIC_REASONS: ReadonlySet<SaveVotesPromptReason> = new Set([
  * (GEO-3400): the visitor asked for it, so it comes forward rather than waiting in the corner. An
  * email's vote link (GEO-3374), the first vote (GEO-3572) and the follow-up at five votes open it centred too;
  * see `opensSaveVotesCentered`.
+ *
+ * It can't be dismissed (GEO-3846): no close button, and neither Escape nor a press beside it closes
+ * it. A lobby guest's "Join the discussion" is exempt for now and closes as before. It goes once the
+ * visitor signs in, once every vote is taken back, or while Privy's own dialog
+ * takes over the sign-in.
  */
 export function SaveVotesSheet() {
   const { ready, authenticated, isModalOpen } = usePrivy();
@@ -182,15 +183,27 @@ export function SaveVotesSheet() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, visible, reason]);
 
+  /**
+   * The code step gave up on a sign-in it can't finish (Privy's fallback failed). The sheet stays, as
+   * it can't be dismissed, and goes back to the email step to try again. An email sign-in is
+   * withdrawn; a Google redirect cannot be aborted, and its save attempt must survive.
+   */
+  const giveUp = React.useCallback(() => {
+    if (!isGoogleSignInStarting()) cancelPrivyAuth();
+    setAttempt(null);
+  }, []);
+
+  /**
+   * Lobbies are exempt (Preston, GEO-3846): a lobby guest's "Join the discussion" can still be closed.
+   * Withdraw an email sign-in, including one left mid-edit; a Google redirect cannot be aborted, and
+   * its save attempt must survive closing. The votes stay on the device.
+   */
   const close = React.useCallback(() => {
-    // Withdraw an email sign-in, including one left mid-edit. A Google redirect cannot be aborted;
-    // its new save attempt must survive closing even when an email was started before it.
     if (midSignIn && !isGoogleSignInStarting()) cancelPrivyAuth();
-    // Not now, not never: the votes stay on the device and the pills still offer "Save".
-    recordSavePromptDismissed();
     setAttempt(null);
     closeSaveVotesPrompt();
   }, [midSignIn]);
+  const dismissible = Boolean(lobbyName);
 
   /** Privy never loaded, so no code went out: back to the address, to try again. */
   const [unavailable, setUnavailable] = React.useState(false);
@@ -235,17 +248,16 @@ export function SaveVotesSheet() {
   // closing that overlay does not mail a second code (the email capture learned this first).
   if (overlayOpen && codeEmail === null) return null;
 
-  const returnVisit = reason === 'return_visit';
-
-  const label = lobbyName ? 'Join the discussion' : 'Save your votes';
+  const label = lobbyName ? 'Join the discussion' : SAVE_VOTES_HEADING;
   const compact = !centered;
   const content = (
     <SignInCard
       compact={compact}
       codeEmail={codeEmail}
       onChangeEmail={changeEmail}
-      onClose={close}
-      closeLabel="Not now"
+      onGiveUp={giveUp}
+      onClose={dismissible ? close : undefined}
+      closeLabel={dismissible ? 'Not now' : undefined}
       labels={SAVE_VOTES_LABELS}
       intent={logIn ? 'login' : 'signup'}
       header={
@@ -263,8 +275,8 @@ export function SaveVotesSheet() {
             </>
           ) : (
             <>
-              <p className={HEADING_CLASS}>{saveVotesHeading(count, returnVisit, logIn)}</p>
-              <p className={SUBTEXT_CLASS}>{saveVotesSubtext(count, logIn)}</p>
+              <p className={HEADING_CLASS}>{SAVE_VOTES_HEADING}</p>
+              <p className={SUBTEXT_CLASS}>{SAVE_VOTES_SUBTEXT}</p>
             </>
           )}
           <VoteChips votes={votes} rows={centered ? 2 : 1} />
@@ -300,7 +312,7 @@ export function SaveVotesSheet() {
       <CenteredSignInDialog
         title={label}
         hidden={overlayOpen}
-        onClose={close}
+        onClose={dismissible ? close : undefined}
         restoreFocus={() => !isModalOpenRef.current}
       >
         {content}
@@ -314,7 +326,7 @@ export function SaveVotesSheet() {
       role="region"
       aria-label={label}
       onKeyDown={event => {
-        if (event.key === 'Escape') close();
+        if (dismissible && event.key === 'Escape') close();
       }}
       className={CORNER_CARD_CLASS}
     >
@@ -329,8 +341,7 @@ function chipLabel(vote: LocalVote) {
 }
 
 /**
- * The visitor's latest votes, two to a row, then how many more: a reminder of what closing this
- * leaves behind. One row in the corner card; the centred dialog has room for a second. The "+N" closes
+ * The visitor's latest votes, two to a row, then how many more: the votes that don't count yet. One row in the corner card; the centred dialog has room for a second. The "+N" closes
  * the last row rather than wrapping onto a line of its own, so the chips in a row shrink to fit.
  */
 function VoteChips({ votes, rows }: { votes: LocalVote[]; rows: 1 | 2 }) {

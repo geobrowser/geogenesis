@@ -23,7 +23,7 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
-import { GraphExplorerShell } from './graph-explorer-shell';
+import { GRAPH_PAGE_FRAME, GraphExplorerShell } from './graph-explorer-shell';
 import { GraphViewer } from './graph-viewer';
 
 /**
@@ -50,7 +50,7 @@ export function GraphExplorerPage({ entityId: routeEntityId }: { entityId: strin
   if (topicId === null) return <NotAvailable />;
   if (!hydrated) return <GraphExplorerShell />;
   return (
-    <div className="flex h-[100dvh] flex-col overflow-hidden bg-white md:h-auto md:min-h-[100dvh] md:overflow-visible">
+    <div className={GRAPH_PAGE_FRAME}>
       <TopicGraph
         entityId={entityId}
         topicId={topicId}

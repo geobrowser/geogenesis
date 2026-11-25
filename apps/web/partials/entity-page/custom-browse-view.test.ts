@@ -1,9 +1,11 @@
-import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { describe, expect, it } from 'vitest';
 
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
-import { TOPIC_TYPE_ID } from '~/core/constants';
+import { NEWS_STORY_TYPE_ID, TOPIC_TYPE_ID } from '~/core/constants';
+import { ENTITY_TEMPLATE_REGISTRY } from '~/core/templates/registry';
+import { OFFICIAL_DOCUMENT_TYPE_ID } from '~/core/topics/ontology';
 
 import { customBrowseView, needsSpaceForView } from './custom-browse-view';
 
@@ -107,17 +109,40 @@ describe('customBrowseView', () => {
     expect(view({ entity: { types: [PERSON, CLAIM_TYPE] } })).toBe('claim');
   });
 
-  it('keeps the claim surface while editing', () => {
-    expect(view({ entity: { types: [CLAIM_TYPE] }, isEditing: true })).toBe('claim');
+  /**
+   * GEO-3819: editing a templated entity opens the standard entity editor, Claim and Topic
+   * included, and leaving edit mode gives the template back. Every template in the registry is
+   * covered, with and without the v2 flag, so a new template cannot opt back into a custom editor
+   * without this failing.
+   */
+  it('opens the generic editor for a claim while editing', () => {
+    expect(view({ entity: { types: [CLAIM_TYPE] }, isEditing: true })).toBe('generic');
+    expect(view({ entity: { types: [CLAIM_TYPE] }, isEditing: true, enableV2Templates: true })).toBe('generic');
+  });
+
+  it('opens the generic editor for a topic while editing', () => {
+    expect(view({ entity: { types: [TOPIC_TYPE] }, isEditing: true })).toBe('generic');
+    expect(view({ entity: { types: [TOPIC_TYPE] }, isEditing: true, enableV2Templates: true })).toBe('generic');
   });
 
   it('falls through to the generic page for other custom views while editing', () => {
     expect(view({ isEditing: true })).toBe('generic');
   });
 
-  it('keeps the topic view while editing so authored tabs remain manageable', () => {
-    expect(view({ entity: { types: [TOPIC_TYPE] }, isEditing: true })).toBe('topic');
-  });
+  describe.each(ENTITY_TEMPLATE_REGISTRY.map(entry => [entry.id, entry.typeIds[0]] as const))(
+    'the %s template',
+    (templateId, typeId) => {
+      const entity = { types: [{ id: typeId }] };
+
+      it('renders the template when not editing', () => {
+        expect(view({ entity, enableV2Templates: true, isEditing: false })).toBe(templateId);
+      });
+
+      it('renders the generic editor while editing', () => {
+        expect(view({ entity, enableV2Templates: true, isEditing: true })).toBe('generic');
+      });
+    }
+  );
 
   it('draws nothing until the entity itself is known', () => {
     expect(view({ entity: null, isLoadingEntity: true })).toBe('pending');
@@ -127,6 +152,31 @@ describe('customBrowseView', () => {
     const dashed = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 
     expect(view({ entityId: dashed })).toBe('person');
+  });
+
+  it('keeps v2 templates disabled unless enableV2Templates is true', () => {
+    expect(view({ entity: { types: [{ id: NEWS_STORY_TYPE_ID }] } })).toBe('generic');
+    expect(view({ entity: { types: [{ id: OFFICIAL_DOCUMENT_TYPE_ID }] } })).toBe('generic');
+
+    expect(view({ entity: { types: [{ id: NEWS_STORY_TYPE_ID }] }, enableV2Templates: true })).toBe('news-story');
+    expect(view({ entity: { types: [{ id: OFFICIAL_DOCUMENT_TYPE_ID }] }, enableV2Templates: true })).toBe('source');
+  });
+
+  // GEO-3819: News events are all typed Claim too, and open as events once v2 is on.
+  it('opens an entity typed Claim and News event as an event with v2 on', () => {
+    const entity = { types: [CLAIM_TYPE, { id: ContentIds.NEWS_EVENT_TYPE }] };
+
+    expect(view({ entity, enableV2Templates: true })).toBe('event');
+    expect(view({ entity })).toBe('claim');
+    expect(
+      needsSpaceForView({ entity: { types: [...entity.types, PERSON] }, isEditing: false, enableV2Templates: true })
+    ).toBe(false);
+  });
+
+  it('falls back to generic while editing a v2 template', () => {
+    expect(view({ entity: { types: [{ id: NEWS_STORY_TYPE_ID }] }, enableV2Templates: true, isEditing: true })).toBe(
+      'generic'
+    );
   });
 });
 

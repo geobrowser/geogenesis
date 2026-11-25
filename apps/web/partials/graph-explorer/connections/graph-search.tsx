@@ -3,9 +3,12 @@
 import * as React from 'react';
 
 import cx from 'classnames';
+import { flushSync } from 'react-dom';
 
 import type { GraphNode } from '~/core/graph-explorer/fetch-graph-neighbourhood';
 import { GRAPH_KIND_LABELS } from '~/core/graph-explorer/graph-kinds';
+
+import { Search } from '~/design-system/icons/search';
 
 import { nodeTypeLabel } from './node-card';
 
@@ -25,7 +28,10 @@ export function searchNodes(nodes: readonly GraphNode[], query: string): GraphNo
     .map(({ node }) => node);
 }
 
-/** Finds within the map on screen; picking a result re-centres on it. */
+/**
+ * Finds within the map on screen; picking a result re-centres on it. On a phone the field folds into
+ * an icon beside Share, and opens over the path while it's in use.
+ */
 export function GraphSearch({
   nodes,
   onPick,
@@ -40,6 +46,10 @@ export function GraphSearch({
   const typed = React.useRef(false);
   const [open, setOpen] = React.useState(false);
   const [active, setActive] = React.useState(0);
+  // Phone only: the field is folded into its icon until pressed (on a desktop the icon never shows).
+  const [unfolded, setUnfolded] = React.useState(false);
+  const inputRef = React.useRef<HTMLInputElement>(null);
+  const iconRef = React.useRef<HTMLButtonElement>(null);
   const results = React.useMemo(() => searchNodes(nodes, query), [nodes, query]);
   const listId = React.useId();
 
@@ -48,16 +58,48 @@ export function GraphSearch({
     typed.current = false;
   };
 
+  // Folding hides the focused field, so focus goes back to the icon rather than dropping to the
+  // page. On a desktop the icon is never shown, focus() does nothing and the field keeps focus.
+  const fold = () => {
+    flushSync(() => setUnfolded(false));
+    iconRef.current?.focus();
+  };
+
   const pick = (node: GraphNode) => {
     report();
     setQuery('');
     setOpen(false);
+    fold();
     onPick(node);
   };
 
   return (
-    <div className="relative w-[260px] shrink-0 lg:order-5 lg:w-auto lg:flex-[1_1_100%]">
+    <div
+      data-search-open={unfolded || undefined}
+      // `!` because the tablet's `lg:` rules come later in the stylesheet and would win on a phone.
+      className={cx(
+        'relative w-[260px] shrink-0 md:order-none! lg:order-5 lg:w-auto lg:flex-[1_1_100%]',
+        unfolded ? 'md:min-w-0 md:flex-[1_1_0%]!' : 'md:flex-none!'
+      )}
+    >
+      {!unfolded && (
+        <button
+          ref={iconRef}
+          type="button"
+          aria-label="Search the map"
+          title="Search the map"
+          onClick={() => {
+            // Focus inside the press, so a phone raises its keyboard.
+            flushSync(() => setUnfolded(true));
+            inputRef.current?.focus();
+          }}
+          className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#dbdbdb] text-text hover:border-text md:inline-flex"
+        >
+          <Search />
+        </button>
+      )}
       <input
+        ref={inputRef}
         type="search"
         role="combobox"
         aria-label="Find on the map"
@@ -76,16 +118,22 @@ export function GraphSearch({
         onBlur={() => {
           report();
           setOpen(false);
+          if (!query.trim()) setUnfolded(false);
         }}
         onKeyDown={event => {
           if (event.key === 'ArrowDown') setActive(index => Math.min(results.length - 1, index + 1));
           else if (event.key === 'ArrowUp') setActive(index => Math.max(0, index - 1));
           else if (event.key === 'Enter' && results[active]) pick(results[active]);
-          else if (event.key === 'Escape') setOpen(false);
-          else return;
+          else if (event.key === 'Escape') {
+            setOpen(false);
+            if (!query.trim()) fold();
+          } else return;
           event.preventDefault();
         }}
-        className="h-8 w-full rounded-full border border-transparent bg-[#f0f0f0] px-[14px] text-[13px] text-text outline-none focus:border-text focus:bg-white"
+        className={cx(
+          'h-8 w-full rounded-full border border-transparent bg-[#f0f0f0] px-[14px] text-[13px] text-text outline-none focus:border-text focus:bg-white',
+          !unfolded && 'md:hidden'
+        )}
       />
       {open && query.trim() && (
         <ul

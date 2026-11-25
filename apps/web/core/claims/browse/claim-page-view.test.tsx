@@ -119,16 +119,9 @@ vi.mock('~/partials/entity-page/entity-page-inline-description', () => ({
   ENTITY_DESCRIPTION_MAX_LINES: mocks.maxLines,
   EntityPageInlineDescription: () => <div data-testid="editable-description" />,
 }));
-vi.mock('~/partials/entity-page/editable-entity-header', () => ({
-  EditableHeading: () => <div data-testid="editable-heading" />,
-}));
 vi.mock('~/partials/entity-page/entity-page-actions', () => ({
-  EntityPageActions: ({ isVoteable, showCreate = true }: { isVoteable?: boolean; showCreate?: boolean }) => (
-    <div
-      data-testid="entity-page-actions"
-      data-voteable={String(Boolean(isVoteable))}
-      data-show-create={String(showCreate)}
-    />
+  EntityPageActions: ({ isVoteable }: { isVoteable?: boolean }) => (
+    <div data-testid="entity-page-actions" data-voteable={String(Boolean(isVoteable))} />
   ),
 }));
 
@@ -576,24 +569,6 @@ describe('ClaimPageView record', () => {
 
     expect(tabs.compareDocumentPosition(activity) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(activity.compareDocumentPosition(comments) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  });
-
-  it('keeps the claim heading and description editable on the custom surface', () => {
-    render(<ClaimPageView entityId="claim-1" spaceId="space-1" isEditing />);
-
-    expect(screen.getByTestId('editable-heading')).toBeInTheDocument();
-    expect(screen.getByTestId('editable-description')).toBeInTheDocument();
-  });
-
-  it('puts history and the menu beside the pills in edit mode only, without create or votes', () => {
-    const view = render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
-    expect(screen.queryByTestId('entity-page-actions')).not.toBeInTheDocument();
-
-    view.rerender(<ClaimPageView entityId="claim-1" spaceId="space-1" isEditing />);
-    const actions = screen.getByTestId('entity-page-actions');
-    expect(screen.getByTestId('position')).toContainElement(actions);
-    expect(actions).toHaveAttribute('data-voteable', 'false');
-    expect(actions).toHaveAttribute('data-show-create', 'false');
   });
 
   it('makes Activity select claim record tabs inside a side panel', () => {

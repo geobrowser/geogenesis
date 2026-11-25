@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { resolveGraphFilter } from '~/core/graph-explorer/graph-filter';
 
-import { claimsEmptyMessage, descriptionEmptyMessage, relationshipsEmptyMessage } from './empty-states';
+import { claimsEmptyMessage, relationshipsEmptyMessage } from './empty-states';
 
 const SPACE = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const TOPIC = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
@@ -30,10 +30,5 @@ describe('empty states', () => {
       )
     ).toBe('No claims in this topic’s spaces are linked to this yet.');
     expect(claimsEmptyMessage(global, null)).toBe('No claims in the knowledge graph are linked to this yet.');
-  });
-
-  it('says a description is missing from the space it was read in', () => {
-    expect(descriptionEmptyMessage(SPACE)).toBe('No description in this space yet.');
-    expect(descriptionEmptyMessage(null)).toBe('No description in the knowledge graph yet.');
   });
 });

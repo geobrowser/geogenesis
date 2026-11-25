@@ -50,6 +50,14 @@ describe('sharing a graph', () => {
     });
   });
 
+  it('carries the chip in view as ?kinds=, and leaves it off under Everything', async () => {
+    await share.shareGraph(ids, context, { nativeShare: false, kindFilter: 'claim' });
+    const copied = new URL(vi.mocked(navigator.clipboard.writeText).mock.calls[0][0]);
+    expect([...copied.searchParams.keys()]).toEqual(['topic', 'space', 'kinds', 'si']);
+    expect(copied.searchParams.get('kinds')).toBe('claim');
+    expect(share.graphShareUrl('https://x', ids, 'all')).toBe(`https://x/explore/graph/${CENTRE}?topic=${TOPIC}&space=${SPACE}`);
+  });
+
   it('uses the share sheet on phones and copies when it is missing', async () => {
     const sheet = vi.fn(async (_data: ShareData) => {});
     Object.defineProperty(navigator, 'share', { configurable: true, value: sheet });

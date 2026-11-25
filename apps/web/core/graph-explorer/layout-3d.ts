@@ -5,11 +5,28 @@ export type Vec3 = [number, number, number];
 /** 1 = hop 1, 2 = hop 2, 3 = cross-link (drawn, but no spring). */
 export type LayoutLink = { a: string; b: string; hop: 1 | 2 | 3 };
 
-export type LayoutSettings = { restLength: Record<1 | 2, number>; repulsion: number; iterations: number };
+export type LayoutSettings = {
+  restLength: Record<1 | 2, number>;
+  repulsion: number;
+  iterations: number;
+  /** Output squeezes x and z by this and stretches y by its square: a taller, narrower cloud. */
+  tall?: number;
+};
 
 export const DESKTOP_LAYOUT: LayoutSettings = { restLength: { 1: 360, 2: 170 }, repulsion: 150_000, iterations: 320 };
-/** Longer than the design's 180/100: our phone cards carry more text. */
-export const PHONE_LAYOUT: LayoutSettings = { restLength: { 1: 250, 2: 130 }, repulsion: 80_000, iterations: 320 };
+/** Longer than the design's 180/100: our phone cards carry more text. Tall, to fill a portrait stage (GEO-3864). */
+export const PHONE_LAYOUT: LayoutSettings = {
+  restLength: { 1: 250, 2: 130 },
+  repulsion: 80_000,
+  iterations: 320,
+  tall: 1.3,
+};
+
+/** `tall` applied to a simulation-space point; `inverse` takes an output point back. */
+export function tallen(p: Vec3, tall: number, inverse = false): Vec3 {
+  const k = inverse ? 1 / tall : tall;
+  return [p[0] / k, p[1] * k * k, p[2] / k];
+}
 
 /** FNV-1a to [0, 1): seeds positions so the same graph always lays out the same way. */
 export function hash01(text: string): number {
@@ -38,9 +55,12 @@ export function simulateLayout({
   const parent = new Map<string, string>();
   for (const link of links) if (link.hop < 3 && !parent.has(link.b)) parent.set(link.b, link.a);
 
+  const tall = settings.tall ?? 1;
+  // The simulation runs untransformed: earlier output is taken back first, so a re-centre doesn't compound.
+  const before = tall === 1 ? previous : new Map([...previous].map(([id, p]) => [id, tallen(p, tall, true)]));
   const positions = new Map<string, Vec3>();
   const place = (id: string, depth = 0): Vec3 => {
-    const known = positions.get(id) ?? previous.get(id);
+    const known = positions.get(id) ?? before.get(id);
     if (known) return known;
     const parentId = parent.get(id);
     const origin: Vec3 = parentId && depth < 4 ? place(parentId, depth + 1) : [0, 0, 0];
@@ -119,7 +139,7 @@ export function simulateLayout({
     if (centre !== undefined) nodes[centre] = [0, 0, 0];
   }
 
-  return new Map(ids.map((id, i) => [id, nodes[i]]));
+  return new Map(ids.map((id, i) => [id, tall === 1 ? nodes[i] : tallen(nodes[i], tall)]));
 }
 
 export type View = { yaw: number; pitch: number; distance: number; width: number; height: number };
@@ -154,7 +174,7 @@ export function fitDistance(points: readonly Vec3[], width: number, height: numb
     values.sort((a, b) => a - b)[Math.floor(values.length * 0.85)] ?? fallback;
   const stretch = verticalStretch(width, height);
   const fx = percentile(
-    points.map(p => Math.hypot(p[0], p[2]) + (phone ? 64 : 100)),
+    points.map(p => Math.hypot(p[0], p[2]) + (phone ? 16 : 100)),
     300
   );
   const fy = percentile(

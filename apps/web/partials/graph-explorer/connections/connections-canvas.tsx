@@ -19,6 +19,7 @@ import {
   simulateLayout,
   starfield,
 } from '~/core/graph-explorer/layout-3d';
+import { type NamePlace, type Rect, isPhonePin, pinMarkerScale, placeName } from '~/core/graph-explorer/pin-name';
 import type { GraphSelection, SelectedNode } from '~/core/graph-explorer/select-graph';
 import { INITIAL_VIEW, isSkeletonNode, isSkeletonSelection } from '~/core/graph-explorer/skeleton-graph';
 
@@ -48,10 +49,12 @@ type NodeView = {
   /** When it left the selection; it fades out and is removed LEAVE_MS later. */
   died: number;
   entry: SelectedNode;
-  /** Screen offset keeping it clear of the centre, eased frame to frame. */
-  push: [number, number];
-  /** Opacity factor while a nearer card covers it on phone, eased frame to frame. */
+  /** Opacity factor while a nearer card covers its label, eased frame to frame. */
   dim: number;
+  /** A phone pin's name alone fades when covered (its marker stays); eased like `dim`. */
+  labelDim: number;
+  /** Where a phone pin's name sits around its marker; kept while it stays clear. */
+  place: NamePlace;
 };
 
 type DrawnLink = { a: string; b: string; hop: 1 | 2 | 3; edge: GraphEdge };
@@ -79,6 +82,11 @@ type Engine = {
   dpr: number;
   /** Placeholders only: links are faint and carry no moving dots. */
   skeleton: boolean;
+  /** Overlays over the stage (zoom buttons, sheet handle), in stage coordinates; phone names keep clear. */
+  obstacles: Rect[];
+  /** The hint's box while it shows. */
+  hint: Rect | null;
+  hintShown: boolean;
 };
 
 export type ConnectionsCanvasProps = {
@@ -92,6 +100,8 @@ export type ConnectionsCanvasProps = {
   labelFor: (edge: GraphEdge, fromId: string) => string;
   /** Overlays inside the stage (legend, hint). */
   children?: React.ReactNode;
+  /** Extra round buttons at the top of the zoom stack (the phone's color key). */
+  controls?: React.ReactNode;
 };
 
 /**
@@ -106,6 +116,7 @@ export function ConnectionsCanvas({
   renderNode,
   labelFor,
   children,
+  controls,
 }: ConnectionsCanvasProps) {
   const reduceMotion = useReducedMotion() ?? false;
   const analytics = useGraphAnalytics();
@@ -114,6 +125,7 @@ export function ConnectionsCanvas({
     analyticsRef.current = analytics;
   }, [analytics]);
   const stageRef = React.useRef<HTMLDivElement>(null);
+  const hintRef = React.useRef<HTMLParagraphElement>(null);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const elements = React.useRef(new Map<string, HTMLElement>());
   const moved = React.useRef(false);
@@ -151,6 +163,9 @@ export function ConnectionsCanvas({
     height: 0,
     dpr: 1,
     skeleton: false,
+    obstacles: [],
+    hint: null,
+    hintShown: true,
   });
   const [leaving, setLeaving] = React.useState<SelectedNode[]>([]);
   const [layoutMs, setLayoutMs] = React.useState<number | null>(null);
@@ -231,8 +246,9 @@ export function ConnectionsCanvas({
           alive: true,
           died: 0,
           entry,
-          push: [0, 0],
           dim: 1,
+          labelDim: 1,
+          place: 'below',
         });
       }
     }
@@ -287,6 +303,35 @@ export function ConnectionsCanvas({
     return [...selection.nodes, ...leaving.filter(entry => !ids.has(entry.node.id))];
   }, [leaving, selection]);
 
+  /** The overlays phone names keep clear of, in stage coordinates. */
+  const measureOverlays = () => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    const state = engine.current;
+    const origin = stage.getBoundingClientRect();
+    const toStage = (rect: DOMRect): Rect => ({
+      left: rect.left - origin.left,
+      right: rect.right - origin.left,
+      top: rect.top - origin.top,
+      bottom: rect.bottom - origin.top,
+    });
+    // The zoom buttons and the phone's sheet handle both carry `data-stage-control`.
+    state.obstacles = [...document.querySelectorAll('[data-stage-control]')]
+      .map(element => element.getBoundingClientRect())
+      .filter(rect => rect.width > 0 && rect.left < origin.right && rect.right > origin.left)
+      .filter(rect => rect.top < origin.bottom && rect.bottom > origin.top)
+      .map(toStage);
+    const hint = hintRef.current?.getBoundingClientRect();
+    state.hint = state.hintShown && hint && hint.width > 0 ? toStage(hint) : null;
+  };
+
+  const loading = isSkeletonSelection(selection);
+  React.useLayoutEffect(() => {
+    engine.current.hintShown = !(hinted || loading);
+    if (phone) measureOverlays();
+    wake.current();
+  }, [phone, hinted, loading, selection]);
+
   // Size the canvas to the stage.
   React.useLayoutEffect(() => {
     const stage = stageRef.current;
@@ -298,6 +343,7 @@ export function ConnectionsCanvas({
       state.width = rect.width;
       state.height = rect.height;
       state.dpr = Math.min(phone ? 1.5 : 2, window.devicePixelRatio || 1);
+      if (phone) measureOverlays();
       canvas.width = rect.width * state.dpr;
       canvas.height = rect.height * state.dpr;
       canvas.style.width = `${rect.width}px`;
@@ -366,6 +412,13 @@ export function ConnectionsCanvas({
           if (link.b === hover) neighbours.add(link.a);
         }
 
+      const obstacles = state.hint ? [...state.obstacles, state.hint] : state.obstacles;
+      const pinName = (node: NodeView, point: ReturnType<typeof project>, box: Box) => {
+        const pin = { x: point.x, y: point.y, anchor: box.anchor, width: box.width, height: box.height };
+        const at = placeName(pin, state, obstacles, node.place);
+        node.place = at.place;
+        return at;
+      };
       const measure = (id: string, element: HTMLElement) => {
         let box = anchors.current.get(id);
         if (!box) {
@@ -376,7 +429,7 @@ export function ConnectionsCanvas({
       };
       const centreElement = elements.current.get(state.centreId);
       const centrePoint = projected.get(state.centreId);
-      // Every other node is kept off this box, at the scale the centre is drawn at.
+      // The centre's box, at the scale it is drawn at: a card crossing it fades by how much it covers.
       const centreRect =
         centreElement && centrePoint
           ? rectAt(
@@ -395,6 +448,13 @@ export function ConnectionsCanvas({
         scale: number;
         opacity: number;
         isCentre: boolean;
+        /** Shown as its marker; `data-far` on its button is the only copy kept across frames. */
+        far: boolean;
+        /** A phone pin: drawn at scale 1, its marker scaled by `markerScale` (GEO-3864). */
+        pin: boolean;
+        markerScale: number;
+        /** A pin's name: offset from its laid-out place, screen rect, and whether that place is clear of overlays. */
+        name: { dx: number; dy: number; rect: Rect; clear: boolean } | null;
       }> = [];
       for (const node of state.views.values()) {
         const element = elements.current.get(node.id);
@@ -402,7 +462,18 @@ export function ConnectionsCanvas({
         if (!element || !point) continue;
         const isCentre = node.id === state.centreId;
         const fog = Math.max(0.28, Math.min(1, 1 - (point.depth + 150) / 1100));
-        const scale = nodeScale(isCentre, node.hop, point.scale, phone);
+        // A pin's name keeps its size at any depth, so it never swaps to a marker.
+        const pin = isPhonePin(phone, node.hop, isCentre);
+        const scale = pin ? 1 : nodeScale(isCentre, node.hop, point.scale, phone);
+        // Hop 2 is always a marker; a hop-1 card turns into one while drawn too small to read.
+        // Read from the button, not the view: a node selected again while still fading out keeps
+        // its button (and its `data-far`) but gets a fresh view.
+        const wasFar = element.dataset.far !== undefined;
+        const far = !pin && !isCentre && node.hop === 1 && tooSmallToRead(scale, wasFar, phone);
+        if (far !== wasFar) {
+          if (far) element.dataset.far = '';
+          else delete element.dataset.far;
+        }
         let opacity = node.alive ? fog : 0;
         if (hover && node.id !== hover && !neighbours.has(node.id)) opacity *= 0.22;
         if (node.id === hover && node.alive) opacity = 1;
@@ -411,54 +482,76 @@ export function ConnectionsCanvas({
           moving = true;
         }
         const box = measure(node.id, element);
-        if (centreRect && !isCentre && node.alive) {
-          const rect = rectAt(point.x, point.y, box, scale);
-          const target = clearance(centreRect, rect);
-          const ease = reduceMotion ? 1 : 0.2;
-          if (Math.abs(target[0] - node.push[0]) + Math.abs(target[1] - node.push[1]) > 0.5) moving = true;
-          const eased: [number, number] = [
-            node.push[0] + (target[0] - node.push[0]) * ease,
-            node.push[1] + (target[1] - node.push[1]) * ease,
-          ];
-          // Easing may only move a card around the centre, never across it.
-          node.push = overlaps(centreRect, shifted(rect, eased)) ? target : eased;
-        } else if (isCentre) node.push = [0, 0];
-        point.x += node.push[0];
-        point.y += node.push[1];
-        drawn.push({ node, element, point, box, scale, opacity, isCentre });
+        // Every card stays on its projected path; depth order and fading, not a push, keep the centre clear.
+        drawn.push({
+          node,
+          element,
+          point,
+          box,
+          scale,
+          opacity,
+          isCentre,
+          far,
+          pin,
+          markerScale: pin ? pinMarkerScale(point.scale) : 1,
+          name: pin ? pinName(node, point, box) : null,
+        });
       }
 
-      // On phone a card covered by a nearer one fades, so the front one reads.
+      // A labelled card a nearer one touches fades, so no two labels overlap; far markers carry no label.
+      const labelled = drawn.filter(entry => !entry.isCentre && entry.node.alive && entry.node.hop < 2 && !entry.far);
+      // A pin's label is its name's rect, wherever placeName put it.
+      const labelRect = (entry: (typeof drawn)[number]) =>
+        entry.name?.rect ?? rectAt(entry.point.x, entry.point.y, entry.box, entry.scale);
+      const hidden = coveredLabels(
+        labelled.map(entry => ({
+          rect: labelRect(entry),
+          depth: entry.point.depth,
+          keep: entry.node.id === hover || neighbours.has(entry.node.id),
+          shown: (entry.pin ? entry.node.labelDim : entry.node.dim) > 0.5,
+        }))
+      );
+      const covered = new Set(labelled.filter((_, i) => hidden[i]).map(entry => entry.node));
+      const ease = (from: number, to: number) => {
+        if (Math.abs(to - from) > 0.01) moving = true;
+        return from + (to - from) * (reduceMotion ? 1 : 0.2);
+      };
       for (const entry of drawn) {
-        let covered = false;
-        if (phone && !entry.isCentre && entry.node.alive && entry.node.id !== hover && !neighbours.has(entry.node.id)) {
+        // A pin's name with no place clear of the overlays fades rather than draw under them.
+        let isCovered = covered.has(entry.node) || entry.name?.clear === false;
+        let target = isCovered && !entry.pin ? COVERED_DIM : 1;
+        // The centre draws over every card but the hovered one, so any other card crossing it fades.
+        if (centreRect && !entry.isCentre && entry.node.id !== hover) {
           const rect = rectAt(entry.point.x, entry.point.y, entry.box, entry.scale);
-          covered = drawn.some(
-            other =>
-              other !== entry &&
-              !other.isCentre &&
-              other.node.alive &&
-              other.opacity > 0.3 &&
-              other.point.depth < entry.point.depth &&
-              overlapShare(rect, rectAt(other.point.x, other.point.y, other.box, other.scale)) > 0.25
-          );
+          target = Math.min(target, centreCrossDim(rect, centreRect));
+          // A pin's name drawn half under the centre doesn't read, so it goes as soon as the two touch.
+          if (entry.pin && overlapShare(labelRect(entry), centreRect) > 0) isCovered = true;
         }
-        const target = covered ? 0.2 : 1;
-        if (Math.abs(target - entry.node.dim) > 0.01) moving = true;
-        entry.node.dim += (target - entry.node.dim) * (reduceMotion ? 1 : 0.2);
+        entry.node.dim = ease(entry.node.dim, target);
+        // Synced on every card: a button that stops being a pin (hop 2, or past the breakpoint) must drop it.
+        const covers = entry.pin && isCovered;
+        if (covers !== (entry.element.dataset.covered !== undefined)) {
+          if (covers) entry.element.dataset.covered = '';
+          else delete entry.element.dataset.covered;
+        }
+        if (entry.pin) entry.node.labelDim = ease(entry.node.labelDim, isCovered ? 0 : 1);
       }
 
-      for (const { node, element, point, box, scale, opacity, isCentre } of drawn) {
+      for (const { node, element, point, box, scale, opacity, isCentre, pin, markerScale, name } of drawn) {
         const anchor = box.anchor;
         element.style.transformOrigin = `50% ${anchor}px`;
         element.style.transform = `translate3d(${point.x.toFixed(1)}px,${point.y.toFixed(1)}px,0) translate(-50%,-${anchor}px) scale(${scale.toFixed(3)})`;
         element.style.opacity = (opacity * node.dim).toFixed(3);
+        if (pin) {
+          element.style.setProperty('--pin-scale', markerScale.toFixed(3));
+          element.style.setProperty('--pin-label', node.labelDim.toFixed(3));
+          element.style.setProperty('--pin-dx', `${(name?.dx ?? 0).toFixed(1)}px`);
+          element.style.setProperty('--pin-dy', `${(name?.dy ?? 0).toFixed(1)}px`);
+        }
         element.style.zIndex = String(
           node.id === hover
-            ? 9500
-            : isCentre
-              ? 8500
-              : 5000 - Math.round(point.depth) + (neighbours.has(node.id) ? 2000 : 0)
+            ? HOVER_ORDER
+            : depthOrder(point.depth, isCentre, neighbours.has(node.id), phone && node.hop === 2)
         );
       }
 
@@ -661,7 +754,6 @@ export function ConnectionsCanvas({
   };
 
   const centreId = selection.nodes[0]?.node.id;
-  const loading = isSkeletonSelection(selection);
 
   return (
     <div
@@ -726,9 +818,13 @@ export function ConnectionsCanvas({
               aria-label={entry.node.name ?? undefined}
               tabIndex={gone ? -1 : 0}
               className={cx(
-                'absolute top-0 left-0 opacity-0 will-change-transform focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white',
-                gone && 'pointer-events-none',
-                isCentre ? 'cursor-default' : 'cursor-pointer'
+                'group absolute top-0 left-0 opacity-0 will-change-transform focus-visible:outline-2 focus-visible:outline-white',
+                // A covered pin's faded name lets taps through to what it covers; its marker still takes them.
+                gone ? 'pointer-events-none' : 'data-[covered]:pointer-events-none',
+                // The centre already wears a white ring (CENTRE_RING), so its focus ring sits clear of it.
+                isCentre
+                  ? 'cursor-default focus-visible:outline-offset-[9px]'
+                  : 'cursor-pointer focus-visible:outline-offset-4'
               )}
               onClick={event => {
                 if (moved.current) return;
@@ -761,7 +857,11 @@ export function ConnectionsCanvas({
           );
         })}
       </div>
-      <div data-stage-control className="absolute right-4 bottom-4 z-[10000] flex flex-col gap-2">
+      <div
+        data-stage-control
+        className="absolute right-4 bottom-4 z-[10000] flex flex-col gap-2 graph-phone:bottom-[calc(max(16px,env(safe-area-inset-bottom))+52px)]"
+      >
+        {controls}
         {(
           [
             ['+', 'Zoom in', 1 / 1.25],
@@ -782,6 +882,7 @@ export function ConnectionsCanvas({
       </div>
       {children}
       <p
+        ref={hintRef}
         aria-hidden
         className={cx(
           'pointer-events-none absolute top-4 left-1/2 z-[9999] -translate-x-1/2 rounded-full bg-white/10 px-[14px] py-[6px] text-[13px] whitespace-nowrap text-[#e6e6e6] transition-opacity duration-500 md:text-[12px]',
@@ -805,7 +906,6 @@ function useCanHover() {
 }
 
 type Box = { anchor: number; width: number; height: number };
-type Rect = { left: number; right: number; top: number; bottom: number };
 
 /** A card's screen rectangle: centred on x, anchored at y, scaled about its anchor. */
 function rectAt(x: number, y: number, box: Box, scale: number): Rect {
@@ -823,28 +923,77 @@ export function nodeScale(isCentre: boolean, hop: number, depthScale: number, ph
   return Math.max(0.3, Math.min(1.2, depthScale * (hop === 2 ? 0.95 : 1)));
 }
 
-const CENTRE_MARGIN = 10;
+/** The hovered card draws over everything, the centre included. */
+const HOVER_ORDER = 9500;
+/** The centre is pinned above every other card, so cards glide behind it whichever side they're on. */
+const CENTRE_ORDER = 8500;
+/** How far a phone's hop-2 markers sink, so they pass under the hop-1 pins and their names. */
+const SUNK = 3000;
+/** How far a hovered card's neighbours rise over the other cards (still under the centre). */
+const NEIGHBOUR_LIFT = 2000;
 
-/** The shortest move that takes `rect` off `centre` (plus a margin); none when they don't touch. */
-export function clearance(centre: Rect, rect: Rect): [number, number] {
-  const right = centre.right + CENTRE_MARGIN - rect.left;
-  const left = rect.right - (centre.left - CENTRE_MARGIN);
-  const down = centre.bottom + CENTRE_MARGIN - rect.top;
-  const up = rect.bottom - (centre.top - CENTRE_MARGIN);
-  if (right <= 0 || left <= 0 || down <= 0 || up <= 0) return [0, 0];
-  const dx = right < left ? right : -left;
-  const dy = down < up ? down : -up;
-  return Math.abs(dx) < Math.abs(dy) ? [dx, 0] : [0, dy];
+/**
+ * A card's stacking order when it isn't hovered: nearer is higher, a hovered card's neighbours sit
+ * over the rest, and the centre stays above them all, so a card in front of it in depth still
+ * passes under it and the centre's name stays readable.
+ */
+export function depthOrder(depth: number, isCentre: boolean, lifted = false, sunk = false): number {
+  if (isCentre) return CENTRE_ORDER;
+  const lift = (lifted ? NEIGHBOUR_LIFT : 0) - (sunk ? SUNK : 0);
+  return Math.min(CENTRE_ORDER - 1, 5000 - Math.round(depth) + lift);
 }
 
-function shifted(rect: Rect, [dx, dy]: [number, number]): Rect {
-  return { left: rect.left + dx, right: rect.right + dx, top: rect.top + dy, bottom: rect.bottom + dy };
+/** Opacity factor at full cover for a card under the centre: faint enough that the centre reads. */
+const UNDER_CENTRE_DIM = 0.12;
+
+/**
+ * Opacity factor for a card crossing the centre's box, in step with how much of it the two share,
+ * so it fades in and out smoothly as it passes under the centre.
+ */
+export function centreCrossDim(rect: Rect, centre: Rect): number {
+  return 1 - overlapShare(rect, centre) * (1 - UNDER_CENTRE_DIM);
 }
 
-/** Whether `rect` reaches into `centre`'s margin. */
-export function overlaps(centre: Rect, rect: Rect): boolean {
-  const [dx, dy] = clearance(centre, rect);
-  return dx !== 0 || dy !== 0;
+/**
+ * Scale below which a card's text is too small to read, and the higher one it must grow past to
+ * come back, so it doesn't flap. Phone's whole map is drawn smaller and on a denser screen, so its
+ * cut is lower or most of its cards would go.
+ */
+const FAR_SCALE = { desktop: [0.6, 0.7], phone: [0.5, 0.58] } as const;
+
+/** Whether a card drawn at `scale` is too small to read, with hysteresis on `wasFar`. */
+export function tooSmallToRead(scale: number, wasFar: boolean, phone: boolean) {
+  const [below, above] = FAR_SCALE[phone ? 'phone' : 'desktop'];
+  return wasFar ? scale <= above : scale < below;
+}
+
+/** A covered card's opacity factor: low enough that its text no longer reads over the front one. */
+const COVERED_DIM = 0.12;
+
+type LabelSlot = { rect: Rect; depth: number; keep: boolean; shown: boolean };
+
+/**
+ * Which labels to fade so no two overlap: placed greedily, the hovered one and its neighbours
+ * first, then those already showing (so a pair at equal depth doesn't flicker), then nearest first.
+ * O(n²) over a few dozen cards, so cheap per frame.
+ */
+export function coveredLabels(slots: readonly LabelSlot[]): boolean[] {
+  const order = slots
+    .map((slot, i) => i)
+    .sort(
+      (a, b) =>
+        Number(slots[b].keep) - Number(slots[a].keep) ||
+        Number(slots[b].shown) - Number(slots[a].shown) ||
+        slots[a].depth - slots[b].depth
+    );
+  const placed: Rect[] = [];
+  const hidden = slots.map(() => false);
+  for (const i of order) {
+    const { rect, keep } = slots[i];
+    if (!keep && placed.some(other => overlapShare(rect, other) > 0)) hidden[i] = true;
+    else placed.push(rect);
+  }
+  return hidden;
 }
 
 /** How much of the smaller rectangle the two share, 0 to 1. */

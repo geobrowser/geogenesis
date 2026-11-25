@@ -52,6 +52,18 @@ describe('PositionRow', () => {
     expect(grid.className).not.toContain('md:grid-cols');
   });
 
+  // GEO-3841 gave the graph explorer's open claim a solid outline; every other host keeps the card's.
+  it('draws dashed 28px pills unless the host asks for the solid outline', () => {
+    const { unmount } = render(<PositionRow positions={positions} responseKind="stance" viewerPosition={null} />);
+    const pill = () => screen.getByText('Agree').closest('.rounded-full') as HTMLElement;
+    expect(pill()).toHaveClass('border-dashed', 'min-h-7');
+    unmount();
+
+    render(<PositionRow positions={positions} responseKind="stance" viewerPosition={null} outline="solid" />);
+    expect(pill()).toHaveClass('border-grey-03', 'min-h-8');
+    expect(pill()).not.toHaveClass('border-dashed');
+  });
+
   it('measures against its own width, not an ancestor container', () => {
     render(<PositionRow positions={positions} responseKind="stance" viewerPosition={null} />);
 
@@ -254,5 +266,90 @@ describe('PositionRow', () => {
 
       expect([...pill('Agree').classList]).not.toContain('cursor-progress');
     });
+  });
+});
+
+// GEO-3833: the debates app's vote pills on the same wiring.
+describe('PositionRow app look', () => {
+  afterEach(cleanup);
+
+  const participant = { user_id: 'u1', profile_space_id: 's1', display_name: 'One', avatar_cid: null };
+  const crowded: DebateClaimPositionSummary[] = [
+    {
+      position: true,
+      position_label: 'Agree',
+      total_count: 3,
+      available_now_count: 3,
+      present_count: 3,
+      participants: [participant],
+    },
+  ];
+
+  it('draws two outlined 44px pills named Agree and Disagree, beside the end slot on one row', () => {
+    render(
+      <PositionRow
+        positions={[]}
+        responseKind="stance"
+        viewerPosition={null}
+        onRespond={() => {}}
+        endSlot={<button type="button">Share claim</button>}
+        endSlotWraps="compact"
+        look="app"
+      />
+    );
+
+    const agree = screen.getByRole('button', { name: 'Agree' });
+    const disagree = screen.getByRole('button', { name: 'Disagree' });
+    for (const pill of [agree, disagree]) {
+      expect(pill).toHaveClass('h-11', 'rounded-full', 'border', 'border-[#8a8a8a]', 'font-semibold');
+      expect(pill).toHaveAttribute('aria-pressed', 'false');
+    }
+    const grid = agree.closest('.grid') as HTMLElement;
+    expect(grid).toHaveClass('grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]');
+    // The app's row never wraps its actions under the pills.
+    expect(grid.className).not.toContain('claim-row-end-inline');
+    expect(screen.getByRole('button', { name: 'Share claim' }).parentElement).toHaveClass('h-11');
+  });
+
+  it('marks the held side with a dark outline, bold label and filled thumb', () => {
+    const { container } = render(
+      <PositionRow positions={[]} responseKind="stance" viewerPosition onRespond={() => {}} look="app" />
+    );
+
+    const agree = screen.getByRole('button', { name: /^Agree/ });
+    expect(agree).toHaveAttribute('aria-pressed', 'true');
+    expect(agree).toHaveClass('border-[#151515]', 'font-bold');
+    const { container: filled } = render(<ThumbUp filled />);
+    expect(container.querySelector('[data-app-vote-icon]')!.innerHTML).toBe(filled.innerHTML);
+  });
+
+  it('leaves the "Not counted yet" note to the host, and says the side is only on this device', () => {
+    render(
+      <PositionRow positions={[]} responseKind="stance" viewerPosition localSide onRespond={() => {}} look="app" />
+    );
+
+    expect(screen.queryByText(/Not counted yet/)).toBeNull();
+    expect(screen.getByRole('button', { name: /your response, not counted yet/ })).toBeInTheDocument();
+  });
+
+  it('draws no faces in the pills', () => {
+    const faces = (look: 'default' | 'app') => {
+      const { container, unmount } = render(
+        <PositionRow positions={crowded} responseKind="stance" viewerPosition={null} onRespond={() => {}} look={look} />
+      );
+      const count = container.querySelectorAll('.-space-x-\\[7px\\] > span').length;
+      unmount();
+      return count;
+    };
+
+    // The same positions draw a face in the default pill, so the app's zero is not a fixture miss.
+    expect(faces('default')).toBeGreaterThan(0);
+    expect(faces('app')).toBe(0);
+  });
+
+  it('leaves the default look as it was', () => {
+    render(<PositionRow positions={[]} responseKind="stance" viewerPosition={null} onRespond={() => {}} />);
+
+    expect(screen.getByRole('button', { name: 'Agree' })).toHaveClass('border-dashed');
   });
 });

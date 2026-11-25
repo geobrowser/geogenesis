@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { exploreEntitiesConnectionDocument } from '~/core/explore/explore-entities-document';
 
-import { topicCoverageDocument } from './use-topic-coverage';
+import { relationScopedTopicCoverageDocument, topicCoverageDocument } from './use-topic-coverage';
 
 function operation(doc: DocumentNode): OperationDefinitionNode {
   const op = doc.definitions.find(d => d.kind === Kind.OPERATION_DEFINITION);
@@ -76,5 +76,18 @@ describe('the topic coverage document', () => {
     // composition strip is what says how much a topic holds.
     const root = fields(operation(topicCoverageDocument).selectionSet.selections)[0];
     expect(names(root)).toEqual(['nodes', 'pageInfo']);
+  });
+
+  it("leaves the relation's own space open unless asked, then filters it to the same spaces", () => {
+    // Master's Topic page reads the unscoped document; the template opts into the scoped one so a
+    // source tagged with the topic only in another space is not listed as this space's.
+    const relationFilter = (doc: DocumentNode) => {
+      const root = fields(operation(doc).selectionSet.selections)[0]!;
+      const filter = root.arguments?.find(arg => arg.name.value === 'filter');
+      return print(filter!.value).replace(/\s+/g, ' ');
+    };
+    expect(relationFilter(topicCoverageDocument)).not.toContain('spaceId:');
+    expect(relationFilter(relationScopedTopicCoverageDocument)).toContain('spaceId: {in: $spaceIds}');
+    expect(relationFilter(relationScopedTopicCoverageDocument)).toContain('spaceIds: {overlaps: $spaceIds}');
   });
 });

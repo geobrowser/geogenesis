@@ -1,5 +1,6 @@
 import type { GraphNode } from './fetch-graph-neighbourhood';
 import { DESKTOP_LAYOUT, PHONE_LAYOUT, fitDistance, hash01, project, simulateLayout } from './layout-3d';
+import { isPhonePin, pinMarkerScale } from './pin-name';
 import type { GraphSelection, SelectedNode } from './select-graph';
 
 const SKELETON_PREFIX = 'skeleton:';
@@ -84,6 +85,8 @@ export type StaticSkeletonNode = {
   left: number;
   top: number;
   scale: number;
+  /** A phone pin's marker scale; its node draws at scale 1. */
+  markerScale?: number;
   opacity: number;
 };
 
@@ -106,13 +109,15 @@ export function staticSkeleton(phone: boolean): StaticSkeletonNode[] {
   return selection.nodes.map(entry => {
     const point = project(target.get(entry.node.id)!, { ...INITIAL_VIEW, distance, width, height });
     const round = (value: number) => Math.round(value * 100) / 100;
+    const pin = isPhonePin(phone, entry.hop, entry.hop === 0);
     return {
       id: entry.node.id,
       kind: entry.node.kind as 'ent' | 'claim',
       hop: entry.hop,
       left: round((point.x / width) * 100),
       top: round((point.y / height) * 100),
-      scale: round(Math.max(0.3, Math.min(1.2, point.scale * (entry.hop === 2 ? 0.95 : 1)))),
+      scale: pin ? 1 : round(Math.max(0.3, Math.min(1.2, point.scale * (entry.hop === 2 ? 0.95 : 1)))),
+      ...(pin && { markerScale: round(pinMarkerScale(point.scale)) }),
       opacity: round(Math.max(0.28, Math.min(1, 1 - (point.depth + 150) / 1100))),
     };
   });

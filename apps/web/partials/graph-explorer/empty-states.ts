@@ -23,8 +23,3 @@ export function claimsEmptyMessage(filter: GraphFilter, topicName: string | null
   if (filter.topicLensId) return `No claims about this in ${topicName ?? 'this topic'} yet.`;
   return `No claims ${where(filter)} are linked to this yet.`;
 }
-
-/** The description is read in one space (`centreTextInSpace`), never borrowed from another. */
-export function descriptionEmptyMessage(spaceId: string | null): string {
-  return spaceId ? 'No description in this space yet.' : 'No description in the knowledge graph yet.';
-}

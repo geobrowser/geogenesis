@@ -10,6 +10,7 @@ import { debateQueryKeys } from '~/core/debates/hooks';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { QuerySeed, type QuerySeedEntry } from '~/core/query-seed';
+import { LiveClaimSectionsView } from '~/core/templates/views/live-claim-template-view';
 
 import { DebatesBrowseFeed } from './debate-feed';
 import { debateIdFromEntityPath } from './debate-feed-url';
@@ -55,8 +56,8 @@ type DebateEntityViewProps = {
 };
 
 /**
- * A published Debate is a live video, not a wall of values. In browse mode we drop the visitor
- * straight into the `/debates` infinite-scroll feed anchored to this debate; the raw entity page
+ * A published Debate is a live video, not a wall of values. In browse mode we show the debate with
+ * the claim it argues below it, to scroll into (GEO-3869), not the space's other debates; the raw entity page
  * (props, relations, blocks) is only for editors and shows up when edit mode is on. If the debates
  * feature is off we fall back to the entity page so nothing is ever hidden without a way to see it.
  */
@@ -109,8 +110,19 @@ function DebateEntityViewBody({ spaceId, debateId, editView, removedView }: Omit
       initialSeekSeconds={initialSeekSeconds}
       fallback={serverView(editView)}
       removedView={serverView(removedView)}
+      belowLinkedDebate={debatedClaimContent}
     />
   );
+}
+
+/**
+ * Below the debate, the Debate page scrolls into the claim being argued, from its Supporting claims
+ * down, rather than into the space's next debate (GEO-3869). Nothing for a debate with no claim.
+ */
+export function debatedClaimContent(debate: Debate): React.ReactNode {
+  const { claim_entity_id: claimId, space_id: claimSpaceId } = debate.claim ?? {};
+  if (!claimId || !claimSpaceId) return null;
+  return <LiveClaimSectionsView entityId={claimId} spaceId={claimSpaceId} />;
 }
 
 /**

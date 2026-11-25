@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect } from 'react';
 
-import { atom, useAtom } from 'jotai';
+import { atom, useAtom, useSetAtom } from 'jotai';
 import { usePathname, useSearchParams } from 'next/navigation';
 
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
@@ -88,12 +88,24 @@ export function useOnboarding() {
     setIsOnboardingVisible(false);
   }, [pathname, setIsOnboardingVisible, setDismissedAtPath]);
 
-  const showOnboarding = useCallback(() => {
+  const showOnboarding = useShowOnboarding();
+
+  return { isOnboardingVisible, hideOnboarding, showOnboarding };
+}
+
+/**
+ * Opens onboarding, even where it was dismissed on this page. Separate from `useOnboarding` so a
+ * control can offer it without taking on the auto-open logic and its router reads.
+ */
+export function useShowOnboarding() {
+  const { isModalOpen } = usePrivy();
+  const setIsOnboardingVisible = useSetAtom(isOnboardingVisibleAtom);
+  const setDismissedAtPath = useSetAtom(onboardingDismissedAtPathAtom);
+
+  return useCallback(() => {
     setDismissedAtPath(null);
     if (!isModalOpen) {
       setIsOnboardingVisible(true);
     }
   }, [isModalOpen, setIsOnboardingVisible, setDismissedAtPath]);
-
-  return { isOnboardingVisible, hideOnboarding, showOnboarding };
 }

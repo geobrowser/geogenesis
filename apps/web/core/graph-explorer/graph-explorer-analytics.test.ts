@@ -48,6 +48,15 @@ describe('classifyEntry', () => {
 });
 
 describe('a graph explorer session', () => {
+  it('sends the entry point of whichever template page opened it (GEO-3866)', () => {
+    markGraphExplorerEntry('news_story_page');
+    const session = startGraphExplorerSession(init, now);
+    session.opened('ready', layout);
+
+    expect(named('graph_explorer_opened')[0]?.props).toMatchObject({ entry: 'in_app', entry_point: 'news_story_page' });
+    session.left('unmount');
+  });
+
   it('sends opened once, with the in-app entry point, and every event unstamped and without text', () => {
     markGraphExplorerEntry('topic_page');
     const session = startGraphExplorerSession(init, now);
@@ -317,6 +326,37 @@ describe('useGraphExplorerSession', () => {
     window.dispatchEvent(new Event('pagehide'));
     unmount();
     expect(named('graph_explorer_left').map(({ props }) => props.exit)).toEqual(['page_hidden']);
+  });
+
+  it('sends one left for beforeunload followed by pagehide and the unmount', () => {
+    const { result, unmount } = renderHook(() => useGraphExplorerSession(init));
+    result.current!.opened('ready', layout);
+    window.dispatchEvent(new Event('beforeunload'));
+    expect(named('graph_explorer_left').map(({ props }) => props.exit)).toEqual(['page_hidden']);
+    window.dispatchEvent(new Event('pagehide'));
+    unmount();
+    expect(named('graph_explorer_left').map(({ props }) => props.exit)).toEqual(['page_hidden']);
+  });
+
+  it('starts a new session on a back/forward cache restore after beforeunload', () => {
+    const { result, unmount } = renderHook(() => useGraphExplorerSession(init));
+    const first = result.current!;
+    first.opened('ready', layout);
+    window.dispatchEvent(new Event('beforeunload'));
+    window.dispatchEvent(new Event('pagehide'));
+    const show = new Event('pageshow');
+    Object.defineProperty(show, 'persisted', { value: true });
+    act(() => {
+      window.dispatchEvent(show);
+    });
+    const second = result.current!;
+    expect(second.id).not.toBe(first.id);
+    second.opened('ready', layout);
+    unmount();
+    expect(named('graph_explorer_left').map(({ props }) => [props.graph_session_id, props.exit])).toEqual([
+      [first.id, 'page_hidden'],
+      [second.id, 'navigated'],
+    ]);
   });
 
   it('sends navigated on an unmount without pagehide', () => {

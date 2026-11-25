@@ -5,7 +5,7 @@ import { useChat } from '@ai-sdk/react';
 import * as React from 'react';
 
 import { DefaultChatTransport, type UIMessage, isTextUIPart, isToolUIPart } from 'ai';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import { createPortal } from 'react-dom';
@@ -13,10 +13,11 @@ import { createPortal } from 'react-dom';
 import { snapshotActionContext } from '~/core/action-context';
 import { capture } from '~/core/analytics';
 import { recordAction } from '~/core/analytics-operations';
-import { BOTTOM_INSET_OFFSET_CLASS } from '~/core/app-bottom-inset';
 import { applyInjectOpsToStore } from '~/core/chat/apply-inject-ops';
 import { hasPendingClientToolCall, shouldResubmitAfterClientExecution } from '~/core/chat/client-tools';
 import { useEditDispatcher } from '~/core/chat/edit-dispatcher';
+import { type IngestionLink, ingestionPromptText, stageIngestionLink } from '~/core/chat/ingestion-link';
+import { type IngestionWriteSpace, ingestionChatContext } from '~/core/chat/ingestion-space';
 import type { InjectType } from '~/core/chat/inject-types';
 import {
   COMPACT_AT_INPUT_TOKENS,
@@ -50,10 +51,8 @@ import { useReportError } from '~/core/state/status-bar-store';
 import { reportError as captureAssistantError } from '~/core/telemetry/logger';
 import { describeError } from '~/core/utils/error-diagnostics';
 import { NavUtils } from '~/core/utils/utils';
-import { Z_LAYER_CLASS } from '~/core/z-layers';
 
-import { AssistantSparkle } from '~/design-system/icons/assistant-sparkle';
-
+import { AssistantFab } from './assistant-fab';
 import { useHideAssistant } from './assistant-visibility';
 import { ChatPanel } from './chat-panel';
 
@@ -248,6 +247,9 @@ export function ChatWidget({ openOnMount = null }: { openOnMount?: string | null
 
   // Persists across follow-up turns; reset by `handleNewChat`.
   const modeRef = React.useRef<ChatMode>('default');
+  // The space a Sources `+` import picked when it was pressed: the page's, or a non-member's own
+  // personal space (GEO-3819). Ingestion turns write there; reset by `handleNewChat`.
+  const writeSpaceRef = React.useRef<IngestionWriteSpace | null>(null);
 
   // Inject pipeline: when the seed signals an inject route, we hold its jobId
   // here and let `useInjectJob` drive the polling + status. The assistant
@@ -259,6 +261,7 @@ export function ChatWidget({ openOnMount = null }: { openOnMount?: string | null
     injectType: InjectType;
     assistantMessageId: string;
     applied: boolean;
+    link?: IngestionLink;
   } | null>(null);
   const injectState = useInjectJob({ jobId: injectJob?.jobId ?? null, enabled: injectJob !== null });
 
@@ -267,7 +270,10 @@ export function ChatWidget({ openOnMount = null }: { openOnMount?: string | null
       new DefaultChatTransport({
         api: '/api/chat',
         body: () => ({
-          context: contextRef.current,
+          context: ingestionChatContext(
+            contextRef.current,
+            modeRef.current === 'ingestion' ? writeSpaceRef.current : null
+          ),
           preloadedEntity: preloadedEntityRef.current,
           mode: modeRef.current,
         }),
@@ -716,6 +722,7 @@ export function ChatWidget({ openOnMount = null }: { openOnMount?: string | null
     // error from the prior chat would resurface on the fresh one.
     clearError();
     modeRef.current = 'default';
+    writeSpaceRef.current = null;
     stoppedRef.current = false;
     setInjectJob(null);
     setInjectInline(null);
@@ -910,6 +917,8 @@ export function ChatWidget({ openOnMount = null }: { openOnMount?: string | null
     stoppedRef.current = false;
     // Drop any stale error so the StatusBar retry doesn't regenerate the previous failed turn.
     clearError();
+    // A Sources `+` seed carries the space it picked at the press; other seeds write into the route's.
+    writeSpaceRef.current = seed.writeSpace ?? null;
 
     if (seed.mode === 'inject') {
       // Push a synthetic user + empty-assistant pair. The assistant slot is
@@ -926,19 +935,19 @@ export function ChatWidget({ openOnMount = null }: { openOnMount?: string | null
       setInjectInline({ assistantMessageId, status: 'pending', startedAt: Date.now() });
       setInjectJob({
         jobId: seed.jobId,
-        spaceId: currentSpaceId ?? '',
+        spaceId: seed.writeSpace?.spaceId ?? currentSpaceId ?? '',
         url: seed.url,
         injectType: seed.injectType,
         assistantMessageId,
         applied: false,
+        link: seed.link,
       });
       setSeed(null);
       return;
     }
 
     modeRef.current = seed.mode;
-    // Backtick-wrap the URL so markdown doesn't mangle special chars.
-    const text = `Please ingest this URL into this space and stage the entities: \`${seed.url}\``;
+    const text = ingestionPromptText(seed.url, seed.link, { personalSpace: writeSpaceRef.current?.personal === true });
     trackAssistantMessage(text, 'typed');
     sendMessageRef.current({ text });
     setSeed(null);
@@ -1029,6 +1038,17 @@ export function ChatWidget({ openOnMount = null }: { openOnMount?: string | null
         return;
       }
       const result = applyInjectOpsToStore(injectState.ops, injectJob.spaceId);
+      // Added from a page's Sources `+`: link the new source back to that page so it shows in the
+      // section it was added from (GEO-3819). Staged with the rest of the import.
+      if (injectJob.link) {
+        stageIngestionLink({
+          link: injectJob.link,
+          primaryEntityId: result.primaryEntityId,
+          primaryEntityName: result.primaryEntityName,
+          spaceId: injectJob.spaceId,
+          ops: injectState.ops,
+        });
+      }
       // Ingestion genuinely succeeded here (job polled to `completed` and its ops
       // applied to the store), so this is the only place we mark the daily upload
       // activity done — not at submission time, where the job could still fail.
@@ -1080,7 +1100,9 @@ export function ChatWidget({ openOnMount = null }: { openOnMount?: string | null
       updateAssistantText(`News pipeline didn't return results (${reason}) — falling back to the standard import.`);
       setInjectInline(null);
       modeRef.current = 'ingestion';
-      const fallbackText = `Please ingest this URL into this space and stage the entities: \`${injectJob.url}\``;
+      const fallbackText = ingestionPromptText(injectJob.url, injectJob.link, {
+        personalSpace: writeSpaceRef.current?.personal === true,
+      });
       trackAssistantMessage(fallbackText, 'typed');
       sendMessageRef.current({ text: fallbackText });
       setInjectJob(null);
@@ -1156,19 +1178,7 @@ export function ChatWidget({ openOnMount = null }: { openOnMount?: string | null
           onClearHistory={handleClearHistory}
         />
       ) : (
-        <motion.button
-          type="button"
-          key="fab"
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.8 }}
-          transition={{ duration: 0.15 }}
-          onClick={() => openAssistant('fab')}
-          aria-label="Open assistant"
-          className={`fixed right-4 ${BOTTOM_INSET_OFFSET_CLASS} ${Z_LAYER_CLASS.assistantLauncher} flex size-10 items-center justify-center rounded-full border border-grey-02 bg-white text-text shadow-lg transition-colors hover:border-text`}
-        >
-          <AssistantSparkle size={20} />
-        </motion.button>
+        <AssistantFab key="fab" animated onOpen={() => openAssistant('fab')} />
       )}
     </AnimatePresence>
   );

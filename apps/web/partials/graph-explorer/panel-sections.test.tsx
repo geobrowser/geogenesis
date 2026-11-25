@@ -47,13 +47,25 @@ vi.mock('~/partials/entity-page/entity-vote-buttons', async () => {
     typeof import('~/core/responses/entity-response')
   >('~/core/responses/entity-response');
   return {
-    EntityVoteButtons: ({ entityId, spaceId }: { entityId: string; spaceId: string }) => {
+    EntityVoteButtons: ({
+      entityId,
+      spaceId,
+      hideClaimShare,
+      hideResponderAvatars,
+    }: {
+      entityId: string;
+      spaceId: string;
+      hideClaimShare?: boolean;
+      hideResponderAvatars?: boolean;
+    }) => {
       const client = useQueryClient();
       const getContext = useActionContext('entity_vote_buttons', 'claim', entityId);
       return (
         <button
           type="button"
           aria-label="Agree"
+          data-share={hideClaimShare ? 'hidden' : 'shown'}
+          data-faces={hideResponderAvatars ? 'hidden' : 'shown'}
           onClick={() => {
             mocks.votes.push(getContext());
             client.setQueryData(
@@ -149,17 +161,18 @@ describe('TopicOverview', () => {
   it('lists fights and settled claims with 3+ votes, voting in place and re-centring on the title', async () => {
     mocks.summary.data = {
       claims: [
-        { id: id(2), name: 'A fight', spaceId: 's', positive: 30, negative: 25, band: 'contested' },
+        { id: id(2), name: 'A fight', spaceId: 's', positive: 20, negative: 25, band: 'contested' },
         { id: id(3), name: 'Settled', spaceId: 's', positive: 9, negative: 1, band: 'agreed' },
         { id: id(4), name: 'Too few', spaceId: 's', positive: 1, negative: 1, band: 'contested' },
       ],
       truncated: false,
     };
-    seed(2, 's', 30, 25);
+    seed(2, 's', 20, 25);
     seed(3, 's', 9, 1);
     const onOpen = overview();
     const fights = screen.getByRole('region', { name: 'The biggest fights' });
-    expect(rows(fights)).toEqual(['A fight55% agree · 55 votes']);
+    // The prototype's row: the band's square, the text, and only "44% agree" under it.
+    expect(rows(fights)).toEqual(['A fight44% agree']);
     expect(within(screen.getByRole('region', { name: 'Widely agreed, most votes' })).getByText('Settled')).toBeTruthy();
     fireEvent.click(within(fights).getByRole('button', { name: 'A fight' }));
     expect(onOpen).toHaveBeenCalledWith(id(2), 'A fight');
@@ -170,7 +183,7 @@ describe('TopicOverview', () => {
     expect(mocks.votes).toEqual([
       expect.objectContaining({ list_id: 'graph_explorer_fights', item_position: 1, page_type: 'graph_explorer' }),
     ]);
-    await waitFor(() => expect(rows(fights)).toEqual(['A fight55% agree · 56 votes']));
+    await waitFor(() => expect(rows(fights)).toEqual(['A fight46% agree']));
   });
 
   it('says once that nothing has enough votes, and shows nothing for a topic without responses', () => {
@@ -210,6 +223,14 @@ describe('TopicOverview', () => {
         .map(button => button.textContent)
     ).toEqual(['Node 5News story · Jun 1, 2025']);
   });
+
+  it('names a news row’s publisher with its favicon, between its type and date', () => {
+    const publisher = { id: id(9), name: 'Times of Israel', image: 'https://example.com/toi.png' };
+    overview({ nodes: [node(5, 'story', { date: '2025-06-01T00:00:00Z', publisher })] });
+    const news = screen.getByRole('region', { name: 'Latest news' });
+    expect(within(news).getByRole('button').textContent).toBe('Node 5News story · Times of Israel · Jun 1, 2025');
+    expect(news.querySelector('[data-publisher-icon] img')?.getAttribute('src')).toBe('https://example.com/toi.png');
+  });
 });
 
 describe('NeighbourGroups', () => {
@@ -230,6 +251,7 @@ describe('NeighbourGroups', () => {
     wrap(
       <NeighbourGroups
         groups={[]}
+        centre={{ kind: 'topic', typeNames: ['Topic'] }}
         claims={[]}
         claimsState={idle}
         moreKinds={[]}
@@ -252,6 +274,80 @@ describe('NeighbourGroups', () => {
     expect(document.activeElement).toBe(within(region).getByRole('button', { name: /Node 16/ }));
   });
 
+  it('leaves out labels that repeat the group, and keeps the ones that add something', () => {
+    const row = (n: number, kind: NeighbourGroup['kind'], labels: string[], extra: Partial<GraphNode>) => ({
+      spoke: { entity: node(n, kind, extra), labels, edgeSpaceIds: [], nodeSpaceId: null, hasOutgoing: true },
+      node: node(n, kind, extra),
+    });
+    const topicType = { id: NEIGHBOUR_KIND_TYPE_IDS.topic[0], name: 'Topic' };
+    const storyType = { id: NEWS_STORY_TYPE_ID, name: 'News story' };
+    groups({
+      groups: [
+        {
+          kind: 'story',
+          spokes: [
+            row(20, 'story', ['Story', 'On this topic'], {
+              name: 'Ceasefire talks',
+              types: [storyType],
+              date: '2026-11-03',
+            }),
+          ],
+        },
+        { kind: 'topic', spokes: [row(21, 'topic', ['Topic'], { name: 'Civilian casualties', types: [topicType] })] },
+        {
+          kind: 'ent',
+          spokes: [
+            row(23, 'ent', ['Related entity'], {
+              name: 'International Court of Justice',
+              types: [{ id: NEIGHBOUR_KIND_TYPE_IDS.organisation[0], name: 'Organization' }],
+            }),
+          ],
+        },
+        {
+          kind: 'other',
+          spokes: [row(22, 'other', ['Mentions'], { name: 'A memo', types: [{ id: 'x', name: 'Memo' }] })],
+        },
+      ],
+    });
+    expect(rows(screen.getByRole('region', { name: 'Topics · 1' }))).toEqual(['Civilian casualties']);
+    expect(rows(screen.getByRole('region', { name: 'News · 1' }))).toEqual(['Ceasefire talksNov 3, 2026']);
+    expect(rows(screen.getByRole('region', { name: 'People and groups · 1' }))).toEqual([
+      'International Court of JusticeOrganization',
+    ]);
+    expect(rows(screen.getByRole('region', { name: 'Other · 1' }))).toEqual(['MentionsA memoMemo']);
+  });
+
+  it('hides a fallback that only names the centre, on neighbour and claim rows, and keeps it elsewhere', async () => {
+    const skill = node(30, 'other', { name: 'Rust', types: [{ id: 'x', name: 'Language' }] });
+    const neighbours: NeighbourGroup = {
+      kind: 'other',
+      spokes: [
+        {
+          spoke: {
+            entity: skill,
+            labels: ['Skills (incoming)'],
+            edgeSpaceIds: [],
+            nodeSpaceId: null,
+            hasOutgoing: false,
+          },
+          node: skill,
+        },
+      ],
+    };
+    const claims: PanelClaim[] = [{ id: id(31), name: 'Rust is safe', spaceId: 'a', relations: ['Skills (incoming)'] }];
+    seed(31, 'a', 1, 0);
+    const labelsUnder = async (centre: React.ComponentProps<typeof NeighbourGroups>['centre']) => {
+      const view = groups({ groups: [neighbours], claims, centre });
+      const other = rows(screen.getByRole('region', { name: 'Other · 1' }));
+      await waitFor(() => expect(rows(screen.getByRole('region', { name: /^Claims/ }))[0]).toContain('Rust is safe'));
+      const claim = rows(screen.getByRole('region', { name: /^Claims/ }));
+      view.unmount();
+      return [...other, ...claim].map(text => text?.includes('Skills (incoming)'));
+    };
+    expect(await labelsUnder({ kind: 'other', typeNames: ['Skill'] })).toEqual([false, false]);
+    expect(await labelsUnder({ kind: 'ent', typeNames: ['Person'] })).toEqual([true, true]);
+  });
+
   it('moves focus to the first revealed claim after Show all and Show more claims', async () => {
     const claims: PanelClaim[] = Array.from({ length: 7 }, (_, i) => ({
       id: id(i + 1),
@@ -264,6 +360,7 @@ describe('NeighbourGroups', () => {
       <QueryClientProvider client={client}>
         <NeighbourGroups
           groups={[]}
+          centre={{ kind: 'topic', typeNames: ['Topic'] }}
           claims={list}
           claimsState={{ ...idle, hasNextPage: true, fetchNextPage }}
           moreKinds={[]}
@@ -289,7 +386,7 @@ describe('NeighbourGroups', () => {
   it('sorts claims by votes in their own spaces, with a band bar, one batch per space and votes in place', async () => {
     const claims: PanelClaim[] = [
       { id: id(1), name: 'Few', spaceId: 'a' },
-      { id: id(2), name: 'Many', spaceId: 'b', relation: 'Supports' },
+      { id: id(2), name: 'Many', spaceId: 'b', relations: ['Claim', 'Supports'] },
       { id: id(3), name: 'Some', spaceId: 'a' },
     ];
     seed(1, 'a', 1, 0);
@@ -298,9 +395,7 @@ describe('NeighbourGroups', () => {
     const onOpen = vi.fn();
     groups({ claims, onOpen });
     const region = screen.getByRole('region', { name: 'Claims · 3' });
-    await waitFor(() =>
-      expect(rows(region)).toEqual(['SupportsMany95% agree · 42 votes', 'Some40% agree · 5 votes', 'Few1 vote'])
-    );
+    await waitFor(() => expect(rows(region)).toEqual(['SupportsMany95% agree', 'Some40% agree', 'Few1 vote']));
     expect(region.textContent).toContain('Of 2 with 3+ votes: 1 widely agreed, 1 contested');
     expect(new Set(mocks.batches)).toEqual(new Set(['a', 'b']));
 
@@ -313,6 +408,114 @@ describe('NeighbourGroups', () => {
     await waitFor(() => expect(rows(region)[2]).toBe('Few2 votes'));
     fireEvent.click(within(region).getByRole('button', { name: 'Few' }));
     expect(onOpen).toHaveBeenCalledWith(id(1), 'Few');
+  });
+
+  it('heads each group in bold sentence case with its count, above the prototype’s gray band', () => {
+    groups({ groups: [spokeGroup('ent', 2)] });
+    const region = screen.getByRole('region', { name: 'People and groups · 2' });
+    const title = within(region).getByRole('heading');
+    expect(title.className).toContain('text-smallTitle');
+    expect(title.className).not.toContain('uppercase');
+    // The band spans the panel: an 8px top border with the panel's padding pulled back out.
+    expect(region.className).toContain('border-t-8');
+    expect(region.className).toContain('-mx-6');
+    expect(region.className).toContain('md:-mx-4');
+  });
+
+  it('draws claim rows as the prototype does: band square, text, agreement, thumbs revealed on hover', async () => {
+    seed(30, 's', 9, 1);
+    seed(31, 's', 0, 0);
+    groups({
+      claims: [
+        { id: id(30), name: 'Agreed', spaceId: 's' },
+        { id: id(31), name: 'Unvoted', spaceId: 's' },
+      ],
+    });
+    const region = screen.getByRole('region', { name: 'Claims · 2' });
+    await waitFor(() => expect(rows(region)).toEqual(['Agreed90% agree', 'UnvotedNo votes yet']));
+    const [agreed, unvoted] = within(region).getAllByRole('listitem');
+    expect(agreed.querySelector('[data-band]')?.getAttribute('data-band')).toBe('agreed');
+    expect(unvoted.querySelector('[data-band]')?.getAttribute('data-band')).toBe('none');
+    // No face pile and no share label: the thumbs alone, faded until hover or focus on desktop and
+    // always shown at phone width (md:) and on touch screens.
+    const thumbs = agreed.querySelector('[data-row-thumbs]')!;
+    expect(thumbs.className.split(' ')).toEqual(
+      expect.arrayContaining([
+        'opacity-0',
+        'group-hover/claim:opacity-100',
+        'group-focus-within/claim:opacity-100',
+        'md:opacity-100',
+        '[@media(hover:none)]:opacity-100',
+      ])
+    );
+    const vote = within(agreed).getByRole('button', { name: 'Agree' });
+    expect(vote.dataset.faces).toBe('hidden');
+    expect(vote.dataset.share).toBe('hidden');
+    // Voting still works from the row.
+    fireEvent.click(vote);
+    await waitFor(() => expect(rows(region)[0]).toBe('Agreed91% agree'));
+  });
+
+  it('names a source’s publisher with its favicon, except on the publisher’s own panel', () => {
+    const publisher = { id: id(9), name: 'BBC Verify', image: 'ipfs://QmFavicon' };
+    const report = {
+      kind: 'src' as const,
+      spokes: [
+        {
+          spoke: {
+            entity: node(40, 'src'),
+            labels: ['Source'],
+            edgeSpaceIds: [],
+            nodeSpaceId: null,
+            hasOutgoing: true,
+          },
+          node: node(40, 'src', {
+            types: [{ id: 'f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0', name: 'Report' }],
+            date: '2025-03-01T00:00:00Z',
+            publisher,
+          }),
+        },
+      ],
+    };
+    const { unmount } = groups({ groups: [report] });
+    const region = screen.getByRole('region', { name: 'Sources · 1' });
+    expect(region.textContent).toContain('Report · BBC Verify · Mar 1, 2025');
+    expect(region.querySelector('[data-publisher-icon] img')).toBeTruthy();
+    unmount();
+
+    groups({ groups: [report], centreId: id(9) });
+    const own = screen.getByRole('region', { name: 'Sources · 1' });
+    expect(own.textContent).not.toContain('BBC Verify');
+    expect(own.querySelector('[data-publisher-icon]')).toBeNull();
+  });
+
+  it('draws an image-less publisher as its initial in a 16px circle', () => {
+    const publisher = { id: id(9), name: 'BBC Verify', image: null };
+    const report = {
+      kind: 'src' as const,
+      spokes: [
+        {
+          spoke: {
+            entity: node(40, 'src'),
+            labels: ['Source'],
+            edgeSpaceIds: [],
+            nodeSpaceId: null,
+            hasOutgoing: true,
+          },
+          node: node(40, 'src', {
+            types: [{ id: 'f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0', name: 'Report' }],
+            date: '2025-03-01T00:00:00Z',
+            publisher,
+          }),
+        },
+      ],
+    };
+    groups({ groups: [report] });
+    const icon = screen
+      .getByRole('region', { name: 'Sources · 1' })
+      .querySelector<HTMLElement>('[data-publisher-icon] > span');
+    expect(icon?.textContent).toBe('B');
+    expect(icon?.style.width).toBe('16px');
   });
 
   it('keeps the honest empty states', () => {

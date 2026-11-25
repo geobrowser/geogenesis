@@ -1,11 +1,20 @@
+import type { IngestionLink } from '~/core/chat/ingestion-link';
+import type { IngestionWriteSpace } from '~/core/chat/ingestion-space';
 import type { ClassifyUrlResponse } from '~/core/chat/inject-types';
 import type { AssistantSeed } from '~/core/state/chat-store';
 
 /**
  * Classifies a URL and returns the assistant seed for either the inject job
- * path or the chat-driven ingestion fallback.
+ * path or the chat-driven ingestion fallback. `writeSpace`, when given, is the space the import writes
+ * into instead of the route's (see `AssistantSeed`).
  */
-export async function resolveUrlIngestionSeed(normalizedUrl: string, logTag: string): Promise<AssistantSeed> {
+export async function resolveUrlIngestionSeed(
+  normalizedUrl: string,
+  logTag: string,
+  link?: IngestionLink,
+  writeSpace?: IngestionWriteSpace
+): Promise<AssistantSeed> {
+  const seedTarget = { ...(link ? { link } : {}), ...(writeSpace ? { writeSpace } : {}) };
   let classification: ClassifyUrlResponse = { route: 'chat' };
   try {
     const res = await fetch('/api/chat/classify-url', {
@@ -39,6 +48,7 @@ export async function resolveUrlIngestionSeed(normalizedUrl: string, logTag: str
             url: normalizedUrl,
             jobId: body.jobId,
             injectType: classification.type,
+            ...seedTarget,
           };
         }
       } else {
@@ -49,5 +59,5 @@ export async function resolveUrlIngestionSeed(normalizedUrl: string, logTag: str
     }
   }
 
-  return { mode: 'ingestion', url: normalizedUrl };
+  return { mode: 'ingestion', url: normalizedUrl, ...seedTarget };
 }

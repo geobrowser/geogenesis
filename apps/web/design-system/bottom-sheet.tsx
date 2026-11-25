@@ -2,8 +2,9 @@
 
 import { Close, Content, Overlay, Portal, Root, Title, Trigger } from '@radix-ui/react-dialog';
 
-import type * as React from 'react';
+import * as React from 'react';
 
+import { useVisualViewportInset } from '~/core/hooks/use-visual-viewport-inset';
 import { Z_LAYER_CLASS } from '~/core/z-layers';
 
 import { CloseSmall } from '~/design-system/icons/close-small';
@@ -20,6 +21,7 @@ export function BottomSheet({
   showTitle = false,
   headerAction,
   container,
+  avoidKeyboard = false,
   children,
 }: {
   open: boolean;
@@ -37,8 +39,33 @@ export function BottomSheet({
    * sheet, which traps focus): portaled to the body, the sheet would sit outside that trap.
    */
   container?: HTMLElement | null;
+  /**
+   * For a sheet holding text fields: rides above the on-screen keyboard, keeps the focused field in
+   * view and puts the page back where it was on close. Only for a sheet portaled to the body.
+   */
+  avoidKeyboard?: boolean;
   children: React.ReactNode;
 }) {
+  const keyboardAware = avoidKeyboard && !container;
+  const inset = useVisualViewportInset(keyboardAware && open);
+  const contentRef = React.useRef<HTMLDivElement>(null);
+  useRestoreScrollOnClose(keyboardAware && open);
+
+  // The keyboard shrinks the sheet, so the focused field can end up below its fold.
+  React.useEffect(() => {
+    if (!inset || inset.bottom === 0) return;
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && contentRef.current?.contains(active)) {
+      active.scrollIntoView({ block: 'nearest' });
+    }
+  }, [inset]);
+
+  // The scroll padding keeps a focused field clear of a sticky actions row at the sheet's foot.
+  const keyboardStyle: React.CSSProperties | undefined =
+    inset && inset.bottom > 0
+      ? { bottom: inset.bottom, maxHeight: Math.max(0, inset.height - 12), scrollPaddingBottom: 72 }
+      : undefined;
+
   return (
     <Root open={open} onOpenChange={onOpenChange}>
       {trigger ? <Trigger asChild>{trigger}</Trigger> : null}
@@ -46,7 +73,11 @@ export function BottomSheet({
         {/* `data-no-sheet-drag` on both: portaled into another sheet (the debates panel's Filters,
             GEO-3463), they sit inside its surface in the DOM, and its native touch listeners would
             otherwise take a swipe here, or on this backdrop, as a drag that moves or dismisses it. */}
-        <Overlay data-no-sheet-drag className={`fixed inset-0 ${Z_LAYER_CLASS.bottomSheetBackdrop} bg-text/40`} />
+        <Overlay
+          data-no-sheet-drag
+          data-bottom-sheet-backdrop
+          className={`fixed inset-0 ${Z_LAYER_CLASS.bottomSheetBackdrop} bg-text/40`}
+        />
         {/* Portaled into another sheet, `fixed` is placed against that sheet, not the viewport: the
             debates panel's surface is transformed, which makes it the containing block. So the cap is
             that sheet's height (`max-h-full`); 85dvh of the screen is taller than a panel at peek, and
@@ -55,6 +86,8 @@ export function BottomSheet({
         {/* `aria-modal` said outright, as Radix does not set it: a surface underneath that steps aside
             for a modal dialog (the debates panel's Escape handler) can only tell from this. */}
         <Content
+          ref={contentRef}
+          style={keyboardStyle}
           data-no-sheet-drag
           aria-modal="true"
           aria-describedby={undefined}
@@ -81,4 +114,32 @@ export function BottomSheet({
       </Portal>
     </Root>
   );
+}
+
+/**
+ * iOS scrolls the page to bring a focused field into view and leaves it there when the keyboard
+ * goes away. Puts the page back at the scroll position it had when the sheet opened.
+ */
+function useRestoreScrollOnClose(active: boolean) {
+  // Unmounted with the page (a navigation), the sheet must not scroll the next page.
+  const mounted = React.useRef(true);
+  React.useLayoutEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  React.useLayoutEffect(() => {
+    if (!active) return;
+    const x = window.scrollX;
+    const y = window.scrollY;
+    return () => {
+      // After the keyboard has gone and Radix has returned focus to the trigger.
+      requestAnimationFrame(() => {
+        if (!mounted.current) return;
+        if (window.scrollX !== x || window.scrollY !== y) window.scrollTo(x, y);
+      });
+    };
+  }, [active]);
 }

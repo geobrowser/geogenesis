@@ -557,6 +557,11 @@ export const rankingFullscreenFocusTargetAtom = atom<HTMLElement | null>(null);
 // than the viewport and lets the feed scroll up under the sticky navbar.
 export const debateFullscreenActiveAtom = atom<boolean>(false);
 
+// How many full-page v2 entity templates are on screen (GEO-3846). The assistant's floating button
+// stays off while any is, so it doesn't compete with the template. A count rather than a boolean, so
+// the old page unmounting during a route change can't clear the new page's mount.
+export const entityTemplatePagesOnScreenAtom = atom<number>(0);
+
 // The graph explorer route has no app chrome, so the explorer fills the screen in flow under body
 // portals. Set while that route shows something else (an unbuilt mode, a bad link, an error), so the
 // app gives its navbar and sidebar back.

@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" fill="none">
+  <defs>
+    <linearGradient id="sea" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#E7EEF5" />
+      <stop offset="55%" stop-color="#DCE6F0" />
+      <stop offset="100%" stop-color="#D2DFEC" />
+    </linearGradient>
+    <linearGradient id="land" x1="0.2" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#F6F3EC" />
+      <stop offset="55%" stop-color="#EFEADF" />
+      <stop offset="100%" stop-color="#E6DFD2" />
+    </linearGradient>
+    <linearGradient id="wash" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.25" />
+      <stop offset="100%" stop-color="#202020" stop-opacity="0.04" />
+    </linearGradient>
+  </defs>
+
+  <!-- Mediterranean water backdrop -->
+  <rect width="1200" height="300" fill="url(#sea)" />
+
+  <!-- Subtle cartographic graticule -->
+  <g stroke="#8CA3B8" stroke-opacity="0.18" stroke-width="1">
+    <line x1="0" y1="75" x2="1200" y2="75" />
+    <line x1="0" y1="150" x2="1200" y2="150" />
+    <line x1="0" y1="225" x2="1200" y2="225" />
+    <line x1="150" y1="0" x2="150" y2="300" />
+    <line x1="300" y1="0" x2="300" y2="300" />
+    <line x1="450" y1="0" x2="450" y2="300" />
+    <line x1="600" y1="0" x2="600" y2="300" />
+    <line x1="750" y1="0" x2="750" y2="300" />
+    <line x1="900" y1="0" x2="900" y2="300" />
+    <line x1="1050" y1="0" x2="1050" y2="300" />
+  </g>
+
+  <!-- Offshore bathymetric contours -->
+  <g stroke="#7B96B0" stroke-opacity="0.24" stroke-width="1.2" fill="none">
+    <path d="M 485 -10 C 460 72, 422 146, 360 205 C 308 254, 240 282, 165 312" />
+    <path d="M 435 -10 C 408 75, 368 150, 300 212 C 245 262, 175 292, 95 312" />
+    <path d="M 380 -10 C 350 76, 308 152, 236 218 C 180 268, 108 296, 25 312" />
+    <path d="M 320 -10 C 288 78, 245 154, 170 222 C 112 272, 42 298, -20 310" />
+  </g>
+
+  <!-- Eastern Mediterranean landmass silhouette -->
+  <path
+    d="M 540 -10
+       C 526 42, 514 82, 496 124
+       C 476 168, 444 202, 404 232
+       C 366 260, 318 282, 260 310
+       L 1210 310
+       L 1210 -10 Z"
+    fill="url(#land)"
+    stroke="#BEB4A3"
+    stroke-width="1.5"
+  />
+
+  <!-- Topographic elevation contours over inland terrain -->
+  <g stroke="#B8AC99" stroke-opacity="0.45" stroke-width="1.1" fill="none">
+    <path d="M 590 -10 C 578 46, 562 94, 536 142 C 510 190, 466 228, 412 262 C 374 286, 332 298, 294 312" />
+    <path d="M 652 -10 C 642 52, 622 106, 594 156 C 562 212, 512 252, 452 288 C 428 302, 404 308, 380 314" />
+    <path d="M 730 -10 C 718 56, 696 116, 662 172 C 626 232, 570 274, 510 314" />
+    <path d="M 820 -10 C 808 62, 782 128, 744 188 C 704 250, 650 288, 592 314" />
+    <path d="M 922 -10 C 908 68, 880 140, 838 202 C 798 260, 748 294, 698 314" />
+    <path d="M 1030 -10 C 1018 72, 992 146, 954 212 C 916 274, 872 298, 830 314" />
+    <path d="M 1138 -10 C 1126 74, 1102 152, 1066 220 C 1036 276, 1002 300, 968 314" />
+  </g>
+
+  <!-- Subtle ridge highlight contours -->
+  <g stroke="#9D9280" stroke-opacity="0.28" stroke-width="1" fill="none">
+    <path d="M 775 28 C 752 86, 728 134, 696 184 C 668 228, 628 264, 580 295" />
+    <path d="M 870 12 C 846 76, 822 132, 788 188 C 756 240, 712 276, 664 306" />
+    <path d="M 974 18 C 956 84, 932 144, 898 202 C 868 252, 830 284, 788 308" />
+  </g>
+
+  <!-- Delicate Geo accent coordinate nodes along the coastline -->
+  <g>
+    <circle cx="496" cy="124" r="3.5" fill="#6833FF" fill-opacity="0.55" />
+    <circle cx="496" cy="124" r="9" stroke="#6833FF" stroke-opacity="0.2" stroke-width="1.2" />
+    <circle cx="452" cy="186" r="3" fill="#3963FE" fill-opacity="0.55" />
+    <circle cx="452" cy="186" r="8" stroke="#3963FE" stroke-opacity="0.2" stroke-width="1.2" />
+    <circle cx="672" cy="148" r="2.5" fill="#202020" fill-opacity="0.35" />
+    <path d="M 496 124 L 672 148 L 452 186" stroke="#202020" stroke-opacity="0.14" stroke-width="1" stroke-dasharray="3 4" />
+  </g>
+
+  <!-- Soft lighting wash -->
+  <rect width="1200" height="300" fill="url(#wash)" />
+</svg>

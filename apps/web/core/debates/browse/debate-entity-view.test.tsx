@@ -3,7 +3,9 @@ import { cleanup, render, screen } from '@testing-library/react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { DebateEntityView, debatePageSeedEntries } from './debate-entity-view';
+import type { Debate } from '~/core/debates/api';
+
+import { DebateEntityView, debatePageSeedEntries, debatedClaimContent } from './debate-entity-view';
 
 const mocks = vi.hoisted(() => ({
   pathname: '/space/space-1/debate-1',
@@ -12,6 +14,13 @@ const mocks = vi.hoisted(() => ({
   anchors: [] as Array<string | undefined>,
   /** Which server view the feed would show: what it was handed for each of its two outs. */
   feedViews: null as { fallback: unknown; removedView: unknown } | null,
+  belowLinkedDebate: undefined as ((debate: Debate) => unknown) | undefined,
+}));
+
+vi.mock('~/core/templates/views/live-claim-template-view', () => ({
+  LiveClaimSectionsView: (props: { entityId: string; spaceId: string }) => (
+    <div data-testid="claim-sections">{`${props.spaceId}/${props.entityId}`}</div>
+  ),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -23,8 +32,14 @@ vi.mock('next/navigation', () => ({
 vi.mock('~/core/hooks/use-user-is-editing', () => ({ useUserIsEditing: () => mocks.editing }));
 
 vi.mock('./debate-feed', () => ({
-  DebatesBrowseFeed: (props: { initialDebateId?: string; fallback?: unknown; removedView?: unknown }) => {
+  DebatesBrowseFeed: (props: {
+    initialDebateId?: string;
+    fallback?: unknown;
+    removedView?: unknown;
+    belowLinkedDebate?: (debate: Debate) => unknown;
+  }) => {
     mocks.anchors.push(props.initialDebateId);
+    mocks.belowLinkedDebate = props.belowLinkedDebate;
     mocks.feedViews = { fallback: props.fallback, removedView: props.removedView };
     return null;
   },
@@ -138,5 +153,34 @@ describe('debatePageSeedEntries (GEO-3604)', () => {
     expect(debatePageSeedEntries('01a0448a61d371018434a20fdadf6f00', { debate, media: null, signedIn: false })).toEqual(
       []
     );
+  });
+});
+
+describe('DebateEntityView claim below the debate (GEO-3869)', () => {
+  const debateAbout = (claim: Partial<Debate['claim']>) =>
+    ({
+      id: 'debate-1',
+      claim: {
+        id: 'c',
+        space_id: 'space-2',
+        claim_entity_id: 'claim-1',
+        claim: 'Debates are useful',
+        description: null,
+        ...claim,
+      },
+    }) as Debate;
+
+  it('hands the feed the debated claim’s content to scroll into, in the claim’s own space', () => {
+    mocks.pathname = '/space/space-1/debate-1';
+    render(<DebateEntityView spaceId="space-1" debateId="debate-1" editView={null} />);
+    expect(mocks.belowLinkedDebate).toBe(debatedClaimContent);
+
+    render(<>{debatedClaimContent(debateAbout({}))}</>);
+    expect(screen.getByTestId('claim-sections')).toHaveTextContent('space-2/claim-1');
+  });
+
+  it('adds nothing for a debate with no claim', () => {
+    expect(debatedClaimContent(debateAbout({ claim_entity_id: '' }))).toBeNull();
+    expect(debatedClaimContent({ id: 'debate-1' } as unknown as Debate)).toBeNull();
   });
 });

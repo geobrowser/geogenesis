@@ -5,12 +5,9 @@ import * as React from 'react';
 import { useAtomValue } from 'jotai';
 import dynamic from 'next/dynamic';
 
-import { BOTTOM_INSET_OFFSET_CLASS } from '~/core/app-bottom-inset';
 import { assistantSeedAtom, isChatOpenAtom } from '~/core/state/chat-store';
-import { Z_LAYER_CLASS } from '~/core/z-layers';
 
-import { AssistantSparkle } from '~/design-system/icons/assistant-sparkle';
-
+import { AssistantFab } from './assistant-fab';
 import { useHideAssistant } from './assistant-visibility';
 
 const loadChatWidget = () => import('~/partials/chat/chat-widget').then(m => ({ default: m.ChatWidget }));
@@ -54,16 +51,5 @@ export function ChatLauncher() {
 
   const preload = () => void loadChatWidget();
 
-  return (
-    <button
-      type="button"
-      onClick={() => setTrigger('fab')}
-      onPointerEnter={preload}
-      onFocus={preload}
-      aria-label="Open assistant"
-      className={`fixed right-4 ${BOTTOM_INSET_OFFSET_CLASS} ${Z_LAYER_CLASS.assistantLauncher} flex size-10 items-center justify-center rounded-full border border-grey-02 bg-white text-text shadow-lg transition-colors hover:border-text`}
-    >
-      <AssistantSparkle size={20} />
-    </button>
-  );
+  return <AssistantFab onOpen={() => setTrigger('fab')} onPreload={preload} />;
 }

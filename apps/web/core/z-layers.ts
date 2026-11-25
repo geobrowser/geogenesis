@@ -44,16 +44,20 @@ export const Z_LAYERS = {
   scheduleDialogBackdrop: 10006,
   scheduleDialog: 10007,
 
-  // A modal bottom sheet (the lobby's person and claim menus on a phone). Over everything else,
-  // the assistant launcher and the debates panel included, since a modal takes every tap.
+  // A modal bottom sheet (the lobby's person and claim menus on a phone, the graph explorer's panel
+  // sheet). Over everything else, the assistant launcher and the debates panel included, since a
+  // modal takes every tap -- except the save-votes prompt below, which can be opened from inside one.
   bottomSheetBackdrop: 10008,
   bottomSheet: 10009,
 
-  // The save-votes prompt when the navbar's "Save N votes" opens it centred (GEO-3400), backdrop and
-  // card in one layer: the card sits inside its backdrop. Above the status bar, toasts and chat
-  // launcher; level with the schedule dialog, which needs an account, so the two never meet. Below
-  // the bottom sheet, which stays on top of everything.
-  saveVotesDialog: 10007,
+  // The save-votes prompt (backdrop and card in one layer: the card sits inside its backdrop),
+  // whether the navbar's "Save N votes" opens it centred (GEO-3400) or a signed-out vote does. It is
+  // above the bottom sheet because a vote button can sit inside a sheet (GEO-3849: the graph
+  // explorer's panel sheet on a phone), and a prompt opened from a sheet has to land on top of it;
+  // at 10007 it opened behind the sheet, unseen, and the next tap dismissed it. Nothing opens a
+  // sheet over the prompt, which is modal. Privy's own dialog (z-index 999999, set by Privy) and the
+  // "Opening sign-in" overlay (`#sign-in-pending` in styles.css, 10011) stay above it.
+  saveVotesDialog: 10010,
 } as const;
 
 export const Z_LAYER_CLASS = {
@@ -77,5 +81,5 @@ export const Z_LAYER_CLASS = {
   scheduleDialog: 'z-[10007]',
   bottomSheetBackdrop: 'z-[10008]',
   bottomSheet: 'z-[10009]',
-  saveVotesDialog: 'z-[10007]',
+  saveVotesDialog: 'z-[10010]',
 } as const;

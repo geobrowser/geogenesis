@@ -28,7 +28,11 @@ import { usePendingTab } from '~/core/state/pending-tab';
 import { useMutate } from '~/core/sync/use-mutate';
 import { getRelations, getValues } from '~/core/sync/use-store';
 import type { Relation } from '~/core/types';
-import { entityTabIdFromHref, isEntityTabActive } from '~/core/utils/entity-tab-navigation';
+import {
+  entityTabIdFromHref,
+  isEntityTabActive,
+  isSelectedThroughRecordRoute,
+} from '~/core/utils/entity-tab-navigation';
 import { NavUtils } from '~/core/utils/utils';
 
 import { EditSmall } from '~/design-system/icons/edit-small';
@@ -49,7 +53,7 @@ import {
 
 export type SystemTab = Pick<
   TabGroupTab,
-  'label' | 'href' | 'badge' | 'sidePanelKey' | 'onlyWhenNarrow' | 'dividerBefore'
+  'label' | 'href' | 'badge' | 'sidePanelKey' | 'onlyWhenNarrow' | 'dividerBefore' | 'activeOnRecordRoutes'
 >;
 
 export type EditableTab = {
@@ -315,6 +319,12 @@ export function EditableTabGroup({
           fullPath,
           sidePanelKey: tab.sidePanelKey,
           activeSystemTab: sidePanelTab?.activeSystemTab,
+          activeOnRecordRoutes: tab.activeOnRecordRoutes,
+        })}
+        clickNavigatesWhenSelected={isSelectedThroughRecordRoute({
+          href: tab.href,
+          fullPath,
+          activeOnRecordRoutes: tab.activeOnRecordRoutes,
         })}
         onSelect={
           sidePanelTab
@@ -412,11 +422,13 @@ function StaticTab({
   activeRef,
   pendingHref,
   onPendingChange,
+  clickNavigatesWhenSelected = false,
 }: {
   href: string;
   label: string;
   badge?: React.ReactNode;
   active: boolean;
+  clickNavigatesWhenSelected?: boolean;
   onSelect?: () => void;
   onlyWhenNarrow?: boolean;
   activeRef: (element: HTMLElement | null) => void;
@@ -452,7 +464,7 @@ function StaticTab({
       prefetch={!switchesInPage}
       hoverPrefetch={!switchesInPage}
       onClick={event => {
-        if (isRepeatTabClick(event, selected)) event.preventDefault();
+        if (isRepeatTabClick(event, selected && !clickNavigatesWhenSelected)) event.preventDefault();
         switchTabInPage(event, href, () => onPendingChange(href, true));
       }}
     >

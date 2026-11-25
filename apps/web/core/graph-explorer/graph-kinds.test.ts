@@ -54,4 +54,12 @@ describe('kinds in the filter', () => {
     expect(resolveGraphFilter(null, overrides).kinds).toEqual(['ent', 'claim']);
     expect(parseGraphFilterOverrides(new URLSearchParams('kinds=nope')).kinds).toBeUndefined();
   });
+
+  it('opens a shared ?kinds=<chip> link on that chip, still fetching every kind', () => {
+    const overrides = parseGraphFilterOverrides(new URLSearchParams('kinds=claim'));
+    expect(overrides.chip).toBe('claim');
+    expect(resolveGraphFilter(null, overrides).kinds).toEqual(GRAPH_KINDS);
+    // Topics have no chip, so a lone topic still narrows.
+    expect(parseGraphFilterOverrides(new URLSearchParams('kinds=topic'))).toEqual({ kinds: ['topic'] });
+  });
 });

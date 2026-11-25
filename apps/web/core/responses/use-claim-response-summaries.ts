@@ -31,10 +31,13 @@ export function useClaimResponseSummaryBatch({
   spaceId,
   targets,
   enabled,
+  responderMetadata = true,
 }: {
   spaceId: string;
   targets: ClaimResponseTarget[];
   enabled: boolean;
+  /** False skips priming responder profiles and spaces, for rows that draw no responder faces. */
+  responderMetadata?: boolean;
 }) {
   const queryClient = useQueryClient();
   const { personalSpaceId, isLoading: isPersonalSpaceLoading } = usePersonalSpaceId();
@@ -127,7 +130,7 @@ export function useClaimResponseSummaryBatch({
       });
       return null;
     },
-    enabled: responseBatch.isSuccess && responderSpaceIds.length > 0,
+    enabled: responderMetadata && responseBatch.isSuccess && responderSpaceIds.length > 0,
     staleTime: 60_000,
     retry: 2,
   });

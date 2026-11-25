@@ -37,7 +37,11 @@ export type LocalVote = {
 
 export type LocalVotesState = {
   votes: LocalVote[];
-  /** How many times the save sheet has opened on its own, and been closed. Drives when it asks again. */
+  /**
+   * How many times the save sheet has opened on its own, which drives when it asks again. Nothing
+   * counts closes any more, as the sheet can't be dismissed (GEO-3846); `dismissCount` stays so
+   * state saved before then still reads.
+   */
   prompt: { shownCount: number; dismissCount: number };
   /**
    * The account a save prompt signed in, once it has. Only a sign-in a save prompt started saves the
@@ -263,10 +267,6 @@ export function clearLocalVotes() {
 
 export function recordSavePromptShown() {
   update(current => ({ ...current, prompt: { ...current.prompt, shownCount: current.prompt.shownCount + 1 } }));
-}
-
-export function recordSavePromptDismissed() {
-  update(current => ({ ...current, prompt: { ...current.prompt, dismissCount: current.prompt.dismissCount + 1 } }));
 }
 
 /** A save prompt's sign-in completed for `accountId`: these votes are that account's to publish. */

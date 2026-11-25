@@ -3671,6 +3671,62 @@ describe('holding the full recordings until the viewer asks (feed bandwidth)', (
     expect(getDefaultStore().get(feedFullPlaybackStartedAtom)).toBe(true);
   });
 
+  it('reports the Play that lifts the hold once, after the recordings attach', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false, posters: stills });
+
+    const attachedWhenReported: boolean[] = [];
+    mocks.control = vi.fn(() => attachedWhenReported.push(mocks.analyticsAttached.at(-1) ?? false));
+    const { getByRole } = render(<DebateFeedPlayer debate={debate} active holdFullPlayback />);
+
+    fireEvent.click(getByRole('button', { name: 'Play debate' }));
+
+    expect(mocks.control).toHaveBeenCalledOnce();
+    expect(mocks.control).toHaveBeenCalledWith('play');
+    expect(attachedWhenReported).toEqual([true]);
+  });
+
+  it('reports a held card’s Play pressed while scrolling in only once it is active', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false, posters: stills });
+    const { getByRole, rerender } = render(<DebateFeedPlayer debate={debate} active={false} holdFullPlayback />);
+
+    fireEvent.click(getByRole('button', { name: 'Play debate' }));
+    expect(mocks.control).not.toHaveBeenCalled();
+
+    rerender(<DebateFeedPlayer debate={debate} active holdFullPlayback />);
+    expect(mocks.control).toHaveBeenCalledOnce();
+    expect(mocks.control).toHaveBeenCalledWith('play');
+  });
+
+  it('reports the Play from a tap on a held card’s video, after the recordings attach', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false, posters: stills });
+    const attachedWhenReported: boolean[] = [];
+    mocks.control = vi.fn(() => attachedWhenReported.push(mocks.analyticsAttached.at(-1) ?? false));
+    const { getAllByRole } = render(<DebateFeedPlayer debate={debate} active holdFullPlayback />);
+
+    fireEvent.click(getAllByRole('button', { name: 'Pause or play' })[0]);
+
+    expect(mocks.control).toHaveBeenCalledOnce();
+    expect(mocks.control).toHaveBeenCalledWith('play');
+    expect(attachedWhenReported).toEqual([true]);
+  });
+
+  it('reports each Play and Pause after the hold lifts once each, as before the hold', () => {
+    const fixture = (playing: boolean) =>
+      controllerFixture({ mutedByUser: true, turnSlot: 1, playing, posters: stills });
+    mocks.controller = fixture(false);
+    const { getAllByRole, getByRole, rerender } = render(<DebateFeedPlayer debate={debate} active holdFullPlayback />);
+
+    fireEvent.click(getByRole('button', { name: 'Play debate' }));
+    mocks.controller = fixture(true);
+    rerender(<DebateFeedPlayer debate={debate} active holdFullPlayback />);
+    fireEvent.click(getAllByRole('button', { name: 'Pause debate' })[0]);
+    mocks.controller = fixture(false);
+    rerender(<DebateFeedPlayer debate={debate} active holdFullPlayback />);
+    fireEvent.click(getAllByRole('button', { name: 'Play debate' })[0]);
+
+    expect(mocks.control.mock.calls.map(([control]) => control)).toEqual(['play', 'pause', 'play']);
+  });
+
   it('keeps a Play tap while scrolling into view and starts only once active', () => {
     const fixture = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false, posters: stills });
     mocks.controller = fixture;
@@ -4630,5 +4686,57 @@ describe('the moments editor player (GEO-3773)', () => {
 
     expect(mocks.analyticsAttached.at(-1)).toBe(true);
     expect(watchedMocks.markDebateWatched).toHaveBeenCalledWith(debate.id);
+  });
+});
+
+// GEO-3833: the debates app draws the Agree speaker on top. The tiles swap by flex `order`, never by
+// DOM order (moving a playing <video> pauses it), and the controls that belong to a *position* — play,
+// mute and Start over on top, the scrubber at the bottom — must follow the swap onto the right tile.
+describe('Agree speaker on top', () => {
+  const withLabels = (slot1: string, slot2: string) =>
+    ({
+      ...debate,
+      participants: [
+        { participant_slot: 1, position_label: slot1 },
+        { participant_slot: 2, position_label: slot2 },
+      ],
+    }) as unknown as Debate;
+
+  const tile = (container: HTMLElement, slot: 1 | 2) =>
+    container.querySelector(`[data-debate-slot="${slot}"]`) as HTMLElement;
+
+  it('puts slot 2 on top when it argues Agree, with the top controls and the scrubber on the right tiles', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false });
+    const { container } = render(<DebateFeedPlayer debate={withLabels('Disagree', ' agree ')} active />);
+    const top = tile(container, 2);
+    const bottom = tile(container, 1);
+
+    // DOM order kept; drawn order swapped.
+    expect(container.querySelectorAll('[data-debate-slot]')[0]).toBe(bottom);
+    expect(top.classList.contains('order-1')).toBe(true);
+    expect(bottom.classList.contains('order-2')).toBe(true);
+
+    expect(within(top).getByRole('button', { name: 'Unmute' })).toBeTruthy();
+    expect(within(bottom).queryByRole('button', { name: 'Unmute' })).toBeNull();
+    expect(within(bottom).getByRole('slider', { name: 'Debate timeline' })).toBeTruthy();
+    expect(within(top).queryByRole('slider', { name: 'Debate timeline' })).toBeNull();
+  });
+
+  it.each([
+    ['no agree label yet', withLabels('Verify', 'Dispute')],
+    ['agree already in slot 1', withLabels('Agree', 'Disagree')],
+    ['no participants', debate],
+  ])('keeps slot 1 on top with %s', (_label, subject) => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false });
+    const { container } = render(<DebateFeedPlayer debate={subject} active />);
+    const top = tile(container, 1);
+    const bottom = tile(container, 2);
+
+    expect(top.classList.contains('order-1')).toBe(false);
+    expect(top.classList.contains('order-2')).toBe(false);
+    expect(bottom.classList.contains('order-1')).toBe(false);
+    expect(within(top).getByRole('button', { name: 'Unmute' })).toBeTruthy();
+    expect(within(bottom).getByRole('slider', { name: 'Debate timeline' })).toBeTruthy();
+    expect(within(top).queryByRole('slider', { name: 'Debate timeline' })).toBeNull();
   });
 });

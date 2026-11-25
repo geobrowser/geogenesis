@@ -7,7 +7,7 @@ export type GraphCaps = { hop1: number; hop2Each: number; hop2Total: number; cro
 export const DESKTOP_GRAPH_CAPS: GraphCaps = { hop1: 14, hop2Each: 2, hop2Total: 26, cross: 40 };
 export const PHONE_GRAPH_CAPS: GraphCaps = { hop1: 8, hop2Each: 1, hop2Total: 6, cross: 40 };
 
-/** A chip: every kind, or one kind (topics always stay, as the design keeps its hub). */
+/** A chip: every kind, or one kind. Under a chip topics drop out too; the centre always stays. */
 export type GraphKindFilter = GraphKind | 'all';
 
 export type Candidate = { node: GraphNode; edge: GraphEdge };
@@ -20,7 +20,7 @@ export type GraphSelection = { nodes: SelectedNode[]; links: SelectedLink[] };
 const BAND_ORDER = ['agreed', 'contested', 'rejected'] as const;
 
 function keeps(node: GraphNode, kindFilter: GraphKindFilter) {
-  return kindFilter === 'all' || node.kind === kindFilter || node.kind === 'topic';
+  return kindFilter === 'all' || node.kind === kindFilter;
 }
 
 /** Claims with responses first, alternating across the agreement bands; unanswered claims after. */

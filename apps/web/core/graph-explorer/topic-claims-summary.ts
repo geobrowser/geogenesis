@@ -59,7 +59,7 @@ export type ClaimsHeadline = {
   banded: number;
 };
 
-/** The topic's claims in one line, as the panel and the share card both state them; null with none. */
+/** The topic's claims in one line for the share card (the panel shows it only with no bands); null with none. */
 export function claimsHeadline(claims: readonly SummarisedClaim[]): ClaimsHeadline | null {
   if (claims.length === 0) return null;
   const banded = claims.filter(claim => claim.positive + claim.negative >= MIN_RESPONSES_FOR_BAND);

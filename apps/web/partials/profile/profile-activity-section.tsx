@@ -10,6 +10,9 @@ import { type ExploreFeedRow, toExploreFeedItem } from '~/core/explore/explore-c
 import { type SpaceLabel, spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { ACTIVITY_GALLERY_CARD_LIMIT } from '~/core/profile/activity-gallery';
 import type { ClaimResponse } from '~/core/profile/use-person-positions';
+import { debateParticipantsKey } from '~/core/templates/adapters/debate-gallery-model';
+import { useDebateParticipantsBatch } from '~/core/templates/adapters/use-debate-participants-batch';
+import { DEBATE_GALLERY_CARD_WIDTH_CLASS } from '~/core/templates/primitives/debate-gallery-card';
 import { normId } from '~/core/utils/norm-id';
 
 import { PILL_BUTTON_CLASS_NAME, PILL_BUTTON_SECONDARY_CLASS_NAME, buttonClassNames } from '~/design-system/button';
@@ -17,10 +20,10 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 import { NextButton, PreviousButton } from '~/design-system/table/table-pagination';
 
-import { ExploreFeedCard } from '~/partials/explore/explore-feed-card';
 import { withSpaceTabsAnchor } from '~/partials/space-page/space-tabs-anchor';
 
 import { GalleryClaimCard } from './gallery-claim-card';
+import { GalleryDebateCard } from './gallery-debate-card';
 
 export type ActivityKind = {
   key: string;
@@ -82,13 +85,10 @@ export type ActivityKind = {
  * galleries said they were different kinds of thing while burying the history
  * above them.
  *
- * The rows are the feed's own `ExploreFeedCard`, narrowed and laid sideways,
- * rather than a bespoke tile. That is what makes a debate here actually
- * playable and a claim here actually answerable: the card already holds the
- * player, the response buttons, the tally, and the Verify/Dispute vocabulary a
- * factual claim takes in place of Agree/Disagree. A tile reimplementing any of
- * that would be a second, worse copy of all of it — the bespoke one drew a
- * video inside an `<img>` and showed a grey box.
+ * A claim is the compact claim card, which holds the response buttons and the
+ * Verify/Dispute vocabulary a factual claim takes. A debate is the Topic page's
+ * Recent debates card (GEO-3871): the two speakers' video with the claim over it,
+ * opening the debate page, so a debate looks the same in every gallery.
  */
 export function ProfileActivitySection({
   kinds,
@@ -550,6 +550,11 @@ function ActivityGallery({
   const rowSpaceIds = React.useMemo(() => [...new Set(shown.map(row => row.spaceId))], [shown]);
   const { labelsById } = useSpaceLabels(rowSpaceIds);
 
+  // One lookup for the row's speakers rather than one per card. Until it answers, each card names
+  // its speakers from the debate's title, as the Topic page's row does.
+  const debateIds = React.useMemo(() => shown.filter(row => !isClaimRow(row)).map(row => row.entityId), [shown]);
+  const { data: participantsByDebateId } = useDebateParticipantsBatch(debateIds);
+
   const { scrollerRef, canScrollLeft, canScrollRight, scrollByCard } = useActivityGallery(shown);
 
   React.useEffect(() => {
@@ -561,8 +566,7 @@ function ActivityGallery({
   React.useEffect(() => () => onNavigationChange?.(null), [onNavigationChange]);
 
   return (
-    // Nothing here plays until it is tapped, and a tap plays only that card (GEO-3812): the gallery
-    // is outside a feed, so its debate cards are tap-to-play, one debate at a time app-wide.
+    // Nothing here plays in place: a debate card opens the debate page (GEO-3871).
     <>
       {/*
        * The wrapper, not the scroller, carries both of these.
@@ -598,6 +602,7 @@ function ActivityGallery({
               row={row}
               label={spaceLabel(labelsById, row.spaceId)}
               response={responseByClaimId?.[normId(row.entityId)]}
+              participants={participantsByDebateId?.[debateParticipantsKey(row.entityId)]}
               personName={personName}
               debateEndSlot={debateEndSlot}
             />
@@ -688,9 +693,10 @@ function useActivityGallery(rows: ExploreFeedRow[]) {
 /**
  * One card in the row.
  *
- * Both kinds use `300px`: after the card's border and 24px horizontal padding,
- * their 274px pill row has room for both response labels. Debate cards own their
- * frame, just as claim cards do; an extra gallery frame would spend that room twice.
+ * Claims use `300px`: after the card's border and 24px horizontal padding, their
+ * 274px pill row has room for both response labels. Debates use the Topic
+ * gallery's widths, so the two speakers' stills read at the same size there and
+ * here.
  *
  * Narrow enough that the next card is visibly cut off, which is what says the
  * row scrolls without a control saying so.
@@ -700,6 +706,7 @@ function GalleryCard({
   row,
   label,
   response,
+  participants,
   personName,
   debateEndSlot,
 }: {
@@ -707,17 +714,17 @@ function GalleryCard({
   row: ExploreFeedRow;
   label: SpaceLabel | undefined;
   response: ClaimResponse | undefined;
+  participants: React.ComponentProps<typeof GalleryDebateCard>['participants'];
   personName?: string | null;
   debateEndSlot?: (item: ReturnType<typeof toExploreFeedItem>) => React.ReactNode;
 }) {
-  // A claim gets the debates panel's own card, and everything else the feed's.
+  // A claim gets the debates panel's own card, and a debate the Topic page's Recent debates card
+  // (GEO-3871): only the video, with the claim over it and each speaker named on their own half.
   //
-  // Not one card for both: the explore card is built to be read one to a row at
-  // full width, and in a 420px column its padding and its separate tally block
-  // read as a card with something wrong with it. The lobby card is already the
-  // compact one, and a claim then looks the same wherever it is answered. A
-  // debate keeps the feed's card, which is the one that plays.
+  // Not one card for both: the claim card holds the response buttons a claim is answered with,
+  // and a debate's votes belong on its own page, which the card opens.
   const isClaim = isClaimRow(row);
+  const item = React.useMemo(() => toExploreFeedItem(row, label), [row, label]);
 
   return (
     <ActionContextProvider value={{ list_id: 'profile_activity', item_position: itemPosition }}>
@@ -725,20 +732,12 @@ function GalleryCard({
         data-activity-card
         // Measure the visible gallery, including inside a side panel, rather than the viewport.
         // The next card still peeks into view; the card itself owns its frame and padding.
-        className="w-[min(300px,84cqw)] shrink-0 snap-start"
+        className={cx('shrink-0 snap-start', isClaim ? 'w-[min(300px,84cqw)]' : DEBATE_GALLERY_CARD_WIDTH_CLASS)}
       >
         {isClaim ? (
           <GalleryClaimCard row={row} response={response} personName={personName} />
         ) : (
-          // The Join button is hidden: this is a record being read, not a place to
-          // be recruited into.
-          <ExploreFeedCard
-            item={toExploreFeedItem(row, label)}
-            hideJoinButton
-            titleOpensSidePanel
-            compactDebateChrome
-            debateEndSlot={debateEndSlot?.(toExploreFeedItem(row, label))}
-          />
+          <GalleryDebateCard item={item} participants={participants} endSlot={debateEndSlot?.(item)} />
         )}
       </div>
     </ActionContextProvider>

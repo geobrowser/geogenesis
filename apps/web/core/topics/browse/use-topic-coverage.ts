@@ -57,7 +57,10 @@ const FRAGMENT = 'TopicCoverageFragment';
  * came from. What bounds the payload is the property and relation-type narrowing, which still
  * applies; the decoder scopes each row to its own display space afterwards.
  */
-const TOPIC_COVERAGE_SOURCE = /* GraphQL */ `
+function topicCoverageSource(scopeRelation: boolean) {
+  // Scoped, the Topics relation must also be published in one of `$spaceIds`, not only the source.
+  const relationSpace = scopeRelation ? 'spaceId: { in: $spaceIds }' : '';
+  return /* GraphQL */ `
   ${exploreCardPropertyFragment(FRAGMENT)}
 
   query TopicCoverage(
@@ -74,6 +77,7 @@ const TOPIC_COVERAGE_SOURCE = /* GraphQL */ `
       filter: {
         typeId: { is: $topicsPropertyId }
         toEntityId: { is: $topicId }
+        ${relationSpace}
         fromEntity: { typeIds: { overlaps: $typeIds }, spaceIds: { overlaps: $spaceIds } }
       }
     ) {
@@ -89,9 +93,13 @@ const TOPIC_COVERAGE_SOURCE = /* GraphQL */ `
     }
   }
 `;
+}
 
 /** Exported for the test that holds it to the same per-entity selection the explore feed uses. */
-export const topicCoverageDocument = parse(TOPIC_COVERAGE_SOURCE) as TypedDocumentNode<any, any>;
+export const topicCoverageDocument = parse(topicCoverageSource(false)) as TypedDocumentNode<any, any>;
+
+/** The same query with the Topics relation's own space filtered to `$spaceIds`. */
+export const relationScopedTopicCoverageDocument = parse(topicCoverageSource(true)) as TypedDocumentNode<any, any>;
 
 export type TopicCoveragePage = {
   /** Card rows, still missing the parts only a space lookup can answer. */
@@ -137,19 +145,37 @@ export function useTopicCoverage({
   first,
   after,
   spaceIds,
+  scopeRelationToSpaces = false,
+  enabled = true,
 }: {
   topicId: string;
   first: number;
   after?: string;
   /** Undefined leaves the query unscoped, which is what the scope hook returns while it resolves. */
   spaceIds?: string[];
+  /**
+   * Also require the Topics relation to be published in `spaceIds`, so a source tagged with the
+   * topic only in another space is left out. Ignored without `spaceIds`.
+   */
+  scopeRelationToSpaces?: boolean;
+  enabled?: boolean;
 }) {
+  const scopeRelation = scopeRelationToSpaces && spaceIds !== undefined;
   const { data, isLoading, isPlaceholderData } = useQuery({
-    queryKey: ['topic', 'coverage', ID.uuidToHex(topicId), first, after ?? null, spaceIds ?? null],
+    enabled,
+    queryKey: [
+      'topic',
+      'coverage',
+      ID.uuidToHex(topicId),
+      first,
+      after ?? null,
+      spaceIds ?? null,
+      ...(scopeRelation ? ['relation-scoped'] : []),
+    ],
     queryFn: ({ signal }) =>
       Effect.runPromise(
         graphql({
-          query: topicCoverageDocument,
+          query: scopeRelation ? relationScopedTopicCoverageDocument : topicCoverageDocument,
           decoder: decodeCoverage,
           variables: {
             topicsPropertyId: ID.uuidToHex(TOPICS_PROPERTY_ID),

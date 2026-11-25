@@ -18,7 +18,7 @@ import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store
 import { TabEntity } from '~/core/types';
 import { Entity, Relation } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
-import { entityBrowseViewFromTypes } from '~/core/utils/entity-browse-view';
+import { entityBrowseViewFromTypes, entityPageTypeFromTypes } from '~/core/utils/entity-browse-view';
 import { sortRelations } from '~/core/utils/utils';
 
 import { Spacer } from '~/design-system/spacer';
@@ -95,7 +95,7 @@ export default async function ProfileLayout(props: Props) {
   const result = await cachedFetchEntityPage(entityId, spaceId);
   const entityTypes = result?.entity?.types ?? [];
   const targetContext = entityActionScope(result?.entity);
-  const pageType = entityBrowseViewFromTypes(entityTypes);
+  const pageType = entityPageTypeFromTypes(entityTypes);
   const actionContext = {
     ...targetContext,
     page_entity_id: entityId,
