@@ -282,6 +282,7 @@ export function TopicTemplate({
                     turn={turn}
                     isFirst={idx === 0}
                     isLast={idx === timelineHighlights.length - 1}
+                    spineInGutter={!compact && !embedded}
                   />
                 ))}
               </ol>
@@ -327,10 +328,16 @@ function TimelineHighlightRow({
   turn,
   isFirst,
   isLast,
+  spineInGutter,
 }: {
   turn: TopicTimelineHighlightModel;
   isFirst: boolean;
   isLast: boolean;
+  /**
+   * Pull the phone spine into the page margin. Only the full page has a gutter wide enough (37px); the
+   * side panel (16px, clipped on x) and the Space home shell would cut the circle off.
+   */
+  spineInGutter: boolean;
 }) {
   const isInteractive = Boolean(turn.href || turn.onSelect);
 
@@ -356,21 +363,29 @@ function TimelineHighlightRow({
   );
 
   return (
-    // Desktop: date | spine | event. Phones: a slim spine on the left, with the date just above its
-    // event's name beside it (GEO-3837).
-    <li className="grid grid-cols-[12px_minmax(0,1fr)] gap-x-3 @[680px]:grid-cols-[118px_28px_minmax(0,1fr)] @[680px]:gap-x-4">
+    // Desktop: date | spine | event. Phones: on the full page the spine sits in the page margin (the
+    // negative margin is its 18px column plus the 12px gap), so the date and event line up with the
+    // section headers; in narrower shells it stays inside the column. The date sits just above its
+    // event's name (GEO-3837, GEO-3854).
+    <li
+      className={cx(
+        'grid grid-cols-[18px_minmax(0,1fr)] gap-x-3 @[680px]:grid-cols-[118px_28px_minmax(0,1fr)] @[680px]:gap-x-4',
+        spineInGutter && '-ml-[30px] @[680px]:ml-0'
+      )}
+    >
       {/* Date */}
       <div className="col-start-2 row-start-1 pt-4 text-[14px] font-semibold text-grey-04 @[680px]:col-start-1 @[680px]:pt-5 @[680px]:text-right">
         {turn.when}
       </div>
 
-      {/* Continuous vertical timeline spine. The dot lines up with the date on phones, the name on desktop. */}
+      {/* Continuous vertical timeline spine. The same circle on every width; it lines up with the date on
+          phones, the name on desktop. */}
       <div className="relative col-start-1 row-span-2 row-start-1 flex justify-center @[680px]:col-start-2 @[680px]:row-span-1">
         {!isFirst && <span aria-hidden className="absolute top-0 h-[26px] w-px bg-grey-02 @[680px]:h-[28px]" />}
         {!isLast && <span aria-hidden className="absolute top-[26px] bottom-0 w-px bg-grey-02 @[680px]:top-[28px]" />}
         <span
           aria-hidden
-          className="relative z-10 mt-[20px] inline-grid size-3 shrink-0 place-items-center rounded-full border border-transparent bg-white @[680px]:mt-[19px] @[680px]:size-[18px] @[680px]:border-grey-02"
+          className="relative z-10 mt-[17px] inline-grid size-[18px] shrink-0 place-items-center rounded-full border border-grey-02 bg-white @[680px]:mt-[19px]"
         >
           <span className="size-2 rounded-full bg-text" />
         </span>

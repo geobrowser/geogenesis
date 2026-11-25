@@ -51,9 +51,11 @@ export interface ClaimExplorerProps {
 
 const PAGE_SIZE = 10;
 
+type ExplorerClaim = ClaimSummaryModel & { section: 'split' | 'agreed' };
+
 /**
  * Calm ranked Claims list styled identically to the Rankings panel: soft-shadow card container,
- * plain tabular rank numbers, clean 2-tab switch (`Disputed` | `Accepted`), right-aligned split bars,
+ * plain tabular rank numbers, one list (disputed claims first, then accepted), right-aligned split bars,
  * anchored `+` claim proposal popover, and automatic pagination when more claims exist than fit on one page.
  */
 export function ClaimExplorer({
@@ -68,45 +70,39 @@ export function ClaimExplorer({
     () => [...contestedClaims, ...agreedClaims].map(claim => claim.id),
     [agreedClaims, contestedClaims]
   );
-  const added = usePendingAdds<ClaimSummaryModel & { tab: 'split' | 'agreed' }>(listedIds);
-  const addedByTab = React.useMemo(
-    () => ({
-      split: added.rows.filter(claim => claim.tab === 'split'),
-      agreed: added.rows.filter(claim => claim.tab === 'agreed'),
-    }),
-    [added.rows]
-  );
-  const [tab, setTab] = React.useState<'split' | 'agreed'>(contestedClaims.length > 0 ? 'split' : 'agreed');
+  const added = usePendingAdds<ClaimSummaryModel>(listedIds);
   const [page, setPage] = React.useState(1);
 
-  const allContested = React.useMemo(
-    () => [...addedByTab.split, ...contestedClaims],
-    [addedByTab.split, contestedClaims]
-  );
-  const allAgreed = React.useMemo(() => [...addedByTab.agreed, ...agreedClaims], [addedByTab.agreed, agreedClaims]);
-  const voteTargets = React.useMemo(
-    () => [...allContested, ...allAgreed].map(claim => claim.voteTarget),
-    [allAgreed, allContested]
-  );
-  const hasContested = allContested.length > 0;
-  const hasAgreed = allAgreed.length > 0;
-  const showTabs = hasContested && hasAgreed;
+  // One list (GEO-3854): new claims on top, then disputed, then accepted, each in its own order. A
+  // claim listed in both groups shows once, in the first group it appears in.
+  const allClaims = React.useMemo<ExplorerClaim[]>(() => {
+    const seen = new Set<string>();
+    const rows: ExplorerClaim[] = [];
+    const push = (claim: ClaimSummaryModel, section: ExplorerClaim['section']) => {
+      if (seen.has(claim.id)) return;
+      seen.add(claim.id);
+      rows.push({ ...claim, section });
+    };
+    added.rows.forEach(claim => push(claim, 'split'));
+    contestedClaims.forEach(claim => push(claim, 'split'));
+    agreedClaims.forEach(claim => push(claim, 'agreed'));
+    return rows;
+  }, [added.rows, agreedClaims, contestedClaims]);
+  const voteTargets = React.useMemo(() => allClaims.map(claim => claim.voteTarget), [allClaims]);
 
-  const activeTab = showTabs ? tab : hasContested ? 'split' : 'agreed';
-  const activeList = activeTab === 'split' ? allContested : allAgreed;
   const rankingKey = React.useMemo(() => {
-    const sig = activeList
+    const sig = allClaims
       .slice(0, 3)
       .map(c => c.id)
       .join(',');
-    return `claims:${title}:${activeTab}:${sig}`;
-  }, [activeList, activeTab, title]);
+    return `claims:${title}:${sig}`;
+  }, [allClaims, title]);
 
-  const ranking = useListRanking({ listKey: rankingKey, items: activeList });
+  const ranking = useListRanking({ listKey: rankingKey, items: allClaims });
 
   const rankableItems = React.useMemo<RankableListItem[]>(
     () =>
-      activeList.map(claim => ({
+      allClaims.map(claim => ({
         id: claim.id,
         title: claim.title,
         badge: claim.kind ? formatClaimKindLabel(claim.kind) : undefined,
@@ -116,7 +112,7 @@ export function ClaimExplorer({
             ? `${formatCompactCount(claim.split.totalVotes)} ${claim.split.totalVotes === 1 ? 'vote' : 'votes'}`
             : undefined,
       })),
-    [activeList]
+    [allClaims]
   );
 
   const displayList = ranking.orderedItems;
@@ -124,7 +120,7 @@ export function ClaimExplorer({
   const safePage = Math.min(page, totalPages);
   const startIndex = (safePage - 1) * PAGE_SIZE;
   const visible = displayList.slice(startIndex, startIndex + PAGE_SIZE);
-  if (!hasContested && !hasAgreed) return null;
+  if (allClaims.length === 0) return null;
 
   return (
     <section id="claims" aria-label={title} className={cx('flex flex-col gap-4', className)}>
@@ -140,21 +136,21 @@ export function ClaimExplorer({
               setPage(1);
             }}
             onOpen={ranking.open}
-            disabled={activeList.length < 2}
+            disabled={allClaims.length < 2}
           />
           <AddClaimPopover
             label="Add claim"
             canOpen={ctx?.callbacks?.canOpenAddForm}
             onSubmit={draft => {
-              const tab = activeTab;
+              // The new claim goes to the top of the list, so show page 1 where it lands.
+              setPage(1);
               added.add(
                 state => ({
-                  tab,
                   pending: state.status === 'pending',
                   title: draft.title,
                   kind: draft.kind,
                   meta: state.status === 'pending' ? [PUBLISHING_LABEL] : draft.note ? [draft.note] : undefined,
-                  split: { rows: [], isSplit: tab === 'split', totalVotes: 0 },
+                  split: { rows: [], isSplit: true, totalVotes: 0 },
                   href: state.status === 'published' ? NavUtils.toEntity(state.spaceId, state.id) : undefined,
                 }),
                 ctx?.callbacks?.onAddClaim?.(draft)
@@ -167,7 +163,7 @@ export function ClaimExplorer({
 
       <ListRankingWorkspace
         open={ranking.isOpen}
-        title={showTabs ? `${title} · ${activeTab === 'split' ? 'Disputed' : 'Accepted'}` : title}
+        title={title}
         items={rankableItems}
         initialOrder={ranking.myOrder}
         onClose={ranking.close}
@@ -178,68 +174,24 @@ export function ClaimExplorer({
       />
 
       <div className={cx('flex flex-col overflow-hidden', TEMPLATE_CARD_SURFACE)}>
-        {showTabs && (
-          <div
-            role="tablist"
-            aria-label="Claim view"
-            className="flex flex-wrap items-center gap-2 border-b border-divider px-5 py-3.5"
-          >
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === 'split'}
-              onClick={() => {
-                setTab('split');
-                setPage(1);
-              }}
-              className={cx(
-                'inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[14px] font-medium transition-colors',
-                activeTab === 'split'
-                  ? 'border-text bg-text text-white'
-                  : 'border-grey-02 bg-white text-text hover:border-text'
-              )}
-            >
-              <span>Disputed</span>
-            </button>
-
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === 'agreed'}
-              onClick={() => {
-                setTab('agreed');
-                setPage(1);
-              }}
-              className={cx(
-                'inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[14px] font-medium transition-colors',
-                activeTab === 'agreed'
-                  ? 'border-text bg-text text-white'
-                  : 'border-grey-02 bg-white text-text hover:border-text'
-              )}
-            >
-              <span>Accepted</span>
-            </button>
-          </div>
-        )}
-
-        {/* Both tabs' rows, so switching tab or page keeps the same lookup and batch. */}
+        {/* Every row, so switching page keeps the same lookup and batch. */}
         <TemplateVoteRows targets={voteTargets}>
           <div className="divide-y divide-divider">
             {visible.map((claim, index) => (
-              // Names the list, the tab (positions restart on each) and the row on every action taken
-              // in it, a vote included.
+              // Names the list, the claim's group and the row on every action taken in it, a vote
+              // included. Positions run 1..N down the one list.
               <ActionContextProvider
                 key={claim.id}
                 value={{
                   list_id: 'template_claims',
-                  list_section_id: activeTab,
+                  list_section_id: claim.section,
                   item_position: startIndex + index + 1,
                 }}
               >
                 <ClaimListRow
                   rank={startIndex + index + 1}
                   claim={claim}
-                  isAgreed={activeTab === 'agreed'}
+                  isAgreed={claim.section === 'agreed'}
                   hideKindOnPhone={hideKindOnPhone}
                 />
               </ActionContextProvider>
