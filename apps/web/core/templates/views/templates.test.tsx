@@ -29,12 +29,25 @@ const SHIPPED_TEMPLATE_ACTIONS = { ...TEMPLATE_ACTIONS };
 function restoreTemplateActions() {
   Object.assign(TEMPLATE_ACTIONS, SHIPPED_TEMPLATE_ACTIONS);
 }
+// A test that flips a flag inline (outside the helpers below) is put back here.
+afterEach(restoreTemplateActions);
 
 /** These fixture walks cover Add context and Dispute with the actions switched on. */
 function withTemplateActionsOn() {
   beforeEach(() => {
     TEMPLATE_ACTIONS.addContext = true;
     TEMPLATE_ACTIONS.dispute = true;
+  });
+  afterEach(restoreTemplateActions);
+}
+
+/**
+ * The Sources "+" ships off until ingestion publishes on its own (GEO-3862). These tests switch it on
+ * so each template's Sources section still proves it draws the "+" once the flag comes back.
+ */
+function withAddSourceOn() {
+  beforeEach(() => {
+    TEMPLATE_ACTIONS.addSource = true;
   });
   afterEach(restoreTemplateActions);
 }
@@ -847,6 +860,8 @@ describe('GEO-3819 layout fixes', () => {
 });
 
 describe('EventTemplate Sources section (GEO-3819)', () => {
+  withAddSourceOn();
+
   it('shows "No sources" with an add button when the event has none', () => {
     render(
       <EventTemplate
@@ -867,6 +882,8 @@ describe('EventTemplate Sources section (GEO-3819)', () => {
 });
 
 describe('PostTemplate Sources section (GEO-3819)', () => {
+  withAddSourceOn();
+
   it('shows "No sources" with an add button when the post has none', () => {
     render(
       <PostTemplate
@@ -912,8 +929,8 @@ describe('Add context and Dispute switched off (GEO-3819 defaults)', () => {
     sections: [],
   };
 
-  it('ships both actions off in the one switch', () => {
-    expect(SHIPPED_TEMPLATE_ACTIONS).toEqual({ addContext: false, dispute: false });
+  it('ships the actions off in the one switch', () => {
+    expect(SHIPPED_TEMPLATE_ACTIONS).toEqual({ addContext: false, dispute: false, addSource: false });
   });
 
   it('shows no Add context / Dispute entry point and no empty Context or Disputes section', () => {
@@ -923,10 +940,10 @@ describe('Add context and Dispute switched off (GEO-3819 defaults)', () => {
     expect(screen.queryByRole('region', { name: 'Disputes' })).toBeNull();
     expect(screen.queryByRole('button', { name: /add context|add dispute|dispute|challenge/i })).toBeNull();
     expect(screen.queryByText(/^(Add context|Dispute|Challenge)$/)).toBeNull();
-    // The Sources `+` stays: it is the link ingestion, not an Add context action.
+    // The Sources `+` is hidden too until link ingestion publishes on its own (TEMPLATE_ACTIONS.addSource).
     expect(
-      within(screen.getByRole('region', { name: 'Sources' })).getByRole('button', { name: 'Add source' })
-    ).toBeInTheDocument();
+      within(screen.getByRole('region', { name: 'Sources' })).queryByRole('button', { name: 'Add source' })
+    ).toBeNull();
   });
 
   it('hides the Post "Add context note" button and the empty Context notes section', () => {
@@ -1194,6 +1211,7 @@ describe('GEO-3837 phone tidy-ups', () => {
   });
 
   it('names the sources section "Sources" and keeps its "+" adding a source (GEO-3846)', () => {
+    TEMPLATE_ACTIONS.addSource = true;
     render(
       <TopicTemplate
         model={{

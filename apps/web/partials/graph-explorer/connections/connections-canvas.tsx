@@ -50,7 +50,7 @@ type NodeView = {
   entry: SelectedNode;
   /** Screen offset keeping it clear of the centre, eased frame to frame. */
   push: [number, number];
-  /** Opacity factor while a nearer card covers it on phone, eased frame to frame. */
+  /** Opacity factor while a nearer card covers its label, eased frame to frame. */
   dim: number;
 };
 
@@ -398,6 +398,8 @@ export function ConnectionsCanvas({
         scale: number;
         opacity: number;
         isCentre: boolean;
+        /** Shown as its marker; `data-far` on its button is the only copy kept across frames. */
+        far: boolean;
       }> = [];
       for (const node of state.views.values()) {
         const element = elements.current.get(node.id);
@@ -406,6 +408,15 @@ export function ConnectionsCanvas({
         const isCentre = node.id === state.centreId;
         const fog = Math.max(0.28, Math.min(1, 1 - (point.depth + 150) / 1100));
         const scale = nodeScale(isCentre, node.hop, point.scale, phone);
+        // Hop 2 is always a marker; a hop-1 card turns into one while drawn too small to read.
+        // Read from the button, not the view: a node selected again while still fading out keeps
+        // its button (and its `data-far`) but gets a fresh view.
+        const wasFar = element.dataset.far !== undefined;
+        const far = !isCentre && node.hop === 1 && tooSmallToRead(scale, wasFar, phone);
+        if (far !== wasFar) {
+          if (far) element.dataset.far = '';
+          else delete element.dataset.far;
+        }
         let opacity = node.alive ? fog : 0;
         if (hover && node.id !== hover && !neighbours.has(node.id)) opacity *= 0.22;
         if (node.id === hover && node.alive) opacity = 1;
@@ -428,25 +439,22 @@ export function ConnectionsCanvas({
         } else if (isCentre) node.push = [0, 0];
         point.x += node.push[0];
         point.y += node.push[1];
-        drawn.push({ node, element, point, box, scale, opacity, isCentre });
+        drawn.push({ node, element, point, box, scale, opacity, isCentre, far });
       }
 
-      // On phone a card covered by a nearer one fades, so the front one reads.
+      // A labelled card a nearer one touches fades, so no two labels overlap; far markers carry no label.
+      const labelled = drawn.filter(entry => !entry.isCentre && entry.node.alive && entry.node.hop < 2 && !entry.far);
+      const hidden = coveredLabels(
+        labelled.map(entry => ({
+          rect: rectAt(entry.point.x, entry.point.y, entry.box, entry.scale),
+          depth: entry.point.depth,
+          keep: entry.node.id === hover || neighbours.has(entry.node.id),
+          shown: entry.node.dim > 0.5,
+        }))
+      );
+      const covered = new Set(labelled.filter((_, i) => hidden[i]).map(entry => entry.node));
       for (const entry of drawn) {
-        let covered = false;
-        if (phone && !entry.isCentre && entry.node.alive && entry.node.id !== hover && !neighbours.has(entry.node.id)) {
-          const rect = rectAt(entry.point.x, entry.point.y, entry.box, entry.scale);
-          covered = drawn.some(
-            other =>
-              other !== entry &&
-              !other.isCentre &&
-              other.node.alive &&
-              other.opacity > 0.3 &&
-              other.point.depth < entry.point.depth &&
-              overlapShare(rect, rectAt(other.point.x, other.point.y, other.box, other.scale)) > 0.25
-          );
-        }
-        const target = covered ? 0.2 : 1;
+        const target = covered.has(entry.node) ? COVERED_DIM : 1;
         if (Math.abs(target - entry.node.dim) > 0.01) moving = true;
         entry.node.dim += (target - entry.node.dim) * (reduceMotion ? 1 : 0.2);
       }
@@ -729,9 +737,12 @@ export function ConnectionsCanvas({
               aria-label={entry.node.name ?? undefined}
               tabIndex={gone ? -1 : 0}
               className={cx(
-                'absolute top-0 left-0 opacity-0 will-change-transform focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white',
+                'group absolute top-0 left-0 opacity-0 will-change-transform focus-visible:outline-2 focus-visible:outline-white',
                 gone && 'pointer-events-none',
-                isCentre ? 'cursor-default' : 'cursor-pointer'
+                // The centre already wears a white ring (CENTRE_RING), so its focus ring sits clear of it.
+                isCentre
+                  ? 'cursor-default focus-visible:outline-offset-[9px]'
+                  : 'cursor-pointer focus-visible:outline-offset-4'
               )}
               onClick={event => {
                 if (moved.current) return;
@@ -852,6 +863,48 @@ function shifted(rect: Rect, [dx, dy]: [number, number]): Rect {
 export function overlaps(centre: Rect, rect: Rect): boolean {
   const [dx, dy] = clearance(centre, rect);
   return dx !== 0 || dy !== 0;
+}
+
+/**
+ * Scale below which a card's text is too small to read, and the higher one it must grow past to
+ * come back, so it doesn't flap. Phone's whole map is drawn smaller and on a denser screen, so its
+ * cut is lower or most of its cards would go.
+ */
+const FAR_SCALE = { desktop: [0.6, 0.7], phone: [0.5, 0.58] } as const;
+
+/** Whether a card drawn at `scale` is too small to read, with hysteresis on `wasFar`. */
+export function tooSmallToRead(scale: number, wasFar: boolean, phone: boolean) {
+  const [below, above] = FAR_SCALE[phone ? 'phone' : 'desktop'];
+  return wasFar ? scale <= above : scale < below;
+}
+
+/** A covered card's opacity factor: low enough that its text no longer reads over the front one. */
+const COVERED_DIM = 0.12;
+
+type LabelSlot = { rect: Rect; depth: number; keep: boolean; shown: boolean };
+
+/**
+ * Which labels to fade so no two overlap: placed greedily, the hovered one and its neighbours
+ * first, then those already showing (so a pair at equal depth doesn't flicker), then nearest first.
+ * O(n²) over a few dozen cards, so cheap per frame.
+ */
+export function coveredLabels(slots: readonly LabelSlot[]): boolean[] {
+  const order = slots
+    .map((slot, i) => i)
+    .sort(
+      (a, b) =>
+        Number(slots[b].keep) - Number(slots[a].keep) ||
+        Number(slots[b].shown) - Number(slots[a].shown) ||
+        slots[a].depth - slots[b].depth
+    );
+  const placed: Rect[] = [];
+  const hidden = slots.map(() => false);
+  for (const i of order) {
+    const { rect, keep } = slots[i];
+    if (!keep && placed.some(other => overlapShare(rect, other) > 0)) hidden[i] = true;
+    else placed.push(rect);
+  }
+  return hidden;
 }
 
 /** How much of the smaller rectangle the two share, 0 to 1. */
