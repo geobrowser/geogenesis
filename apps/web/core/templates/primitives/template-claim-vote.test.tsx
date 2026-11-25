@@ -465,6 +465,37 @@ describe('ClaimExplorer voting', () => {
     for (const meter of meters) expect(meter).toHaveAttribute('aria-valuenow', '100');
   });
 
+  // A Claim page sub-claim's split is one row named for its space, with no Everyone row.
+  it("a sub-claim's single space row takes the live numbers, with no second overall row", () => {
+    setControl({ viewerPosition: true });
+    render(
+      <EntityActionProvider>
+        <ClaimExplorer
+          contestedClaims={[
+            claim({
+              voteTarget: TARGET,
+              userVote: null,
+              agreeCount: 1,
+              disagreeCount: 1,
+              split: {
+                rows: [{ id: 'space-1', label: 'AI', color: '#3963fe', percent: 50, voterCount: 2 }],
+                isSplit: true,
+                totalVotes: 2,
+              },
+            }),
+          ]}
+          agreedClaims={[]}
+        />
+      </EntityActionProvider>
+    );
+    expect(screen.getByText('3 votes')).toBeInTheDocument();
+    // One inline meter (wide) and one phone row: the space row, at 2 of 3.
+    const meters = screen.getAllByRole('meter');
+    expect(meters).toHaveLength(2);
+    for (const meter of meters) expect(meter).toHaveAttribute('aria-valuenow', '67');
+    expect(screen.queryByText('Everyone')).toBeNull();
+  });
+
   it('a switched vote moves the inline percentage and keeps the total', () => {
     setControl({ viewerPosition: false });
     setState({ readiness: { response_kind: 'stance', viewer_response: { position: true } } });
