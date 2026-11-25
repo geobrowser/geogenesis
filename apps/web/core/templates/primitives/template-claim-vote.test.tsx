@@ -431,7 +431,7 @@ describe('ClaimExplorer voting', () => {
     const onVote = vi.fn();
     render(
       <EntityActionProvider>
-        <ClaimExplorer contestedClaims={[claim({ voteTarget: TARGET, onVote, userVote: null })]} agreedClaims={[]} />
+        <ClaimExplorer claims={[claim({ voteTarget: TARGET, onVote, userVote: null })]} />
       </EntityActionProvider>
     );
 
@@ -451,7 +451,7 @@ describe('ClaimExplorer voting', () => {
     });
     const view = render(
       <EntityActionProvider>
-        <ClaimExplorer contestedClaims={[noVotes]} agreedClaims={[]} />
+        <ClaimExplorer claims={[noVotes]} />
       </EntityActionProvider>
     );
     expect(screen.getByText('No votes yet')).toBeInTheDocument();
@@ -462,7 +462,7 @@ describe('ClaimExplorer voting', () => {
     setControl({ viewerPosition: true });
     render(
       <EntityActionProvider>
-        <ClaimExplorer contestedClaims={[noVotes]} agreedClaims={[]} />
+        <ClaimExplorer claims={[noVotes]} />
       </EntityActionProvider>
     );
     expect(screen.queryByText('No votes yet')).toBeNull();
@@ -478,7 +478,7 @@ describe('ClaimExplorer voting', () => {
     render(
       <EntityActionProvider>
         <ClaimExplorer
-          contestedClaims={[
+          claims={[
             claim({
               voteTarget: TARGET,
               userVote: null,
@@ -491,7 +491,6 @@ describe('ClaimExplorer voting', () => {
               },
             }),
           ]}
-          agreedClaims={[]}
         />
       </EntityActionProvider>
     );
@@ -509,7 +508,7 @@ describe('ClaimExplorer voting', () => {
     render(
       <EntityActionProvider>
         <ClaimExplorer
-          contestedClaims={[
+          claims={[
             claim({
               voteTarget: TARGET,
               userVote: 'agree',
@@ -524,7 +523,6 @@ describe('ClaimExplorer voting', () => {
               },
             }),
           ]}
-          agreedClaims={[]}
         />
       </EntityActionProvider>
     );
@@ -568,7 +566,7 @@ describe('ClaimExplorer voting', () => {
     const onVote = vi.fn();
     render(
       <EntityActionProvider>
-        <ClaimExplorer contestedClaims={[claim({ onVote, userVote: null })]} agreedClaims={[]} />
+        <ClaimExplorer claims={[claim({ onVote, userVote: null })]} />
       </EntityActionProvider>
     );
 
@@ -592,7 +590,7 @@ describe('list attribution on template votes', () => {
     });
     render(
       <EntityActionProvider>
-        <ClaimExplorer contestedClaims={[row(TARGET), row(second)]} agreedClaims={[]} />
+        <ClaimExplorer claims={[row(TARGET), row(second)]} />
       </EntityActionProvider>
     );
 

@@ -38,8 +38,11 @@ const CLAIM_KIND_TONE: Record<ClaimKind, TemplateBadgeTone> = {
 };
 
 export interface ClaimExplorerProps {
-  contestedClaims: readonly ClaimSummaryModel[];
-  agreedClaims: readonly ClaimSummaryModel[];
+  /**
+   * The claims in the order to show them, ranked 1..N as given (GEO-3868). The list never regroups
+   * them: an accepted claim keeps its place and only gains a check mark.
+   */
+  claims: readonly ClaimSummaryModel[];
   title?: string;
   /**
    * Below 760px the Factual / Judgment tag is dropped to keep each row short (GEO-3819). On for
@@ -53,41 +56,36 @@ const PAGE_SIZE = 10;
 
 type ExplorerClaim = ClaimSummaryModel & { section: 'split' | 'agreed' };
 
+/** Accepted: at least two votes and not split (75% or more on one side). Draws the check mark. */
+function isAcceptedClaim(claim: ClaimSummaryModel): boolean {
+  return !claim.split.isSplit && (claim.split.totalVotes ?? 0) >= 2;
+}
+
 /**
  * Calm ranked Claims list styled identically to the Rankings panel: soft-shadow card container,
- * plain tabular rank numbers, one list (disputed claims first, then accepted), right-aligned split bars,
+ * plain tabular rank numbers, one list in the order given, right-aligned split bars,
  * anchored `+` claim proposal popover, and automatic pagination when more claims exist than fit on one page.
  */
-export function ClaimExplorer({
-  contestedClaims,
-  agreedClaims,
-  title = 'Claims',
-  hideKindOnPhone = true,
-  className,
-}: ClaimExplorerProps) {
+export function ClaimExplorer({ claims, title = 'Claims', hideKindOnPhone = true, className }: ClaimExplorerProps) {
   const ctx = useEntityActionContext();
-  const listedIds = React.useMemo(
-    () => [...contestedClaims, ...agreedClaims].map(claim => claim.id),
-    [agreedClaims, contestedClaims]
-  );
+  const listedIds = React.useMemo(() => claims.map(claim => claim.id), [claims]);
   const added = usePendingAdds<ClaimSummaryModel>(listedIds);
   const [page, setPage] = React.useState(1);
 
-  // One list (GEO-3854): new claims on top, then disputed, then accepted, each in its own order. A
-  // claim listed in both groups shows once, in the first group it appears in.
+  // One list (GEO-3854): new claims on top, then the claims in the order given (GEO-3868), never
+  // regrouped into disputed then accepted. A claim listed twice shows once, at its first place.
   const allClaims = React.useMemo<ExplorerClaim[]>(() => {
     const seen = new Set<string>();
     const rows: ExplorerClaim[] = [];
-    const push = (claim: ClaimSummaryModel, section: ExplorerClaim['section']) => {
+    const push = (claim: ClaimSummaryModel) => {
       if (seen.has(claim.id)) return;
       seen.add(claim.id);
-      rows.push({ ...claim, section });
+      rows.push({ ...claim, section: isAcceptedClaim(claim) ? 'agreed' : 'split' });
     };
-    added.rows.forEach(claim => push(claim, 'split'));
-    contestedClaims.forEach(claim => push(claim, 'split'));
-    agreedClaims.forEach(claim => push(claim, 'agreed'));
+    added.rows.forEach(push);
+    claims.forEach(push);
     return rows;
-  }, [added.rows, agreedClaims, contestedClaims]);
+  }, [added.rows, claims]);
   const voteTargets = React.useMemo(() => allClaims.map(claim => claim.voteTarget), [allClaims]);
 
   const rankingKey = React.useMemo(() => {

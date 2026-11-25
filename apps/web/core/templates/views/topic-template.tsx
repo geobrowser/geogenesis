@@ -7,7 +7,12 @@ import Link from 'next/link';
 
 import { NavUtils } from '~/core/utils/utils';
 
-import type { EntityActionCallbacks, TopicTemplateModel, TopicTimelineHighlightModel } from '../models';
+import type {
+  ClaimSummaryModel,
+  EntityActionCallbacks,
+  TopicTemplateModel,
+  TopicTimelineHighlightModel,
+} from '../models';
 import { TEMPLATE_ONTOLOGY, formatOntologyDate } from '../ontology';
 import {
   AddEntityItemPopover,
@@ -35,6 +40,7 @@ import { PUBLISHING_LABEL, usePendingAdds } from '../primitives/use-pending-adds
  * time fields. That mode writes the same midnight-UTC ISO string (`2026-11-18T00:00:00.000Z`) as a DATETIME
  * date with no time, and `buildEventEdits` still stages it as DATETIME, so the property type doesn't change.
  */
+const NO_CLAIMS: readonly ClaimSummaryModel[] = [];
 const EVENT_DATE_INPUT = { propertyId: TEMPLATE_ONTOLOGY.EVENT_DATE_PROPERTY_ID, dataType: 'DATE' } as const;
 
 export interface TopicTemplateProps {
@@ -66,8 +72,7 @@ export function TopicTemplate({
   isLoadingSections = false,
   className,
 }: TopicTemplateProps) {
-  const contested = model.contestedClaims ?? [];
-  const agreed = model.agreedClaims ?? [];
+  const claims = model.claims ?? NO_CLAIMS;
   const listedTimelineIds = React.useMemo(
     () => (model.timelineHighlights ?? []).map(turn => turn.id),
     [model.timelineHighlights]
@@ -221,10 +226,8 @@ export function TopicTemplate({
         </div>
       ) : (
         <div className="flex animate-fade-in flex-col gap-10">
-          {/* Calm single-column Claims list with 2-tab switch (Disputed | Accepted) */}
-          {(contested.length > 0 || agreed.length > 0) && (
-            <ClaimExplorer contestedClaims={contested} agreedClaims={agreed} title="Claims" hideKindOnPhone />
-          )}
+          {/* One ranked Claims list, in the topic's Best order (GEO-3868) */}
+          {claims.length > 0 && <ClaimExplorer claims={claims} title="Claims" hideKindOnPhone />}
 
           {/* Recent debates gallery (horizontal snap-scroll cards matching Genesis's debate gallery) */}
           {model.recentDebates && model.recentDebates.length > 0 && (

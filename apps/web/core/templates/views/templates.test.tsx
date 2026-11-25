@@ -116,7 +116,7 @@ describe('TopicTemplate progressive disclosure', () => {
       title: 'Renewable energy',
       lede: 'Grid-scale storage and generation.',
       stats: [{ label: 'Claims', value: '12' }],
-      contestedClaims: [
+      claims: [
         {
           id: 'c-1',
           title: 'Battery storage costs fell over 80% in the past decade',
@@ -547,7 +547,7 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
       lede: 'Artificial intelligence space description',
       coverUrl: '/cover-ai.jpg',
       subtopics: [{ id: 'sub-1', label: 'AI Regulation', href: '/space/s/sub-1' }],
-      contestedClaims: [
+      claims: [
         {
           id: 'c-1',
           title: 'We should slow down AI development',
@@ -559,7 +559,6 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
           },
         },
       ],
-      agreedClaims: [],
     };
 
     render(<TopicTemplate model={model} embedded />);
@@ -1240,12 +1239,44 @@ describe('Phone claim lists without the card (GEO-3857)', () => {
     expect(surface).not.toHaveClass('rounded-xl');
   };
 
+  it.each(['Topic', 'Source', 'Episode'] as const)(
+    '%s lists its claims in the order given, an accepted claim above a disputed one (GEO-3868)',
+    page => {
+      const claims = [
+        { id: 'c-acc', title: 'Accepted claim', split: { rows: [], isSplit: false, totalVotes: 9 } },
+        { id: 'c-dis', title: 'Disputed claim', split: { rows: [], isSplit: true, totalVotes: 9 } },
+      ];
+      const { container } = render(
+        page === 'Topic' ? (
+          <TopicTemplate model={{ id: 'topic-1', title: 'Topic', stats: [], claims }} />
+        ) : page === 'Source' ? (
+          <SourceTemplate
+            model={{ id: 'source-1', title: 'A report', metadata: [], supportedClaims: claims, sections: [] }}
+          />
+        ) : (
+          <PodcastEpisodeTemplate
+            model={{
+              id: 'ep-1',
+              title: 'Episode',
+              topics: [],
+              claims,
+              quotes: [],
+              hosts: [],
+              guests: [],
+              listenOn: [],
+            }}
+          />
+        )
+      );
+      const list = container.querySelector('#claims')?.textContent ?? '';
+      expect(list.indexOf('Accepted claim')).toBeGreaterThanOrEqual(0);
+      expect(list.indexOf('Accepted claim')).toBeLessThan(list.indexOf('Disputed claim'));
+    }
+  );
+
   it('loads Topic and Source claim lists on the same card-less surface they render with', () => {
     render(
-      <TopicTemplate
-        model={{ id: 'topic-1', title: 'Renewable energy', stats: [], contestedClaims: [] }}
-        isLoadingSections
-      />
+      <TopicTemplate model={{ id: 'topic-1', title: 'Renewable energy', stats: [], claims: [] }} isLoadingSections />
     );
     const topicList = screen.getByLabelText('Loading topic sections').querySelector('.divide-y');
     expectPhoneListSurface(topicList);

@@ -48,6 +48,14 @@ const state = vi.hoisted(() => ({
   votes: undefined as unknown,
   /** Topic feed claims, and which of them the viewed space tagged (null: still checking). */
   feedClaims: undefined as { entityId: string; title: string; spaceId: string }[] | undefined,
+  /** Best-ranked topic feed claims and best debates (GEO-3868). */
+  bestClaims: undefined as { entityId: string; title: string; spaceId: string }[] | undefined,
+  bestDebates: undefined as
+    | {
+        items: { entityId: string; title: string; spaceId: string; debateClaim?: { entityId: string; name: string } }[];
+        fromSpaceFeed: boolean;
+      }
+    | undefined,
   taggedInSpace: null as Set<string> | null,
   feedNews: undefined as
     | { items: { entityId: string; title: string; spaceId: string; createdAtSec: number }[]; fromSpaceFeed: boolean }
@@ -91,9 +99,13 @@ vi.mock('@tanstack/react-query', async importOriginal => ({
           ? state.tweetAuthors
           : queryKey[1] === 'top-claims'
             ? state.feedClaims
-            : queryKey[1] === 'best-news'
-              ? state.feedNews
-              : undefined,
+            : queryKey[1] === 'best-claims'
+              ? state.bestClaims
+              : queryKey[1] === 'best-debates'
+                ? state.bestDebates
+                : queryKey[1] === 'best-news'
+                  ? state.feedNews
+                  : undefined,
     isLoading: false,
   }),
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),
@@ -217,6 +229,8 @@ beforeEach(() => {
   state.votes = undefined;
   state.tweetAuthors = undefined;
   state.feedClaims = undefined;
+  state.bestClaims = undefined;
+  state.bestDebates = undefined;
   state.taggedInSpace = null;
   state.feedNews = undefined;
   mocks.useClaimRecord.mockReset().mockReturnValue({
@@ -417,9 +431,9 @@ describe('Topic template', () => {
     topicCorpus();
     const { result } = renderHook(() => useLiveTopicTemplate({ entityId: PAGE, spaceId: SPACE }));
 
-    await waitFor(() => expect(result.current.data?.contestedClaims).toBeDefined());
+    await waitFor(() => expect(result.current.data?.claims).toBeDefined());
     const model = result.current.data!;
-    expect(model.contestedClaims?.map(claim => claim.title)).toEqual(['Claim here']);
+    expect(model.claims?.map(claim => claim.title)).toEqual(['Claim here']);
     expect(model.timelineHighlights?.map(item => item.title)).toEqual(['Event here']);
     expect(model.sections?.[0]?.items.map(item => item.title)).toEqual(['Source here']);
     expect(mocks.useTopicConnectionCounts).toHaveBeenCalledWith([PAGE], { spaceId: SPACE });
@@ -435,12 +449,78 @@ describe('Topic template', () => {
     const { result, rerender } = renderHook(() => useLiveTopicTemplate({ entityId: PAGE, spaceId: SPACE }));
     // Held back while the check loads, rather than shown and then dropped.
     await waitFor(() => expect(result.current.data).toBeDefined());
-    expect(result.current.data!.contestedClaims ?? []).toEqual([]);
+    expect(result.current.data!.claims ?? []).toEqual([]);
 
     state.taggedInSpace = new Set(['f1']);
     rerender();
     await waitFor(() =>
-      expect(result.current.data!.contestedClaims?.map(claim => claim.title)).toEqual(['Feed claim tagged here'])
+      expect(result.current.data!.claims?.map(claim => claim.title)).toEqual(['Feed claim tagged here'])
+    );
+  });
+
+  it('lists claims in Best order, then fills from Top, debate claims and linked claims, never regrouped (GEO-3868)', async () => {
+    topicCorpus();
+    state.bestClaims = [
+      { entityId: 'b1', title: 'Best 1, accepted', spaceId: SPACE },
+      { entityId: 'b2', title: 'Best 2, disputed', spaceId: SPACE },
+    ];
+    state.feedClaims = [
+      { entityId: 't1', title: 'Top 1, most votes', spaceId: SPACE },
+      { entityId: 'b2', title: 'Best 2, disputed', spaceId: SPACE },
+    ];
+    state.bestDebates = {
+      fromSpaceFeed: false,
+      items: [
+        { entityId: 'd1', title: 'Debate', spaceId: SPACE, debateClaim: { entityId: 'dc1', name: 'Debated claim' } },
+      ],
+    };
+    state.taggedInSpace = new Set(['b1', 'b2', 't1', 'd1']);
+    // Top 1 has the most votes and Best 1 is accepted: neither moves either one.
+    const vote = (userId: string, objectId: string, voteType: number) => ({
+      userId,
+      objectId,
+      spaceId: SPACE,
+      voteType,
+      voteKind: CLAIM_STANCE_VOTE_KIND,
+    });
+    state.votes = {
+      byClaim: aggregateClaimVotes(
+        activeStanceVotes([
+          vote('u1', 'b1', 0),
+          vote('u2', 'b1', 0),
+          ...['u1', 'u2', 'u3', 'u4', 'u5', 'u6'].map((u, i) => vote(u, 't1', i % 2)),
+        ]),
+        null
+      ),
+    };
+    const { result } = renderHook(() => useLiveTopicTemplate({ entityId: PAGE, spaceId: SPACE }));
+
+    await waitFor(() => expect(result.current.data?.claims).toBeDefined());
+    const claims = result.current.data!.claims!;
+    expect(claims.map(claim => claim.title)).toEqual([
+      'Best 1, accepted',
+      'Best 2, disputed',
+      'Top 1, most votes',
+      'Debated claim',
+      'Claim here',
+    ]);
+    expect(claims.map(claim => claim.split.isSplit)).toEqual([false, true, true, true, true]);
+  });
+
+  it('shows the first 40 Best claims alone when Best has 40 or more', async () => {
+    topicCorpus();
+    state.bestClaims = Array.from({ length: 41 }, (_, i) => ({
+      entityId: `b${i}`,
+      title: `Best ${i}`,
+      spaceId: SPACE,
+    }));
+    state.feedClaims = [{ entityId: 't1', title: 'Top 1', spaceId: SPACE }];
+    state.taggedInSpace = new Set([...state.bestClaims.map(item => item.entityId), 't1']);
+    const { result } = renderHook(() => useLiveTopicTemplate({ entityId: PAGE, spaceId: SPACE }));
+
+    await waitFor(() => expect(result.current.data?.claims).toBeDefined());
+    expect(result.current.data!.claims!.map(claim => claim.title)).toEqual(
+      Array.from({ length: 40 }, (_, i) => `Best ${i}`)
     );
   });
 
@@ -517,8 +597,8 @@ describe('Topic template', () => {
     };
     const { result } = renderHook(() => useLiveTopicTemplate({ entityId: PAGE, spaceId: SPACE }));
 
-    await waitFor(() => expect(result.current.data?.contestedClaims).toBeDefined());
-    const [claim] = result.current.data!.contestedClaims!;
+    await waitFor(() => expect(result.current.data?.claims).toBeDefined());
+    const [claim] = result.current.data!.claims!;
     expect(claim!.split.rows).toEqual([expect.objectContaining({ label: 'Everyone', voterCount: 3 })]);
   });
 

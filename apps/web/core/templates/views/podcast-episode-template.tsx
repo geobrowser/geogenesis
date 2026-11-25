@@ -72,8 +72,6 @@ export function PodcastEpisodeTemplate({
   const [playerOpen, setPlayerOpen] = React.useState(false);
 
   const allClaims = [...addedClaims, ...model.claims];
-  const agreedClaims = allClaims.filter(claim => (claim.split.totalVotes ?? 0) >= 2 && !claim.split.isSplit);
-  const contestedClaims = allClaims.filter(claim => !((claim.split.totalVotes ?? 0) >= 2 && !claim.split.isSplit));
 
   const allQuotes = [...addedQuotes, ...model.quotes];
   const visibleQuotes = showAllQuotes ? allQuotes : allQuotes.slice(0, INITIAL_VISIBLE_QUOTES);
@@ -199,7 +197,7 @@ export function PodcastEpisodeTemplate({
 
       {/* Notable claims — rendered identically to Topic pages via ClaimExplorer */}
       {allClaims.length > 0 ? (
-        <ClaimExplorer contestedClaims={contestedClaims} agreedClaims={agreedClaims} title="Notable claims" />
+        <ClaimExplorer claims={allClaims} title="Notable claims" />
       ) : (
         <section aria-label="Notable claims" className="flex flex-col gap-3">
           <div className="flex items-center justify-between gap-3">
