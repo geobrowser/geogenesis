@@ -77,8 +77,9 @@ export function EntityPanel({
   return (
     <section aria-label={`About ${centre.name ?? centre.id}`} className="flex min-h-0 flex-col gap-5">
       {/* On a phone the map right above already names the centre, so its space goes to the map. The
-          switch is the map's own sub-600px breakpoint, so no window width shows neither layout. */}
-      <div data-testid="entity-panel-header" className="flex items-start gap-3 max-[599px]:hidden">
+          switch is the map's own phone breakpoint, `(max-width: 599px)`: Tailwind's `max-[600px]:` is
+          `width < 600px`, the same widths (`max-[599px]:` would leave 599px out). */}
+      <div data-testid="entity-panel-header" className="flex items-start gap-3 max-[600px]:hidden">
         <EntityAvatar entity={centre} size={48} />
         <div className="flex min-w-0 flex-col gap-1">
           <h2 className="text-mediumTitle wrap-break-word text-text">{centre.name ?? centre.id}</h2>
