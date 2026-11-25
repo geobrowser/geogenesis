@@ -14,6 +14,7 @@ import { DebateRemovedView } from '~/core/debates/browse/debate-removed-view';
 import { isDebateEntity } from '~/core/debates/is-debate-entity';
 import { sharePlayerEnabled, sharePlayerMetadata } from '~/core/debates/server/share-player';
 import { debatePageStillPreloads } from '~/core/debates/speaker-still';
+import { originOfHost, topicCardMetadata } from '~/core/graph-explorer/topic-card-metadata';
 import { isHiddenEntity } from '~/core/moderation/hidden';
 import { firstLine } from '~/core/opengraph';
 import { Entities } from '~/core/utils/entity';
@@ -49,9 +50,25 @@ interface Props {
 export async function generateMetadata(props: Props): Promise<Metadata> {
   const params = await props.params;
   if (!IdUtils.isValid(params.id) || !IdUtils.isValid(params.entityId)) return {};
+
+  // A Topic's link preview is its topic card (GEO-3880). The layout sets it too, but the segment's
+  // `opengraph-image` file is also attached at the page's level and beats the layout's `images`; only
+  // `images` set at this level win over it.
+  const topic = (await cachedFetchEntityPage(params.entityId, params.id))?.entity ?? null;
+  if (topic && !isHiddenEntity(topic) && entityBrowseViewFromTypes(topic.types) === 'topic') {
+    const title = topic.name ?? 'Entity';
+    return topicCardMetadata({
+      topicId: params.entityId,
+      spaceId: params.id,
+      title,
+      description: firstLine(Entities.description(topic.values ?? [])),
+      origin: originOfHost((await headers()).get('host')),
+    });
+  }
+
   if (!sharePlayerEnabled(params.entityId)) return {};
 
-  const entity = (await cachedFetchEntityPage(params.entityId, params.id))?.entity ?? null;
+  const entity = topic;
   if (!entity || isHiddenEntity(entity) || !isDebateEntity(entity.types)) return {};
   if ((await cachedFetchDebateVisibility(params.entityId)) === 'removed') return {};
 

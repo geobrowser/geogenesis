@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { TOPIC_TYPE_ID } from '~/core/constants';
 import type { DebateMediaResponse } from '~/core/debates/api';
 import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
 import { HIDDEN_PROPERTY_ID } from '~/core/moderation/hidden';
@@ -82,11 +83,12 @@ describe('debate page generateMetadata (GEO-3817)', () => {
     expect(metadata.twitter).toMatchObject({ players: [{ width: 1080, height: 1920 }] });
   });
 
-  it('adds nothing in production for an ordinary debate, without reading the graph or geo-chat', async () => {
+  // The entity read is the layout's cached one (the Topic card needs the types), so only geo-chat
+  // stays unread.
+  it('adds nothing in production for an ordinary debate, without reading geo-chat', async () => {
     vi.stubEnv('VERCEL_ENV', 'production');
     vi.stubEnv('NODE_ENV', 'production');
     expect(await generateMetadata(props())).toEqual({});
-    expect(fetchEntityPage).not.toHaveBeenCalled();
     expect(fetchMedia).not.toHaveBeenCalled();
   });
 
@@ -102,6 +104,29 @@ describe('debate page generateMetadata (GEO-3817)', () => {
 
   it('adds nothing for an entity that is not a Debate', async () => {
     fetchEntityPage.mockResolvedValue({ entity: { ...debate().entity, types: [] }, relations: [] });
+    expect(await generateMetadata(props())).toEqual({});
+  });
+});
+
+describe('Topic page generateMetadata (GEO-3880)', () => {
+  const topic = (values: unknown[] = []) => ({
+    entity: { id: DEBATE_ID, name: 'Israel-Palestine Conflict', types: [{ id: TOPIC_TYPE_ID }], values, relations: [] },
+    relations: [],
+  });
+
+  // The segment's `opengraph-image` file is attached at the page's level too, so only images set here beat it.
+  it("points og:image and twitter:image at the topic card, at the request's origin", async () => {
+    vi.stubEnv('VERCEL_ENV', 'production');
+    fetchEntityPage.mockResolvedValue(topic());
+    const card = `https://preview.example/explore/graph/${DEBATE_ID}/card?topic=${DEBATE_ID}&space=${SPACE_ID}&variant=topic&v=1`;
+    const metadata = await generateMetadata(props());
+    expect(metadata.openGraph?.images).toEqual([expect.objectContaining({ url: card, width: 1200, height: 630 })]);
+    expect(metadata.twitter).toMatchObject({ card: 'summary_large_image', images: [card] });
+  });
+
+  it('gives a hidden Topic no card', async () => {
+    fetchEntityPage.mockResolvedValue(topic([{ property: { id: HIDDEN_PROPERTY_ID }, value: 'true' }]));
+    vi.stubEnv('VERCEL_ENV', 'production');
     expect(await generateMetadata(props())).toEqual({});
   });
 });

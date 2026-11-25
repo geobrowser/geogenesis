@@ -1,6 +1,7 @@
 import { generateGraphCardResponse } from '~/core/graph-explorer/graph-card-image';
 import { parseGraphRouteIds } from '~/core/graph-explorer/graph-card-metadata';
 import { CARD_CACHE, DEGRADED_CACHE, loadGraphCardData } from '~/core/graph-explorer/server/graph-card-data';
+import { generateTopicCardResponse } from '~/core/graph-explorer/topic-card-image';
 
 import { checkRankingOgIpRateLimit, getClientIp } from '~/app/api/ranking-og/rate-limit';
 import { jsonResponse } from '~/app/api/ranking-og/route-utils';
@@ -9,7 +10,8 @@ export const runtime = 'nodejs';
 
 /**
  * The share card for `/explore/graph/{id}?topic&space`. Kept outside /api/, which robots.txt
- * disallows: X shows no image it may not fetch. `v` only busts caches.
+ * disallows: X shows no image it may not fetch. `v` only busts caches. `variant=topic` is a Topic
+ * page's link preview (no claims); a centre whose page isn't a Topic page gets the explorer card.
  */
 export async function GET(req: Request, { params }: { params: Promise<{ entityId: string }> }): Promise<Response> {
   const rateLimit = await checkRankingOgIpRateLimit(getClientIp(req));
@@ -21,14 +23,23 @@ export async function GET(req: Request, { params }: { params: Promise<{ entityId
   if (!ids || !ids.topicId) return jsonResponse(400, { ok: false, error: 'invalid_id' });
   if (search.get('space') && !ids.spaceId) return jsonResponse(400, { ok: false, error: 'invalid_id' });
 
+  const variant = search.get('variant') === 'topic' ? 'topic' : 'graph';
+
   try {
-    const data = await loadGraphCardData({ entityId: ids.entityId, topicId: ids.topicId, spaceId: ids.spaceId });
+    const data = await loadGraphCardData({
+      entityId: ids.entityId,
+      topicId: ids.topicId,
+      spaceId: ids.spaceId,
+      variant,
+    });
     if (!data) {
       const notFound = jsonResponse(404, { ok: false, error: 'not_found' });
       notFound.headers.set('Cache-Control', DEGRADED_CACHE);
       return notFound;
     }
-    const image = await generateGraphCardResponse(data);
+    const image = await (data.variant === 'topic'
+      ? generateTopicCardResponse(data)
+      : generateGraphCardResponse(data));
     image.headers.set('Cache-Control', data.degraded ? DEGRADED_CACHE : CARD_CACHE);
     return image;
   } catch (error) {

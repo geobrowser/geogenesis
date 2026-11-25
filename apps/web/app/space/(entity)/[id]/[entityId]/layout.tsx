@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import { Metadata } from 'next';
 
+import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 
 import { ActionContextProvider } from '~/core/action-context-provider';
@@ -11,6 +12,7 @@ import { entityActionScope } from '~/core/action-entity-context';
 import { fetchShownPropertyEntitiesForBlocks } from '~/core/blocks/data/fetch-block-shown-properties';
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
 import { isDebateEntity } from '~/core/debates/is-debate-entity';
+import { originOfHost, topicCardMetadata } from '~/core/graph-explorer/topic-card-metadata';
 import { isHiddenEntity } from '~/core/moderation/hidden';
 import { firstLine } from '~/core/opengraph';
 import { RouteEditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
@@ -76,6 +78,14 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
 
   const title = entity?.name ?? 'Entity';
   const description = firstLine(Entities.description(entity?.values ?? []));
+
+  // A Topic unfurls as its own card. The segment's `opengraph-image` file beats these `images` on the
+  // page itself, so `page.tsx` sets them again there. On the Topic's tab routes (`/claims`, ...) only
+  // twitter:image becomes the card; og:image stays the file, as before. Every other type keeps the file.
+  if (entity && entityBrowseViewFromTypes(entity.types) === 'topic') {
+    const origin = originOfHost((await headers()).get('host'));
+    return { title, description, ...topicCardMetadata({ topicId: entityId, spaceId, title, description, origin }) };
+  }
 
   return {
     title,

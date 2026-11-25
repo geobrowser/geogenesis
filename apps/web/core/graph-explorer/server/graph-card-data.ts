@@ -1,6 +1,7 @@
 import { fetchFeaturedSpacesShared } from '~/core/io/subgraph/fetch-featured-spaces';
 import { inlineOgImage } from '~/core/og-image-inline';
 import { fetchClaimResponseSummaries } from '~/core/responses/claim-response-summaries';
+import { entityBrowseViewFromTypes } from '~/core/utils/entity-browse-view';
 import { normId } from '~/core/utils/norm-id';
 
 import { nodeClaimSpaceId } from '../claims-about';
@@ -9,6 +10,7 @@ import type { GraphCardMeta } from '../graph-card-metadata';
 import { type GraphFilter, resolveGraphFilter } from '../graph-filter';
 import { GRAPH_KINDS, type GraphKind } from '../graph-kinds';
 import { pickNeighbours } from '../select-graph';
+import { assignTopicSlots } from '../topic-card-slots';
 import {
   COUNT_CHUNK,
   type TopicClaimsSummary,
@@ -41,11 +43,22 @@ export type GraphCardData = {
   summary: TopicClaimsSummary | null;
   /** The scope fell back or an image ran out of time: cached briefly so a full card follows. */
   degraded: boolean;
+  /** The card this data is shaped for: `topic` only when asked for and the centre is a Topic page. */
+  variant: GraphCardVariant;
 };
 
 export const CARD_NEIGHBOURS = 6;
+/** Picked before the topic card fits them to its slots. */
+export const TOPIC_CARD_CANDIDATES = 12;
 export const FEATURED_BUDGET_MS = 1000;
 export const IMAGE_BUDGET_MS = 1500;
+/**
+ * `graph` is the explorer's share card; `topic` is a Topic page's link preview, which draws no claims,
+ * so it skips the claims walk and its hub shows the topic's Cover at the 184px disc's 2x.
+ */
+export type GraphCardVariant = 'graph' | 'topic';
+const HUB_IMAGE_PX: Record<GraphCardVariant, number> = { graph: 320, topic: 400 };
+const PERSON_IMAGE_PX: Record<GraphCardVariant, number> = { graph: 128, topic: 144 };
 
 export const CARD_CACHE = 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800';
 /** A fallback scope or a missing image: short, so the next crawler gets the full card. */
@@ -110,7 +123,12 @@ function centreTypeLabel(meta: GraphCardMeta['centre']): string {
  * no URL overrides. Null when there is nothing to show: unknown, hidden or unnamed centre.
  */
 export async function loadGraphCardData(
-  { entityId, topicId, spaceId }: { entityId: string; topicId: string; spaceId: string | null },
+  {
+    entityId,
+    topicId,
+    spaceId,
+    variant = 'graph',
+  }: { entityId: string; topicId: string; spaceId: string | null; variant?: GraphCardVariant },
   deps: Deps = defaultDeps
 ): Promise<GraphCardData | null> {
   const meta = await deps.loadMeta(entityId, topicId);
@@ -126,16 +144,20 @@ export async function loadGraphCardData(
   const filter = resolveGraphFilter({ spaceIds: ids.size ? [...ids].sort() : null, topicId, topicSpaceId: spaceId });
 
   const isTopicCentre = meta.centre.id === normId(topicId);
+  // The same rule the entity page uses to advertise the topic card, so a Person + Topic gets it too
+  // (its graph kind is `ent`). Any other centre behind `variant=topic` gets the full explorer card.
+  const topicVariant = variant === 'topic' && entityBrowseViewFromTypes(meta.centre.types) === 'topic';
+  const cardVariant: GraphCardVariant = topicVariant ? 'topic' : 'graph';
   const [hop1, about] = await Promise.all([
     deps.fetchHop1(meta.centre.id, filter),
-    meta.centre.kind === 'topic' ? deps.fetchAllClaimsAbout(meta.centre.id, filter, spaceId) : null,
+    meta.centre.kind === 'topic' && !topicVariant ? deps.fetchAllClaimsAbout(meta.centre.id, filter, spaceId) : null,
   ]);
   if (hop1.failedKinds?.length) degraded = true;
 
   // Counts in each claim's own space: hop 1's agrees/disagrees are cross-space and never shown.
   const claimSpace = new Map<string, string>();
   for (const { node } of hop1.neighbours)
-    if (node.kind === 'claim') {
+    if (node.kind === 'claim' && !topicVariant) {
       const space = nodeClaimSpaceId(node, spaceId);
       if (space) claimSpace.set(node.id, space);
     }
@@ -154,16 +176,31 @@ export async function loadGraphCardData(
     return { ...node, agrees: own?.positive ?? 0, disagrees: own?.negative ?? 0 };
   };
 
-  const candidates = hop1.neighbours.map(({ node, edge }) => ({ node: scoped(node), edge }));
-  const picked = pickNeighbours(candidates, CARD_NEIGHBOURS, new Set([meta.centre.id]), 'all').filter(
-    ({ node }) => node.name
-  );
+  const candidates = hop1.neighbours
+    .filter(({ node }) => !topicVariant || node.kind !== 'claim')
+    .map(({ node, edge }) => ({ node: scoped(node), edge }));
+  const named = pickNeighbours(
+    candidates,
+    topicVariant ? TOPIC_CARD_CANDIDATES : CARD_NEIGHBOURS,
+    new Set([meta.centre.id]),
+    'all'
+  ).filter(({ node }) => node.name);
+  // The topic card's slots are shaped: a few spares let a missing card or person be filled by another.
+  const picked = topicVariant
+    ? assignTopicSlots(named.map(pick => ({ ...pick, kind: pick.node.kind }))).map(({ node }) => node)
+    : named;
 
   const [centreImage, ...neighbourImages] = await Promise.all([
     meta.centre.kind === 'claim'
       ? null
-      : deps.inlineImage(meta.centre.image ?? hop1.centre?.image, 320, IMAGE_BUDGET_MS),
-    ...picked.map(({ node }) => (node.kind === 'ent' ? deps.inlineImage(node.image, 128, IMAGE_BUDGET_MS) : null)),
+      : deps.inlineImage(
+          (topicVariant ? meta.centre.cover : null) ?? meta.centre.image ?? hop1.centre?.image,
+          HUB_IMAGE_PX[cardVariant],
+          IMAGE_BUDGET_MS
+        ),
+    ...picked.map(({ node }) =>
+      node.kind === 'ent' ? deps.inlineImage(node.image, PERSON_IMAGE_PX[cardVariant], IMAGE_BUDGET_MS) : null
+    ),
   ]);
   if ([centreImage, ...neighbourImages].some(image => image?.timedOut)) degraded = true;
 
@@ -208,6 +245,7 @@ export async function loadGraphCardData(
       ? summariseTopicClaims(about.claims, claim => countsOf(claim.id, claim.spaceId), about.truncated)
       : null,
     degraded,
+    variant: cardVariant,
   };
 }
 

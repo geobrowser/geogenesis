@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   rate: { ok: true } as { ok: true } | { ok: false; retryAfter: number },
   load: vi.fn(),
   render: vi.fn(),
+  renderTopic: vi.fn(),
 }));
 
 vi.mock('~/app/api/ranking-og/rate-limit', () => ({
@@ -18,6 +19,7 @@ vi.mock('~/core/graph-explorer/server/graph-card-data', async importOriginal => 
 }));
 vi.mock('~/core/graph-explorer/server/graph-card-meta', () => ({ loadGraphCardMeta: vi.fn() }));
 vi.mock('~/core/graph-explorer/graph-card-image', () => ({ generateGraphCardResponse: mocks.render }));
+vi.mock('~/core/graph-explorer/topic-card-image', () => ({ generateTopicCardResponse: mocks.renderTopic }));
 
 const TOPIC = '4ed3162278994f29bde7a6f7cf60e28e';
 const SPACE = '89bd89bf28ff8a0963faf92a8c905e20';
@@ -32,6 +34,10 @@ beforeEach(() => {
   mocks.load.mockReset();
   mocks.render.mockReset();
   mocks.render.mockImplementation(async () => new Response('jpeg', { headers: { 'Content-Type': 'image/jpeg' } }));
+  mocks.renderTopic.mockReset();
+  mocks.renderTopic.mockImplementation(
+    async () => new Response('topic', { headers: { 'Content-Type': 'image/jpeg' } })
+  );
 });
 
 describe('GET /explore/graph/[entityId]/card', () => {
@@ -43,7 +49,26 @@ describe('GET /explore/graph/[entityId]/card', () => {
     expect(response.headers.get('Cache-Control')).toBe(
       'public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800'
     );
-    expect(mocks.load).toHaveBeenCalledWith({ entityId: TOPIC, topicId: TOPIC, spaceId: SPACE });
+    expect(mocks.load).toHaveBeenCalledWith({ entityId: TOPIC, topicId: TOPIC, spaceId: SPACE, variant: 'graph' });
+  });
+
+  it('draws the Topic link preview for variant=topic, cached like the explorer card', async () => {
+    mocks.load.mockResolvedValue({ degraded: false, variant: 'topic' });
+    const response = await get(TOPIC, `topic=${TOPIC}&space=${SPACE}&variant=topic&v=1`);
+    expect(await response.text()).toBe('topic');
+    expect(response.headers.get('Cache-Control')).toBe(
+      'public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800'
+    );
+    expect(mocks.load).toHaveBeenCalledWith({ entityId: TOPIC, topicId: TOPIC, spaceId: SPACE, variant: 'topic' });
+    expect(mocks.render).not.toHaveBeenCalled();
+  });
+
+  // The loader decides: a centre whose page isn't a Topic page comes back shaped for the explorer card.
+  it('draws the explorer card when the loader shaped the data for it despite variant=topic', async () => {
+    mocks.load.mockResolvedValue({ degraded: false, variant: 'graph' });
+    const response = await get(TOPIC, `topic=${TOPIC}&variant=topic`);
+    expect(await response.text()).toBe('jpeg');
+    expect(mocks.renderTopic).not.toHaveBeenCalled();
   });
 
   it('caches a degraded card briefly', async () => {
