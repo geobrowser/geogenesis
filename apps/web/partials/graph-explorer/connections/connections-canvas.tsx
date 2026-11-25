@@ -437,7 +437,8 @@ export function ConnectionsCanvas({
       const centreDepth = centrePoint?.depth ?? 0;
       for (const entry of drawn) {
         let target = covered.has(entry.node) ? COVERED_DIM : 1;
-        if (centreRect && !entry.isCentre && entry.node.id !== hover && !neighbours.has(entry.node.id))
+        // Only the hovered card is lifted over the centre; its neighbours keep their side of it.
+        if (centreRect && !entry.isCentre && entry.node.id !== hover)
           target = Math.min(
             target,
             centreCrossDim(rectAt(entry.point.x, entry.point.y, entry.box, entry.scale), entry.point.depth, {
@@ -457,7 +458,9 @@ export function ConnectionsCanvas({
         element.style.zIndex = String(
           node.id === hover
             ? 9500
-            : depthOrder(point.depth, isCentre, centreDepth) + (neighbours.has(node.id) ? 2000 : 0)
+            : // The centre rises with the hovered card's neighbours, so one behind it stays behind it.
+              depthOrder(point.depth, isCentre, centreDepth) +
+                (neighbours.has(node.id) || (isCentre && hover) ? 2000 : 0)
         );
       }
 

@@ -394,6 +394,8 @@ describe('ConnectionsCanvas', () => {
       runFrames(2600 + 1000);
       let behind = 0;
       let inFront = 0;
+      let faintest = 1;
+      const shown: number[] = [];
       for (let i = 0; i < 2400; i++) {
         view.projected = [];
         runFrames(now + 16);
@@ -403,12 +405,77 @@ describe('ConnectionsCanvas', () => {
         expect(middle).toBeDefined();
         const lower = Number(isaac.style.zIndex) < Number(centreButton.style.zIndex);
         expect(lower).toBe(own!.depth > middle!.depth);
-        if (lower) behind++;
-        else inFront++;
+        const opacity = Number(isaac.style.opacity);
+        if (lower) {
+          behind++;
+          faintest = Math.min(faintest, opacity);
+        } else {
+          inFront++;
+          shown.push(opacity);
+        }
       }
-      // The spin carried Isaac across the centre both ways.
+      // The spin carried Isaac across the centre both ways, faint behind it and readable over it.
       expect(behind).toBeGreaterThan(0);
       expect(inFront).toBeGreaterThan(0);
+      expect(faintest).toBeLessThanOrEqual(0.121);
+      expect(Math.max(...shown)).toBeGreaterThan(0.3);
+    } finally {
+      sizes.forEach(restore => restore());
+    }
+  });
+
+  it("keeps a hovered card's neighbour on its own side of the centre, and lifts only the hovered card", () => {
+    const sizes = (['offsetWidth', 'offsetHeight'] as const).map(key => {
+      const old = Object.getOwnPropertyDescriptor(HTMLElement.prototype, key);
+      Object.defineProperty(HTMLElement.prototype, key, { configurable: true, get: () => 600 });
+      return () => old && Object.defineProperty(HTMLElement.prototype, key, old);
+    });
+    // A hop-2 marker whose only neighbour is Isaac, so hovering it lifts Isaac but not the centre.
+    const marker = node(3, 'ent', 'Marker');
+    const withMarker: GraphSelection = {
+      nodes: [...selection.nodes, { node: marker, hop: 2, parentId: person.id }],
+      links: [
+        ...selection.links,
+        {
+          hop: 2,
+          edge: { id: 'e2', fromId: person.id, toId: marker.id, propertyId: 'p', propertyName: 'Knows', spaceId: 's' },
+        },
+      ],
+    };
+    try {
+      render(
+        <ConnectionsCanvas
+          selection={withMarker}
+          phone={false}
+          onSelect={vi.fn()}
+          renderNode={entry => entry.node.name}
+          labelFor={() => 'label'}
+        />
+      );
+      const isaac = screen.getByRole('button', { name: 'Isaac Herzog' });
+      const centreButton = screen.getByRole('button', { name: 'Centre' });
+      const markerButton = screen.getByRole('button', { name: 'Marker' });
+      runFrames(2600 + 1000);
+      fireEvent.mouseEnter(markerButton);
+      let behind = 0;
+      let faintest = 1;
+      for (let i = 0; i < 2400; i++) {
+        view.projected = [];
+        runFrames(now + 16);
+        expect(Number(markerButton.style.zIndex)).toBe(9500);
+        if (Number(isaac.style.zIndex) < Number(centreButton.style.zIndex)) {
+          behind++;
+          faintest = Math.min(faintest, Number(isaac.style.opacity));
+        }
+      }
+      // Isaac still passes behind the centre, and fades there, while the marker is hovered.
+      expect(behind).toBeGreaterThan(0);
+      expect(faintest).toBeLessThanOrEqual(0.121);
+      // The hovered card itself is never faded by the centre.
+      fireEvent.mouseLeave(markerButton);
+      fireEvent.mouseEnter(isaac);
+      runFrames(now + 2000);
+      expect(Number(isaac.style.opacity)).toBe(1);
     } finally {
       sizes.forEach(restore => restore());
     }
