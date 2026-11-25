@@ -32,10 +32,10 @@ export function TopicTemplateSeedProvider({
 
 /**
  * `LiveTopicTemplateView`, seeded from `TopicTemplateSeedProvider` when the page has a seed for this
- * Topic. Until the seed arrives, the fallback is the same view unseeded: header and title from the
- * entity store, sections as skeletons. During hydration React leaves a boundary that is still
- * streaming as server HTML, so the fallback never mounts in the browser on a full page load and
- * makes no client requests.
+ * Topic. Until the seed arrives, the fallback is the same view waiting on it: header and title from
+ * the entity store, sections as skeletons, and no feed reads. The fallback does mount in the browser
+ * when the page hydrates before the seed's promise settles there, which on a full load is common; it
+ * stays quiet, and the seeded view replaces it once the promise settles.
  *
  * Without a seed (the side panel, a Topic shown as a space's homepage, or another entity's panel
  * opened over this page) it is the plain view.
@@ -47,7 +47,7 @@ export function StreamedLiveTopicTemplateView(props: LiveTopicTemplateViewProps)
   }
 
   return (
-    <React.Suspense fallback={<LiveTopicTemplateView {...props} />}>
+    <React.Suspense fallback={<LiveTopicTemplateView {...props} awaitingSeed />}>
       <SeededLiveTopicTemplateView entries={seed.entries} {...props} />
     </React.Suspense>
   );

@@ -191,12 +191,19 @@ export function useLiveTopicTemplate({
   spaceId,
   serverCoverUrl,
   isSpaceHome = false,
+  awaitingSeed = false,
 }: {
   entityId: string;
   spaceId: string;
   serverCoverUrl?: string | null;
   /** True when rendered on a Topic Space's own homepage (`/space/[id]`), so debates & news read from `/api/topics/space/feed`. */
   isSpaceHome?: boolean;
+  /**
+   * The page's server is still streaming this Topic's seed (see `StreamedLiveTopicTemplateView`).
+   * The feed reads stay idle and the sections stay skeletons, so the view drawn while the seed is in
+   * flight asks nothing that the seed is about to hand over.
+   */
+  awaitingSeed?: boolean;
 }): TemplateDataSource<TopicTemplateModel> {
   const { entity, isLoading: isEntityLoading } = useQueryEntity({ id: entityId, spaceId });
   const { personalSpaceId } = usePersonalSpaceId();
@@ -213,6 +220,7 @@ export function useLiveTopicTemplate({
     queryFn: ({ signal }) =>
       fetchTopicFeedSlice({ topicId: entityId, spaceId, typeId: CLAIM_TYPE_ID, sort: 'top', signal }),
     staleTime: TOPIC_FEED_STALE_MS,
+    enabled: !awaitingSeed,
   });
 
   const bestClaimsQuery = useQuery({
@@ -220,6 +228,7 @@ export function useLiveTopicTemplate({
     queryFn: ({ signal }) =>
       fetchTopicFeedSlice({ topicId: entityId, spaceId, typeId: CLAIM_TYPE_ID, sort: 'best', signal }),
     staleTime: TOPIC_FEED_STALE_MS,
+    enabled: !awaitingSeed,
   });
 
   const bestDebatesQuery = useQuery({
@@ -241,6 +250,7 @@ export function useLiveTopicTemplate({
       };
     },
     staleTime: TOPIC_FEED_STALE_MS,
+    enabled: !awaitingSeed,
   });
 
   // The topic feed checks only that an entity lives in the space; keep what the space itself tagged.
@@ -255,7 +265,7 @@ export function useLiveTopicTemplate({
     spaceId,
     entityIds: feedEntityIds,
     // One check once every slice has landed, rather than one per slice.
-    enabled: !topClaimsQuery.isLoading && !bestClaimsQuery.isLoading && !bestDebatesQuery.isLoading,
+    enabled: !awaitingSeed && !topClaimsQuery.isLoading && !bestClaimsQuery.isLoading && !bestDebatesQuery.isLoading,
   });
   const keepTagged = React.useCallback(
     (items: ExploreFeedItem[] | undefined): ExploreFeedItem[] => keepTaggedItems(items, taggedInSpace, isTaggedLoading),
@@ -833,7 +843,7 @@ export function useLiveTopicTemplate({
     CLAIM_VOTES_MAX_WAIT_MS,
     { revealSettledBeforeMount: true }
   );
-  const isSectionsLoading = isBaseSectionsLoading || isWaitingForClaimVotes;
+  const isSectionsLoading = awaitingSeed || isBaseSectionsLoading || isWaitingForClaimVotes;
   if (orderedClaimSeeds.length > 0 && frozenClaimOrder?.key !== currentClaimOrderKey) {
     if (isSectionsLoading) {
       // Not drawn yet: order the claims by their counts once the set has settled and the counts are in.

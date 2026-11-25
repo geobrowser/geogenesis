@@ -18,6 +18,8 @@ export interface LiveTopicTemplateViewProps {
   compact?: boolean;
   /** Embedded inside a Topic Space shell (suppresses duplicate cover/header). */
   embedded?: boolean;
+  /** Drawn while the page's seed for this Topic is still streaming: no feed reads, section skeletons. */
+  awaitingSeed?: boolean;
 }
 
 /**
@@ -30,6 +32,7 @@ export function LiveTopicTemplateView({
   serverCoverUrl,
   compact = false,
   embedded = false,
+  awaitingSeed = false,
 }: LiveTopicTemplateViewProps) {
   useEntityTemplatePageOnScreen(!compact && !embedded);
   const { data, isLoading, isSectionsLoading, actionCallbacks } = useLiveTopicTemplate({
@@ -37,6 +40,7 @@ export function LiveTopicTemplateView({
     spaceId,
     serverCoverUrl,
     isSpaceHome: embedded,
+    awaitingSeed,
   });
 
   if (isLoading) {
