@@ -345,7 +345,7 @@ describe('ClaimExplorer row layout (GEO-3845)', () => {
     const title = screen.getByText('A judgment claim');
     const agree = screen.getByRole('button', { name: 'Agree' });
     // Bigger title and numbers than the old 16px title and 13.5px result (Yaniv, Preston, GEO-3857).
-    expect(title).toHaveClass('text-[19px]', 'leading-[26px]');
+    expect(title).toHaveClass('text-[19px]', 'leading-[26px]', 'font-normal');
     expect(tag.parentElement).toHaveClass('text-[15px]');
     expect(screen.getAllByText('71%').find(node => node.tagName === 'STRONG')).toHaveClass('text-[17px]');
     // The rank sits on the title's first baseline, and the row pads itself only on the wide card.
