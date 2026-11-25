@@ -303,6 +303,46 @@ describe('Claim template', () => {
     expect(quotes?.items.map(item => item.title)).toEqual(['Quote, here']);
   });
 
+  it('splits supporting and opposing quotes into their own sections', () => {
+    // Named like the live properties, so an unexcluded one would show under Properties.
+    const quote = (id: string, typeId: string) => {
+      const rel = relation(typeId, id, SPACE, `Quote ${id}`);
+      return { ...rel, type: { id: typeId, name: 'Quotes that oppose or support claims' } } as Relation;
+    };
+    state.page = pageEntity(CLAIM_TYPE_ID, [
+      quote('s1', TEMPLATE_ONTOLOGY.QUOTES_THAT_SUPPORT_CLAIMS_LIVE_PROPERTY_ID),
+      quote('s2', TEMPLATE_ONTOLOGY.QUOTES_THAT_SUPPORT_CLAIMS_PROPERTY_ID),
+      quote('o1', TEMPLATE_ONTOLOGY.QUOTES_THAT_OPPOSE_CLAIMS_PROPERTY_ID),
+    ]);
+    state.corpus = [
+      linked('s3', 'Quote s3', SPACE, [TEMPLATE_ONTOLOGY.QUOTE_TYPE_ID], TEMPLATE_ONTOLOGY.CLAIM_SUPPORTS_PROPERTY_ID),
+      linked('o2', 'Quote o2', SPACE, [TEMPLATE_ONTOLOGY.QUOTE_TYPE_ID], TEMPLATE_ONTOLOGY.CLAIM_OPPOSES_PROPERTY_ID),
+    ];
+
+    const { result } = renderHook(() => useLiveClaimTemplate({ entityId: PAGE, spaceId: SPACE }));
+    const model = result.current.data!;
+
+    const supporting = model.sections.find(section => section.id === 'quotes');
+    const opposing = model.sections.find(section => section.id === 'opposing-quotes');
+    expect(supporting?.title).toBe('Supporting quotes');
+    expect(supporting?.items.map(item => item.title)).toEqual(['Quote s1', 'Quote s2', 'Quote s3']);
+    expect(opposing?.title).toBe('Opposing quotes');
+    expect(opposing?.items.map(item => item.title)).toEqual(['Quote o1', 'Quote o2']);
+    // Shown as a section, so not repeated under Properties.
+    const propertyLabels = (model.graphConnections ?? []).flatMap(group => group.items.map(item => item.label));
+    expect(propertyLabels).not.toContain('Quote o1');
+  });
+
+  it('shows no opposing quotes section for a claim without any', () => {
+    state.page = pageEntity(CLAIM_TYPE_ID, [
+      relation(TEMPLATE_ONTOLOGY.QUOTES_THAT_SUPPORT_CLAIMS_LIVE_PROPERTY_ID, 's1', SPACE, 'Quote s1'),
+    ]);
+
+    const { result } = renderHook(() => useLiveClaimTemplate({ entityId: PAGE, spaceId: SPACE }));
+
+    expect(result.current.data!.sections.some(section => section.id === 'opposing-quotes')).toBe(false);
+  });
+
   it('reads more claims in the topic and debates in the viewed space alone', () => {
     state.page = pageEntity(CLAIM_TYPE_ID, [relation(TOPICS_PROPERTY_ID, 'topic', SPACE)]);
     renderHook(() => useLiveClaimTemplate({ entityId: PAGE, spaceId: SPACE }));
