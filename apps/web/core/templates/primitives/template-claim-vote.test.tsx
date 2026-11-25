@@ -461,7 +461,7 @@ describe('list attribution on template votes', () => {
     });
   });
 
-  it('names the Recent debates list and the card, and draws the card pills from the binding', () => {
+  it('draws Recent debates cards with the claim over the video and no vote pills', () => {
     const debate = (id: string, target: ClaimVoteTarget): TopicRecentDebateModel => ({
       id,
       claimId: target.claimId,
@@ -474,18 +474,34 @@ describe('list attribution on template votes', () => {
         { name: 'Bo', position: 'Disagree', communityColor: '#000' },
       ],
       voteTarget: target,
+      href: `/debate/${id}`,
     });
-    render(
+    const { container } = render(
       <EntityActionProvider>
         <RecentDebatesGallery debates={[debate('debate-1', TARGET), debate('debate-2', second)]} />
       </EntityActionProvider>
     );
 
-    expect(lastScope('claim-1')).toMatchObject({ list_id: 'template_recent_debates', item_position: 1 });
-    expect(lastScope('claim-2')).toMatchObject({ list_id: 'template_recent_debates', item_position: 2 });
+    // The card is only the video: no vote pills and no vote lookups.
+    expect(screen.queryByRole('group', { name: `Vote on ${second.title}` })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Disagree/ })).toBeNull();
+    expect(lastScope('claim-2')).toBeUndefined();
 
-    const group = screen.getByRole('group', { name: `Vote on ${second.title}` });
-    fireEvent.click(within(group).getByRole('button', { name: /^Disagree/ }));
-    expect(mocks.respond).toHaveBeenCalledWith(false);
+    // The card link still names the claim, and the claim shows over the top of the video, two lines max.
+    const link = screen.getByRole('link', { name: `Watch debate: ${second.title}` });
+    expect(link).toHaveAttribute('href', '/debate/debate-2');
+    const overlay = link.querySelector('[data-debate-claim-overlay]');
+    expect(overlay).toHaveTextContent(second.title);
+    expect(overlay).toHaveClass('top-0');
+    expect(overlay?.querySelector('.line-clamp-2')).toHaveTextContent(second.title);
+
+    // Both speaker chips sit at the bottom-left of their own panel.
+    const topChip = container.querySelector('[data-speaker-chip="top"]');
+    const bottomChip = container.querySelector('[data-speaker-chip="bottom"]');
+    expect(topChip).toHaveTextContent('Ada');
+    expect(topChip).toHaveClass('bottom-2', 'left-2.5');
+    expect(topChip).not.toHaveClass('top-2');
+    expect(bottomChip).toHaveTextContent('Bo');
+    expect(bottomChip).toHaveClass('bottom-2', 'left-2.5');
   });
 });
