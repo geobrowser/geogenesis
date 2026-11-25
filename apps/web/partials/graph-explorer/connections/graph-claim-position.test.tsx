@@ -18,6 +18,8 @@ const mocks = vi.hoisted(() => ({
   submitResponse: vi.fn(),
   indexedViewerDirection: null as 'positive' | 'negative' | null,
   counts: { positive: 5, negative: 2 },
+  hasCounts: true,
+  countsLoading: false,
 }));
 
 vi.mock('~/core/sync/use-store', () => ({
@@ -31,9 +33,9 @@ vi.mock('~/core/claims/browse/claim-response-summary', async importOriginal => {
     ...actual,
     useClaimResponseSummary: () => ({
       ...actual.summarizeClaimResponses(mocks.counts.positive, mocks.counts.negative),
-      isLoading: false,
+      isLoading: mocks.countsLoading,
       isViewerResponseLoading: false,
-      hasCounts: true,
+      hasCounts: mocks.hasCounts,
       indexedViewerDirection: mocks.indexedViewerDirection,
     }),
   };
@@ -90,6 +92,8 @@ beforeEach(() => {
   mocks.submitResponse.mockReset();
   mocks.indexedViewerDirection = null;
   mocks.counts = { positive: 5, negative: 2 };
+  mocks.hasCounts = true;
+  mocks.countsLoading = false;
   vi.mocked(openSaveVotesPrompt).mockClear();
   vi.mocked(recordAction).mockClear();
   clearLocalVotes();
@@ -109,6 +113,13 @@ describe('the open claim’s Agree and Disagree', () => {
     expect(count.parentElement).toBe(percent.parentElement?.parentElement);
     const bar = screen.getByRole('img', { name: '71% agree, 29% disagree' });
     expect((bar.firstElementChild as HTMLElement).style.width).toBe('71%');
+    // One black fill on the grey track: ClaimSplitBar's mono tone, not the green/red split.
+    expect(bar).toHaveClass('bg-divider');
+    expect(bar.children).toHaveLength(1);
+    expect(bar.firstElementChild).toHaveClass('bg-text');
+    // Smaller than "agree", as in the prototype; not the chat widget's token, which chat.css resizes.
+    expect(count).toHaveClass('text-browseSection');
+    expect(count).not.toHaveClass('text-chat');
 
     const agree = screen.getByRole('button', { name: 'Agree' });
     const disagree = screen.getByRole('button', { name: 'Disagree' });
@@ -131,6 +142,23 @@ describe('the open claim’s Agree and Disagree', () => {
     expect(screen.queryByText(/%/)).toBeNull();
     expect(screen.queryByRole('img', { name: /agree/ })).toBeNull();
     expect(screen.getByRole('button', { name: 'Agree' })).toBeInTheDocument();
+  });
+
+  // Review finding (round 4): a failed or pending count reads as total 0, which is not "No votes yet".
+  it.each([
+    ['the counts failed', { hasCounts: false, countsLoading: false }],
+    ['the counts are loading', { hasCounts: false, countsLoading: true }],
+  ])('draws neither "No votes yet", a share nor a bar while %s, but keeps the pills', (_, state) => {
+    mocks.counts = { positive: 0, negative: 0 };
+    mocks.hasCounts = state.hasCounts;
+    mocks.countsLoading = state.countsLoading;
+    renderActions();
+
+    expect(screen.queryByText('No votes yet')).toBeNull();
+    expect(screen.queryByText(/%/)).toBeNull();
+    expect(screen.queryByRole('img', { name: /agree/ })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Agree' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Disagree' })).toBeInTheDocument();
   });
 
   // ClaimSummary's rule: the share from the first vote on.
