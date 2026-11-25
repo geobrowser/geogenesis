@@ -55,7 +55,8 @@ const DARK_CARD =
 
 /**
  * How many lines a card's name gets. On a phone the centre gets four, so most names show whole
- * without a long claim filling the middle of the map; the panel below shows the whole name.
+ * without a long claim filling the middle of the map. The panel below leaves the name out on a
+ * phone (GEO-3849), so a name past four lines shows whole only on its own page.
  */
 function labelClamp(
   { isCentre, phone }: Pick<CardProps, 'isCentre' | 'phone'>,

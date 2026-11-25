@@ -31,7 +31,7 @@ const node = (kind: GraphKind): GraphNode => ({
 const clamps = () => screen.getByText(NAME).className.match(/line-clamp-\d/g) ?? [];
 
 // On a phone the centre's card gets four lines: more than its neighbours, but bounded, so a long claim
-// can't fill the middle of the map. The panel under the map shows the whole name.
+// can't fill the middle of the map. The panel under the map leaves the name out on a phone (GEO-3849).
 describe('NodeCard names', () => {
   afterEach(cleanup);
 
