@@ -110,6 +110,9 @@ describe('buildEventEdits', () => {
 describe('toStoredDate', () => {
   it('keeps the calendar day typed', () => {
     expect(toStoredDate('2026-11-18')).toBe('2026-11-18T00:00:00.000Z');
+    // The Add event date input's value (the entity page's DateField) is stored as it is.
+    expect(toStoredDate('2026-11-18T00:00:00.000Z')).toBe('2026-11-18T00:00:00.000Z');
+    expect(toStoredDate('2026-11-18T15:30:00.000Z')).toBe('2026-11-18T15:30:00.000Z');
     expect(toStoredDate('Nov 18, 2026')).toBe('2026-11-18T00:00:00.000Z');
     expect(toStoredDate('soon')).toBeNull();
     expect(toStoredDate('2026-02-30')).toBeNull();
