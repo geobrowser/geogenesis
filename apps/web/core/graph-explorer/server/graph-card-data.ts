@@ -8,15 +8,10 @@ import { nodeClaimSpaceId } from '../claims-about';
 import { type GraphHop1, type GraphNode, fetchHop1 } from '../fetch-graph-neighbourhood';
 import type { GraphCardMeta } from '../graph-card-metadata';
 import { type GraphFilter, resolveGraphFilter } from '../graph-filter';
-import { GRAPH_KINDS, type GraphKind } from '../graph-kinds';
+import type { GraphKind } from '../graph-kinds';
 import { pickNeighbours } from '../select-graph';
 import { assignTopicSlots } from '../topic-card-slots';
-import {
-  COUNT_CHUNK,
-  type TopicClaimsSummary,
-  fetchAllClaimsAbout,
-  summariseTopicClaims,
-} from '../topic-claims-summary';
+import { COUNT_CHUNK } from '../topic-claims-summary';
 import { loadGraphCardMeta } from './graph-card-meta';
 
 export type Counts = { positive: number; negative: number };
@@ -37,28 +32,23 @@ export type GraphCardData = {
   topic: { id: string; name: string } | null;
   isTopicCentre: boolean;
   neighbours: GraphCardNode[];
-  /** Hop 1 per kind; `more` when the API had another page. */
-  kindCounts: Array<{ kind: GraphKind; n: number; more: boolean }>;
-  /** Topic centres only. */
-  summary: TopicClaimsSummary | null;
   /** The scope fell back or an image ran out of time: cached briefly so a full card follows. */
   degraded: boolean;
   /** The card this data is shaped for: `topic` only when asked for and the centre is a Topic page. */
   variant: GraphCardVariant;
 };
 
-export const CARD_NEIGHBOURS = 6;
-/** Picked before the topic card fits them to its slots. */
-export const TOPIC_CARD_CANDIDATES = 12;
+/** Picked before the card fits them to its six slots: spares fill a slot another kind can't. */
+export const CARD_CANDIDATES = 12;
 export const FEATURED_BUDGET_MS = 1000;
 export const IMAGE_BUDGET_MS = 1500;
 /**
- * `graph` is the explorer's share card; `topic` is a Topic page's link preview, which draws no claims,
- * so it skips the claims walk and its hub shows the topic's Cover at the 184px disc's 2x.
+ * `graph` is the explorer's share card; `topic` is a Topic page's link preview, which draws no claims
+ * and whose hub shows the topic's Cover. Both share one layout: a 184px hub and 72px avatars, at 2x.
  */
 export type GraphCardVariant = 'graph' | 'topic';
-const HUB_IMAGE_PX: Record<GraphCardVariant, number> = { graph: 320, topic: 400 };
-const PERSON_IMAGE_PX: Record<GraphCardVariant, number> = { graph: 128, topic: 144 };
+const HUB_IMAGE_PX = 400;
+const PERSON_IMAGE_PX = 144;
 
 export const CARD_CACHE = 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800';
 /** A fallback scope or a missing image: short, so the next crawler gets the full card. */
@@ -68,7 +58,6 @@ type Deps = {
   loadMeta: (entityId: string, topicId: string) => Promise<GraphCardMeta | null>;
   fetchFeatured: () => Promise<Array<{ spaceId: string }>>;
   fetchHop1: (entityId: string, filter: GraphFilter) => Promise<GraphHop1>;
-  fetchAllClaimsAbout: typeof fetchAllClaimsAbout;
   fetchSummaries: typeof fetchClaimResponseSummaries;
   inlineImage: typeof inlineOgImage;
 };
@@ -77,7 +66,6 @@ const defaultDeps: Deps = {
   loadMeta: loadGraphCardMeta,
   fetchFeatured: fetchFeaturedSpacesShared,
   fetchHop1: (entityId, filter) => fetchHop1(entityId, filter),
-  fetchAllClaimsAbout,
   fetchSummaries: fetchClaimResponseSummaries,
   inlineImage: inlineOgImage,
 };
@@ -148,10 +136,7 @@ export async function loadGraphCardData(
   // (its graph kind is `ent`). Any other centre behind `variant=topic` gets the full explorer card.
   const topicVariant = variant === 'topic' && entityBrowseViewFromTypes(meta.centre.types) === 'topic';
   const cardVariant: GraphCardVariant = topicVariant ? 'topic' : 'graph';
-  const [hop1, about] = await Promise.all([
-    deps.fetchHop1(meta.centre.id, filter),
-    meta.centre.kind === 'topic' && !topicVariant ? deps.fetchAllClaimsAbout(meta.centre.id, filter, spaceId) : null,
-  ]);
+  const hop1 = await deps.fetchHop1(meta.centre.id, filter);
   if (hop1.failedKinds?.length) degraded = true;
 
   // Counts in each claim's own space: hop 1's agrees/disagrees are cross-space and never shown.
@@ -165,10 +150,7 @@ export async function loadGraphCardData(
     const space = nodeClaimSpaceId(hop1.centre, spaceId);
     if (space) claimSpace.set(hop1.centre.id, space);
   }
-  const counts = await loadCounts(
-    [...claimSpace.entries(), ...(about?.claims ?? []).map(claim => [claim.id, claim.spaceId] as [string, string])],
-    deps.fetchSummaries
-  );
+  const counts = await loadCounts([...claimSpace.entries()], deps.fetchSummaries);
   const countsOf = (id: string, space: string | undefined) => (space ? counts.get(`${space}:${id}`) : undefined);
   const scoped = (node: GraphNode): GraphNode => {
     if (node.kind !== 'claim') return node;
@@ -179,36 +161,25 @@ export async function loadGraphCardData(
   const candidates = hop1.neighbours
     .filter(({ node }) => !topicVariant || node.kind !== 'claim')
     .map(({ node, edge }) => ({ node: scoped(node), edge }));
-  const named = pickNeighbours(
-    candidates,
-    topicVariant ? TOPIC_CARD_CANDIDATES : CARD_NEIGHBOURS,
-    new Set([meta.centre.id]),
-    'all'
-  ).filter(({ node }) => node.name);
-  // The topic card's slots are shaped: a few spares let a missing card or person be filled by another.
-  const picked = topicVariant
-    ? assignTopicSlots(named.map(pick => ({ ...pick, kind: pick.node.kind }))).map(({ node }) => node)
-    : named;
+  const named = pickNeighbours(candidates, CARD_CANDIDATES, new Set([meta.centre.id]), 'all').filter(
+    ({ node }) => node.name
+  );
+  // The card's slots are shaped: a few spares let a missing card or person be filled by another.
+  const picked = assignTopicSlots(named.map(pick => ({ ...pick, kind: pick.node.kind }))).map(({ node }) => node);
 
   const [centreImage, ...neighbourImages] = await Promise.all([
     meta.centre.kind === 'claim'
       ? null
       : deps.inlineImage(
           (topicVariant ? meta.centre.cover : null) ?? meta.centre.image ?? hop1.centre?.image,
-          HUB_IMAGE_PX[cardVariant],
+          HUB_IMAGE_PX,
           IMAGE_BUDGET_MS
         ),
     ...picked.map(({ node }) =>
-      node.kind === 'ent' ? deps.inlineImage(node.image, PERSON_IMAGE_PX[cardVariant], IMAGE_BUDGET_MS) : null
+      node.kind === 'ent' ? deps.inlineImage(node.image, PERSON_IMAGE_PX, IMAGE_BUDGET_MS) : null
     ),
   ]);
   if ([centreImage, ...neighbourImages].some(image => image?.timedOut)) degraded = true;
-
-  const perKind = new Map<GraphKind, Set<string>>();
-  for (const { node } of hop1.neighbours) {
-    if (node.id === meta.centre.id) continue;
-    perKind.set(node.kind, (perKind.get(node.kind) ?? new Set()).add(node.id));
-  }
 
   const centreCounts =
     meta.centre.kind === 'claim'
@@ -236,14 +207,6 @@ export async function loadGraphCardData(
       image: neighbourImages[index]?.src ?? null,
       counts: node.kind === 'claim' ? { positive: node.agrees, negative: node.disagrees } : null,
     })),
-    kindCounts: GRAPH_KINDS.filter(kind => perKind.has(kind)).map(kind => ({
-      kind,
-      n: perKind.get(kind)!.size,
-      more: hop1.moreKinds.includes(kind),
-    })),
-    summary: about
-      ? summariseTopicClaims(about.claims, claim => countsOf(claim.id, claim.spaceId), about.truncated)
-      : null,
     degraded,
     variant: cardVariant,
   };

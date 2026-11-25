@@ -60,8 +60,6 @@ const data = (centre: Partial<GraphCardData['centre']> = {}, rest: Partial<Graph
   topic: { id: 'c', name: 'Israel-Palestine Conflict' },
   isTopicCentre: true,
   neighbours: NEIGHBOURS,
-  kindCounts: [],
-  summary: null,
   degraded: false,
   variant: 'topic',
   ...rest,

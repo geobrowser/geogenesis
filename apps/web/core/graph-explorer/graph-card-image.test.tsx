@@ -5,25 +5,12 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { renderToStaticMarkup } from 'react-dom/server';
 import sharp from 'sharp';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-import { TopicClaimsSummary } from '~/partials/graph-explorer/connections/centre-summary';
-
-import {
-  GraphCard,
-  generateGraphCardResponse,
-  kindChipLabel,
-  placeNodes,
-  responsesSoFar,
-  shownVerdict,
-} from './graph-card-image';
-import type { GraphFilter } from './graph-filter';
+import { GraphCard, generateGraphCardResponse, shownVerdict } from './graph-card-image';
+import { CLAIM_TITLE_MAX_LINES, TITLE_MIN_PX, claimNodeLabel, fitLinkCardTitle } from './link-card-layout';
 import type { GraphCardData, GraphCardNode } from './server/graph-card-data';
-
-const panel = vi.hoisted(() => ({ summary: undefined as unknown }));
-vi.mock('~/core/graph-explorer/use-graph-explorer', () => ({
-  useTopicClaimsSummary: () => ({ isLoading: false, isError: false, data: panel.summary }),
-}));
+import { TopicCard } from './topic-card-image';
 
 const text = (element: React.ReactElement) =>
   renderToStaticMarkup(element)
@@ -71,11 +58,6 @@ const base = (centre: Partial<GraphCardData['centre']>, rest: Partial<GraphCardD
   topic: { id: 'c', name: 'Israel-Gaza war' },
   isTopicCentre: true,
   neighbours: NEIGHBOURS,
-  kindCounts: [
-    { kind: 'topic', n: 11, more: true },
-    { kind: 'src', n: 1, more: false },
-  ],
-  summary: null,
   degraded: false,
   variant: 'graph',
   ...rest,
@@ -95,20 +77,7 @@ const claim = (positive: number, negative: number) =>
   );
 
 const SHAPES: Record<string, GraphCardData> = {
-  topic: base(
-    {},
-    {
-      summary: {
-        claims: [
-          { id: 'a', name: 'a', spaceId: 's', positive: 5, negative: 0, band: 'agreed' },
-          { id: 'b', name: 'b', spaceId: 's', positive: 2, negative: 2, band: 'contested' },
-          { id: 'd', name: 'd', spaceId: 's', positive: 0, negative: 3, band: 'rejected' },
-          { id: 'e', name: 'e', spaceId: 's', positive: 1, negative: 0, band: 'agreed' },
-        ],
-        truncated: false,
-      },
-    }
-  ),
+  topic: base({}, { neighbours: NEIGHBOURS.filter(entry => entry.kind !== 'claim') }),
   person: base(
     {
       name: 'Isaac Herzog',
@@ -116,17 +85,15 @@ const SHAPES: Record<string, GraphCardData> = {
       typeLabel: 'Person',
       description: 'Israeli politician, president since 2021.',
     },
-    { isTopicCentre: false, neighbours: NEIGHBOURS.slice(3) }
+    { isTopicCentre: false }
   ),
   claim: claim(5, 5),
   claimFew: claim(2, 0),
   claimNone: claim(0, 0),
-  sparse: base(
-    { name: 'World Central Kitchen', kind: 'ent', typeLabel: 'Organization' },
-    { neighbours: NEIGHBOURS.slice(0, 1), isTopicCentre: false }
-  ),
-  empty: base({ name: 'Israel-Lebanon conflict' }, { neighbours: [], kindCounts: [] }),
+  empty: base({ name: 'Israel-Lebanon conflict' }, { neighbours: [] }),
 };
+
+const BAND_COLORS = ['#1e824c', '#b75700', '#6833ff', 'rgba(30,130,76', 'rgba(183,87,0', 'rgba(104,51,255'];
 
 describe('graph share card', () => {
   it.each(Object.keys(SHAPES))('renders %s to a 1200×630 JPEG', async name => {
@@ -138,78 +105,56 @@ describe('graph share card', () => {
     if (process.env.GRAPH_CARD_DUMP) writeFileSync(join(process.env.GRAPH_CARD_DUMP, `${name}.jpg`), buffer);
   });
 
-  it('keeps every node inside the frame with a margin', () => {
-    for (const placed of placeNodes(NEIGHBOURS)) {
-      expect(placed.left).toBeGreaterThanOrEqual(24);
-      expect(placed.top).toBeGreaterThanOrEqual(24);
-      expect(placed.left + placed.w).toBeLessThanOrEqual(1200 - 24);
-      expect(placed.top + placed.h).toBeLessThanOrEqual(630 - 24);
+  it("labels the title with the centre's kind and draws no description, stats or tagline", () => {
+    const drawn = text(<GraphCard data={SHAPES.person} />);
+    expect(drawn).toContain('Person');
+    expect(drawn).toContain('Isaac Herzog');
+    expect(drawn).not.toContain('Israeli politician');
+    expect(drawn).not.toContain('Connections');
+    expect(drawn).not.toContain(' in Israel-Gaza war');
+    expect(drawn).not.toMatch(/people and groups|claims with/);
+  });
+
+  it('draws a claim neighbour as a neutral card whose label carries its agree percent', () => {
+    const markup = renderToStaticMarkup(<GraphCard data={SHAPES.person} />);
+    expect(markup).toContain('Claim · 80% agree');
+    for (const color of BAND_COLORS) expect(markup).not.toContain(color);
+    expect(markup).not.toMatch(/widely agreed|contested|widely rejected/i);
+  });
+
+  it("puts a claim centre's agree percent in the hub, and its count until it has 3 responses", () => {
+    expect(text(<GraphCard data={SHAPES.claim} />)).toMatch(/50% agree/);
+    expect(text(<GraphCard data={SHAPES.claimFew} />)).toContain('2 responses');
+    expect(text(<GraphCard data={SHAPES.claimNone} />)).toContain('No votes yet');
+    for (const shape of [SHAPES.claim, SHAPES.claimFew, SHAPES.claimNone]) {
+      const markup = renderToStaticMarkup(<GraphCard data={shape} />);
+      for (const color of BAND_COLORS) expect(markup).not.toContain(color);
     }
   });
 
-  it('shows a percent and band only from 3 responses, on each band boundary', () => {
-    expect(shownVerdict({ positive: 2, negative: 0 })).toBeNull();
-    expect(shownVerdict({ positive: 0, negative: 0 })).toBeNull();
+  it('labels a claim with a percent only from 3 responses', () => {
+    expect(claimNodeLabel({ positive: 2, negative: 0 })).toBe('Claim');
+    expect(claimNodeLabel(null)).toBe('Claim');
+    expect(claimNodeLabel({ positive: 3, negative: 1 })).toBe('Claim · 75% agree');
     expect(shownVerdict({ positive: 65, negative: 35 })).toEqual({ band: 'agreed', percent: 65 });
-    expect(shownVerdict({ positive: 64, negative: 36 })).toEqual({ band: 'contested', percent: 64 });
-    expect(shownVerdict({ positive: 35, negative: 65 })).toEqual({ band: 'contested', percent: 35 });
     expect(shownVerdict({ positive: 34, negative: 66 })).toEqual({ band: 'rejected', percent: 34 });
-    expect(responsesSoFar(1)).toBe('1 response so far');
-    expect(responsesSoFar(2)).toBe('2 responses so far');
   });
 
-  it('writes chips singular only for exactly one', () => {
-    expect(kindChipLabel({ kind: 'src', n: 1, more: false })).toBe('1 source');
-    expect(kindChipLabel({ kind: 'src', n: 1, more: true })).toBe('1+ sources');
-    expect(kindChipLabel({ kind: 'ent', n: 8, more: true })).toBe('8+ people and groups');
-  });
-});
-
-describe('the panel and the card', () => {
-  const both = (data: GraphCardData) => {
-    panel.summary = data.summary;
-    return {
-      card: text(<GraphCard data={data} />),
-      panel: text(
-        <TopicClaimsSummary topicId="t" filter={{} as GraphFilter} topicSpaceId={null} onOpenClaim={() => {}} />
-      ),
-    };
-  };
-
-  it('state the same bands, with the count of claims with 3+ responses on the card only', () => {
-    const { card, panel: shown } = both(SHAPES.topic);
-    expect(card).toContain('3 claims with 3+ responses');
-    expect(shown).not.toContain('with 3+ responses');
-    for (const [label, n] of [
-      ['widely agreed', 1],
-      ['contested', 1],
-      ['widely rejected', 1],
-    ] as const) {
-      expect(card).toContain(`${n} ${label}`);
-      expect(shown.toLowerCase()).toMatch(new RegExp(`${label} ${n}\\b`));
-    }
+  it('gives a long claim up to five lines before it shrinks to the floor', () => {
+    const name = SHAPES.claim.centre.name;
+    expect(fitLinkCardTitle(name).lines.length).toBeLessThanOrEqual(3);
+    const fit = fitLinkCardTitle(name, CLAIM_TITLE_MAX_LINES);
+    expect(fit.lines.length).toBeGreaterThan(3);
+    expect(fit.lines.length).toBeLessThanOrEqual(CLAIM_TITLE_MAX_LINES);
+    expect(fit.fontSize).toBeGreaterThanOrEqual(TITLE_MIN_PX);
+    expect(fit.lines.join(' ')).toBe(name);
+    expect(renderToStaticMarkup(<GraphCard data={SHAPES.claim} />)).toMatch(/line-clamp:\s?5/);
+    expect(renderToStaticMarkup(<GraphCard data={SHAPES.person} />)).not.toMatch(/line-clamp:\s?5/);
   });
 
-  it('say only how many claims have responses when none has 3, with no bands', () => {
-    const sparse = base(
-      {},
-      {
-        summary: {
-          claims: [
-            { id: 'a', name: 'a', spaceId: 's', positive: 2, negative: 0, band: 'agreed' },
-            { id: 'b', name: 'b', spaceId: 's', positive: 1, negative: 1, band: 'contested' },
-          ],
-          truncated: false,
-        },
-      }
+  it('draws a topic centre exactly as the Topic link preview does: one shared layout', () => {
+    expect(renderToStaticMarkup(<GraphCard data={SHAPES.topic} />)).toBe(
+      renderToStaticMarkup(<TopicCard data={{ ...SHAPES.topic, variant: 'topic' }} />)
     );
-    const { card, panel: shown } = both(sparse);
-    expect(card).toContain('2 claims have responses so far');
-    expect(shown).toContain('2 claims have responses so far');
-    expect(card).not.toMatch(/widely agreed/i);
-    expect(shown).not.toMatch(/widely agreed/i);
-    // Most responses keeps its count, without a percent under 3.
-    expect(shown).toContain('2 responses');
-    expect(shown).not.toContain('100% agree');
   });
 });

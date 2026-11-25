@@ -2,8 +2,6 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-
-import { decodeClaimsAbout } from '../claims-about';
 import { type GraphHop1, type GraphNode, decodeHop1, decodeNode } from '../fetch-graph-neighbourhood';
 import type { GraphCardMeta } from '../graph-card-metadata';
 import type { GraphKind } from '../graph-kinds';
@@ -65,7 +63,6 @@ function deps(overrides: Partial<Parameters<typeof loadGraphCardData>[1]> = {}) 
     loadMeta: vi.fn(async () => topicMeta),
     fetchFeatured: vi.fn(async () => [{ spaceId: FEATURED }]),
     fetchHop1: vi.fn(async () => hop1([])),
-    fetchAllClaimsAbout: vi.fn(async () => ({ claims: [], truncated: false })),
     fetchSummaries: vi.fn(async () => new Map()),
     inlineImage: vi.fn(async () => ({ src: 'data:image/jpeg;base64,AA', timedOut: false })),
     ...overrides,
@@ -120,17 +117,14 @@ describe('loadGraphCardData', () => {
     expect(data?.neighbours[0].counts).toEqual({ positive: 1, negative: 3 });
   });
 
-  it('picks at most six neighbours and counts every kind', async () => {
+  it('picks at most six neighbours, fitted to the slots', async () => {
     const nodes = [
       ...Array.from({ length: 5 }, (_, i) => graphNode(`s${i}`, 'src')),
       ...Array.from({ length: 5 }, (_, i) => graphNode(`e${i}`, 'ent')),
     ];
     const data = await loadGraphCardData(ids, deps({ fetchHop1: vi.fn(async () => hop1(nodes)) }));
     expect(data?.neighbours).toHaveLength(6);
-    expect(data?.kindCounts).toEqual([
-      { kind: 'ent', n: 5, more: false },
-      { kind: 'src', n: 5, more: true },
-    ]);
+    expect(data?.neighbours.filter(node => node.kind === 'src')).toHaveLength(3);
     expect(data?.neighbours.find(node => node.kind === 'src')?.label).toBe('Article');
   });
 
@@ -167,11 +161,10 @@ describe('loadGraphCardData', () => {
     const data = await loadGraphCardData({ ...ids, entityId: CLAIM }, d);
     expect(data?.centre).toMatchObject({ kind: 'claim', typeLabel: 'Claim', counts: { positive: 5, negative: 5 } });
     expect(data?.isTopicCentre).toBe(false);
-    expect(d.fetchAllClaimsAbout).not.toHaveBeenCalled();
     expect(d.inlineImage).not.toHaveBeenCalled();
   });
 
-  it('leaves hidden neighbours and claims out of the picks, the kind counts and the summary', async () => {
+  it('leaves hidden neighbours out of the picks', async () => {
     const person = (id: string, name: string, hidden = false) => ({
       id,
       name,
@@ -179,14 +172,6 @@ describe('loadGraphCardData', () => {
       types: [{ id: NEIGHBOUR_KIND_TYPE_IDS.person[0], name: 'Person' }],
       relationsList: [],
       hidden: hidden ? [{ text: 'true', boolean: null }] : [],
-    });
-    const claim = (id: string, hidden: boolean) => ({
-      id,
-      name: `Claim ${id}`,
-      spaceIds: [SPACE],
-      names: [{ spaceId: SPACE, text: `Claim ${id}` }],
-      placed: [],
-      hidden: hidden ? [{ spaceId: SPACE, text: null, boolean: true }] : [],
     });
     const shown = '1'.repeat(32);
     const withheld = '2'.repeat(32);
@@ -227,18 +212,6 @@ describe('loadGraphCardData', () => {
             TOPIC
           )
         ),
-        fetchAllClaimsAbout: vi.fn(async () => ({
-          claims: decodeClaimsAbout(
-            {
-              entitiesConnection: {
-                nodes: [claim(shown, false), claim(withheld, true)],
-                pageInfo: { hasNextPage: false, endCursor: null },
-              },
-            },
-            SPACE
-          ).claims,
-          truncated: false,
-        })),
         fetchSummaries: vi.fn(
           async () =>
             new Map([
@@ -249,16 +222,6 @@ describe('loadGraphCardData', () => {
       })
     );
     expect(data?.neighbours.map(node => node.name)).toEqual(['Shown']);
-    expect(data?.kindCounts).toEqual([{ kind: 'ent', n: 1, more: false }]);
-    expect(data?.summary?.claims.map(entry => entry.id)).toEqual([shown]);
-  });
-
-  it('summarises a topic with no voted claims as empty', async () => {
-    const d = deps({
-      fetchAllClaimsAbout: vi.fn(async () => ({ claims: [{ id: 'q', name: 'Q', spaceId: SPACE }], truncated: false })),
-    });
-    const data = await loadGraphCardData(ids, d);
-    expect(data?.summary?.claims).toEqual([]);
   });
 
   describe('the Topic link preview', () => {
@@ -275,12 +238,10 @@ describe('loadGraphCardData', () => {
       graphNode('p2', 'ent'),
     ];
 
-    it('draws no claims and never walks or counts them', async () => {
+    it('draws no claims and never counts them', async () => {
       const d = deps({ fetchHop1: vi.fn(async () => hop1(mixed)) });
       const data = await loadGraphCardData(topicIds, d);
-      expect(d.fetchAllClaimsAbout).not.toHaveBeenCalled();
       expect(d.fetchSummaries).not.toHaveBeenCalled();
-      expect(data?.summary).toBeNull();
       expect(data?.neighbours.map(node => node.kind)).not.toContain('claim');
     });
 
@@ -332,7 +293,6 @@ describe('loadGraphCardData', () => {
       const data = await loadGraphCardData(topicIds, d);
       expect(data?.variant).toBe('graph');
       expect(data?.neighbours.map(node => node.kind)).toContain('claim');
-      expect(d.inlineImage).not.toHaveBeenCalledWith(expect.anything(), 400, expect.any(Number));
     });
 
     it('renders with what exists when the topic has no image and no neighbours', async () => {
@@ -344,15 +304,15 @@ describe('loadGraphCardData', () => {
     });
   });
 
-  it('keeps the explorer card’s claims walk and Avatar-first hub', async () => {
+  it('gives the explorer card the Avatar-first hub, at the shared disc’s 2x, with no claims walk', async () => {
     const d = deps({
       loadMeta: vi.fn(async () => ({
         ...topicMeta,
         centre: { ...topicMeta.centre, image: 'ipfs://avatar', cover: 'ipfs://cover' },
       })),
     });
-    await loadGraphCardData(ids, d);
-    expect(d.fetchAllClaimsAbout).toHaveBeenCalled();
-    expect(d.inlineImage).toHaveBeenCalledWith('ipfs://avatar', 320, expect.any(Number));
+    const data = await loadGraphCardData(ids, d);
+    expect(d.inlineImage).toHaveBeenCalledWith('ipfs://avatar', 400, expect.any(Number));
+    expect(data).not.toHaveProperty('summary');
   });
 });

@@ -83,7 +83,7 @@ describe('buildGraphCardMetadata', () => {
     });
     expect(built.alternates?.canonical).toBe(`/explore/graph/${PERSON}?topic=${TOPIC}&space=${SPACE}`);
     const image = (built.openGraph?.images as Array<{ url: string; width: number; height: number }>)[0];
-    expect(image.url).toBe(`/explore/graph/${PERSON}/card?topic=${TOPIC}&space=${SPACE}&v=1`);
+    expect(image.url).toBe(`/explore/graph/${PERSON}/card?topic=${TOPIC}&space=${SPACE}&v=2`);
     expect(image.url).not.toContain('/api/');
     expect([image.width, image.height]).toEqual([1200, 630]);
     expect(built.twitter).toMatchObject({
