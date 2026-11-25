@@ -30,7 +30,8 @@ afterEach(() => {
 });
 
 function renderTopic(
-  onAddEvent = vi.fn(async (): Promise<TemplateAddResult> => ({ ok: true, id: 'ev-new', spaceId: 's' }))
+  onAddEvent = vi.fn(async (): Promise<TemplateAddResult> => ({ ok: true, id: 'ev-new', spaceId: 's' })),
+  holdAddDraft = vi.fn<(restore: () => void) => void>()
 ) {
   render(
     <TopicTemplate
@@ -40,11 +41,11 @@ function renderTopic(
         lede: 'The war in Gaza',
         timelineHighlights: [{ id: 'ev-1', when: 'Oct 7, 2023', title: 'Attack on Israel', href: '/space/s/ev-1' }],
       }}
-      actionCallbacks={{ onAddEvent, canOpenAddForm: () => true }}
+      actionCallbacks={{ onAddEvent, holdAddDraft }}
     />
   );
   fireEvent.click(screen.getByRole('button', { name: 'Add event' }));
-  return { onAddEvent };
+  return { onAddEvent, holdAddDraft };
 }
 
 function typeDate(year: string, month: string, day: string) {
@@ -170,6 +171,26 @@ describe('Topic timeline Add event date', () => {
 
     expect(onAddEvent).not.toHaveBeenCalled();
     expect(screen.getByRole('alert')).toHaveTextContent('Enter a full date, or leave it blank.');
+  });
+
+  it('puts a withdrawn draft back with its date, and submits that date again (a dismissed sign-up)', async () => {
+    const onAddEvent = vi.fn(async (): Promise<TemplateAddResult> => ({ ok: false, error: 'cancelled' }));
+    const { holdAddDraft } = renderTopic(onAddEvent);
+    typeTitle('Ceasefire signed');
+    typeDate('2026', '11', '18');
+    await act(async () => submit());
+
+    const restore = holdAddDraft.mock.calls[0]![0];
+    act(() => restore());
+
+    expect(screen.getByPlaceholderText('e.g. UN Security Council adopts resolution')).toHaveValue('Ceasefire signed');
+    expect(within(screen.getByRole('group', { name: 'Date' })).getByPlaceholderText('YYYY')).toHaveValue('2026');
+    await act(async () => submit());
+    expect(onAddEvent).toHaveBeenLastCalledWith({
+      title: 'Ceasefire signed',
+      when: '2026-11-18T00:00:00.000Z',
+      summary: undefined,
+    });
   });
 
   it('gives the date fields at least a 16px font, so iOS does not zoom in the phone sheet', () => {

@@ -7,6 +7,7 @@ import * as React from 'react';
 import { type PageSpaceWriters, pickWriteSpace } from '~/core/access/pick-write-space';
 import { readAccountAddress, readRegisteredPersonalSpaceId } from '~/core/hooks/cached-write-identity';
 import { publishOnce } from '~/core/hooks/publish-once';
+import { useAuthResolving } from '~/core/hooks/use-auth-resolving';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { usePublish } from '~/core/hooks/use-publish';
@@ -53,25 +54,30 @@ export function parseTemplateAddIntent(intent: string | undefined): TemplateAddA
 }
 
 // Publishes a template add straight from its edits, never through the local store, so nothing
-// reaches Review edits. Drafts made while a new account's space is created are queued.
+// reaches Review edits. A draft submitted signed out (GEO-3861), or while a new account's space is
+// created, is queued and published once the account can write.
 export function useTemplateAddPublish({ owner, pageSpaceId }: { owner: TemplateAddOwner; pageSpaceId: string }) {
   const { authenticated } = usePrivy();
+  const authResolving = useAuthResolving();
   const queryClient = useQueryClient();
   const tx = useSmartAccountTransaction();
   const { personalSpaceId, isRegistered, isLoading: isPersonalSpaceLoading } = usePersonalSpaceId();
   const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
   const { makeProposal } = usePublish();
   const { dispatch } = useStatusBar();
-  const promptSignIn = usePrivySignIn(undefined, {
-    analytics: {
+  const signInAnalytics = React.useMemo(
+    () => ({
       component: 'template_add_form',
       target_type: 'entity',
       target_id: owner.entityId,
       auth_control: 'add_claim_or_event',
       auth_intent: 'add_claim_or_event',
-      auth_continuation: 'repeat',
-    },
-  });
+      // The draft is held through the sign-in and published after it, not pressed again.
+      auth_continuation: 'queued',
+    }),
+    [owner.entityId]
+  );
+  const promptSignIn = usePrivySignIn(undefined, { analytics: signInAnalytics });
 
   const fail = React.useCallback(
     (error: string, { show = true }: { show?: boolean } = {}): TemplateAddResult => {
@@ -121,9 +127,12 @@ export function useTemplateAddPublish({ owner, pageSpaceId }: { owner: TemplateA
 
   // The press waiting on a queued draft, settled when the queue replays it.
   const waitingRef = React.useRef<((result: TemplateAddResult) => void) | null>(null);
+  // Puts the waiting draft back in the form it came from, for a draft withdrawn before it ran.
+  const waitingRestoreRef = React.useRef<(() => void) | null>(null);
   const settleWaiting = React.useCallback((result: TemplateAddResult) => {
     waitingRef.current?.(result);
     waitingRef.current = null;
+    waitingRestoreRef.current = null;
   }, []);
 
   const replayingRef = React.useRef(false);
@@ -131,7 +140,8 @@ export function useTemplateAddPublish({ owner, pageSpaceId }: { owner: TemplateA
     id: `template-add:${ID.uuidToHex(owner.entityId)}:${ID.uuidToHex(pageSpaceId)}`,
     component: 'entity_editor',
     label: 'your addition',
-    survivesRedirect: false,
+    // A Google sign-in leaves the page and comes back; the draft goes with it.
+    survivesRedirect: true,
     // `makeProposal` reads the personal space from its render, so only a control drawn after the
     // space exists can publish: the press's own closure is from before it.
     liveOnly: true,
@@ -151,7 +161,8 @@ export function useTemplateAddPublish({ owner, pageSpaceId }: { owner: TemplateA
     },
   });
 
-  // A queued draft dropped without replaying (a sign-out clears the queue) settles as not added.
+  // A queued draft dropped without replaying (a dismissed sign-in, or a sign-out clearing the queue)
+  // settles as not added, and goes back into its form so the viewer's text is not lost.
   const wasQueuedRef = React.useRef(false);
   React.useEffect(() => {
     if (isQueued) {
@@ -160,7 +171,11 @@ export function useTemplateAddPublish({ owner, pageSpaceId }: { owner: TemplateA
     }
     if (!wasQueuedRef.current) return;
     wasQueuedRef.current = false;
-    if (!replayingRef.current) settleWaiting({ ok: false, error: 'Your addition was cancelled.' });
+    if (!replayingRef.current) {
+      const restore = waitingRestoreRef.current;
+      settleWaiting({ ok: false, error: 'Your addition was cancelled.' });
+      restore?.();
+    }
     replayingRef.current = false;
   }, [isQueued, settleWaiting]);
 
@@ -177,28 +192,53 @@ export function useTemplateAddPublish({ owner, pageSpaceId }: { owner: TemplateA
     [settleWaiting]
   );
 
+  // The submitting form's way to get its draft back (see `EntityActionCallbacks.holdAddDraft`),
+  // taken by the `add` that follows it.
+  const heldRestoreRef = React.useRef<(() => void) | null>(null);
+  const holdAddDraft = React.useCallback((restore: () => void) => {
+    heldRestoreRef.current = restore;
+  }, []);
+
   const add = React.useCallback(
     async (action: TemplateAddAction): Promise<TemplateAddResult> => {
       const noun = NOUN[action.kind];
-      if (!authenticated) {
-        promptSignIn();
-        return fail(`Sign in to add a ${noun}.`, { show: false });
-      }
-      if (isRegistered && personalSpaceId) return publishNow(action, personalSpaceId);
-      if (isAccountSetupPending || isPersonalSpaceLoading) {
+      const restore = heldRestoreRef.current;
+      heldRestoreRef.current = null;
+      if (authenticated && isRegistered && personalSpaceId) return publishNow(action, personalSpaceId);
+
+      // A draft turned away here goes back into its form, which cleared itself as it submitted. After
+      // the submit handler, so the form's own reset does not win over it.
+      const turnAway = (error: string) => {
+        if (restore) queueMicrotask(restore);
+        return fail(error);
+      };
+
+      const signedOut = !authenticated;
+      if (signedOut || isAccountSetupPending || isPersonalSpaceLoading) {
         // One draft waits per page; a second would replace the first unseen.
         if (isQueued || waitingRef.current) {
-          return fail(`Your last addition is still waiting for your account. Try again in a moment.`);
+          return turnAway(`Your last addition is still waiting for your account. Try again in a moment.`);
         }
         return new Promise<TemplateAddResult>(resolve => {
           waitingRef.current = resolve;
-          queue(JSON.stringify(action));
+          waitingRestoreRef.current = restore;
+          const intent = JSON.stringify(action);
+          if (!signedOut) return queue(intent);
+          // Signed out (GEO-3861): the form was open to them, and only now, with their draft written,
+          // are they asked to sign up. The draft waits in the queue and publishes once they have.
+          // Still starting up, the runner asks if it resolves signed out (`PendingActionsRunner`).
+          if (authResolving) return queue(intent, { onSignedOut: { prompt: signInAnalytics } });
+          queue(intent);
+          // A dismissed sign-in withdraws the draft, so walking away never publishes it later.
+          promptSignIn(undefined, { onCancel: cancel });
         });
       }
-      return fail(`Finish setting up your account to add a ${noun}.`);
+      return turnAway(`Finish setting up your account to add a ${noun}.`);
     },
     [
+      authResolving,
       authenticated,
+      cancel,
       fail,
       isAccountSetupPending,
       isPersonalSpaceLoading,
@@ -208,14 +248,9 @@ export function useTemplateAddPublish({ owner, pageSpaceId }: { owner: TemplateA
       promptSignIn,
       publishNow,
       queue,
+      signInAnalytics,
     ]
   );
 
-  const canOpenAddForm = React.useCallback(() => {
-    if (authenticated) return true;
-    promptSignIn();
-    return false;
-  }, [authenticated, promptSignIn]);
-
-  return { add, canOpenAddForm };
+  return { add, holdAddDraft };
 }

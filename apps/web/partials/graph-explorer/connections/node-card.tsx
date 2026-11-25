@@ -87,6 +87,9 @@ const FAR_MARKERS: Partial<Record<GraphNode['kind'], string>> = {
   event: cx(FAR_SQUARE, 'shadow-[inset_0_0_0_2px_#f2f2f2]'),
   case: 'h-[14px] w-[14px] rounded-[3px] bg-[#4c8dff] shadow-[0_0_10px_rgba(76,141,255,.7)]',
   src: 'h-3 w-[10px] rounded-[2px] border-[1.5px] border-dashed border-white/70',
+  // A far entity with no picture: a neutral dot, round like the photo it stands in for.
+  ent: 'h-3 w-3 rounded-full bg-grey-03',
+  other: 'h-3 w-3 rounded-full bg-grey-03',
 };
 
 /**
@@ -126,16 +129,25 @@ export function NodeCard({
   centreId = null,
   ...props
 }: CardProps & { claimSpaceId: string | null; centreId?: string | null }) {
-  const far = isFarNode(props.hop, props.isCentre);
   if (props.node.kind === 'claim' && claimSpaceId) return <ClaimCard {...props} spaceId={claimSpaceId} />;
-  if (props.node.kind === 'ent' || props.node.kind === 'other') return <EntityCard {...props} />;
-  if (far) return <FarMarker node={props.node} band={null} />;
-  const card = props.node.kind === 'topic' ? <TopicCard {...props} /> : <ItemCard {...props} centreId={centreId} />;
-  return props.isCentre ? (
-    card
-  ) : (
-    <ShrinksToMarker marker={<FarMarker node={props.node} band={null} />}>{card}</ShrinksToMarker>
+  if (props.node.kind === 'ent' || props.node.kind === 'other') return <EntityCard {...props} centreId={centreId} />;
+  return (
+    <Placed {...props}>
+      {props.node.kind === 'topic' ? <TopicCard {...props} /> : <ItemCard {...props} centreId={centreId} />}
+    </Placed>
   );
+}
+
+/** Where a card sits decides its form: far nodes are a marker, hop 1 shrinks to one, the centre is the card. */
+function Placed({
+  node,
+  hop,
+  isCentre,
+  children,
+}: Pick<CardProps, 'node' | 'hop' | 'isCentre'> & { children: React.ReactNode }) {
+  const marker = <FarMarker node={node} band={null} />;
+  if (isFarNode(hop, isCentre)) return marker;
+  return isCentre ? children : <ShrinksToMarker marker={marker}>{children}</ShrinksToMarker>;
 }
 
 /**
@@ -203,9 +215,30 @@ function TopicCard({ node, isCentre, phone }: CardProps) {
   );
 }
 
-function EntityCard({ node, hop, isCentre, phone }: CardProps) {
-  const src = entityImageSrc(node);
-  const [failed, setFailed] = React.useState(false);
+/**
+ * An entity with a picture is its photo plus a name label. With none, or once the picture fails to
+ * load, it is a name card like the map's other cards: a letter in a gray circle says nothing.
+ */
+function EntityCard({ centreId, ...props }: CardProps & { centreId: string | null }) {
+  const src = entityImageSrc(props.node);
+  // Keyed by URL, so a node whose picture changes tries the new one.
+  const [failedSrc, setFailedSrc] = React.useState<string | null>(null);
+  if (src && failedSrc !== src) return <EntityPhotoCard {...props} src={src} onError={() => setFailedSrc(src)} />;
+  return (
+    <Placed {...props}>
+      <ItemCard {...props} centreId={centreId} />
+    </Placed>
+  );
+}
+
+function EntityPhotoCard({
+  node,
+  hop,
+  isCentre,
+  phone,
+  src,
+  onError,
+}: CardProps & { src: string; onError: () => void }) {
   const far = isFarNode(hop, isCentre);
   const size = isCentre ? (phone ? 64 : 84) : far ? 30 : phone ? 40 : 52;
   const width = isCentre ? (phone ? 'w-[110px]' : 'w-[150px]') : far ? null : phone ? 'w-[84px]' : 'w-[112px]';
@@ -214,7 +247,7 @@ function EntityCard({ node, hop, isCentre, phone }: CardProps) {
       <span
         data-anchor
         className={cx(
-          'flex shrink-0 items-center justify-center overflow-hidden bg-[#333] text-[#ddd]',
+          'flex shrink-0 items-center justify-center overflow-hidden bg-[#333]',
           // Far, Geo draws the photo as a 30px rounded square with a faint white ring.
           far ? 'rounded-[8px]' : 'rounded-full',
           isCentre
@@ -223,19 +256,9 @@ function EntityCard({ node, hop, isCentre, phone }: CardProps) {
               ? 'shadow-[0_0_0_1px_rgba(255,255,255,.3)]'
               : 'shadow-[0_0_0_1px_rgba(255,255,255,.18),0_10px_30px_rgba(0,0,0,.5)]'
         )}
-        style={{ width: size, height: size, fontSize: Math.round(size * 0.4) }}
+        style={{ width: size, height: size }}
       >
-        {src && !failed ? (
-          <img
-            src={src}
-            alt=""
-            draggable={false}
-            className="h-full w-full object-cover"
-            onError={() => setFailed(true)}
-          />
-        ) : (
-          node.name?.charAt(0).toUpperCase()
-        )}
+        <img src={src} alt="" draggable={false} className="h-full w-full object-cover" onError={onError} />
       </span>
       {far ? (
         <FarName name={node.name} />
@@ -276,7 +299,7 @@ function cardBox({ isCentre, phone }: Pick<CardProps, 'isCentre' | 'phone'>, des
 }
 
 /**
- * A source's box, in the prototype's Geo geometry: smaller and squarer than the other cards. Phone
+ * A source's (and news') box, in the prototype's Geo geometry: smaller and squarer than the other cards. Phone
  * keeps the shared phone box, which the map's spacing on a small screen is tuned to.
  */
 function sourceBox({ isCentre, phone }: Pick<CardProps, 'isCentre' | 'phone'>) {
@@ -284,8 +307,20 @@ function sourceBox({ isCentre, phone }: Pick<CardProps, 'isCentre' | 'phone'>) {
   return cx('rounded-[10px] px-[11px] py-[9px]', isCentre ? 'w-[220px]' : 'w-[168px]');
 }
 
+/**
+ * The other cards' box (names, events, cases), in the prototype's Geo geometry: roomier than a
+ * claim's, with more space between the eyebrow and the title.
+ */
+function itemBox({ isCentre, phone }: Pick<CardProps, 'isCentre' | 'phone'>) {
+  if (phone) return cx('gap-[6px] rounded-xl', isCentre ? 'w-[176px] p-[14px]' : 'w-[128px] px-3 py-[10px]');
+  return cx('gap-[10px] rounded-xl', isCentre ? 'w-[240px] px-5 py-[18px]' : 'w-[184px] px-4 py-[14px]');
+}
+
 function ItemCard({ node, hop, isCentre, phone, centreId }: CardProps & { centreId: string | null }) {
   const source = node.kind === 'src';
+  const named = node.kind === 'ent' || node.kind === 'other';
+  // Geo draws news like a source: the smaller, squarer card.
+  const small = source || node.kind === 'story';
   const meta = source
     ? sourceEyebrow(node, centreId)
     : [nodeTypeLabel(node), nodeDateLabel(node)].filter(Boolean).join(' · ');
@@ -293,15 +328,14 @@ function ItemCard({ node, hop, isCentre, phone, centreId }: CardProps & { centre
     <span
       data-label
       data-source-card={source || undefined}
+      data-name-card={named || undefined}
       className={cx(
         // Blur behind every card is too much for low-end phones.
-        'flex flex-col items-start gap-1 text-left',
+        'flex flex-col items-start text-left',
         !phone && 'backdrop-blur-[6px]',
         ITEM_STYLES[node.kind] ?? DARK_CARD,
         isCentre && CENTRE_RING,
-        source
-          ? sourceBox({ isCentre, phone })
-          : cx('rounded-xl', cardBox({ isCentre, phone }, ['w-[230px]', 'w-[176px]']))
+        small ? cx('gap-1', sourceBox({ isCentre, phone })) : itemBox({ isCentre, phone })
       )}
     >
       {meta && (
@@ -310,7 +344,9 @@ function ItemCard({ node, hop, isCentre, phone, centreId }: CardProps & { centre
             'text-[11px]',
             source
               ? 'line-clamp-1 font-normal text-[#a8a8a8]'
-              : cx('font-medium', node.kind === 'story' ? 'text-[#4b4b4b]' : 'text-[#d9b46a]')
+              : named
+                ? 'line-clamp-1 font-medium text-[#a8a8a8]'
+                : cx('font-medium', node.kind === 'story' ? 'text-[#4b4b4b]' : 'text-[#d9b46a]')
           )}
         >
           {meta}

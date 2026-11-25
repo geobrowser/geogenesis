@@ -20,6 +20,8 @@ type Options = {
    * GEO-3819). Without it the import writes into the route's space.
    */
   resolveSpace?: (url: string) => Promise<IngestionSpaceDecision>;
+  /** The link the field starts with: one held through a sign-in (GEO-3861). */
+  initialUrl?: string;
 };
 
 /**
@@ -63,9 +65,9 @@ export function useStartUrlIngestion() {
   );
 }
 
-export function useUrlIngestionSubmit({ logTag, onComplete, link, resolveSpace }: Options) {
+export function useUrlIngestionSubmit({ logTag, onComplete, link, resolveSpace, initialUrl }: Options) {
   const startIngestion = useStartUrlIngestion();
-  const [url, setUrl] = React.useState('');
+  const [url, setUrl] = React.useState(initialUrl ?? '');
   const [submitting, setSubmitting] = React.useState(false);
   const onCompleteRef = React.useRef(onComplete);
   onCompleteRef.current = onComplete;
