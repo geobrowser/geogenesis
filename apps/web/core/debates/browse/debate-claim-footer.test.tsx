@@ -299,14 +299,14 @@ describe('DebateClaimFooter results row before the claim resolves', () => {
   ] as const)('with the claim read %s, the row reads loading=%s', (claimRead, loading) => {
     mocks.claimRead = claimRead;
     mocks.localVoteSide = true;
-    renderFooter({ look: 'app' });
+    renderFooter();
 
     expect(screen.getByTestId('claim-summary')).toHaveAttribute('data-loading', loading);
   });
 
   it('reads as loading on a card that has not asked for its claim yet', () => {
     mocks.localVoteSide = true;
-    renderFooter({ look: 'app', enabled: false });
+    renderFooter({ enabled: false });
 
     expect(screen.getByTestId('claim-summary')).toHaveAttribute('data-loading', 'true');
   });
