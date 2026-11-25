@@ -1235,7 +1235,7 @@ describe('Phone claim lists without the card (GEO-3857)', () => {
     totalVotes,
   });
   const expectPhoneListSurface = (surface: Element | null) => {
-    expect(surface).toHaveClass('border-t', 'border-divider', '@[760px]:rounded-xl', '@[760px]:border');
+    expect(surface).toHaveClass('border-t', 'border-divider', '@[640px]:rounded-xl', '@[640px]:border');
     expect(surface).not.toHaveClass('rounded-xl');
   };
 
@@ -1281,7 +1281,7 @@ describe('Phone claim lists without the card (GEO-3857)', () => {
     const topicList = screen.getByLabelText('Loading topic sections').querySelector('.divide-y');
     expectPhoneListSurface(topicList);
     // Skeleton rows pad only on the wide card, as the loaded rows do.
-    expect(topicList?.firstElementChild).toHaveClass('@[760px]:px-5');
+    expect(topicList?.firstElementChild).toHaveClass('@[640px]:px-5');
     expect(topicList?.firstElementChild).not.toHaveClass('px-5');
     cleanup();
 
@@ -1312,7 +1312,7 @@ describe('Phone claim lists without the card (GEO-3857)', () => {
     );
     const surface = screen.getByText('Aid kept entering').closest('.divide-y');
     expectPhoneListSurface(surface);
-    expect(surface).toHaveClass('@[760px]:overflow-hidden');
+    expect(surface).toHaveClass('@[640px]:overflow-hidden');
     expect(surface).not.toHaveClass('overflow-hidden');
   });
 
@@ -1332,7 +1332,7 @@ describe('Phone claim lists without the card (GEO-3857)', () => {
     );
     const surface = screen.getByText('Aid kept entering').closest('.divide-y');
     expectPhoneListSurface(surface);
-    expect(surface).toHaveClass('@[760px]:overflow-hidden');
+    expect(surface).toHaveClass('@[640px]:overflow-hidden');
     expect(surface).not.toHaveClass('overflow-hidden');
   });
 
