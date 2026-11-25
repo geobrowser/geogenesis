@@ -13,6 +13,7 @@ import { useSpace } from '~/core/hooks/use-space';
 import { ID } from '~/core/id';
 import { CLAIM_RESPONSE_COPY } from '~/core/responses/entity-response';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
+import type { Entity, Relation } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { normId } from '~/core/utils/norm-id';
 import { resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
@@ -51,13 +52,49 @@ import { useTopicMediaBatch } from './use-topic-media-batch';
 import { useEntityWithViewerSources, useViewerSpaceId } from './use-viewer-sources';
 
 /**
+ * One quotes section from the Claim's own quote relations plus Quotes that point at the Claim,
+ * deduplicated by Quote id. Null when there is nothing to show.
+ */
+function quoteSection(
+  id: string,
+  title: string,
+  outgoing: readonly Relation[],
+  incoming: readonly Entity[],
+  spaceId: string
+): EntityListSectionModel | null {
+  const items = new Map<string, EntityListSectionModel['items'][number]>();
+  for (const rel of outgoing) {
+    if (!rel.toEntity.name) continue;
+    items.set(ID.uuidToHex(rel.toEntity.id), {
+      id: rel.toEntity.id,
+      kind: 'source',
+      kindLabel: 'Quote',
+      title: rel.toEntity.name,
+      href: NavUtils.toEntity(rel.toSpaceId ?? spaceId, rel.toEntity.id),
+    });
+  }
+  for (const quote of incoming) {
+    const hex = ID.uuidToHex(quote.id);
+    if (!quote.name || items.has(hex)) continue;
+    items.set(hex, {
+      id: quote.id,
+      kind: 'source',
+      kindLabel: 'Quote',
+      title: quote.name,
+      href: NavUtils.toEntity(resolveEntitySpaceId(quote, spaceId), quote.id),
+    });
+  }
+  return items.size > 0 ? { id, title, items: Array.from(items.values()) } : null;
+}
+
+/**
  * Live Geo adapter for `ClaimTemplate`.
  *
  * Bridges `useQueryEntity`, `useClaimResponseState`, `useClaimPositionControl`, incoming & outgoing
  * stance relations (`Supports`, `Opposes`, `Supported by`, `Opposed by`, `Subclaims`, `Inverse claims`,
  * `Supporting/Opposing arguments`) with live vote counts, `Factual`/`Judgment` hydration, and
  * interactive inline voting; Debates gallery cards with speaker stills; Topic pills with images;
- * supporting Quotes & Sources; and live `useMutate` actions.
+ * supporting and opposing Quotes, Sources; and live `useMutate` actions.
  */
 export function useLiveClaimTemplate({
   entityId,
@@ -121,18 +158,21 @@ export function useLiveClaimTemplate({
     }),
     [entityId, spaceId]
   );
-  const incomingQuotesWhere = React.useMemo(
-    () => ({
+  const incomingQuotesWhere = React.useCallback(
+    (propertyId: string) => ({
       types: [{ id: { equals: TEMPLATE_ONTOLOGY.QUOTE_TYPE_ID } }],
       spaces: [{ equals: normId(spaceId) }],
-      relations: [
-        {
-          typeOf: { id: { equals: TEMPLATE_ONTOLOGY.CLAIM_SUPPORTS_PROPERTY_ID } },
-          toEntity: { id: { equals: entityId } },
-        },
-      ],
+      relations: [{ typeOf: { id: { equals: propertyId } }, toEntity: { id: { equals: entityId } } }],
     }),
     [entityId, spaceId]
+  );
+  const incomingSupportingQuotesWhere = React.useMemo(
+    () => incomingQuotesWhere(TEMPLATE_ONTOLOGY.CLAIM_SUPPORTS_PROPERTY_ID),
+    [incomingQuotesWhere]
+  );
+  const incomingOpposingQuotesWhere = React.useMemo(
+    () => incomingQuotesWhere(TEMPLATE_ONTOLOGY.CLAIM_OPPOSES_PROPERTY_ID),
+    [incomingQuotesWhere]
   );
 
   const [isMounted, setIsMounted] = React.useState(false);
@@ -180,7 +220,12 @@ export function useLiveClaimTemplate({
     enabled: isMounted && viewerSpaceId !== null,
   });
   const { entities: incomingSupportingQuotes } = useQueryEntities({
-    where: incomingQuotesWhere,
+    where: incomingSupportingQuotesWhere,
+    first: 10,
+    enabled: isMounted,
+  });
+  const { entities: incomingOpposingQuotes } = useQueryEntities({
+    where: incomingOpposingQuotesWhere,
     first: 10,
     enabled: isMounted,
   });
@@ -498,43 +543,28 @@ export function useLiveClaimTemplate({
       });
     }
 
-    // Merge outgoing Quotes that support claims (live & SDK property IDs) + incoming Quotes supporting this claim.
-    const outgoingQuotes = readEntityRelations(entity, [
-      TEMPLATE_ONTOLOGY.QUOTES_THAT_SUPPORT_CLAIMS_LIVE_PROPERTY_ID,
-      TEMPLATE_ONTOLOGY.QUOTES_THAT_SUPPORT_CLAIMS_PROPERTY_ID,
-    ]);
-    const quoteItemsMap = new Map<string, { id: string; title: string; href: string }>();
-    for (const rel of outgoingQuotes) {
-      if (!rel.toEntity.name) continue;
-      quoteItemsMap.set(ID.uuidToHex(rel.toEntity.id), {
-        id: rel.toEntity.id,
-        title: rel.toEntity.name,
-        href: NavUtils.toEntity(rel.toSpaceId ?? spaceId, rel.toEntity.id),
-      });
-    }
-    for (const q of incomingSupportingQuotes) {
-      if (!q.name) continue;
-      const hex = ID.uuidToHex(q.id);
-      if (quoteItemsMap.has(hex)) continue;
-      quoteItemsMap.set(hex, {
-        id: q.id,
-        title: q.name,
-        href: NavUtils.toEntity(resolveEntitySpaceId(q, spaceId), q.id),
-      });
-    }
-    if (quoteItemsMap.size > 0) {
-      sections.push({
-        id: 'quotes',
-        title: 'Supporting quotes',
-        items: Array.from(quoteItemsMap.values()).map(q => ({
-          id: q.id,
-          kind: 'source',
-          kindLabel: 'Quote',
-          title: q.title,
-          href: q.href,
-        })),
-      });
-    }
+    // Quotes come in two shapes: the Claim's own `Quotes that support/oppose claims` relations, and a
+    // Quote's `Supports`/`Opposes` relation to this Claim. Each side reads only its own properties,
+    // so an opposing quote never lands under Supporting quotes and vice versa.
+    const supportingQuotes = quoteSection(
+      'quotes',
+      'Supporting quotes',
+      readEntityRelations(entity, [
+        TEMPLATE_ONTOLOGY.QUOTES_THAT_SUPPORT_CLAIMS_LIVE_PROPERTY_ID,
+        TEMPLATE_ONTOLOGY.QUOTES_THAT_SUPPORT_CLAIMS_PROPERTY_ID,
+      ]),
+      incomingSupportingQuotes,
+      spaceId
+    );
+    if (supportingQuotes) sections.push(supportingQuotes);
+    const opposingQuotes = quoteSection(
+      'opposing-quotes',
+      'Opposing quotes',
+      readEntityRelations(entity, TEMPLATE_ONTOLOGY.QUOTES_THAT_OPPOSE_CLAIMS_PROPERTY_ID),
+      incomingOpposingQuotes,
+      spaceId
+    );
+    if (opposingQuotes) sections.push(opposingQuotes);
 
     sections.push({
       id: 'sources',
@@ -580,6 +610,7 @@ export function useLiveClaimTemplate({
       TEMPLATE_ONTOLOGY.SOURCES_PROPERTY_ID,
       TEMPLATE_ONTOLOGY.QUOTES_THAT_SUPPORT_CLAIMS_PROPERTY_ID,
       TEMPLATE_ONTOLOGY.QUOTES_THAT_SUPPORT_CLAIMS_LIVE_PROPERTY_ID,
+      TEMPLATE_ONTOLOGY.QUOTES_THAT_OPPOSE_CLAIMS_PROPERTY_ID,
     ]);
     const flags = extractEntityFlags(entity, spaceId);
 
@@ -633,6 +664,7 @@ export function useLiveClaimTemplate({
     entity,
     entityId,
     hydratedSubClaimKindByHex,
+    incomingOpposingQuotes,
     incomingSupportingQuotes,
     record.claimRows,
     record.debateRows,
