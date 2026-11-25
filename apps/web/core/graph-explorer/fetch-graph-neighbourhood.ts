@@ -110,6 +110,10 @@ const NODE_FIELDS = /* GraphQL */ `
     typeId
     toEntity { valuesList(filter: { propertyId: { is: $imageUrlPropertyId } }) { text } }
   }
+`;
+
+/** A source's or story's publisher: only they show one, and they are never claims, so only `others` ask. */
+const PUBLISHER_FIELD = /* GraphQL */ `
   publishers: relationsList(filter: { typeId: { is: $publisherPropertyId } }) {
     toEntity {
       id
@@ -287,7 +291,7 @@ export const nodesDocument = queryDocument(
     nodes { ${NODE_FIELDS} ${PLACED_FIELD} }
   }
   others: entitiesConnection(first: $first, filter: { id: { in: $ids }, not: { typeIds: { overlaps: $claimTypeIds } } }) {
-    nodes { ${NODE_FIELDS} }
+    nodes { ${NODE_FIELDS} ${PUBLISHER_FIELD} }
   }`
 ) as TypedDocumentNode<
   { claims: { nodes: RawNode[] } | null; others: { nodes: RawNode[] } | null },
@@ -307,7 +311,6 @@ function nodeVariables() {
     avatarPropertyId: AVATAR_PROPERTY_ID,
     coverPropertyId: COVER_PROPERTY_ID,
     imageUrlPropertyId: IMAGE_URL_PROPERTY_ID,
-    publisherPropertyId: PUBLISHER_PROPERTY_ID,
   };
 }
 
@@ -472,6 +475,7 @@ export async function fetchNodes(
         first: unique.length,
         claimTypeIds: GRAPH_KIND_TYPE_IDS.claim,
         unplacingPropertyIds: UNPLACING_PROPERTY_IDS,
+        publisherPropertyId: PUBLISHER_PROPERTY_ID,
         ...nodeVariables(),
       }),
       signal,

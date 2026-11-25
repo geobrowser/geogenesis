@@ -15,6 +15,7 @@ import {
   HOP2_FIRST_TRY_MS,
   type Hop1Side,
   NODES_MIN_MS,
+  PUBLISHER_PROPERTY_ID,
   declaredVariables,
   decodeCrossLinks,
   decodeHop1,
@@ -137,11 +138,15 @@ describe('decodeNode', () => {
     expect(decodeNode(raw('1'.repeat(32), 'No publisher', [ARTICLE_TYPE_ID]))?.publisher).toBeNull();
   });
 
-  it('asks every node for its publisher in the same request, not a new one', () => {
-    for (const document of [nodesDocument, hop1CentreDocument]) {
-      expect(print(document)).toContain('publishers: relationsList(filter: {typeId: {is: $publisherPropertyId}})');
-      expect(declared(document)).toContain('publisherPropertyId');
-    }
+  it('asks for publishers in the nodes request, on non-claims only', () => {
+    const field = 'publishers: relationsList(filter: {typeId: {is: $publisherPropertyId}})';
+    const printed = print(nodesDocument);
+    // Sources and stories come back under `others`; claims and the centre never show a publisher.
+    expect(printed.slice(printed.indexOf('others:'))).toContain(field);
+    expect(printed.slice(printed.indexOf('claims:'), printed.indexOf('others:'))).not.toContain('publishers:');
+    expect(declared(nodesDocument)).toContain('publisherPropertyId');
+    expect(print(hop1CentreDocument)).not.toContain('publishers:');
+    expect(declared(hop1CentreDocument)).not.toContain('publisherPropertyId');
   });
 
   it('always makes a centre a node, whatever its type', () => {
@@ -314,6 +319,9 @@ describe('placement', () => {
     const [call] = calls();
     expect(call.variables).toMatchObject({ ids: ['1'.repeat(32), '2'.repeat(32)], first: 2 });
     expect(call.variables.claimTypeIds).toEqual(GRAPH_KIND_TYPE_IDS.claim);
+    // Every declared variable is sent: a null for a `UUID!` fails the whole request.
+    for (const name of declared(nodesDocument)) expect(call.variables[name], name).not.toBeNull();
+    expect(call.variables.publisherPropertyId).toBe(PUBLISHER_PROPERTY_ID);
     expect(call.timeoutMs).toBe(GRAPH_REQUEST_TIMEOUT_MS);
     expect(nodes.get('1'.repeat(32))?.placedSpaceIds).toEqual(['b'.repeat(32)]);
     expect(nodes.get('2'.repeat(32))?.placedSpaceIds).toEqual([]);
