@@ -9,7 +9,6 @@ import { graphExplorerHref } from '~/core/graph-explorer/href';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useName } from '~/core/state/entity-page-store/entity-store';
-import { useFeatureFlag } from '~/core/state/feature-flags';
 import { NetworkIcon } from '~/core/templates/primitives/icons';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -39,7 +38,7 @@ type EntityPageActionsProps = {
   | {
       /**
        * `template`: the entity template header (GEO-3837). Version history moves into the "…" menu,
-       * and a graph link takes the history icon's place while the `graphExplorer` flag is on.
+       * and a graph link takes the history icon's place.
        */
       variant: 'template';
       /** Which template page the graph link sits on, recorded as the explorer's entry point (GEO-3866). */
@@ -60,7 +59,6 @@ export function EntityPageActions({
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
   const editable = useUserIsEditing(spaceId);
   const name = useName(entityId, spaceId);
-  const graphExplorerEnabled = useFeatureFlag('graphExplorer');
 
   const {
     allVersions,
@@ -126,7 +124,6 @@ export function EntityPageActions({
         </Link>
       )}
       {isTemplate ? (
-        graphExplorerEnabled &&
         graphEntryPoint && (
           <Link
             href={graphExplorerHref({ entityId, topicId: entityId, spaceId })}

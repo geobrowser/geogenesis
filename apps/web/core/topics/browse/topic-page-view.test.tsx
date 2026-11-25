@@ -7,7 +7,6 @@ import type React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TOPIC_TYPE_ID } from '~/core/constants';
-import { featureFlagsStorageKey } from '~/core/state/feature-flags';
 import { entityTabIdFromHref } from '~/core/utils/entity-tab-navigation';
 
 import { ENTITY_PAGE_CONTENT_MAX_WIDTH } from '~/partials/entity-page/entity-page-layout';
@@ -367,17 +366,12 @@ describe('TopicPageView parity with the generic entity page', () => {
   });
 
   it('leaves the graph entry to the header graph button, not a chip beside the types (GEO-3837)', () => {
-    window.localStorage.setItem(featureFlagsStorageKey, JSON.stringify({ graphExplorer: true }));
-    try {
-      render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
+    render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
 
-      expect(mocks.pageActions?.variant).toBe('template');
-      // GEO-3866: the graph link records that it was opened from a topic page.
-      expect(mocks.pageActions?.graphEntryPoint).toBe('topic_page');
-      expect(screen.queryByText('Explore graph')).toBeNull();
-    } finally {
-      window.localStorage.removeItem(featureFlagsStorageKey);
-    }
+    expect(mocks.pageActions?.variant).toBe('template');
+    // GEO-3866: the graph link records that it was opened from a topic page.
+    expect(mocks.pageActions?.graphEntryPoint).toBe('topic_page');
+    expect(screen.queryByText('Explore graph')).toBeNull();
   });
 
   it('keeps them in the header, beside the types, where the entity page puts them', () => {
