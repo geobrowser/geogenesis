@@ -181,7 +181,7 @@ export function PostTemplate({
             // claim joins its meta line.
             <section aria-label="Claims in this post" className="flex flex-col gap-3">
               <h2 className="m-0 text-mediumTitle font-semibold text-text">Claims in this post</h2>
-              <div className={cx('divide-y divide-divider @[760px]:overflow-hidden', TEMPLATE_CLAIM_LIST_SURFACE)}>
+              <div className={cx('divide-y divide-divider @[640px]:overflow-hidden', TEMPLATE_CLAIM_LIST_SURFACE)}>
                 <TemplateVoteRows targets={model.claims.map(({ claim }) => claim.voteTarget)}>
                   {model.claims.map(({ claim, stanceLabel }, index) => (
                     <ClaimListRow

@@ -32,6 +32,11 @@ type InteractionBarProps = {
    */
   overflow?: React.ReactNode;
   className?: string;
+  /**
+   * `'circles'` is the debates app's (GEO-3833): two 44px icon-only circles, the comment count said
+   * in the accessible name instead of shown.
+   */
+  variant?: 'pills' | 'circles';
 };
 
 type DebateActionKind = 'comments' | 'share';
@@ -58,7 +63,45 @@ export function DebateInteractionBar({
   shareOpen,
   overflow,
   className,
+  variant = 'pills',
 }: InteractionBarProps) {
+  if (variant === 'circles') {
+    const circleClass = cx(
+      'flex size-11 shrink-0 items-center justify-center rounded-full transition-colors [&_svg]:size-5',
+      'bg-[#efefef] text-[#151515] hover:bg-[#e3e3e3]'
+    );
+    return (
+      <div className={cx('flex items-center gap-1.5', className)}>
+        <button
+          type="button"
+          {...debateActionAnalyticsProps('comments')}
+          aria-label={`Open comments, ${commentCount} ${commentCount === 1 ? 'comment' : 'comments'}`}
+          aria-expanded={commentsPanelOpen}
+          data-entity-comments-opener={commentsPanelOpen !== undefined ? '' : undefined}
+          onClick={onComment}
+          className={circleClass}
+        >
+          <Comment />
+        </button>
+        {/* Drawn, disabled, while the host has no debate to share yet: the circles hold the row's
+            width, so the pills beside them do not resize when the debate lands. */}
+        <button
+          type="button"
+          {...debateActionAnalyticsProps('share')}
+          aria-label="Share claim"
+          aria-haspopup={shareOpen === undefined ? undefined : 'dialog'}
+          aria-expanded={onShare ? shareOpen : undefined}
+          disabled={!onShare}
+          onClick={onShare}
+          className={cx(circleClass, 'disabled:opacity-50')}
+        >
+          <Share />
+        </button>
+        {overflow}
+      </div>
+    );
+  }
+
   // The count is said, not just shown. `aria-label` replaces a control's visible text for a screen
   // reader, and the visible text here is the number — so labelling it "Comments" is the one reading
   // that drops the thing it is there to report. Counted the way `EntityCommentsButton` counts.
