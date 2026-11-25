@@ -86,7 +86,8 @@ vi.mock('~/core/graph-explorer/use-graph-explorer', () => ({
   useTopicClaimsSummary: () => ({ isLoading: false, isError: false, data: topicSummary.data }),
 }));
 vi.mock('~/core/analytics-capture-safely', () => ({ captureSafely: vi.fn() }));
-vi.mock('~/core/hooks/use-media-query', () => ({ useMediaQuery: () => false }));
+const media = vi.hoisted(() => ({ phone: false }));
+vi.mock('~/core/hooks/use-media-query', () => ({ useMediaQuery: () => media.phone }));
 vi.mock('~/core/sync/use-store', () => ({ useQueryEntity: () => ({ entity: null, isLoading: false }) }));
 vi.mock('~/core/hooks/use-is-mobile-layout', () => ({ useIsMobileLayout: () => false }));
 vi.mock('~/design-system/prefetch-link', () => ({
@@ -207,6 +208,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  media.phone = false;
 });
 
 /** The viewer is controlled; this keeps its history the way the page's URL would. */
@@ -721,5 +723,78 @@ describe('GraphViewer analytics', () => {
         .filter(props => props.interaction === 'filter')
         .map(props => props.value)
     ).toEqual(['ent', 'all']);
+  });
+});
+
+describe('GraphViewer on a phone', () => {
+  const sheet = () => screen.queryByRole('dialog');
+
+  it('gives the map the screen, with the panel closed behind a handle named for the centre', () => {
+    media.phone = true;
+    const { container } = render(<Viewer start={TOPIC} scope={scope} />);
+    // jsdom applies no media queries, so this pins the classes that undo the stacked md: layout.
+    const map = screen.getByTestId('graph-map').className.split(' ');
+    expect(map).toEqual(expect.arrayContaining(['graph-phone:flex-1', 'graph-phone:h-auto', 'graph-phone:min-h-0']));
+    expect(container.querySelector('aside')).toBeNull();
+    const handle = screen.getByRole('button', { name: 'Details for Israel-Gaza war' });
+    expect(handle.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.getByTestId('graph-map').contains(handle)).toBe(true);
+    expect(sheet()).toBeNull();
+    expect(screen.queryByText('A topic.')).toBeNull();
+  });
+
+  it('opens the panel as a sheet titled with the centre, and closes it with Close or Escape', () => {
+    media.phone = true;
+    render(<Viewer start={TOPIC} scope={scope} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Details for Israel-Gaza war' }));
+    const open = screen.getByRole('dialog', { name: 'Israel-Gaza war' });
+    expect(within(open).getByText('A topic.')).toBeTruthy();
+    fireEvent.click(within(open).getByRole('button', { name: 'Close israel-gaza war' }));
+    expect(sheet()).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Details for Israel-Gaza war' }));
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    expect(sheet()).toBeNull();
+  });
+
+  it('keeps the sheet closed on a map tap, closes it on a hop from inside it, and names the new centre', () => {
+    media.phone = true;
+    render(<Viewer start={TOPIC} scope={scope} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Isaac Herzog' }));
+    expect(hooks.useGraphNeighbourhood).toHaveBeenLastCalledWith(expect.objectContaining({ centreId: PERSON }));
+    expect(sheet()).toBeNull();
+    expect(screen.getByRole('button', { name: 'Details for Isaac Herzog' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Israel-Gaza war' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Details for Israel-Gaza war' }));
+    const open = screen.getByRole('dialog', { name: 'Israel-Gaza war' });
+    fireEvent.click(within(open).getAllByRole('button', { name: /Isaac Herzog/ })[0]!);
+    expect(hooks.useGraphNeighbourhood).toHaveBeenLastCalledWith(expect.objectContaining({ centreId: PERSON }));
+    expect(sheet()).toBeNull();
+    expect(screen.getByRole('button', { name: 'Details for Isaac Herzog' })).toBeTruthy();
+  });
+
+  it('reports each opening of the sheet', () => {
+    media.phone = true;
+    const move: React.MutableRefObject<((next: GraphHistory) => void) | null> = { current: null };
+    render(<TrackedViewer move={move} />);
+    for (let i = 0; i < 2; i++) {
+      fireEvent.click(screen.getByRole('button', { name: 'Details for Israel-Gaza war' }));
+      fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    }
+    const opens = vi
+      .mocked(captureSafely)
+      .mock.calls.filter(
+        ([name, props]) =>
+          name === 'graph_explorer_interacted' && (props as { interaction?: string }).interaction === 'panel_sheet'
+      );
+    expect(opens).toHaveLength(2);
+  });
+
+  it('keeps the side panel and no handle off a phone', () => {
+    const { container } = render(<Viewer start={TOPIC} scope={scope} />);
+    expect(container.querySelector('aside')).not.toBeNull();
+    expect(screen.queryByTestId('graph-panel-handle')).toBeNull();
+    expect(screen.getByText('A topic.')).toBeTruthy();
   });
 });

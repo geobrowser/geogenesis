@@ -22,6 +22,8 @@ type Interaction =
   | { interaction: 'filter'; value: string }
   | { interaction: 'search'; result_count: number }
   | { interaction: 'summary_seen' }
+  // Each open of the phone's panel sheet (GEO-3849).
+  | { interaction: 'panel_sheet' }
   | { interaction: 'open_page'; value: 'claim' | 'entity'; target_id: string };
 
 /** An `open_page` click this soon before leaving is why the viewer left. */

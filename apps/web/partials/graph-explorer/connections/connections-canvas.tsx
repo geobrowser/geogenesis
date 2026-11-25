@@ -761,7 +761,10 @@ export function ConnectionsCanvas({
           );
         })}
       </div>
-      <div data-stage-control className="absolute right-4 bottom-4 z-[10000] flex flex-col gap-2">
+      <div
+        data-stage-control
+        className="absolute right-4 bottom-4 z-[10000] flex flex-col gap-2 graph-phone:bottom-[68px]"
+      >
         {(
           [
             ['+', 'Zoom in', 1 / 1.25],
