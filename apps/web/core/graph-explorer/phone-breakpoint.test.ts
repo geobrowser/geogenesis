@@ -15,13 +15,16 @@ const STYLES = readFileSync(join(WEB, 'styles', 'styles.css'), 'utf8');
 // The plugin ships its own postcss types, a different patch version from ours.
 const TAILWIND = tailwind({ base: WEB }) as unknown as AcceptedPlugin;
 const VARIANTS = STYLES.split('\n').filter(line => /^@custom-variant graph-(phone|wide) /.test(line));
+// md: is compiled too, in the stylesheet's order: graph-phone: overrides it under 600px only by
+// sorting after it, which follows from where styles.css declares each.
+const COMPILED_VARIANTS = STYLES.split('\n').filter(line => /^@custom-variant (md|graph-phone|graph-wide) /.test(line));
 
 /** The CSS Tailwind generates for these classes, whitespace collapsed. */
 async function compile(classes: string): Promise<string> {
   const input = [
     // source(none): no scan of the app; the inline source is all the assertions need.
     "@import 'tailwindcss/utilities' source(none);",
-    ...VARIANTS,
+    ...COMPILED_VARIANTS,
     `@source inline('${classes}');`,
   ].join('\n');
   const { css } = await postcss([TAILWIND]).process(input, { from: join(WEB, 'styles', 'x.css') });
@@ -59,7 +62,10 @@ describe('graph explorer phone breakpoint', () => {
     const flat = await compile(GRAPH_PAGE_FRAME);
     const fallback = flat.indexOf(`@media ${GRAPH_PHONE_QUERY} { height: 100vh; }`);
     const dvh = flat.indexOf(`@media ${GRAPH_PHONE_QUERY} { @supports (height:100dvh) { height: 100dvh; } }`);
-    expect(fallback).toBeGreaterThan(-1);
+    const tablet = flat.indexOf('@media (max-width: 767px) { height: auto; }');
+    expect(tablet).toBeGreaterThan(-1);
+    // Equal specificity, so the later rule wins: md:h-auto, then 100vh, then 100dvh where supported.
+    expect(fallback).toBeGreaterThan(tablet);
     expect(dvh).toBeGreaterThan(fallback);
   });
 
