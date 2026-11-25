@@ -166,6 +166,9 @@ describe('VoteBox: the result leads, over a full-width split bar (GEO-3845)', ()
     // "Do you agree?" sits over the buttons.
     const ask = screen.getByTestId('vote-box-ask');
     expect(within(ask).getByText('Do you agree?')).toBeInTheDocument();
+    // Read once: the visible text is hidden from screen readers, the button group carries the name.
+    expect(within(ask).getByText('Do you agree?')).toHaveAttribute('aria-hidden');
+    expect(within(ask).getByRole('group', { name: 'Do you agree?' })).toBeInTheDocument();
     expect(
       within(ask)
         .getByText('Do you agree?')
@@ -196,8 +199,7 @@ describe('VoteBox: the result leads, over a full-width split bar (GEO-3845)', ()
     expect(left.compareDocumentPosition(ask) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(ask).toHaveClass('w-full', '@[680px]:w-auto');
     // No Agree / Disagree share labels under the bar (Preston): the result above already says it.
-    expect(screen.queryByTestId('vote-box-bar-ends')).toBeNull();
-    expect(screen.queryByText('Disagree 29%')).toBeNull();
+    expect(left).toHaveTextContent(/^71%agree·7 votes$/);
   });
 
   it('matches the claim rows on phones: buttons, then the split line with "71% (7)" and no label', () => {
@@ -214,10 +216,10 @@ describe('VoteBox: the result leads, over a full-width split bar (GEO-3845)', ()
     expect(screen.getByTestId('vote-box-ask')).toHaveClass('w-full');
   });
 
-  it('keeps the bar ends to agree votes', () => {
+  it('names a non-agree unit in the headline', () => {
     render(<VoteBox split={{ ...lone, rows: [{ ...lone.rows[0], unit: 'helpful' }] }} control={control} />);
     expect(screen.getByTestId('vote-box-result')).toHaveTextContent('71%helpful');
-    expect(screen.queryByTestId('vote-box-bar-ends')).toBeNull();
+    expect(screen.getByRole('meter', { name: 'World affairs helpful' })).toBeInTheDocument();
   });
 
   it('leads with the overall row and lists the spaces under the bar', () => {
@@ -265,6 +267,8 @@ describe('VoteBox: the result leads, over a full-width split bar (GEO-3845)', ()
     expect(prompt.compareDocumentPosition(result) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(result).toHaveTextContent('52%agree·2,418 people rated this account');
     expect(within(box).getByRole('button', { name: 'Agree' })).toBeInTheDocument();
+    // The prompt already asks, so "Do you agree?" is not drawn over the buttons.
+    expect(within(box).queryByText('Do you agree?')).toBeNull();
   });
 
   it('says a large, quiet "No votes yet" over an empty bar, buttons still there', () => {
@@ -279,7 +283,6 @@ describe('VoteBox: the result leads, over a full-width split bar (GEO-3845)', ()
     expect(within(result).getByText('No votes yet')).toHaveClass('text-[28px]', 'text-grey-04');
     expect(screen.queryByRole('meter')).toBeNull();
     expect(screen.getByTestId('vote-box-empty-bar')).toHaveClass('w-full', 'bg-grey-01');
-    expect(screen.queryByTestId('vote-box-bar-ends')).toBeNull();
     expect(screen.getByRole('button', { name: 'Agree' })).toBeEnabled();
   });
 });

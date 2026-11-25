@@ -21,11 +21,11 @@ export interface VoteBoxProps {
  * Interactive Agree / Disagree card, the hero vote on a Claim page. The buttons are the debates
  * app's (GEO-3845), see `debate-vote-buttons.tsx`.
  *
- * It leads with the result: a large percentage with its unit ("71% agree") and the vote count in
- * quiet gray, the buttons at the right of that line, and a split bar across the whole card under it
- * (the agree share in the row's ink, the rest in light gray) with "Agree" / "Disagree" shares at its
- * ends. With no votes the headline is a quiet "No votes yet" over an empty bar. A lone split row
- * draws no space label: the headline is its result. Several spaces add a compact per-space list
+ * Wide, it leads with the result: a large percentage with its unit ("71% agree") and the vote count
+ * in quiet gray over a split bar (the agree share in the row's ink, the rest in light gray, no share
+ * labels), with "Do you agree?" and the buttons to the right, bottom-aligned with the bar. With no
+ * votes the headline is a quiet "No votes yet" over an empty bar. A lone split row draws no space
+ * label: the headline is its result. Several spaces add a compact per-space list
  * under the bar, the overall ("Everyone") row leading as the headline when there is one. Under a
  * 680px container it matches the claim rows: the buttons span the card and the split line ("67% (3)")
  * sits under them, with no headline.
@@ -77,7 +77,12 @@ export function VoteBox({ prompt, split, control, className }: VoteBoxProps) {
 
         {/* "Do you agree?" over the buttons (Preston); a News story's prompt already asks. */}
         <div data-testid="vote-box-ask" className="flex w-full shrink-0 flex-col gap-2 @[680px]:w-auto">
-          {!prompt && <span className="text-[13.5px] leading-[18px] font-medium text-grey-04">Do you agree?</span>}
+          {/* aria-hidden: the button group carries the same name, so it is read once. */}
+          {!prompt && (
+            <span aria-hidden className="text-[13.5px] leading-[18px] font-medium text-grey-04">
+              Do you agree?
+            </span>
+          )}
           <DebateVoteButtons
             userVote={userVote}
             disabled={disabled}
@@ -118,7 +123,7 @@ export function VoteBox({ prompt, split, control, className }: VoteBoxProps) {
 }
 
 /**
- * The lead result: "71% agree · 7 votes", the percentage large and bold. Without an overall row it
+ * The lead result: "71% agree · 7 votes", the percentage large, at medium weight. Without an overall row it
  * is the count alone, large and quiet ("No votes yet" when nobody has voted).
  */
 function Headline({ row, countSummary, noVotes }: { row?: SplitRow; countSummary: string; noVotes: boolean }) {
@@ -162,33 +167,25 @@ function Headline({ row, countSummary, noVotes }: { row?: SplitRow; countSummary
  * labels under it (the result above says it). With no votes it is an empty track and no meter.
  * With several spaces and no overall row it draws nothing (the list carries the bars).
  */
-function ResultBar({ row, noVotes, className }: { row?: SplitRow; noVotes: boolean; className?: string }) {
+function ResultBar({ row, noVotes }: { row?: SplitRow; noVotes: boolean }) {
   if (!row) {
     if (!noVotes) return null;
-    return (
-      <div
-        data-testid="vote-box-empty-bar"
-        aria-hidden
-        className={cx('h-2.5 w-full rounded-full bg-grey-01', className)}
-      />
-    );
+    return <div data-testid="vote-box-empty-bar" aria-hidden className="h-2.5 w-full rounded-full bg-grey-01" />;
   }
   const clamped = Math.max(0, Math.min(100, row.percent));
   return (
-    <div className={cx('flex flex-col gap-2', className)}>
+    <div
+      role="meter"
+      aria-label={`${row.label} ${row.unit ?? 'agree'}`}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={Math.round(clamped)}
+      className="block h-2.5 w-full overflow-hidden rounded-full bg-grey-02"
+    >
       <div
-        role="meter"
-        aria-label={`${row.label} ${row.unit ?? 'agree'}`}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={Math.round(clamped)}
-        className="block h-2.5 w-full overflow-hidden rounded-full bg-grey-02"
-      >
-        <div
-          className="h-full rounded-full transition-[width] duration-200"
-          style={{ width: `${clamped.toFixed(2)}%`, backgroundColor: row.color }}
-        />
-      </div>
+        className="h-full rounded-full transition-[width] duration-200"
+        style={{ width: `${clamped.toFixed(2)}%`, backgroundColor: row.color }}
+      />
     </div>
   );
 }

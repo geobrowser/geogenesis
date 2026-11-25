@@ -1149,7 +1149,6 @@ describe('GEO-3837 phone tidy-ups', () => {
     // The result leads: a large percentage and the count, no space name, over the split bar (GEO-3845).
     expect(within(box).getByTestId('vote-box-result')).toHaveTextContent('60%agree·5 votes');
     expect(within(box).getByRole('meter')).toHaveAttribute('aria-valuenow', '60');
-    expect(within(box).queryByTestId('vote-box-bar-ends')).toBeNull();
     expect(within(box).queryByText('World affairs')).toBeNull();
 
     fireEvent.click(within(box).getByRole('button', { name: 'Disagree' }));
