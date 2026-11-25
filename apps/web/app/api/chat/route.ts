@@ -109,6 +109,7 @@ function validateClientContext(input: unknown): ChatClientContext | null {
   const currentEntityId = raw.currentEntityId;
   const currentPath = raw.currentPath;
   const isEditMode = raw.isEditMode;
+  const writeToPersonalSpace = raw.writeToPersonalSpace;
 
   if (currentSpaceId != null && (typeof currentSpaceId !== 'string' || !UUID_OR_DASHLESS.test(currentSpaceId))) {
     return null;
@@ -125,12 +126,16 @@ function validateClientContext(input: unknown): ChatClientContext | null {
   if (isEditMode != null && typeof isEditMode !== 'boolean') {
     return null;
   }
+  if (writeToPersonalSpace != null && typeof writeToPersonalSpace !== 'boolean') {
+    return null;
+  }
   // personalSpaceId resolved server-side from membership; ignore client value.
   return {
     currentSpaceId: typeof currentSpaceId === 'string' ? currentSpaceId : null,
     currentEntityId: typeof currentEntityId === 'string' ? currentEntityId : null,
     currentPath: typeof currentPath === 'string' ? currentPath : null,
     isEditMode: typeof isEditMode === 'boolean' ? isEditMode : false,
+    writeToPersonalSpace: writeToPersonalSpace === true,
   };
 }
 

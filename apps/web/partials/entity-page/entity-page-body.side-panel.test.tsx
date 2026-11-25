@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { TOPIC_TYPE_ID } from '~/core/constants';
 import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
+import { ENTITY_TEMPLATE_REGISTRY } from '~/core/templates/registry';
 
 import { EntityPageBody } from './entity-page-body';
 
@@ -22,6 +23,13 @@ const mocks = vi.hoisted(() => ({
   isLoadingSpace: false,
   claimPage: null as Record<string, unknown> | null,
   topicPage: null as Record<string, unknown> | null,
+  liveClaimPage: null as Record<string, unknown> | null,
+  liveTopicPage: null as Record<string, unknown> | null,
+  liveEventPage: null as Record<string, unknown> | null,
+  liveNewsStoryPage: null as Record<string, unknown> | null,
+  liveSourcePage: null as Record<string, unknown> | null,
+  livePostPage: null as Record<string, unknown> | null,
+  entityTemplatesV2: true,
   entityMediaUrl: null as string | null,
   previewImageUrl: null as string | null,
   space: null as { type: string; entity: { id: string; types: { id: string }[] } } | null,
@@ -35,6 +43,41 @@ vi.mock('~/core/follows/person-follow-counts', () => ({
 }));
 
 vi.mock('~/core/hooks/use-user-is-editing', () => ({ useUserIsEditing: () => mocks.editing }));
+vi.mock('~/core/state/feature-flags', () => ({
+  useFeatureFlag: (id: string) => (id === 'entityTemplatesV2' ? mocks.entityTemplatesV2 : false),
+}));
+vi.mock('~/core/templates/views', () => ({
+  LiveClaimTemplateView: (props: Record<string, unknown>) => {
+    mocks.liveClaimPage = props;
+    return <div data-testid="live-claim-template">{props.footer as React.ReactNode}</div>;
+  },
+  LiveTopicTemplateView: (props: Record<string, unknown>) => {
+    mocks.liveTopicPage = props;
+    return <div data-testid="live-topic-template">{props.footer as React.ReactNode}</div>;
+  },
+  LiveEventTemplateView: (props: Record<string, unknown>) => {
+    mocks.liveEventPage = props;
+    return <div data-testid="live-event-template">{props.footer as React.ReactNode}</div>;
+  },
+  LiveNewsStoryTemplateView: (props: Record<string, unknown>) => {
+    mocks.liveNewsStoryPage = props;
+    return <div data-testid="live-news-story-template">{props.footer as React.ReactNode}</div>;
+  },
+  LiveSourceTemplateView: (props: Record<string, unknown>) => {
+    mocks.liveSourcePage = props;
+    return <div data-testid="live-source-template">{props.footer as React.ReactNode}</div>;
+  },
+  LivePostTemplateView: (props: Record<string, unknown>) => {
+    mocks.livePostPage = props;
+    return <div data-testid="live-post-template">{props.footer as React.ReactNode}</div>;
+  },
+  LivePodcastShowTemplateView: (props: Record<string, unknown>) => (
+    <div data-testid="live-podcast-template">{props.footer as React.ReactNode}</div>
+  ),
+  LivePodcastEpisodeTemplateView: (props: Record<string, unknown>) => (
+    <div data-testid="live-episode-template">{props.footer as React.ReactNode}</div>
+  ),
+}));
 // Node's built-in localStorage shim can shadow jsdom with a partial object. This
 // layout test only reaches the pending-space atom through transitive UI imports.
 vi.mock('~/core/state/pending-personal-space', () => ({
@@ -108,8 +151,10 @@ vi.mock('~/partials/entity-page/backlinks-client-container', () => ({
   BacklinksClientContainer: () => <div data-testid="backlinks" />,
 }));
 vi.mock('~/partials/entity-page/type-schema-inline', () => ({ TypeSchemaInline: () => null }));
-vi.mock('~/partials/entity-page/entity-page-header', () => ({ EntityPageHeader: () => null }));
-vi.mock('~/partials/editor/lazy-editor', () => ({ Editor: () => null }));
+vi.mock('~/partials/entity-page/entity-page-header', () => ({
+  EntityPageHeader: () => <div data-testid="generic-entity-header" />,
+}));
+vi.mock('~/partials/editor/lazy-editor', () => ({ Editor: () => <div data-testid="block-editor" /> }));
 vi.mock('~/partials/comments/comments-section', () => ({
   CommentSection: (props: Record<string, unknown>) => {
     mocks.commentSection = props;
@@ -155,6 +200,13 @@ beforeEach(() => {
   mocks.editing = false;
   mocks.claimPage = null;
   mocks.topicPage = null;
+  mocks.liveClaimPage = null;
+  mocks.liveTopicPage = null;
+  mocks.liveEventPage = null;
+  mocks.liveNewsStoryPage = null;
+  mocks.liveSourcePage = null;
+  mocks.livePostPage = null;
+  mocks.entityTemplatesV2 = true;
   mocks.entityMediaUrl = null;
   mocks.previewImageUrl = null;
   mocks.isLoadingSpace = false;
@@ -265,7 +317,30 @@ describe('EntityPageBody relation side panel', () => {
 });
 
 describe('EntityPageBody claim side panel', () => {
-  it('shows both configured claim images above the custom view', () => {
+  it('renders LiveClaimTemplateView without duplicating EntityPageCover when entityTemplatesV2 is enabled', () => {
+    mocks.entity = { id: 'entity-1', types: [{ id: CLAIM_TYPE_ID }] };
+
+    render(
+      <EntityPageBody
+        variant="sidePanel"
+        {...SHARED}
+        avatarUrl="https://example.com/avatar.png"
+        coverUrl="https://example.com/cover.png"
+      />
+    );
+
+    expect(screen.queryByTestId('cover')).not.toBeInTheDocument();
+    expect(screen.getByTestId('live-claim-template')).toBeInTheDocument();
+    expect(mocks.liveClaimPage).toMatchObject({
+      entityId: 'entity-1',
+      spaceId: 'space-1',
+      serverCoverUrl: 'https://example.com/cover.png',
+      compact: true,
+    });
+  });
+
+  it('shows both configured claim images above the legacy custom view when entityTemplatesV2 is disabled', () => {
+    mocks.entityTemplatesV2 = false;
     mocks.entity = { id: 'entity-1', types: [{ id: CLAIM_TYPE_ID }] };
 
     render(
@@ -289,7 +364,8 @@ describe('EntityPageBody claim side panel', () => {
     });
   });
 
-  it('does not render a cover or preview fallback as the claim avatar', () => {
+  it('does not render a cover or preview fallback as the claim avatar in legacy mode', () => {
+    mocks.entityTemplatesV2 = false;
     mocks.entity = { id: 'entity-1', types: [{ id: CLAIM_TYPE_ID }] };
     mocks.entityMediaUrl = 'https://example.com/cover-fallback.png';
     mocks.previewImageUrl = 'https://example.com/preview-fallback.png';
@@ -333,16 +409,17 @@ describe('EntityPageBody claim side panel', () => {
     });
   });
 
-  it('keeps the custom claim view and appends properties while editing', () => {
+  it('opens the standard entity editor for a claim while editing', () => {
     mocks.entity = { id: 'entity-1', types: [{ id: CLAIM_TYPE_ID }] };
     mocks.editing = true;
 
     render(<EntityPageBody variant="sidePanel" {...SHARED} />);
 
-    expect(screen.getByTestId('claim-page')).toBeInTheDocument();
+    expect(screen.queryByTestId('claim-page')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('live-claim-template')).not.toBeInTheDocument();
+    expect(screen.getByTestId('title')).toBeInTheDocument();
+    expect(screen.getByTestId('block-editor')).toBeInTheDocument();
     expect(screen.getByTestId('properties')).toBeInTheDocument();
-    expect(mocks.claimPage?.isEditing).toBe(true);
-    expect(mocks.claimPage?.footer).toBeTruthy();
   });
 
   it('mounts route edit initialization before the claim is already editing', () => {
@@ -351,7 +428,7 @@ describe('EntityPageBody claim side panel', () => {
     render(<EntityPageBody variant="route" {...SHARED} serverRelations={[]} />);
 
     expect(screen.getByTestId('automatic-mode-toggle')).toBeInTheDocument();
-    expect(mocks.claimPage?.isEditing).toBe(false);
+    expect(screen.getByTestId('live-claim-template')).toBeInTheDocument();
     expect(screen.queryByTestId('properties')).not.toBeInTheDocument();
   });
 
@@ -360,7 +437,7 @@ describe('EntityPageBody claim side panel', () => {
 
     render(<EntityPageBody variant="route" {...SHARED} serverRelations={[]} />);
 
-    expect(screen.getByTestId('topic-page')).toBeInTheDocument();
+    expect(screen.getByTestId('live-topic-template')).toBeInTheDocument();
     expect(screen.getByTestId('automatic-mode-toggle')).toBeInTheDocument();
   });
 
@@ -374,7 +451,25 @@ describe('EntityPageBody claim side panel', () => {
 });
 
 describe('EntityPageBody topic side panel', () => {
-  it('shows both configured topic images above the custom view', () => {
+  it('renders LiveTopicTemplateView without duplicating EntityPageCover when entityTemplatesV2 is enabled', () => {
+    mocks.entity = { id: 'entity-1', types: [{ id: TOPIC_TYPE_ID }] };
+
+    render(
+      <EntityPageBody variant="sidePanel" {...SHARED} avatarUrl="ipfs://topic-avatar" coverUrl="ipfs://topic-cover" />
+    );
+
+    expect(screen.queryByTestId('cover')).not.toBeInTheDocument();
+    expect(screen.getByTestId('live-topic-template')).toBeInTheDocument();
+    expect(mocks.liveTopicPage).toMatchObject({
+      entityId: 'entity-1',
+      spaceId: 'space-1',
+      serverCoverUrl: 'ipfs://topic-cover',
+      compact: true,
+    });
+  });
+
+  it('shows both configured topic images above the legacy custom view when entityTemplatesV2 is disabled', () => {
+    mocks.entityTemplatesV2 = false;
     mocks.entity = { id: 'entity-1', types: [{ id: TOPIC_TYPE_ID }] };
 
     render(
@@ -393,22 +488,23 @@ describe('EntityPageBody topic side panel', () => {
     });
   });
 
-  it('keeps topic tabs available and appends properties while editing', () => {
+  it('opens the standard entity editor for a topic while editing', () => {
     mocks.entity = { id: 'entity-1', types: [{ id: TOPIC_TYPE_ID }] };
     mocks.editing = true;
 
     render(<EntityPageBody variant="sidePanel" {...SHARED} />);
 
-    expect(screen.getByTestId('topic-page')).toBeInTheDocument();
+    expect(screen.queryByTestId('topic-page')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('live-topic-template')).not.toBeInTheDocument();
+    expect(screen.getByTestId('title')).toBeInTheDocument();
+    expect(screen.getByTestId('block-editor')).toBeInTheDocument();
     expect(screen.getByTestId('properties')).toBeInTheDocument();
-    expect(mocks.topicPage?.isEditing).toBe(true);
-    expect(mocks.topicPage?.footer).toBeTruthy();
   });
 });
 
 /**
  * The claim and topic read views leave out the generic page's "Referenced by" list; editors still
- * need it, so it comes back beneath either view in edit mode only.
+ * need it, and the standard editor they get in edit mode carries it.
  */
 describe.each([
   ['claim', CLAIM_TYPE_ID],
@@ -419,7 +515,7 @@ describe.each([
 
     render(<EntityPageBody variant="route" {...SHARED} serverRelations={[]} />);
 
-    expect(screen.getByTestId(`${name}-page`)).toBeInTheDocument();
+    expect(screen.getByTestId(`live-${name}-template`)).toBeInTheDocument();
     expect(screen.queryByTestId('backlinks')).not.toBeInTheDocument();
   });
 
@@ -429,7 +525,8 @@ describe.each([
 
     render(<EntityPageBody variant="route" {...SHARED} serverRelations={[]} />);
 
-    expect(screen.getByTestId(`${name}-page`)).toContainElement(screen.getByTestId('backlinks'));
+    expect(screen.queryByTestId(`${name}-page`)).not.toBeInTheDocument();
+    expect(screen.getByTestId('backlinks')).toBeInTheDocument();
   });
 
   it('keeps references while editing even when properties are hidden', () => {
@@ -440,5 +537,76 @@ describe.each([
 
     expect(screen.queryByTestId('properties')).not.toBeInTheDocument();
     expect(screen.getByTestId('backlinks')).toBeInTheDocument();
+  });
+});
+
+/**
+ * GEO-3819: every templated entity reads as its template and edits in the standard entity editor,
+ * the one any other entity gets. Toggling edit mode swaps one for the other without a remount, and
+ * the route keeps `AutomaticModeToggle` mounted on the template so `?edit=true` links still enter
+ * edit mode. Person is left out: it needs a personal space to be a template at all, and is covered
+ * by the profile tests above.
+ */
+describe.each(
+  ENTITY_TEMPLATE_REGISTRY.filter(entry => entry.id !== 'person').map(entry => [entry.id, entry.typeIds[0]] as const)
+)('EntityPageBody %s template edit mode', (templateId, typeId) => {
+  const templateTestId = `live-${templateId}-template`;
+
+  describe.each(['route', 'sidePanel'] as const)('in the %s', variant => {
+    const renderBody = () =>
+      variant === 'route'
+        ? render(<EntityPageBody variant="route" {...SHARED} serverRelations={[]} />)
+        : render(<EntityPageBody variant="sidePanel" {...SHARED} />);
+
+    beforeEach(() => {
+      mocks.entity = { id: 'entity-1', types: [{ id: typeId }] };
+    });
+
+    it('renders the template when not editing', () => {
+      renderBody();
+
+      expect(screen.getByTestId(templateTestId)).toBeInTheDocument();
+      expect(screen.queryByTestId('block-editor')).not.toBeInTheDocument();
+    });
+
+    it('renders the standard entity editor while editing', () => {
+      mocks.editing = true;
+
+      renderBody();
+
+      expect(screen.queryByTestId(templateTestId)).not.toBeInTheDocument();
+      expect(screen.queryByTestId('claim-page')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('topic-page')).not.toBeInTheDocument();
+      expect(screen.getByTestId('block-editor')).toBeInTheDocument();
+      expect(screen.getByTestId('properties')).toBeInTheDocument();
+      expect(screen.getByTestId(variant === 'route' ? 'generic-entity-header' : 'title')).toBeInTheDocument();
+    });
+
+    it('returns to the template when edit mode is turned off', () => {
+      mocks.editing = true;
+      const { rerender } = renderBody();
+      expect(screen.getByTestId('block-editor')).toBeInTheDocument();
+
+      mocks.editing = false;
+      rerender(
+        variant === 'route' ? (
+          <EntityPageBody variant="route" {...SHARED} serverRelations={[]} />
+        ) : (
+          <EntityPageBody variant="sidePanel" {...SHARED} />
+        )
+      );
+
+      expect(screen.getByTestId(templateTestId)).toBeInTheDocument();
+      expect(screen.queryByTestId('block-editor')).not.toBeInTheDocument();
+    });
+  });
+
+  it('keeps the route edit entry point mounted on the template', () => {
+    mocks.entity = { id: 'entity-1', types: [{ id: typeId }] };
+
+    render(<EntityPageBody variant="route" {...SHARED} serverRelations={[]} />);
+
+    expect(screen.getByTestId(templateTestId)).toBeInTheDocument();
+    expect(screen.getByTestId('automatic-mode-toggle')).toBeInTheDocument();
   });
 });

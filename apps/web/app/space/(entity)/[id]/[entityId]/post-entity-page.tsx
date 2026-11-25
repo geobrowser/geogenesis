@@ -16,6 +16,7 @@ import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 
 import { EntityPageHeader } from './entity-page-header';
 import { fetchEntityPageData } from './fetch-entity-page-data';
+import { PostEntityPageBody } from './post-entity-page-body';
 import { SpaceRedirect } from './space-redirect';
 
 interface Props {
@@ -57,29 +58,38 @@ export default async function PostEntityPage({
           initialTabs={props.tabs}
           initialCollectionItems={props.initialCollectionItems}
         >
-          {showCover && <EntityPageCover avatarUrl={props.serverAvatarUrl} coverUrl={props.serverCoverUrl} />}
-          <EntityPageContentContainer>
-            <EntityPageHeader
-              showHeading={showHeading}
-              showHeader={showHeader}
-              entityId={props.id}
-              spaceId={props.spaceId}
-              serverRelations={props.relationEntityRelations}
-            />
-            <Spacer height={40} />
-            {notice}
-            {(showSpacer || !!notice) && <Spacer height={40} />}
+          <PostEntityPageBody
+            entityId={props.id}
+            spaceId={props.spaceId}
+            serverCoverUrl={showCover ? props.serverCoverUrl : null}
+            legacyBody={
+              <>
+                {showCover && <EntityPageCover avatarUrl={props.serverAvatarUrl} coverUrl={props.serverCoverUrl} />}
+                <EntityPageContentContainer>
+                  <EntityPageHeader
+                    showHeading={showHeading}
+                    showHeader={showHeader}
+                    entityId={props.id}
+                    spaceId={props.spaceId}
+                    serverRelations={props.relationEntityRelations}
+                  />
+                  <Spacer height={40} />
+                  {notice}
+                  {(showSpacer || !!notice) && <Spacer height={40} />}
 
-            <Editor spaceId={props.spaceId} shouldHandleOwnSpacing />
-            <ToggleEntityPage id={props.id} spaceId={props.spaceId} />
-            <AutomaticModeToggle />
-            <Spacer height={40} />
-            <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
-              <React.Suspense fallback={<div />}>
-                <BacklinksServerContainer entityId={params.entityId} />
-              </React.Suspense>
-            </TrackedErrorBoundary>
-          </EntityPageContentContainer>
+                  <Editor spaceId={props.spaceId} shouldHandleOwnSpacing />
+                  <ToggleEntityPage id={props.id} spaceId={props.spaceId} />
+                  <AutomaticModeToggle />
+                  <Spacer height={40} />
+                  <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
+                    <React.Suspense fallback={<div />}>
+                      <BacklinksServerContainer entityId={params.entityId} />
+                    </React.Suspense>
+                  </TrackedErrorBoundary>
+                </EntityPageContentContainer>
+              </>
+            }
+          />
         </RouteEditorProvider>
       </EntityStoreProvider>
     </SpaceRedirect>

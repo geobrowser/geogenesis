@@ -13,7 +13,11 @@ import { useActiveTabIdForEditor } from '~/core/state/editor/editor-provider';
 import { useEntitySidePanelActiveTab } from '~/core/state/entity-side-panel-active-tab';
 import { useInPageTabSwitch, useSwitchesInPage } from '~/core/state/in-page-tab-switch';
 import { usePendingTab, useTabContentSkeleton } from '~/core/state/pending-tab';
-import { entityTabIdFromHref, isEntityTabActive } from '~/core/utils/entity-tab-navigation';
+import {
+  entityTabIdFromHref,
+  isEntityTabActive,
+  isSelectedThroughRecordRoute,
+} from '~/core/utils/entity-tab-navigation';
 
 import { Dots } from '~/design-system/dots';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
@@ -37,6 +41,8 @@ export type TabGroupTab = {
    * the rail's content appears precisely when the rail stops being there.
    */
   onlyWhenNarrow?: boolean;
+  /** Also active on the entity's record routes below `href`; see `isSelectedThroughRecordRoute`. */
+  activeOnRecordRoutes?: boolean;
 };
 
 interface TabGroupProps {
@@ -212,6 +218,7 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
                     disabled={t.disabled}
                     hidden={t.hidden}
                     sidePanelKey={t.sidePanelKey}
+                    activeOnRecordRoutes={t.activeOnRecordRoutes}
                     activeRef={registerActiveTab}
                     activeTabId={activeTabId}
                     fullPath={fullPath}
@@ -227,6 +234,7 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
                   disabled={t.disabled}
                   hidden={t.hidden}
                   sidePanelKey={t.sidePanelKey}
+                  activeOnRecordRoutes={t.activeOnRecordRoutes}
                   activeRef={registerActiveTab}
                   activeTabId={activeTabId}
                   fullPath={fullPath}
@@ -257,6 +265,7 @@ interface TabProps {
   disabled?: boolean;
   hidden?: boolean;
   sidePanelKey?: string;
+  activeOnRecordRoutes?: boolean;
   activeRef: (element: HTMLElement | null) => void;
   activeTabId: string | null;
   fullPath: string;
@@ -332,6 +341,7 @@ function Tab({
   disabled,
   hidden,
   sidePanelKey,
+  activeOnRecordRoutes,
   activeRef,
   activeTabId,
   fullPath,
@@ -348,6 +358,7 @@ function Tab({
     sidePanel: Boolean(sidePanelTab),
     sidePanelKey,
     activeSystemTab: sidePanelTab?.activeSystemTab,
+    activeOnRecordRoutes,
   });
 
   const selected = pendingHref ? pendingHref === href : active;
@@ -355,7 +366,8 @@ function Tab({
   const switchesInPage = useSwitchesInPage(href);
 
   const handleClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
-    if (isRepeatTabClick(event, selected)) event.preventDefault();
+    const repeat = selected && !isSelectedThroughRecordRoute({ href, fullPath, activeOnRecordRoutes });
+    if (isRepeatTabClick(event, repeat)) event.preventDefault();
     switchTabInPage(event, href, () => onPendingChange(href, true));
   };
 

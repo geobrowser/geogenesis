@@ -36,13 +36,8 @@ import { Text } from '~/design-system/text';
 import { CommentSection } from '~/partials/comments/comments-section';
 import { ThreadRetry } from '~/partials/comments/thread-overflow';
 import { Editor } from '~/partials/editor/lazy-editor';
-import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
-import { EntityPageActions } from '~/partials/entity-page/entity-page-actions';
 import { ENTITY_PAGE_CONTENT_ANCHOR, entityPageTitleAnchor } from '~/partials/entity-page/entity-page-anchors';
-import {
-  ENTITY_DESCRIPTION_MAX_LINES,
-  EntityPageInlineDescription,
-} from '~/partials/entity-page/entity-page-inline-description';
+import { ENTITY_DESCRIPTION_MAX_LINES } from '~/partials/entity-page/entity-page-inline-description';
 import { EntityTabs } from '~/partials/entity-page/entity-tabs';
 import { META_CHIP_CLASS } from '~/partials/entity-page/relation-chip-section';
 import { ClaimVerdictColumn } from '~/partials/explore/claim-explore-feed-card';
@@ -121,15 +116,11 @@ export function ClaimPageView({
   spaceId,
   initialTabRelations = [],
   tabEntities = [],
-  footer,
-  isEditing = false,
 }: {
   entityId: string;
   spaceId: string;
   initialTabRelations?: Relation[];
   tabEntities?: TabEntity[];
-  footer?: React.ReactNode;
-  isEditing?: boolean;
 }) {
   const { entity, isLoading } = useQueryEntity({ id: entityId, spaceId });
   const pathname = usePathname();
@@ -277,58 +268,32 @@ export function ClaimPageView({
                     which on a claim — a full sentence running to three or four lines — leaves each one
                     breaking well short of the measure and reads as wrapping early. Pretty only avoids a
                     stranded last word, so the lines fill. */}
-                {isEditing ? (
-                  <EditableHeading entityId={entityId} spaceId={spaceId} fallbackName={entity.name ?? entity.id} />
-                ) : (
-                  <h1
-                    {...entityPageTitleAnchor(entityId)}
-                    className="text-[1.5rem] leading-[1.3] font-semibold tracking-[-0.4px] text-pretty text-text @[560px]:text-[1.75rem]"
-                  >
-                    {entity.name ?? entity.id}
-                  </h1>
-                )}
+                <h1
+                  {...entityPageTitleAnchor(entityId)}
+                  className="text-[1.5rem] leading-[1.3] font-semibold tracking-[-0.4px] text-pretty text-text @[560px]:text-[1.75rem]"
+                >
+                  {entity.name ?? entity.id}
+                </h1>
 
                 {/* Clamped, like entity pages and the side panel (GEO-2772). What is shared is the line
                     budget, not the cut: wrapping differs with width, so the route, the side panel and a
                     phone break at different words but give up the same three lines of vertical space.
                     `ClampedText` measures an unclamped clone, so the toggle appears only when something
                     is genuinely hidden (GEO-2756). */}
-                {isEditing ? (
-                  <EntityPageInlineDescription
-                    entityId={entityId}
-                    spaceId={spaceId}
-                    fallbackDescription={entity.description}
+                {entity.description && (
+                  <ClampedText
+                    text={entity.description}
+                    maxLines={ENTITY_DESCRIPTION_MAX_LINES}
+                    variant="body"
+                    textClassName="wrap-break-word text-grey-04"
                   />
-                ) : (
-                  entity.description && (
-                    <ClampedText
-                      text={entity.description}
-                      maxLines={ENTITY_DESCRIPTION_MAX_LINES}
-                      variant="body"
-                      textClassName="wrap-break-word text-grey-04"
-                    />
-                  )
                 )}
               </div>
 
               <div
                 className={cx('col-start-1 mt-4 claim-card-narrow:mt-0', hasChipsRow ? 'row-start-3' : 'row-start-2')}
               >
-                <ClaimPositionSection
-                  entityId={entityId}
-                  spaceId={spaceId}
-                  state={state}
-                  row={row}
-                  // History and the ⋯ menu (delete, move, copy to a space) sit in the header row on
-                  // every other entity page. A claim's hero has no such row, so in edit mode they
-                  // join the pills. No create, which has nothing to do with this claim, and no
-                  // generic votes: Agree/Disagree is a claim's only response.
-                  endSlot={
-                    isEditing ? (
-                      <EntityPageActions entityId={entityId} spaceId={spaceId} compact showCreate={false} />
-                    ) : undefined
-                  }
-                />
+                <ClaimPositionSection entityId={entityId} spaceId={spaceId} state={state} row={row} />
               </div>
 
               {/* From the title's row down, so the share lines up with the claim's first line rather
@@ -382,7 +347,6 @@ export function ClaimPageView({
           hrefs={{ debates: hrefs.debates, claims: hrefs.claims }}
           onSelectSystemTab={sidePanelTab?.setActiveSystemTab}
         />
-        {footer}
       </div>
     </div>
   );
@@ -677,7 +641,6 @@ function ClaimPositionSection({
   spaceId,
   state,
   row,
-  endSlot,
 }: {
   entityId: string;
   spaceId: string;
@@ -690,8 +653,6 @@ function ClaimPositionSection({
   state: ClaimResponseState;
   /** geo-chat's row, or null — which for a claim nobody has answered is a settled answer. */
   row: DebateClaim | null;
-  /** Rendered after Disagree; see `positionRowEndSlot`. */
-  endSlot?: React.ReactNode;
 }) {
   const { claim, positions, readiness, isResponseKindResolved, isViewerResponseResolved, responseBlockedReason } =
     state;
@@ -751,7 +712,6 @@ function ClaimPositionSection({
         localSide={control.localVoteSide}
         // Explore's pill row width, so the two read as one control.
         positionRowClassName="max-w-[360px]"
-        positionRowEndSlot={endSlot}
       />
       {control.responseError ? (
         <div role="alert" className="mt-2">
