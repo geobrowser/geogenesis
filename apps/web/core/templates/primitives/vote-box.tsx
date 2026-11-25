@@ -49,7 +49,11 @@ export function VoteBox({ prompt, split, control, className }: VoteBoxProps) {
   return (
     <section
       aria-label={prompt ?? 'Vote on this claim'}
-      className={cx('flex flex-col gap-4 p-5 @[680px]:gap-5 @[680px]:p-6', TEMPLATE_CARD_SURFACE, className)}
+      className={cx(
+        'flex flex-col gap-4 p-5 @max-[300px]:p-4 @[680px]:gap-5 @[680px]:p-6',
+        TEMPLATE_CARD_SURFACE,
+        className
+      )}
     >
       {prompt && <p className="m-0 text-smallTitle text-text">{prompt}</p>}
 
@@ -64,7 +68,8 @@ export function VoteBox({ prompt, split, control, className }: VoteBoxProps) {
           label="Do you agree?"
           onPress={press}
           className="order-3 w-full shrink-0 @[680px]:order-2 @[680px]:w-auto"
-          buttonClassName="flex-1 basis-0 @[680px]:min-w-[124px] @[680px]:flex-none"
+          // On the narrowest phones (320px) the pill padding gives way so "Disagree" is not cut off.
+          buttonClassName="flex-1 basis-0 @max-[300px]:px-2 @[680px]:min-w-[124px] @[680px]:flex-none"
         />
 
         <ResultBar row={headlineRow} noVotes={noVotes} className="order-2 @[680px]:order-3 @[680px]:basis-full" />
