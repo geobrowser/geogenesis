@@ -17,6 +17,7 @@ export {
   type LiveEntityTemplateViewProps,
 } from './live-entity-template-views';
 export { LiveTopicTemplateView, type LiveTopicTemplateViewProps } from './live-topic-template-view';
+export { StreamedLiveTopicTemplateView, TopicTemplateSeedProvider } from './streamed-topic-template';
 export { NewsStoryTemplate, type NewsStoryTemplateProps } from './news-story-template';
 export { PodcastEpisodeTemplate, type PodcastEpisodeTemplateProps } from './podcast-episode-template';
 export { PodcastShowTemplate, type PodcastShowTemplateProps } from './podcast-show-template';
