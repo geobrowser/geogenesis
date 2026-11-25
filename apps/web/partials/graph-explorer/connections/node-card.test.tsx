@@ -1,4 +1,4 @@
-import { cleanup, render } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -55,9 +55,21 @@ describe('NodeCard topics', () => {
     expect(centre.className).toContain('bg-white');
     expect(centre.className).toContain(centreRing);
   });
+
+  it("sets the centre topic in the prototype's Geo look: medium weight, 20px by 10px", () => {
+    const centre = card(node('topic'), 0).querySelector('[data-label]')!;
+    expect(centre.className).toContain('px-5 py-[10px]');
+    expect(centre.firstElementChild!.className).toContain('font-medium');
+    expect(centre.firstElementChild!.className).not.toContain('font-semibold');
+  });
 });
 
 describe('NodeCard centre mark', () => {
+  it("is the prototype's Geo glow, which holds still with reduced motion", () => {
+    expect(centreRing).toContain('animate-graph-centre-glow');
+    expect(centreRing).toContain('motion-reduce:[animation-play-state:paused]');
+  });
+
   it.each(['topic', 'ent', 'claim', 'story', 'event', 'src', 'case', 'other'] as const)('rings a %s centre', kind => {
     const container = card(node(kind), 0);
     expect(container.innerHTML).toContain(centreRing);
@@ -99,6 +111,22 @@ describe('NodeCard far nodes', () => {
     expect(isFarNode(2, true)).toBe(false);
     expect(isFarNode(1, false)).toBe(false);
     expect(isFarNode(2, false)).toBe(true);
+  });
+
+  it("draws far markers in the prototype's Geo look", () => {
+    const claim = farMarkerClass('claim', 'agreed');
+    expect(claim).toContain('h-[14px] w-[14px] rounded-[4px]');
+    expect(claim).toContain('shadow-[0_0_0_1.5px_rgba(255,255,255,.6),0_0_12px_rgba(30,130,76,.7)]');
+    expect(farMarkerClass('event', null)).toContain('shadow-[inset_0_0_0_2px_#f2f2f2]');
+    expect(farMarkerClass('event', null)).not.toContain('bg-');
+    expect(farMarkerClass('case', null)).toContain('h-[14px]');
+    expect(farMarkerClass('case', null)).toContain('shadow-[0_0_10px_rgba(76,141,255,.7)]');
+    const person = card(node('ent', { image: 'https://example.com/photo.png' }), 2).querySelector<HTMLElement>(
+      '[data-anchor]'
+    )!;
+    expect(person.style.width).toBe('30px');
+    expect(person.className).toContain('rounded-[8px]');
+    expect(person.className).toContain('shadow-[0_0_0_1px_rgba(255,255,255,.3)]');
   });
 
   it('gives each kind its own marker color, hollow for a claim with no band', () => {
@@ -143,7 +171,50 @@ describe('source cards', () => {
     const source = card(report, 1).querySelector('[data-source-card]')!;
     expect(source.className).toContain('border-dashed');
     expect(source.textContent).toContain('Report · BBC Verify · Mar 2025');
+    // The prototype's Geo geometry and a regular-weight eyebrow.
+    expect(source.className).toContain('w-[168px]');
+    expect(source.className).toContain('rounded-[10px] px-[11px] py-[9px]');
+    expect(source.className).toContain('border-white/30');
+    expect(source.firstElementChild!.className).toContain('font-normal');
+    expect(card(report, 0).querySelector('[data-source-card]')!.className).toContain('w-[220px]');
     expect(card(node('claim'), 1).querySelector('[data-label]')!.className).not.toContain('border-dashed');
     expect(card(node('story'), 1).querySelector('[data-label]')!.className).not.toContain('border-dashed');
+  });
+});
+
+const NAME = 'Federal Reserve System of the United States and its twelve regional banks';
+
+// The first match is the card's own label; a near entity also carries its far-state name after it.
+const clamps = () => screen.getAllByText(NAME)[0].className.match(/line-clamp-\d/g) ?? [];
+
+// On a phone the centre's card gets four lines: more than its neighbours, but bounded, so a long claim
+// can't fill the middle of the map. The panel under the map leaves the name out on a phone (GEO-3849).
+describe('NodeCard names', () => {
+  it.each<GraphKind>(['ent', 'topic', 'story', 'claim'])(
+    'gives a phone centre’s %s name four lines, and no more',
+    kind => {
+      render(<NodeCard node={node(kind, { name: NAME })} hop={0} isCentre phone claimSpaceId="space" />);
+      expect(clamps()).toEqual(['line-clamp-4']);
+    }
+  );
+
+  it.each<[GraphKind, string]>([
+    ['ent', 'line-clamp-2'],
+    ['topic', 'line-clamp-2'],
+    ['story', 'line-clamp-3'],
+    ['claim', 'line-clamp-2'],
+  ])('still cuts the %s name of a card around the centre on a phone', (kind, clamp) => {
+    render(<NodeCard node={node(kind, { name: NAME })} hop={1} isCentre={false} phone claimSpaceId="space" />);
+    expect(clamps()).toEqual([clamp]);
+  });
+
+  it.each<[GraphKind, string]>([
+    ['ent', 'line-clamp-2'],
+    ['topic', 'line-clamp-2'],
+    ['story', 'line-clamp-3'],
+    ['claim', 'line-clamp-3'],
+  ])('keeps the desktop centre’s %s name to its lines', (kind, clamp) => {
+    render(<NodeCard node={node(kind, { name: NAME })} hop={0} isCentre phone={false} claimSpaceId="space" />);
+    expect(clamps()).toEqual([clamp]);
   });
 });

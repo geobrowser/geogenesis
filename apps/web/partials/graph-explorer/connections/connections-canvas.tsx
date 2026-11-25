@@ -90,6 +90,8 @@ export type ConnectionsCanvasProps = {
   labelFor: (edge: GraphEdge, fromId: string) => string;
   /** Overlays inside the stage (legend, hint). */
   children?: React.ReactNode;
+  /** Extra round buttons at the top of the zoom stack (the phone's color key). */
+  controls?: React.ReactNode;
 };
 
 /**
@@ -104,6 +106,7 @@ export function ConnectionsCanvas({
   renderNode,
   labelFor,
   children,
+  controls,
 }: ConnectionsCanvasProps) {
   const reduceMotion = useReducedMotion() ?? false;
   const analytics = useGraphAnalytics();
@@ -758,7 +761,11 @@ export function ConnectionsCanvas({
           );
         })}
       </div>
-      <div data-stage-control className="absolute right-4 bottom-4 z-[10000] flex flex-col gap-2">
+      <div
+        data-stage-control
+        className="absolute right-4 bottom-4 z-[10000] flex flex-col gap-2 graph-phone:bottom-[calc(max(16px,env(safe-area-inset-bottom))+52px)]"
+      >
+        {controls}
         {(
           [
             ['+', 'Zoom in', 1 / 1.25],

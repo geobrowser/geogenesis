@@ -190,6 +190,14 @@ describe('TabGroup repeat-click guard', () => {
 
     expect(clickTab('Community').defaultPrevented).toBe(false);
   });
+  // GEO-3820: Overview shows selected on a record route while editing, but clicking it still goes there.
+  it('lets a tab selected only through a sub-route navigate', () => {
+    mocks.pathname = '/space/space-1/claim/debates';
+    render(<TabGroup tabs={[{ label: 'Overview', href: '/space/space-1/claim', activeOnRecordRoutes: true }]} />);
+
+    expect(selectedLabels()).toEqual(['Overview']);
+    expect(clickTab('Overview').defaultPrevented).toBe(false);
+  });
 });
 
 describe('TabGroup with a content skeleton on the page', () => {

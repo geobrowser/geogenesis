@@ -9,8 +9,9 @@ import { type GraphNode, hop1AsGraphHop } from '~/core/graph-explorer/fetch-grap
 import { type RecentreMethod, useGraphAnalytics } from '~/core/graph-explorer/graph-explorer-analytics';
 import { type GraphFilterOverrides, type GraphScope, resolveGraphFilter } from '~/core/graph-explorer/graph-filter';
 import { shareGraph } from '~/core/graph-explorer/graph-share';
-import { type GraphHistory, goBack, recentre } from '~/core/graph-explorer/history';
+import { type GraphHistory, goBack, jumpBack, recentre } from '~/core/graph-explorer/history';
 import { spokesOfKind } from '~/core/graph-explorer/panel-sections';
+import { GRAPH_PHONE_QUERY } from '~/core/graph-explorer/phone-breakpoint';
 import { DESKTOP_GRAPH_CAPS, type GraphKindFilter, PHONE_GRAPH_CAPS } from '~/core/graph-explorer/select-graph';
 import { SKELETON_SELECTION } from '~/core/graph-explorer/skeleton-graph';
 import { buildSpokes, entitySpaceId } from '~/core/graph-explorer/spokes';
@@ -23,12 +24,13 @@ import { normId } from '~/core/utils/norm-id';
 import { Skeleton } from '~/design-system/skeleton';
 
 import { ClaimActions, TopicClaimsSummary } from './connections/centre-summary';
-import { ConnectionsStage, PHONE_QUERY } from './connections/connections-view';
+import { ConnectionsStage } from './connections/connections-view';
 import { GraphSearch } from './connections/graph-search';
 import { GraphTopBar } from './connections/graph-top-bar';
-import { claimsEmptyMessage, descriptionEmptyMessage, relationshipsEmptyMessage } from './empty-states';
+import { claimsEmptyMessage, relationshipsEmptyMessage } from './empty-states';
 import { EntityPanel, NO_CLAIMS_ASKED } from './entity-panel';
 import { TopicOverview } from './panel-sections';
+import { PhonePanelSheet } from './phone-panel-sheet';
 
 /**
  * The Connections view: a top bar, the 3D map of the centre's neighbourhood and a panel about the
@@ -57,7 +59,7 @@ export function GraphViewer({
   const [kindFilter, setKindFilter] = React.useState<GraphKindFilter>(() => overrides?.chip ?? 'all');
   // Names of entities already seen, for "Back to X" and the trail before a hop is refetched.
   const [names, setNames] = React.useState<Record<string, string>>({});
-  const phone = useMediaQuery(PHONE_QUERY);
+  const phone = useMediaQuery(GRAPH_PHONE_QUERY);
   const analytics = useGraphAnalytics();
 
   const centreId = history.centreId;
@@ -196,13 +198,22 @@ export function GraphViewer({
         },
       }
     : null;
-  const trail = [...history.back, centreId].flatMap(id => (names[id] ? [names[id]] : []));
+  // Each step keeps its place in the back stack, so a step whose name isn't known yet can drop out
+  // of the path without the others jumping to the wrong centre.
+  const trail = [...history.back, centreId].flatMap((id, index) => (names[id] ? [{ name: names[id], index }] : []));
+  const jumpTo = (index: number) => {
+    const target = history.back[index];
+    if (!target) return;
+    analytics?.tag('trail', normId(target));
+    onNavigate(jumpBack(history, index));
+  };
   const selection = neighbourhood.selection;
 
   const topBar = (
     <GraphTopBar
       back={back}
-      trail={trail.length ? trail : topicName ? [topicName] : []}
+      trail={trail.length ? trail : topicName ? [{ name: topicName, index: history.back.length }] : []}
+      onStep={jumpTo}
       search={
         <GraphSearch
           nodes={selection?.nodes.slice(1).map(entry => entry.node) ?? []}
@@ -244,16 +255,33 @@ export function GraphViewer({
     stage = <StageNote role="status">This entity isn’t in the knowledge graph.</StageNote>;
   }
 
+  // On a phone the map takes the screen below the top bar and the panel is a sheet over it (GEO-3849).
+  // `graph-phone:` sorts after `md:`, so it undoes the stacked md: layout under 600px only.
   return (
-    <div className="flex h-full min-h-0 flex-col md:h-auto">
+    <div className="flex h-full min-h-0 flex-col md:h-auto graph-phone:h-full">
       {topBar}
-      <div className="flex min-h-0 flex-1 md:flex-none md:flex-col">
-        <div className="relative isolate min-w-0 flex-1 overflow-hidden bg-[#0b0b0c] md:h-[62vh] md:min-h-[400px] md:flex-none">
+      <div className="flex min-h-0 flex-1 md:flex-none md:flex-col graph-phone:flex-1">
+        {/* Tablet: the 76px the two-row top bar gave up (GEO-3849), so the panel still starts where
+            it did and its top still peeks above the fold for scrolling past the map. */}
+        <div
+          data-testid="graph-map"
+          className="relative isolate min-w-0 flex-1 overflow-hidden bg-[#0b0b0c] md:h-[calc(62vh+76px)] md:min-h-[400px] md:flex-none graph-phone:h-auto graph-phone:min-h-0 graph-phone:flex-1"
+        >
           {stage}
+          {phone ? (
+            <PhonePanelSheet
+              centreId={centreId}
+              centreName={hop1?.centre?.id === centreId ? hop1.centre.name : (names[centreId] ?? null)}
+            >
+              {renderPanel()}
+            </PhonePanelSheet>
+          ) : null}
         </div>
-        <aside className="w-[360px] shrink-0 overflow-y-auto border-l border-[#f0f0f0] bg-white p-6 md:w-auto md:overflow-visible md:border-t md:border-l-0 md:p-4">
-          {renderPanel()}
-        </aside>
+        {phone ? null : (
+          <aside className="w-[360px] shrink-0 overflow-y-auto border-l border-[#f0f0f0] bg-white p-6 md:w-auto md:overflow-visible md:border-t md:border-l-0 md:p-4">
+            {renderPanel()}
+          </aside>
+        )}
       </div>
     </div>
   );
@@ -327,7 +355,9 @@ export function GraphViewer({
     return (
       <EntityPanel
         centre={centre}
-        centreSpaceId={centreSpaceId}
+        // A claim's page is in the claim's own space, where its vote is; any other kind's is where
+        // its text was read.
+        pageSpaceId={node.kind === 'claim' ? claimSpaceId : centreSpaceId}
         topicSpaceId={topicSpaceId}
         spokes={panelSpokes}
         nodes={hop1Nodes}
@@ -348,10 +378,10 @@ export function GraphViewer({
         emptyMessages={{
           relationships: relationshipsEmptyMessage(filter),
           claims: showsClaims ? claimsEmptyMessage(filter, topicName) : null,
-          description: descriptionEmptyMessage(centreSpaceId),
         }}
         showClaims={rawCentre.kind !== 'claim'}
         summary={summary}
+        summaryFirst={rawCentre.kind === 'claim'}
       />
     );
   }

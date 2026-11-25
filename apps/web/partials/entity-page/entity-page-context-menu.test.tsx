@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -95,5 +95,33 @@ describe('EntityPageContextMenu edit-only items', () => {
     expect(screen.queryByRole('button', { name: /Move to/ })).toBeNull();
     expect(screen.queryByRole('button', { name: /Delete entity/ })).toBeNull();
     expect(screen.getByRole('button', { name: /Copy ID/ })).toBeInTheDocument();
+  });
+});
+
+describe('EntityPageContextMenu version history (GEO-3837)', () => {
+  it('has no Version history item unless the caller hands it the list', () => {
+    renderMenu(null);
+
+    expect(screen.queryByRole('button', { name: /Version history/ })).toBeNull();
+  });
+
+  it('swaps the items for the version list when Version history is picked', () => {
+    const onOpenChange = vi.fn();
+    render(
+      <EntityPageContextMenu
+        entityId="entity-1"
+        entityName="A claim"
+        spaceId="space-1"
+        versionHistory={() => <div data-testid="versions" />}
+        onVersionHistoryOpenChange={onOpenChange}
+      />
+    );
+
+    expect(screen.queryByTestId('versions')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Version history/ }));
+
+    expect(screen.getByTestId('versions')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Copy ID/ })).toBeNull();
+    expect(onOpenChange).toHaveBeenCalledWith(true);
   });
 });
