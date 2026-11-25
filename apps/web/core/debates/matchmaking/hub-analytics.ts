@@ -20,7 +20,9 @@ export type DebateActionAnalyticsSurface =
   | 'challenge-dialog'
   | 'open-elsewhere'
   /** The full-screen feed's and explore's debate card, whose claim pills replaced its up/down vote. */
-  | 'debate-card';
+  | 'debate-card'
+  /** The open claim's Agree/Disagree in the graph explorer's side panel (GEO-3841). */
+  | 'graph-explorer';
 
 const ACTION_SURFACE_ANALYTICS = {
   hub: {
@@ -100,6 +102,10 @@ const ACTION_SURFACE_ANALYTICS = {
   'debate-card': {
     labelPrefix: 'Debate',
     actionIntent: 'debate_action',
+  },
+  'graph-explorer': {
+    labelPrefix: 'Graph explorer',
+    actionIntent: 'graph_explorer_action',
   },
 } as const satisfies Record<DebateActionAnalyticsSurface, { labelPrefix: string; actionIntent: string }>;
 
