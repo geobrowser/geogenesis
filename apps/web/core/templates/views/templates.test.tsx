@@ -29,12 +29,25 @@ const SHIPPED_TEMPLATE_ACTIONS = { ...TEMPLATE_ACTIONS };
 function restoreTemplateActions() {
   Object.assign(TEMPLATE_ACTIONS, SHIPPED_TEMPLATE_ACTIONS);
 }
+// A test that flips a flag inline (outside the helpers below) is put back here.
+afterEach(restoreTemplateActions);
 
 /** These fixture walks cover Add context and Dispute with the actions switched on. */
 function withTemplateActionsOn() {
   beforeEach(() => {
     TEMPLATE_ACTIONS.addContext = true;
     TEMPLATE_ACTIONS.dispute = true;
+  });
+  afterEach(restoreTemplateActions);
+}
+
+/**
+ * The Sources "+" ships off until ingestion publishes on its own (GEO-3862). These tests switch it on
+ * so each template's Sources section still proves it draws the "+" once the flag comes back.
+ */
+function withAddSourceOn() {
+  beforeEach(() => {
+    TEMPLATE_ACTIONS.addSource = true;
   });
   afterEach(restoreTemplateActions);
 }
@@ -847,7 +860,9 @@ describe('GEO-3819 layout fixes', () => {
 });
 
 describe('EventTemplate Sources section (GEO-3819)', () => {
-  it('shows "No sources" with no add button when the event has none', () => {
+  withAddSourceOn();
+
+  it('shows "No sources" with an add button when the event has none', () => {
     render(
       <EventTemplate
         model={{
@@ -862,13 +877,14 @@ describe('EventTemplate Sources section (GEO-3819)', () => {
 
     const sources = screen.getByRole('region', { name: 'Sources' });
     expect(within(sources).getByText('No sources')).toBeInTheDocument();
-    // No "+" while TEMPLATE_ACTIONS.addSource is off.
-    expect(within(sources).queryByRole('button', { name: /add source/i })).toBeNull();
+    expect(within(sources).getByRole('button', { name: /add source/i })).toBeInTheDocument();
   });
 });
 
 describe('PostTemplate Sources section (GEO-3819)', () => {
-  it('shows "No sources" with no add button when the post has none', () => {
+  withAddSourceOn();
+
+  it('shows "No sources" with an add button when the post has none', () => {
     render(
       <PostTemplate
         model={{
@@ -885,8 +901,7 @@ describe('PostTemplate Sources section (GEO-3819)', () => {
 
     const sources = screen.getByRole('region', { name: 'Sources' });
     expect(within(sources).getByText('No sources')).toBeInTheDocument();
-    // No "+" while TEMPLATE_ACTIONS.addSource is off.
-    expect(within(sources).queryByRole('button', { name: /add source/i })).toBeNull();
+    expect(within(sources).getByRole('button', { name: /add source/i })).toBeInTheDocument();
   });
 });
 
@@ -1196,6 +1211,7 @@ describe('GEO-3837 phone tidy-ups', () => {
   });
 
   it('names the sources section "Sources" and keeps its "+" adding a source (GEO-3846)', () => {
+    TEMPLATE_ACTIONS.addSource = true;
     render(
       <TopicTemplate
         model={{
@@ -1209,8 +1225,7 @@ describe('GEO-3837 phone tidy-ups', () => {
 
     const sources = screen.getByRole('region', { name: 'Sources' });
     expect(within(sources).getByRole('heading', { name: 'Sources' })).toBeInTheDocument();
-    // Shipped off: no "+" until ingestion publishes on its own.
-    expect(within(sources).queryByRole('button', { name: 'Add source' })).toBeNull();
+    expect(within(sources).getByRole('button', { name: 'Add source' })).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Evidence' })).toBeNull();
     expect(screen.queryByText(/Sources (&|and) evidence/)).toBeNull();
   });
