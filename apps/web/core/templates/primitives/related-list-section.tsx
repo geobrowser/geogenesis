@@ -13,6 +13,7 @@ import type {
   SourceQuoteModel,
 } from '../models';
 import { resolveTemplateImageUrl } from '../ontology';
+import { TEMPLATE_ACTIONS } from '../template-actions';
 import { EntityInlineContext, EntityOverflowMenu, InlinePagination } from './entity-overflow-menu';
 import {
   ArrowLeftIcon,
@@ -250,7 +251,9 @@ export function RelatedListSection({ section, className }: RelatedListSectionPro
           {/* Only Sources has a `+`: a pasted link becomes a source linked to this page through the same
               ingestion as the Add data panel (GEO-3819). Other sections have no entity type to publish a
               free-text row as, so they have none. */}
-          {isSourceSection && <SourceIngestionPopover label={addLabel} link={ingestionLink} />}
+          {isSourceSection && TEMPLATE_ACTIONS.addSource && (
+            <SourceIngestionPopover label={addLabel} link={ingestionLink} />
+          )}
         </div>
       </div>
 
