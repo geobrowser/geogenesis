@@ -5,8 +5,6 @@ import * as React from 'react';
 import cx from 'classnames';
 import Link from 'next/link';
 
-import { ActionContextProvider } from '~/core/action-context-provider';
-
 import type { TopicRecentDebateModel, TopicRecentDebateParticipantModel } from '../models';
 import { ArrowLeftIcon, ArrowRightIcon, PlayIcon } from './icons';
 import { ListRankingHeaderControl, ListRankingWorkspace, type RankableListItem, useListRanking } from './list-ranking';
@@ -31,9 +29,9 @@ function initialsFrom(name: string): string {
 
 /**
  * Horizontal snap-scroll Recent debates gallery modeled on Geo Genesis's compact debate gallery cards:
- * two stacked 480:289 speaker video stills with play overlay and header scroll controls. Experimental
- * look-test: the claim sits over the top of the video (two lines max) instead of in a footer below it,
- * and the card has no vote buttons or split line.
+ * two stacked 480:289 speaker video stills with play overlay and header scroll controls. The card is only
+ * the video: the claim sits over the top-left (two lines max) and each speaker's chip sits at the bottom-left
+ * of their own panel. Voting and the overflow menu live on the debate page.
  */
 export function RecentDebatesGallery({
   debates,
@@ -184,14 +182,8 @@ export function RecentDebatesGallery({
           ref={scrollerRef}
           className="-mx-2 flex snap-x snap-mandatory scroll-px-2 [scrollbar-width:none] items-stretch gap-4 overflow-x-auto px-2 py-2 [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
         >
-          {displayDebates.map((debate, index) => (
-            // Names the list and the card on every action taken in it.
-            <ActionContextProvider
-              key={debate.id}
-              value={{ list_id: 'template_recent_debates', item_position: index + 1 }}
-            >
-              <RecentDebateGalleryCard debate={debate} />
-            </ActionContextProvider>
+          {displayDebates.map(debate => (
+            <RecentDebateGalleryCard key={debate.id} debate={debate} />
           ))}
         </div>
       </div>
@@ -384,9 +376,9 @@ function SpeakerVideoStill({
         data-speaker-chip={tone}
         className={cx(
           'pointer-events-none absolute right-2.5 left-2.5 z-[3] flex max-w-[calc(100%-20px)] items-center gap-1.5 self-start',
-          // The play button straddles the seam under the top chip. On one- and two-up cards the chip reaches
-          // it, so it rides just above the button; on three-up desktop cards it sits flush at the bottom.
-          tone === 'top' ? 'bottom-7 @[860px]:bottom-2' : 'bottom-2'
+          // The play button straddles the seam right under the top chip, so the chip rides just above it at
+          // every card width; a long name would otherwise slide under the button.
+          tone === 'top' ? 'bottom-7' : 'bottom-2'
         )}
       >
         <span className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-black/60 py-0.5 pr-2.5 pl-1 text-[12px] leading-[16px] text-white backdrop-blur-xs">

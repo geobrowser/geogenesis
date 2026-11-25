@@ -486,7 +486,7 @@ export function useLiveClaimTemplate({
 
     const overviewHref = NavUtils.toEntity(spaceId, entityId);
 
-    // Debates gallery cards (with speaker stills, profile avatars & vote actions synced to this claim)
+    // Debates gallery cards (with speaker stills and profile avatars)
     const debateParticipantsByHex = debateParticipantsQuery.data;
     const debates: TopicRecentDebateModel[] = record.debateRows.slice(0, 8).map(item => {
       const { claimTitle, speakers } = parseDebateTitle(item.title || title, title);
@@ -507,19 +507,6 @@ export function useLiveClaimTemplate({
         date: dateStr,
         duration: '',
         votesLabel,
-        agreeCount: summary.positive,
-        disagreeCount: summary.negative,
-        userVote,
-        onVote: choice => {
-          const target = choice === 'agree';
-          if (control.viewerPosition === target) return;
-          control.respond(target);
-        },
-        onClearVote: () => {
-          if (control.viewerPosition !== null) {
-            control.respond(control.viewerPosition);
-          }
-        },
         participants: [
           {
             name: livePair?.slot1?.name ?? speakers[0],
@@ -536,7 +523,6 @@ export function useLiveClaimTemplate({
             profileAvatarUrl: livePair?.slot2?.avatarUrl ?? null,
           },
         ],
-        split: rows.length > 0 ? { rows, isSplit: summary.isControversial, totalVotes: summary.total } : undefined,
         href: NavUtils.toEntity(item.spaceId || spaceId, item.entityId),
       };
     });

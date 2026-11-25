@@ -556,15 +556,6 @@ export interface TopicRecentDebateModel {
   duration: string;
   votesLabel: string;
   participants: readonly [TopicRecentDebateParticipantModel, TopicRecentDebateParticipantModel];
-  /** Optional community agreement percentages shown in the card's summary band. */
-  split?: SplitBreakdown;
-  agreeCount?: number;
-  disagreeCount?: number;
-  userVote?: VoteChoice;
-  /** Saved inline voting: the row votes on this claim. Takes precedence over `onVote`. */
-  voteTarget?: ClaimVoteTarget;
-  onVote?: (choice: Exclude<VoteChoice, null>) => void;
-  onClearVote?: () => void;
   href?: string;
   onSelect?: () => void;
 }

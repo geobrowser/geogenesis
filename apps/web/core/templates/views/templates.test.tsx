@@ -656,6 +656,15 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     expect(topics.compareDocumentPosition(context) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(context.compareDocumentPosition(disputes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
+    // The Claim page's Debates row uses the video-only card: claim over the video, no footer below it.
+    const debateCard = within(debates).getByRole('link', { name: 'Watch debate: We should slow down AI development' });
+    expect(debateCard.querySelector('[data-debate-claim-overlay]')).toHaveTextContent(
+      'We should slow down AI development'
+    );
+    expect(debateCard.querySelector('[data-speaker-chip="top"]')).toHaveClass('bottom-7');
+    expect(within(debates).getAllByRole('article')[0].children).toHaveLength(1);
+    expect(within(debates).queryByText(/28 votes/)).toBeNull();
+
     // Sub-claims render inline Agree/Disagree vote actions
     const subVoteGroup = within(supporting).getByRole('group', {
       name: /Vote on Safety evaluations lag behind frontier model capabilities\./i,
