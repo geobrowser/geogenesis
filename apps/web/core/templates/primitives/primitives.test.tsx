@@ -947,7 +947,7 @@ describe('ClaimExplorer one list (GEO-3854)', () => {
 
   it('puts an added claim at the top of the one list', () => {
     const { container } = render(
-      <EntityActionProvider callbacks={{ canOpenAddForm: () => true, onAddClaim: () => new Promise<never>(() => {}) }}>
+      <EntityActionProvider callbacks={{ onAddClaim: () => new Promise<never>(() => {}) }}>
         <ClaimExplorer contestedClaims={contested} agreedClaims={agreed} />
       </EntityActionProvider>
     );
@@ -967,7 +967,7 @@ describe('ClaimExplorer one list (GEO-3854)', () => {
   it('goes back to page 1 when a claim is added from a later page, so the new top row is in view', () => {
     const many = Array.from({ length: 12 }, (_, i) => claim(`m-${i}`, `Many ${i + 1}`, true));
     const { container } = render(
-      <EntityActionProvider callbacks={{ canOpenAddForm: () => true, onAddClaim: () => new Promise<never>(() => {}) }}>
+      <EntityActionProvider callbacks={{ onAddClaim: () => new Promise<never>(() => {}) }}>
         <ClaimExplorer contestedClaims={many} agreedClaims={[]} />
       </EntityActionProvider>
     );
@@ -1099,24 +1099,48 @@ describe('Add claim on a live page (GEO-3836)', () => {
     );
   }
 
-  it('keeps the form shut when the page says no (signed out)', () => {
-    const canOpenAddForm = vi.fn(() => false);
+  it('opens the form for everyone: nothing is asked before the viewer has written their claim', () => {
+    const holdAddDraft = vi.fn();
     render(
-      <EntityActionProvider callbacks={{ canOpenAddForm, onAddClaim: vi.fn() }}>
+      <EntityActionProvider callbacks={{ holdAddDraft, onAddClaim: vi.fn(() => new Promise<never>(() => {})) }}>
         <ClaimExplorer contestedClaims={listed} agreedClaims={[]} />
       </EntityActionProvider>
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Add claim' }));
-    expect(canOpenAddForm).toHaveBeenCalledTimes(1);
+    expect(screen.getByPlaceholderText(/Write a clear, testable statement/)).toBeInTheDocument();
+    expect(holdAddDraft).not.toHaveBeenCalled();
+  });
+
+  it('puts a withdrawn draft back in the reopened form (a dismissed sign-up)', async () => {
+    let restore!: () => void;
+    let settle!: (result: { ok: false; error: string }) => void;
+    const holdAddDraft = vi.fn((put: () => void) => (restore = put));
+    const onAddClaim = vi.fn(() => new Promise<never>(resolve => (settle = resolve as never)));
+    render(
+      <EntityActionProvider callbacks={{ holdAddDraft, onAddClaim }}>
+        <ClaimExplorer contestedClaims={listed} agreedClaims={[]} />
+      </EntityActionProvider>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add claim' }));
+    submitClaim('Aid entered on Monday');
+    expect(holdAddDraft).toHaveBeenCalledTimes(1);
     expect(screen.queryByPlaceholderText(/Write a clear, testable statement/)).toBeNull();
+
+    await React.act(async () => {
+      settle({ ok: false, error: 'Your addition was cancelled.' });
+      restore();
+    });
+    expect(screen.getByPlaceholderText(/Write a clear, testable statement/)).toHaveValue('Aid entered on Monday');
+    expect(screen.queryByText('Publishing…')).toBeNull();
   });
 
   it('shows the claim as publishing, then as the published entity, and drops it on a failed publish', async () => {
     let settle!: (result: { ok: true; id: string; spaceId: string } | { ok: false; error: string }) => void;
     const onAddClaim = vi.fn(() => new Promise<never>(resolve => (settle = resolve as never)));
     render(
-      <EntityActionProvider callbacks={{ canOpenAddForm: () => true, onAddClaim }}>
+      <EntityActionProvider callbacks={{ onAddClaim }}>
         <ClaimExplorer contestedClaims={listed} agreedClaims={[]} />
       </EntityActionProvider>
     );

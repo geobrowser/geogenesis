@@ -681,14 +681,14 @@ export function AddClaimPopover({
   label = 'Add claim',
   placeholder = 'Write a clear, testable statement...',
   onSubmit,
-  canOpen,
+  holdDraft,
   align = 'end',
 }: {
   label?: string;
   placeholder?: string;
   onSubmit: (draft: { title: string; kind: ClaimKind; note?: string }) => void;
-  /** Asked as the form opens; false keeps it shut (see `EntityActionCallbacks.canOpenAddForm`). */
-  canOpen?: () => boolean;
+  /** Told as the form submits, with a way to put the draft back (see `EntityActionCallbacks.holdAddDraft`). */
+  holdDraft?: (restore: () => void) => void;
   align?: 'start' | 'center' | 'end';
 }) {
   const [open, setOpen] = React.useState(false);
@@ -700,6 +700,13 @@ export function AddClaimPopover({
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
     if (title.trim().length < 4) return;
+    const draft = { title, kind, note };
+    holdDraft?.(() => {
+      setTitle(draft.title);
+      setKind(draft.kind);
+      setNote(draft.note);
+      setOpen(true);
+    });
     onSubmit({ title: title.trim(), kind, note: note.trim() || undefined });
     setTitle('');
     setKind('fact');
@@ -714,7 +721,6 @@ export function AddClaimPopover({
       align={align}
       onClose={() => setOpen(false)}
       onOpenChange={next => {
-        if (next && canOpen && !canOpen()) return;
         setOpen(next);
         if (!next) {
           setTitle('');
@@ -807,7 +813,7 @@ export function AddEntityItemPopover({
   multilinePrimary = false,
   secondaryDate,
   onSubmit,
-  canOpen,
+  holdDraft,
   align = 'end',
 }: {
   label: string;
@@ -824,8 +830,8 @@ export function AddEntityItemPopover({
    */
   secondaryDate?: { propertyId: string; dataType: DataType };
   onSubmit: (draft: { primary: string; secondary?: string; tertiary?: string }) => void;
-  /** Asked as the form opens; false keeps it shut (see `EntityActionCallbacks.canOpenAddForm`). */
-  canOpen?: () => boolean;
+  /** Told as the form submits, with a way to put the draft back (see `EntityActionCallbacks.holdAddDraft`). */
+  holdDraft?: (restore: () => void) => void;
   align?: 'start' | 'center' | 'end';
 }) {
   const [open, setOpen] = React.useState(false);
@@ -866,6 +872,16 @@ export function AddEntityItemPopover({
         return;
       }
     }
+    // Read after the blur above, so a date typed and submitted with Enter is held too.
+    const draft = { primary, secondary, tertiary, date: dateValueRef.current };
+    holdDraft?.(() => {
+      setPrimary(draft.primary);
+      setSecondary(secondaryDate ? draft.date : draft.secondary);
+      setTertiary(draft.tertiary);
+      dateValueRef.current = draft.date;
+      dateValidRef.current = true;
+      setOpen(true);
+    });
     onSubmit({
       primary: primary.trim(),
       secondary: (secondaryDate ? dateValueRef.current : secondary.trim()) || undefined,
@@ -885,7 +901,6 @@ export function AddEntityItemPopover({
       align={align}
       onClose={() => setOpen(false)}
       onOpenChange={next => {
-        if (next && canOpen && !canOpen()) return;
         setOpen(next);
         if (!next) {
           setPrimary('');

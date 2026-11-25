@@ -160,7 +160,7 @@ export function SourceTemplate({
                 <h2 className="m-0 text-mediumTitle font-semibold text-text">Claims</h2>
                 <AddClaimPopover
                   label="Add claim"
-                  canOpen={actionCallbacks?.canOpenAddForm}
+                  holdDraft={actionCallbacks?.holdAddDraft}
                   onSubmit={draft => {
                     addClaim(
                       state => ({
@@ -192,7 +192,7 @@ export function SourceTemplate({
                 tertiaryLabel="Page or section (optional)"
                 tertiaryPlaceholder="e.g. §86(1) or 07:12"
                 multilinePrimary
-                canOpen={actionCallbacks?.canOpenAddForm}
+                holdDraft={actionCallbacks?.holdAddDraft}
                 onSubmit={draft => {
                   addQuote(
                     state => ({

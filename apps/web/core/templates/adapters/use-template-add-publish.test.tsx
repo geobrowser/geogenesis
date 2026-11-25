@@ -14,7 +14,7 @@ import { TEMPLATE_ONTOLOGY } from '../ontology';
 import type { TemplateAddOwner } from './template-add-edits';
 import { useTemplateAddPublish } from './use-template-add-publish';
 
-const auth = vi.hoisted(() => ({ authenticated: true, promptSignIn: vi.fn() }));
+const auth = vi.hoisted(() => ({ authenticated: true, resolving: false, promptSignIn: vi.fn() }));
 const account = vi.hoisted(() => ({
   personalSpaceId: null as string | null,
   isRegistered: false,
@@ -42,6 +42,7 @@ vi.mock('~/core/wallet/account-readiness', () => ({
   SignedOutBeforeWriteError: class extends Error {},
   SigningAccountFailedError: class extends Error {},
 }));
+vi.mock('~/core/hooks/use-auth-resolving', () => ({ useAuthResolving: () => auth.resolving }));
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => auth.promptSignIn }));
 vi.mock('~/core/hooks/use-personal-space-id', () => ({
   personalSpaceIdQueryKey: (address: string | null | undefined) => ['personal-space-id', address?.toLowerCase()],
@@ -94,6 +95,7 @@ function renderPublisher() {
 
 beforeEach(() => {
   auth.authenticated = true;
+  auth.resolving = false;
   auth.promptSignIn.mockReset();
   Object.assign(account, {
     personalSpaceId: PERSONAL_SPACE,
@@ -132,6 +134,7 @@ describe('useTemplateAddPublish', () => {
     ).toBe(true);
     expect(outcome?.ok && outcome.id).toBe(args.values[0].entity.id);
     expect(invalidate).toHaveBeenCalled();
+    expect(auth.promptSignIn).not.toHaveBeenCalled();
   });
 
   it("a non-editor member's claim is published into their personal space", async () => {
@@ -185,26 +188,136 @@ describe('useTemplateAddPublish', () => {
     expect(mocks.store.setValues).not.toHaveBeenCalled();
   });
 
-  it('signed out, the form asks for sign-in and writes nothing', async () => {
+  it('signed out, submitting asks for sign-in and queues the whole draft without publishing', async () => {
     auth.authenticated = false;
-    const { result } = renderPublisher();
+    Object.assign(account, { personalSpaceId: null, isRegistered: false, address: null });
+    const { result, store } = renderPublisher();
 
-    expect(result.current.canOpenAddForm()).toBe(false);
+    act(() => {
+      void result.current.add(CLAIM);
+    });
+
     expect(auth.promptSignIn).toHaveBeenCalledTimes(1);
+    const queued = store.get(pendingActionsAtom);
+    expect(queued).toHaveLength(1);
+    expect(queued[0]).toMatchObject({ requires: 'personalSpace', survivesRedirect: true });
+    expect(JSON.parse(queued[0]!.intent!)).toEqual(CLAIM);
+    expect(mocks.makeProposal).not.toHaveBeenCalled();
+    expect(mocks.store.setValues).not.toHaveBeenCalled();
+  });
+
+  it('signed out, the queued draft publishes once, into the right space, after sign-in', async () => {
+    role(false, false);
+    auth.authenticated = false;
+    Object.assign(account, { personalSpaceId: null, isRegistered: false, address: null });
+    const { result, rerender, store, queryClient } = renderPublisher();
 
     let outcome: TemplateAddResult | undefined;
-    await act(async () => {
-      outcome = await result.current.add(CLAIM);
+    act(() => {
+      void result.current.add(CLAIM).then(r => (outcome = r));
     });
-    expect(outcome).toMatchObject({ ok: false });
-    expect(mocks.store.setValues).not.toHaveBeenCalled();
+    const [queued] = store.get(pendingActionsAtom);
+
+    // They sign up: the account and its personal space arrive, and the queue replays the draft.
+    auth.authenticated = true;
+    Object.assign(account, { personalSpaceId: PERSONAL_SPACE, isRegistered: true, address: ADDRESS });
+    queryClient.setQueryData(['personal-space-id', ADDRESS.toLowerCase()], {
+      isRegistered: true,
+      personalSpaceId: PERSONAL_SPACE,
+      personalEntityId: null,
+    });
+    rerender();
+    await act(async () => {
+      await queued!.run();
+    });
+
+    expect(mocks.makeProposal).toHaveBeenCalledTimes(1);
+    expect(mocks.makeProposal.mock.calls[0]![0]).toMatchObject({
+      spaceId: PERSONAL_SPACE,
+      name: 'Add claim: Aid entered on Monday',
+    });
+    expect(outcome).toMatchObject({ ok: true, spaceId: PERSONAL_SPACE });
+  });
+
+  it('signed out, an editor of the page publishes the queued draft into the page space', async () => {
+    auth.authenticated = false;
+    const { result, rerender, store } = renderPublisher();
+    let outcome: TemplateAddResult | undefined;
+    act(() => {
+      void result.current.add(CLAIM).then(r => (outcome = r));
+    });
+    const [queued] = store.get(pendingActionsAtom);
+
+    auth.authenticated = true;
+    rerender();
+    await act(async () => {
+      await queued!.run();
+    });
+    expect(mocks.makeProposal).toHaveBeenCalledTimes(1);
+    expect(outcome).toMatchObject({ ok: true, spaceId: PAGE_SPACE });
+  });
+
+  it('a dismissed sign-in withdraws the draft and puts it back in its form', async () => {
+    auth.authenticated = false;
+    const { result, store } = renderPublisher();
+    const restore = vi.fn();
+
+    let pending!: Promise<TemplateAddResult>;
+    act(() => {
+      result.current.holdAddDraft(restore);
+      pending = result.current.add(CLAIM);
+    });
+    const onCancel = auth.promptSignIn.mock.calls[0]![1]?.onCancel as () => void;
+    act(() => onCancel());
+
+    await expect(pending).resolves.toMatchObject({ ok: false });
+    expect(store.get(pendingActionsAtom)).toHaveLength(0);
+    expect(restore).toHaveBeenCalledTimes(1);
     expect(mocks.makeProposal).not.toHaveBeenCalled();
   });
 
-  it('signed in, the form opens', () => {
-    const { result } = renderPublisher();
-    expect(result.current.canOpenAddForm()).toBe(true);
+  it('still resolving, the draft is queued with the prompt left to the runner', () => {
+    auth.authenticated = false;
+    auth.resolving = true;
+    const { result, store } = renderPublisher();
+    act(() => {
+      void result.current.add(CLAIM);
+    });
     expect(auth.promptSignIn).not.toHaveBeenCalled();
+    expect(store.get(pendingActionsAtom)[0]?.onSignedOut).toMatchObject({
+      prompt: { component: 'template_add_form', auth_continuation: 'queued' },
+    });
+  });
+
+  it('a second draft turned away while the first waits goes back into its form, after the submit', async () => {
+    Object.assign(account, { personalSpaceId: null, isRegistered: false, isSetupPending: true });
+    const { result } = renderPublisher();
+    act(() => {
+      void result.current.add(CLAIM);
+    });
+
+    const restore = vi.fn();
+    let second!: Promise<TemplateAddResult>;
+    act(() => {
+      result.current.holdAddDraft(restore);
+      second = result.current.add(CLAIM);
+      // Not inside the submit: the form clears itself right after `onSubmit`, and that would win.
+      expect(restore).not.toHaveBeenCalled();
+    });
+
+    await expect(second).resolves.toMatchObject({ ok: false });
+    expect(restore).toHaveBeenCalledTimes(1);
+    expect(mocks.makeProposal).not.toHaveBeenCalled();
+  });
+
+  it('a published draft never puts itself back in the form', async () => {
+    const { result } = renderPublisher();
+    const restore = vi.fn();
+    await act(async () => {
+      result.current.holdAddDraft(restore);
+      await result.current.add(CLAIM);
+    });
+    expect(restore).not.toHaveBeenCalled();
   });
 
   it('while a new account is set up, the draft is queued and published once the personal space exists', async () => {
