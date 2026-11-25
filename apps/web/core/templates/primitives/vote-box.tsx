@@ -27,7 +27,8 @@ export interface VoteBoxProps {
  * ends. With no votes the headline is a quiet "No votes yet" over an empty bar. A lone split row
  * draws no space label: the headline is its result. Several spaces add a compact per-space list
  * under the bar, the overall ("Everyone") row leading as the headline when there is one. Under a
- * 680px container the result stacks over the bar and the buttons span the card.
+ * 680px container it matches the claim rows: the buttons span the card and the split line ("67% (3)")
+ * sits under them, with no headline.
  */
 export function VoteBox({ prompt, split, control, className }: VoteBoxProps) {
   const { userVote, countSummary, hint, impactNote, disabled, onVote, onClear } = control;
@@ -45,6 +46,14 @@ export function VoteBox({ prompt, split, control, className }: VoteBoxProps) {
   const headlineRow = rows.length === 1 ? rows[0] : rows.find(row => row.isEveryone);
   const listRows = rows.filter(row => row !== headlineRow);
   const noVotes = rows.length === 0;
+  // Phones draw the split as the claim rows do (GEO-3845): under the buttons, bar and "67% (3)", no
+  // headline. A lone row is the result, so it carries no space label.
+  // SplitBars hides an "Everyone" label, so a lone row is drawn under that name.
+  const phoneRows = rows.map(row =>
+    rows.length === 1
+      ? { ...row, label: 'Everyone', isEveryone: true, voterCount: row.voterCount ?? split.totalVotes }
+      : row
+  );
 
   return (
     <section
@@ -58,7 +67,7 @@ export function VoteBox({ prompt, split, control, className }: VoteBoxProps) {
       {prompt && <p className="m-0 text-smallTitle text-text">{prompt}</p>}
 
       {/* Wide: the result and the buttons share a line, the bar spans the card under them. Phones: the
-          result, then the bar, then the buttons across the card. */}
+          buttons across the card, then the split line, as in the claim rows. */}
       <div className="flex flex-col gap-4 @[680px]:flex-row @[680px]:flex-wrap @[680px]:items-end @[680px]:justify-between @[680px]:gap-x-6 @[680px]:gap-y-5">
         <Headline row={headlineRow} countSummary={countSummary} noVotes={noVotes} />
 
@@ -72,15 +81,26 @@ export function VoteBox({ prompt, split, control, className }: VoteBoxProps) {
           buttonClassName="flex-1 basis-0 @max-[300px]:px-2 @[680px]:min-w-[124px] @[680px]:flex-none"
         />
 
-        <ResultBar row={headlineRow} noVotes={noVotes} className="order-2 @[680px]:order-3 @[680px]:basis-full" />
+        <div className="order-2 hidden @[680px]:order-3 @[680px]:block @[680px]:basis-full">
+          <ResultBar row={headlineRow} noVotes={noVotes} />
+        </div>
+
+        {phoneRows.length > 0 && (
+          <div data-testid="vote-box-phone-split" className="order-4 w-full @[680px]:hidden">
+            <SplitBars rows={phoneRows} density="full" />
+          </div>
+        )}
       </div>
 
       {listRows.length > 0 && (
-        <SplitBars
-          rows={listRows}
-          density="compact"
-          className="w-full border-t border-divider pt-4 @[680px]:max-w-[560px]"
-        />
+        // Wide only: phones list every space in the split line under the buttons.
+        <div className="hidden @[680px]:block">
+          <SplitBars
+            rows={listRows}
+            density="compact"
+            className="w-full border-t border-divider pt-4 @[680px]:max-w-[560px]"
+          />
+        </div>
       )}
 
       {(impactNote || (!userVote && hint)) && (
@@ -103,7 +123,7 @@ function Headline({ row, countSummary, noVotes }: { row?: SplitRow; countSummary
   return (
     <div
       data-testid="vote-box-result"
-      className="order-1 flex min-w-0 flex-wrap items-baseline gap-x-2.5 gap-y-1 tabular-nums"
+      className="order-1 hidden min-w-0 flex-wrap items-baseline gap-x-2.5 gap-y-1 tabular-nums @[680px]:flex"
     >
       {row ? (
         <>

@@ -154,6 +154,8 @@ describe('VoteBox: the result leads, over a full-width split bar (GEO-3845)', ()
 
   it('leads with a large "71% agree" and the quiet count, with no space label or prompt', () => {
     render(<VoteBox split={lone} control={control} />);
+    // jsdom applies no container queries: drop the phone split line to check the wide layout alone.
+    screen.getByTestId('vote-box-phone-split').remove();
 
     const result = screen.getByTestId('vote-box-result');
     expect(result).toHaveTextContent('71%agree·7 votes');
@@ -166,6 +168,8 @@ describe('VoteBox: the result leads, over a full-width split bar (GEO-3845)', ()
 
   it('puts the buttons on the result line and the bar across the card, with both shares at its ends', () => {
     render(<VoteBox split={lone} control={control} />);
+    // jsdom applies no container queries: drop the phone split line to check the wide layout alone.
+    screen.getByTestId('vote-box-phone-split').remove();
 
     const result = screen.getByTestId('vote-box-result');
     const buttons = screen.getByRole('group', { name: 'Do you agree?' });
@@ -176,10 +180,28 @@ describe('VoteBox: the result leads, over a full-width split bar (GEO-3845)', ()
     // One line on wide cards (buttons right of the result), the bar on its own line under both.
     expect(result.parentElement).toContainElement(buttons);
     expect(buttons).toHaveClass('@[680px]:order-2', 'order-3', 'w-full', '@[680px]:w-auto');
-    expect(meter.parentElement).toHaveClass('order-2', '@[680px]:order-3', '@[680px]:basis-full');
+    expect(meter.closest('[class*="basis-full"]')).toHaveClass(
+      'order-2',
+      'hidden',
+      '@[680px]:block',
+      '@[680px]:order-3'
+    );
+    // The headline is wide-only; phones show the claim-row split line instead.
+    expect(result).toHaveClass('hidden', '@[680px]:flex');
     // No Agree / Disagree share labels under the bar (Preston): the result above already says it.
     expect(screen.queryByTestId('vote-box-bar-ends')).toBeNull();
     expect(screen.queryByText('Disagree 29%')).toBeNull();
+  });
+
+  it('matches the claim rows on phones: buttons, then the split line with "71% (7)" and no label', () => {
+    render(<VoteBox split={lone} control={control} />);
+
+    const phone = screen.getByTestId('vote-box-phone-split');
+    expect(phone).toHaveClass('order-4', '@[680px]:hidden');
+    expect(phone).toHaveTextContent('71%(7)');
+    expect(within(phone).queryByText('World affairs')).toBeNull();
+    const buttons = screen.getByRole('group', { name: 'Do you agree?' });
+    expect(buttons).toHaveClass('order-3', 'w-full');
   });
 
   it('keeps the bar ends to agree votes', () => {
@@ -190,6 +212,8 @@ describe('VoteBox: the result leads, over a full-width split bar (GEO-3845)', ()
 
   it('leads with the overall row and lists the spaces under the bar', () => {
     render(<VoteBox split={CONTESTED_SPLIT} control={{ ...control, countSummary: '2,418 votes' }} />);
+    // jsdom applies no container queries: drop the phone split line to check the wide layout alone.
+    screen.getByTestId('vote-box-phone-split').remove();
 
     const result = screen.getByTestId('vote-box-result');
     expect(result).toHaveTextContent('52%agree·2,418 votes');
@@ -208,6 +232,8 @@ describe('VoteBox: the result leads, over a full-width split bar (GEO-3845)', ()
         control={control}
       />
     );
+    // jsdom applies no container queries: drop the phone split line to check the wide layout alone.
+    screen.getByTestId('vote-box-phone-split').remove();
 
     const result = screen.getByTestId('vote-box-result');
     expect(result).toHaveTextContent('7 votes');
