@@ -38,9 +38,14 @@ import { normId } from '~/core/utils/norm-id';
 /**
  * How long the page's response stays open for the Topic sections' reads. The page itself does not
  * wait for them: it is sent with the sections as skeletons, and they stream in when these answer.
- * Past this, whatever has not landed is left to the client, exactly as before.
+ * Past this, whatever has not landed is left to the client.
+ *
+ * Generous on purpose. Nothing is held back while it runs, and the client's own reads only start
+ * after its scripts boot and then go to the same backend, so a slow read still lands sooner through
+ * the stream than through the browser. At 1.5 s a cold read missed it now and then, and the page fell
+ * back to the slow client path.
  */
-export const TOPIC_PREFETCH_BUDGET_MS = 1_500;
+export const TOPIC_PREFETCH_BUDGET_MS = 4_000;
 
 /**
  * The Topic template's section reads (Claims, Debates, Sources), made on the server and handed to the
@@ -89,11 +94,25 @@ export async function prefetchTopicTemplateQueries({
     timer = setTimeout(resolve, budgetMs);
   });
 
+  const startedAt = Date.now();
   try {
-    await Promise.race([
-      readSections({ queryClient, topicId, spaceId, topic, signal }).catch(() => undefined),
-      deadline,
+    const outcome = await Promise.race([
+      readSections({ queryClient, topicId, spaceId, topic, signal }).then(
+        () => 'done' as const,
+        (error: unknown) => {
+          // Swallowed for the page, but logged: a failed read sends the sections down the slow path.
+          console.warn('[topic-prefetch] read failed', { topicId, spaceId, error: String(error) });
+          return 'failed' as const;
+        }
+      ),
+      deadline.then(() => 'timeout' as const),
     ]);
+    if (outcome === 'timeout') {
+      console.warn('[topic-prefetch] budget exceeded', { topicId, spaceId, budgetMs });
+    } else if (outcome === 'done') {
+      const ms = Date.now() - startedAt;
+      if (ms > budgetMs / 2) console.info('[topic-prefetch] slow', { topicId, spaceId, ms });
+    }
   } finally {
     clearTimeout(timer);
     // Whatever is still in flight is the client's to ask again.
