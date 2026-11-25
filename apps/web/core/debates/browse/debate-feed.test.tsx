@@ -46,6 +46,44 @@ const mocks = vi.hoisted(() => ({
   /** The page's path and query string, for the deep links the feed reads. */
   pathname: '/space/space-1/debate-1',
   search: '',
+  /** Each debate's moments read, by id; a debate not listed has no moments (GEO-3833). */
+  moments: {} as Record<string, { status: 'loading' | 'ready' | 'error'; moments: Array<{ id: string }> }>,
+}));
+
+vi.mock('../moments-player/use-debate-moments', () => ({
+  useDebateMoments: (id: string, { enabled }: { enabled?: boolean } = {}) =>
+    enabled
+      ? (mocks.moments[id] ?? { status: 'ready', moments: [], slotNames: {} })
+      : { status: 'loading', moments: [], slotNames: {} },
+}));
+vi.mock('~/core/debates/moments-player/moments-card-player', () => ({
+  MomentsCardPlayer: ({
+    debate,
+    active,
+    mountMedia,
+    barOverClip,
+    surface,
+    onShowFullDebate,
+  }: {
+    debate: Debate;
+    active: boolean;
+    mountMedia: boolean;
+    barOverClip?: boolean;
+    surface?: string;
+    onShowFullDebate: (seconds: number | null) => void;
+  }) => (
+    <div
+      data-testid={`reel-${debate.id}`}
+      data-active={String(active)}
+      data-mount-media={String(mountMedia)}
+      data-bar-over-clip={String(Boolean(barOverClip))}
+      data-surface={surface}
+    >
+      <button type="button" onClick={() => onShowFullDebate(41)}>
+        Full debate
+      </button>
+    </div>
+  ),
 }));
 
 vi.mock('~/core/analytics', () => ({
@@ -70,6 +108,7 @@ vi.mock('~/core/debates/hooks', () => ({
     isLoading: mocks.mediaLoading,
     hasError: mocks.mediaError,
   }),
+  useDebateMedia: () => ({ data: undefined, isError: false }),
   useDebate: (_id: string, enabled: boolean) => {
     mocks.anchorEnabled = enabled;
     return { data: mocks.anchorDebate, isLoading: mocks.anchorLoading, error: mocks.anchorError };
@@ -124,6 +163,8 @@ vi.mock('./debate-feed-player', async () => {
       framed,
       onOpenClaims,
       onPlaybackState,
+      initialSeekSeconds,
+      topRight,
     }: {
       debate: Debate;
       active: boolean;
@@ -134,6 +175,8 @@ vi.mock('./debate-feed-player', async () => {
       framed?: boolean;
       onOpenClaims?: () => void;
       onPlaybackState?: (state: typeof mocks.playerState) => void;
+      initialSeekSeconds?: number | null;
+      topRight?: React.ReactNode;
     }) => {
       const state = JSON.stringify(mocks.playerState);
       React.useEffect(() => onPlaybackState?.(JSON.parse(state)), [onPlaybackState, state]);
@@ -146,7 +189,9 @@ vi.mock('./debate-feed-player', async () => {
           data-release-media={releaseMedia ? 'true' : 'false'}
           data-hold-full-playback={holdFullPlayback ? 'true' : 'false'}
           data-framed={framed ? 'true' : 'false'}
+          data-seek={String(initialSeekSeconds ?? null)}
         >
+          {topRight}
           {/* Stands in for the claims chip on the video, now the only way into the claims panel. */}
           <button type="button" onClick={onOpenClaims}>
             Claims on the video
@@ -240,6 +285,7 @@ beforeEach(() => {
   mocks.captured.length = 0;
   mocks.search = '';
   mocks.pathname = '/space/space-1/debate-1';
+  mocks.moments = {};
 
   class MockIntersectionObserver implements IntersectionObserver {
     readonly root = null;
@@ -446,12 +492,12 @@ describe('DebatesBrowseFeed layout and scroll nudge', () => {
       'md:w-[var(--debate-feed-phone-column-width)]'
     );
     expect(mediaColumn).toHaveStyle({
-      '--debate-feed-phone-column-width': 'clamp(240px, calc(83dvh - 197px), calc(100cqw - 2rem))',
+      '--debate-feed-phone-column-width': 'clamp(240px, calc(83dvh - 219px), calc(100cqw - 2rem))',
     });
     // 16px either side on a phone, not 8.
     expect(feedItem).not.toHaveClass('md:px-2');
     expect(mediaColumn).toHaveStyle({
-      '--debate-feed-column-width': `clamp(280px, min(calc(100cqw - 2rem), ${debateCardColumnWidth('82.9dvh - 13.65rem', DEBATE_CARD_WRAPS_BELOW)}), 640px)`,
+      '--debate-feed-column-width': `clamp(280px, min(calc(100cqw - 2rem), ${debateCardColumnWidth('82.9dvh - 15.05rem', DEBATE_CARD_WRAPS_BELOW)}), 640px)`,
     });
   });
 
@@ -463,8 +509,8 @@ describe('DebatesBrowseFeed layout and scroll nudge', () => {
     const footer = screen.getByTestId('claim-footer');
     expect(footer).toHaveAttribute('data-claim', 'claim-entity-debate-1');
     expect(footer).toHaveAttribute('data-enabled', 'true');
-    expect(within(footer).getByRole('button', { name: 'Comments (7)' })).toBeInTheDocument();
-    expect(within(footer).getByRole('button', { name: 'Share debate' })).toBeInTheDocument();
+    expect(within(footer).getByRole('button', { name: 'Open comments, 7 comments' })).toBeInTheDocument();
+    expect(within(footer).getByRole('button', { name: 'Share claim' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Claims \(/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /upvote|downvote/i })).not.toBeInTheDocument();
   });
@@ -717,7 +763,7 @@ describe('DebatesBrowseFeed layout and scroll nudge', () => {
     // budgets that wrapped row from the wider edge.
     expect(screen.getByTestId('claim-footer')).toHaveAttribute('data-wide-actions', 'true');
     expect(screen.getByTestId('claim-footer').parentElement?.parentElement).toHaveStyle({
-      '--debate-feed-column-width': `clamp(280px, min(calc(100cqw - 2rem), ${debateCardColumnWidth('82.9dvh - 13.65rem', DEBATE_CARD_WIDE_WRAPS_BELOW)}), 640px)`,
+      '--debate-feed-column-width': `clamp(280px, min(calc(100cqw - 2rem), ${debateCardColumnWidth('82.9dvh - 15.05rem', DEBATE_CARD_WIDE_WRAPS_BELOW)}), 640px)`,
     });
 
     // Once: the desktop rail beside the video, which drew a second one, is gone.
@@ -798,7 +844,7 @@ describe('DebatesBrowseFeed layout and scroll nudge', () => {
     const card = screen.getByTestId('player-debate-1').closest('.bounce-stub');
     assert(card, 'Expected the landing debate to be wrapped in the bouncing card');
     expect(card).toContainElement(screen.getByRole('heading', { name: 'Debates are useful' }));
-    expect(card.querySelectorAll('[aria-label^="Comments"]').length).toBeGreaterThan(0);
+    expect(card.querySelectorAll('[aria-label^="Open comments"]').length).toBeGreaterThan(0);
 
     expect(screen.getByTestId('player-debate-2').closest('.bounce-stub')).toBeNull();
   });
@@ -839,9 +885,10 @@ describe('DebatesBrowseFeed comments', () => {
   it('shows the comment count and opens the comments panel for the clicked debate', () => {
     render(<DebatesBrowseFeed spaceId="space-1" />);
 
-    const commentButtons = screen.getAllByRole('button', { name: /^Comments/ });
+    const commentButtons = screen.getAllByRole('button', { name: /^Open comments/ });
     expect(commentButtons.length).toBeGreaterThan(0);
-    expect(screen.getAllByText('7').length).toBeGreaterThan(0);
+    // The app's circle says the count to a screen reader rather than on screen (GEO-3833).
+    expect(commentButtons[0]).toHaveAccessibleName('Open comments, 7 comments');
 
     fireEvent.click(commentButtons[0]);
     expect(screen.getByText('Comments panel for debate-1')).toBeInTheDocument();
@@ -850,14 +897,14 @@ describe('DebatesBrowseFeed comments', () => {
   it('closes the claims panel when comments open, and vice versa', () => {
     render(<DebatesBrowseFeed spaceId="space-1" />);
 
-    fireEvent.click(screen.getAllByRole('button', { name: /^Comments/ })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: /^Open comments/ })[0]);
     expect(screen.getByText('Comments panel for debate-1')).toBeInTheDocument();
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Claims on the video' })[0]);
     expect(screen.getByText('Claims panel for debate-1')).toBeInTheDocument();
     expect(screen.queryByText('Comments panel for debate-1')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getAllByRole('button', { name: /^Comments/ })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: /^Open comments/ })[0]);
     expect(screen.getByText('Comments panel for debate-1')).toBeInTheDocument();
     expect(screen.queryByText(/^Claims panel for/)).not.toBeInTheDocument();
   });
@@ -873,7 +920,7 @@ describe('DebatesBrowseFeed panels follow the scrolled-to debate', () => {
 
   it('moves the comments panel to the next debate on scroll', () => {
     render(<DebatesBrowseFeed spaceId="space-1" />);
-    fireEvent.click(screen.getAllByRole('button', { name: /^Comments/ })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: /^Open comments/ })[0]);
     expect(screen.getByText('Comments panel for debate-1')).toBeInTheDocument();
 
     activateDebate('Adjacent debate');
@@ -901,7 +948,7 @@ describe('DebatesBrowseFeed panels follow the scrolled-to debate', () => {
     const adjacent = screen.getByRole('heading', { name: 'Adjacent debate' }).closest('section');
     assert(adjacent, 'Expected a section for the adjacent debate');
 
-    fireEvent.click(within(adjacent).getAllByRole('button', { name: /^Comments/ })[0]);
+    fireEvent.click(within(adjacent).getAllByRole('button', { name: /^Open comments/ })[0]);
 
     expect(screen.getByText('Comments panel for debate-2')).toBeInTheDocument();
     expect(screen.queryByText('Comments panel for debate-1')).not.toBeInTheDocument();
@@ -1723,5 +1770,67 @@ describe('DebatesBrowseFeed comments deep link', () => {
     );
 
     expect(screen.queryByText(/Comments panel for/)).not.toBeInTheDocument();
+  });
+});
+
+// GEO-3833: the same Moments / Full debate button as an Explore card, on every card of the feed.
+describe('DebatesBrowseFeed — moments or the full debate', () => {
+  const READY = { status: 'ready' as const, moments: [{ id: 'clip-0' }, { id: 'clip-1' }] };
+
+  beforeEach(() => {
+    mocks.debates = [
+      completedDebate('debate-1', 'First claim', '2026-07-02T00:01:10.000Z'),
+      completedDebate('debate-2', 'Second claim', '2026-07-02T00:02:10.000Z'),
+    ];
+  });
+
+  it('starts a card with moments on its reel, drawn to the two-tile frame', () => {
+    mocks.moments = { 'debate-1': READY };
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+    activateDebate('First claim');
+    const reel = screen.getByTestId('reel-debate-1');
+    expect(reel).toHaveAttribute('data-active', 'true');
+    expect(reel).toHaveAttribute('data-bar-over-clip', 'true');
+    expect(reel).toHaveAttribute('data-surface', 'debate_feed');
+    expect(screen.queryByTestId('player-debate-1')).toBeNull();
+    // No moments: the full debate, and no button.
+    expect(screen.getByTestId('player-debate-2')).toBeInTheDocument();
+    expect(within(screen.getByTestId('player-debate-2')).queryByRole('button', { name: 'Moments' })).toBeNull();
+  });
+
+  it('switches to the full debate at the moment on screen and back', () => {
+    mocks.moments = { 'debate-1': READY };
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+    activateDebate('First claim');
+    fireEvent.click(within(screen.getByTestId('reel-debate-1')).getByRole('button', { name: 'Full debate' }));
+    expect(screen.queryByTestId('reel-debate-1')).toBeNull();
+    const player = screen.getByTestId('player-debate-1');
+    expect(player).toHaveAttribute('data-seek', '41');
+    expect(player).toHaveAttribute('data-hold-full-playback', 'false');
+    // Only the way back is offered on the full debate.
+    expect(within(player).queryByRole('button', { name: 'Full debate' })).toBeNull();
+    fireEvent.click(within(player).getByRole('button', { name: 'Moments' }));
+    expect(screen.queryByTestId('player-debate-1')).toBeNull();
+    expect(screen.getByTestId('reel-debate-1')).toBeInTheDocument();
+  });
+
+  it('holds the full player on its stills, loading nothing, while the moments load', () => {
+    mocks.moments = { 'debate-1': { status: 'loading', moments: [] } };
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+    activateDebate('First claim');
+    const player = screen.getByTestId('player-debate-1');
+    expect(player).toHaveAttribute('data-active', 'false');
+    expect(player).toHaveAttribute('data-release-media', 'true');
+    expect(player).toHaveAttribute('data-preload', 'false');
+    expect(screen.queryByTestId('reel-debate-1')).toBeNull();
+  });
+
+  it('opens the debate a link named on the full debate, with the button to its moments', () => {
+    mocks.moments = { 'debate-2': READY };
+    render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-2" fallback={<div>Entity page</div>} />);
+    const player = screen.getByTestId('player-debate-2');
+    expect(within(player).queryByRole('button', { name: 'Full debate' })).toBeNull();
+    fireEvent.click(within(player).getByRole('button', { name: 'Moments' }));
+    expect(screen.getByTestId('reel-debate-2')).toBeInTheDocument();
   });
 });

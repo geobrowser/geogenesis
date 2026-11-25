@@ -23,14 +23,20 @@ import {
 } from './player-overlay-styles';
 import { heldAt, usePlaybackAnimationClock } from './use-playback-animation-clock';
 
-/** Each debater's name, by slot. Slot 1 is the top tile. */
+/** Each debater's name, by slot. */
 export type BreakNames = Record<ParticipantSlot, string>;
 
-/** Each slot's tile, as a box to centre a per-debater piece in. */
-const TILE_CLASS: Record<ParticipantSlot, string> = {
-  1: 'absolute inset-x-0 top-0 h-1/2',
-  2: 'absolute inset-x-0 bottom-0 h-1/2',
-};
+/** The top and bottom halves of the player, as boxes to center a per-debater piece in. */
+const HALF_CLASS = {
+  top: 'absolute inset-x-0 top-0 h-1/2',
+  bottom: 'absolute inset-x-0 bottom-0 h-1/2',
+} as const;
+
+/**
+ * A slot's tile. Slot 1 is on top unless the player draws the Agree speaker there instead
+ * (`compositeTopSlot`, GEO-3833), so the half follows `topSlot`, not the slot number.
+ */
+const tileClass = (slot: ParticipantSlot, topSlot: ParticipantSlot) => HALF_CLASS[slot === topSlot ? 'top' : 'bottom'];
 
 /** How long ahead of a cut its timer is set: the playhead arrives about four times a second. */
 const CUT_LOOKAHEAD_MS = 1_000;
@@ -159,10 +165,13 @@ export function DebateEarlyEndLabels({
   names,
   playing,
   clock,
+  topSlot = 1,
 }: {
   cue: EarlyEndCue | null;
   names: BreakNames;
   playing: boolean;
+  /** The slot drawn in the top tile; see `compositeTopSlot`. */
+  topSlot?: ParticipantSlot;
   clock?: { positionMs: () => number | null; originMs: number; resetKey?: string | number };
 }) {
   const ref = React.useRef<HTMLDivElement>(null);
@@ -172,7 +181,7 @@ export function DebateEarlyEndLabels({
       <RoomExit>
         {cue && (
           // The debater who ended is dimmed under their stamp, as in the mockup.
-          <div data-debate-early-end className={cx(TILE_CLASS[cue.endedSlot], 'grid place-items-center')}>
+          <div data-debate-early-end className={cx(tileClass(cue.endedSlot, topSlot), 'grid place-items-center')}>
             <div className={cx('absolute inset-0 bg-black/42', PLAYER_FADE_CLASS)} style={heldAt(0)} />
             <span
               data-debate-stamp="ended"
@@ -186,7 +195,7 @@ export function DebateEarlyEndLabels({
       </RoomExit>
       <RoomExit>
         {cue && (
-          <div className={cx(TILE_CLASS[cue.nextSlot], 'grid place-items-center')}>
+          <div className={cx(tileClass(cue.nextSlot, topSlot), 'grid place-items-center')}>
             <div
               data-debate-banner="turn"
               className={cx(PLAYER_PICK_BASE_CLASS, PLAYER_PICK_CLASS.end, PLAYER_ENTER_CLASS, 'max-w-[90%] truncate')}

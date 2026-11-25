@@ -91,6 +91,18 @@ function mayUnlock(video: HTMLVideoElement): boolean {
   return !unlocked.has(video) && video.paused && video.played.length === 0;
 }
 
+/**
+ * Unlock one waiting element inside a tap, even one that has played. For a player whose other
+ * element sits unseen until its next clip (the Explore card's moments reel, GEO-3833): it has no
+ * place to lose, and without this the tap that gave sound would cover only the element on screen,
+ * so the reel would go muted when it swapped back to the other one.
+ */
+export function unlockGestureVideo(video: HTMLVideoElement) {
+  if (!inUserGesture() || unlocked.has(video) || !video.paused) return;
+  if (video.getAttribute('src')?.startsWith('blob:')) return;
+  unlock(video);
+}
+
 /** Unlock every element still waiting for a tap, and top up the spares. */
 export function unlockGestureVideos() {
   if (!inUserGesture()) return;

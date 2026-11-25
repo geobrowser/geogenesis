@@ -1294,6 +1294,7 @@ export function PositionRow({
   showParticipants = true,
   analyticsSurface,
   outline = 'dashed',
+  look = 'default',
 }: {
   positions: DebateClaimPositionSummary[];
   responseKind: ResponseKind;
@@ -1346,11 +1347,19 @@ export function PositionRow({
   analyticsSurface?: DebateActionAnalyticsSurface;
   /** See `PositionButton`'s `outline`. Every host but the graph explorer's open claim keeps the dashed card pill. */
   outline?: 'dashed' | 'solid';
+  /**
+   * `'app'` is the debates app's vote row (GEO-3833): 44px outlined pills and the end slot on the same
+   * row at every width, the labels giving way to their thumbs where the row is too narrow for
+   * "Disagree" whole. The host shows the "Not counted yet" note under its results instead of under a
+   * pill — see `DebateClaimControls`.
+   */
+  look?: PositionLook;
 }) {
   const copy = CLAIM_RESPONSE_COPY;
+  const appLook = look !== 'default';
   const forSide = showParticipants ? positions.find(position => position.position === true) : undefined;
   const againstSide = showParticipants ? positions.find(position => position.position === false) : undefined;
-  const compactMobileActions = Boolean(endSlot && endSlotWraps);
+  const compactMobileActions = Boolean(endSlot && endSlotWraps) && !appLook;
 
   // Two across where there is room for both labels whole, stacked where there is not.
   //
@@ -1366,17 +1375,21 @@ export function PositionRow({
   // run out of room. Keep that row three columns at every card width instead of letting the nested
   // PositionRow stack while the comments pill remains stranded beside it.
   return (
-    <div className={compactMobileActions ? '@container/debate-actions' : '@container'}>
+    <div className={compactMobileActions || appLook ? '@container/debate-actions' : '@container'}>
       <div
         className={cx(
           'grid gap-2',
-          !endSlot
-            ? 'grid-cols-1 claim-pills-wide:grid-cols-2'
-            : endSlotWraps === 'compact'
-              ? 'grid-cols-2 claim-row-end-inline:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]'
-              : endSlotWraps === 'wide'
-                ? 'grid-cols-2 claim-row-wide-end-inline:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]'
-                : 'grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]',
+          appLook
+            ? endSlot
+              ? 'grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-1.5'
+              : 'grid-cols-2 gap-1.5'
+            : !endSlot
+              ? 'grid-cols-1 claim-pills-wide:grid-cols-2'
+              : endSlotWraps === 'compact'
+                ? 'grid-cols-2 claim-row-end-inline:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]'
+                : endSlotWraps === 'wide'
+                  ? 'grid-cols-2 claim-row-wide-end-inline:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]'
+                  : 'grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]',
           compactMobileActions && 'md:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)_auto] md:gap-1'
         )}
       >
@@ -1408,13 +1421,14 @@ export function PositionRow({
             title={titleFor?.(true)}
             localOnly={localSide === true}
             outline={outline}
+            look={look}
             analytics={
               analyticsSurface
                 ? debateActionAnalyticsAttributes(analyticsSurface, `Claim card ${copy.positiveAction.toLowerCase()}`)
                 : undefined
             }
           />
-          {localSide === true ? <LocalVoteNote /> : noteFor?.(true)}
+          {localSide === true && !appLook ? <LocalVoteNote /> : noteFor?.(true)}
         </div>
         <div className="flex flex-col">
           <PositionButton
@@ -1430,21 +1444,23 @@ export function PositionRow({
             title={titleFor?.(false)}
             localOnly={localSide === false}
             outline={outline}
+            look={look}
             analytics={
               analyticsSurface
                 ? debateActionAnalyticsAttributes(analyticsSurface, `Claim card ${copy.negativeAction.toLowerCase()}`)
                 : undefined
             }
           />
-          {localSide === false ? <LocalVoteNote /> : noteFor?.(false)}
+          {localSide === false && !appLook ? <LocalVoteNote /> : noteFor?.(false)}
         </div>
         {endSlot ? (
           <div
             className={cx(
-              'flex h-7 shrink-0 items-center',
+              'flex shrink-0 items-center',
+              appLook ? 'h-11' : 'h-7',
               compactMobileActions && 'md:col-span-1',
-              endSlotWraps === 'compact' && 'col-span-2 claim-row-end-inline:col-span-1',
-              endSlotWraps === 'wide' && 'col-span-2 claim-row-wide-end-inline:col-span-1'
+              !appLook && endSlotWraps === 'compact' && 'col-span-2 claim-row-end-inline:col-span-1',
+              !appLook && endSlotWraps === 'wide' && 'col-span-2 claim-row-wide-end-inline:col-span-1'
             )}
           >
             {endSlot}
@@ -1504,6 +1520,7 @@ function PositionButton({
   analytics,
   compactMobile = false,
   outline = 'dashed',
+  look = 'default',
 }: {
   label: string;
   summary: DebateClaimPositionSummary | undefined;
@@ -1524,7 +1541,25 @@ function PositionButton({
    * map panel in the Gaza prototype. The held side is the same grey fill either way.
    */
   outline?: 'dashed' | 'solid';
+  look?: PositionLook;
 }) {
+  if (look !== 'default') {
+    return (
+      <AppPositionButton
+        label={label}
+        responseKind={responseKind}
+        position={position}
+        selected={selected}
+        onRespond={onRespond}
+        disabled={disabled}
+        pending={pending}
+        title={title}
+        localOnly={localOnly}
+        analytics={analytics}
+      />
+    );
+  }
+
   // `@container` so the avatar stack can measure the pill it is sitting in — see `PositionAvatars`,
   // which sheds faces rather than letting the label truncate.
   // Grey when held, a dashed outline when not (the Figma card). The side you picked used to be
@@ -1580,6 +1615,75 @@ function PositionButton({
       onPress={() => onRespond(position)}
       className={cx(className, 'transition-colors disabled:opacity-60')}
       hoverClassName={selected ? undefined : 'hover:border-text'}
+      buttonProps={analytics}
+    >
+      {content}
+    </ResponseButton>
+  );
+}
+
+export type PositionLook = 'default' | 'app';
+
+/**
+ * One of the debates app's vote pills (debates-react-native `VoteChoice.tsx`): 44px, a 1px #8a8a8a
+ * outline, the thumb and "Agree"/"Disagree" at 14px semibold. Picked, the outline goes dark, the
+ * thumb fills and the label goes bold — the pill never fills, so the two read as a pair either way.
+ *
+ * The label drops to the thumb alone when the row is under 300px, as the app's does when "Disagree"
+ * no longer fits — `sr-only` rather than hidden, so the button keeps its name. Faces are not drawn:
+ * the app's pills carry none, and every surface using this look turns them off anyway.
+ */
+function AppPositionButton({
+  label,
+  responseKind,
+  position,
+  selected,
+  onRespond,
+  disabled,
+  pending,
+  title,
+  localOnly,
+  analytics,
+}: {
+  label: string;
+  responseKind: ResponseKind;
+  position: boolean;
+  selected: boolean;
+  onRespond?: (position: boolean) => void;
+  disabled?: boolean;
+  pending?: boolean;
+  title?: string;
+  localOnly: boolean;
+  analytics?: DebateAnalyticsAttributes;
+}) {
+  const className = cx(
+    'flex h-11 min-w-0 items-center justify-center gap-1 rounded-full border bg-transparent px-1 text-[14px] leading-none tracking-[-0.3px]',
+    'text-[#151515]',
+    selected ? 'border-[#151515] font-bold' : 'border-[#8a8a8a] font-semibold'
+  );
+  const content = (
+    <>
+      <span data-app-vote-icon className="flex shrink-0 [&_svg]:size-5">
+        <ResponsePositionIcon responseKind={responseKind} position={position} selected={selected} />
+      </span>
+      <span className="truncate @max-[300px]/debate-actions:sr-only">{label}</span>
+      {selected ? (
+        <span className="sr-only">{localOnly ? ' — your response, not counted yet' : ' — your response'}</span>
+      ) : null}
+    </>
+  );
+
+  if (!onRespond) return <div className={className}>{content}</div>;
+
+  return (
+    <ResponseButton
+      selected={selected}
+      pending={pending}
+      disabled={disabled}
+      actionTitle={title}
+      onPress={() => onRespond(position)}
+      className={cx(className, 'transition-colors disabled:opacity-60')}
+      hoverClassName={selected ? undefined : 'hover:border-[#151515]'}
       buttonProps={analytics}
     >
       {content}

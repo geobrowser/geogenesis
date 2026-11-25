@@ -58,6 +58,32 @@ const feedSoundInferredAtom = atom(false);
 export type MuteSource = 'explicit' | 'inferred';
 
 /**
+ * The same shared sound preference, for a player that is not built on this hook: the Explore card's
+ * moments reel (GEO-3833). Unmuting one card holds for the next, whichever player draws it.
+ *
+ * `muted` is the preference alone; a player the browser forces muted keeps that to itself, as this
+ * hook's `soundBlocked` does. `muteChosen` is the viewer having pressed Mute, so a tap must not turn
+ * the sound back on.
+ */
+export function useFeedSoundPreference() {
+  const [soundChoice, setSoundChoice] = useAtom(feedSoundChoiceAtom);
+  const [soundInferred, setSoundInferred] = useAtom(feedSoundInferredAtom);
+  const [arrivedByGesture, setArrivedByGesture] = React.useState(false);
+  React.useEffect(() => {
+    if (navigator.userActivation?.hasBeenActive) setArrivedByGesture(true);
+  }, []);
+  const muted = soundChoice === 'default' ? !(soundInferred || arrivedByGesture) : soundChoice === 'muted';
+  const setMuted = React.useCallback(
+    (next: boolean, source: MuteSource = 'explicit') => {
+      if (source === 'explicit') setSoundChoice(next ? 'muted' : 'unmuted');
+      else setSoundInferred(!next);
+    },
+    [setSoundChoice, setSoundInferred]
+  );
+  return { muted, muteChosen: soundChoice === 'muted', setMuted };
+}
+
+/**
  * Drift thresholds for keeping the two recordings in step (GEO-2828).
  *
  * The old code had one threshold — 0.18s — and one response, a hard seek. On MediaRecorder WebM
@@ -300,20 +326,12 @@ export function useDebatePlayback(
   // Feed debates autoplay muted (TikTok-style): the browser blocks unmuted
   // autoplay without a user gesture, so unmuting the active speaker mid-autoplay
   // would pause and desync that video. Start muted; the viewer unmutes on tap.
-  const [soundChoice, setSoundChoice] = useAtom(feedSoundChoiceAtom);
-  const [soundInferred, setSoundInferred] = useAtom(feedSoundInferredAtom);
-  // Arrived by a click (Explore card, link), so the browser allows sound. A cold load stays muted.
-  const [arrivedByGesture, setArrivedByGesture] = React.useState(false);
-  React.useEffect(() => {
-    if (navigator.userActivation?.hasBeenActive) setArrivedByGesture(true);
-  }, []);
-  const mutedPreference = forceSound
-    ? false
-    : soundChoice === 'default'
-      ? !(soundInferred || arrivedByGesture)
-      : soundChoice === 'muted';
+  // Arrived by a click (Explore card, link), the browser allows sound; a cold load stays muted. The
+  // same rule the Explore card's moments reel reads, so both players agree on the next card's sound.
+  const soundPreference = useFeedSoundPreference();
+  const mutedPreference = forceSound ? false : soundPreference.muted;
   /** The viewer pressed Mute, so a tap must not turn the sound on. */
-  const muteChosen = !forceSound && soundChoice === 'muted';
+  const muteChosen = !forceSound && soundPreference.muteChosen;
   /*
    * The browser made this debate play muted, though the viewer wants sound (GEO-3594).
    *
@@ -324,15 +342,15 @@ export function useDebatePlayback(
    */
   const [soundBlocked, setSoundBlocked] = React.useState(false);
   const mutedByUser = mutedPreference || soundBlocked;
+  const setFeedMuted = soundPreference.setMuted;
   /** Unmuting also lifts this debate's forced mute. Only an `explicit` change is stored as the viewer's choice. */
   const setMutedByUser = React.useCallback(
     (next: React.SetStateAction<boolean>, source: MuteSource = 'explicit') => {
       const muted = typeof next === 'function' ? next(mutedByUser) : next;
       if (!muted) setSoundBlocked(false);
-      if (source === 'explicit') setSoundChoice(muted ? 'muted' : 'unmuted');
-      else setSoundInferred(!muted);
+      setFeedMuted(muted, source);
     },
-    [mutedByUser, setSoundChoice, setSoundInferred]
+    [mutedByUser, setFeedMuted]
   );
   /**
    * Lift this debate's forced mute and nothing else: no saved choice, no tab-wide inferred sound.

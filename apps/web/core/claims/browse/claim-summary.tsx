@@ -61,10 +61,12 @@ export function ClaimSummary({
    * markup — the tier gate, the `hasCounts` guard, the vocabulary — is the part worth having once,
    * and it is the part that would quietly diverge if this were copied.
    */
-  layout?: 'stacked' | 'inline';
+  layout?: 'stacked' | 'inline' | 'results';
 }) {
   const copy = CLAIM_RESPONSE_COPY;
   const tier = claimSummaryTier(summary.total);
+
+  if (layout === 'results') return <ClaimResultsRow summary={summary} className={className} />;
 
   // Nothing where the counts never answered, before asking what the tier is.
   //
@@ -131,6 +133,50 @@ export function ClaimSummary({
       <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
         {share}
         {responders}
+      </div>
+    </div>
+  );
+}
+
+const VOTE_COUNT_FORMAT = new Intl.NumberFormat('en-US');
+
+/**
+ * The debates app's results row (debates-react-native `VoteResults.tsx`, GEO-3833): "{p}% Agree" on
+ * the left, "{n} Votes" on the right, and a 7px bar filled to the Agree share under them. One fill
+ * colour on a grey track rather than the green/red split: the app's row reports how many agree, it
+ * does not colour the sides.
+ *
+ * Its own states rather than `ClaimSummary`'s gates, because a host shows it only once the viewer
+ * has voted, and an empty space under a vote reads as the vote having failed: so a read still on its
+ * way says so, and one that failed says that. A claim with no counted votes at all — a signed-out
+ * vote on a claim nobody else has answered — shows nothing; the "Not counted yet" note under it is
+ * the honest reading there.
+ */
+function ClaimResultsRow({ summary, className }: { summary: ClaimResponseSummary; className?: string }) {
+  const status = summary.isLoading ? 'Loading results…' : !summary.hasCounts ? 'Results unavailable' : null;
+  if (!status && summary.total <= 0) return null;
+  const percent = summary.percent ?? 0;
+
+  return (
+    <div data-claim-results="" className={cx('pt-5', className)}>
+      <div className="flex min-h-[19px] items-center justify-between gap-3 text-[15px] leading-[19px] font-medium text-[#151515]">
+        {status ? (
+          <span>{status}</span>
+        ) : (
+          <>
+            <span className="tabular-nums">{percent}% Agree</span>
+            <span className="text-[#666] tabular-nums">
+              {VOTE_COUNT_FORMAT.format(summary.total)} {summary.total === 1 ? 'Vote' : 'Votes'}
+            </span>
+          </>
+        )}
+      </div>
+      <div
+        className="mt-[15px] h-[7px] overflow-hidden rounded-[9px] bg-[#e3e3e3]"
+        role={status ? undefined : 'img'}
+        aria-label={status ? undefined : `${percent}% agree`}
+      >
+        <div className="h-full rounded-[9px] bg-[#151515]" style={{ width: `${status ? 0 : percent}%` }} />
       </div>
     </div>
   );

@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Debate, DebateClaimPositionSummary } from '~/core/debates/api';
 
 import { DebateClaimFooter } from './debate-claim-footer';
-import { DebateInteractionBar } from './debate-interaction-bar';
 
 const mocks = vi.hoisted(() => ({
   respond: vi.fn(),
@@ -16,12 +15,15 @@ const mocks = vi.hoisted(() => ({
   viewerPosition: null as boolean | null,
   localVoteSide: null as boolean | null,
   summaryLoading: false,
+  // What the claim's graph read returns: the entity, or none with the read in flight or settled.
+  claimRead: 'found' as 'found' | 'pending' | 'missing',
 }));
 
 vi.mock('~/core/sync/use-store', () => ({
   useQueryEntities: ({ enabled }: { enabled: boolean }) => {
     mocks.queryEnabled.push(enabled);
-    return { entities: enabled ? [{ id: 'claim-entity' }] : [], isLoading: false };
+    const found = enabled && mocks.claimRead === 'found';
+    return { entities: found ? [{ id: 'claim-entity' }] : [], isLoading: enabled && mocks.claimRead === 'pending' };
   },
 }));
 
@@ -30,6 +32,7 @@ vi.mock('./use-debate-claim-response', () => ({
     mocks.hookArgs.push(args);
     return {
       responseKind: 'stance',
+      isResponseKindResolved: args.entity != null,
       summary: { isLoading: mocks.summaryLoading },
       control: {
         optimisticPositions: mocks.positions,
@@ -47,8 +50,24 @@ vi.mock('./use-debate-claim-response', () => ({
 
 // Its tiers, bar and responder list have their own suite; here it only has to be placed.
 vi.mock('~/core/claims/browse/claim-summary', () => ({
-  ClaimSummary: ({ entityId, layout, className }: { entityId: string; layout?: string; className?: string }) => (
-    <div data-testid="claim-summary" data-entity={entityId} data-layout={layout} className={className} />
+  ClaimSummary: ({
+    entityId,
+    layout,
+    className,
+    summary,
+  }: {
+    entityId: string;
+    layout?: string;
+    className?: string;
+    summary: { isLoading: boolean };
+  }) => (
+    <div
+      data-testid="claim-summary"
+      data-entity={entityId}
+      data-layout={layout}
+      data-loading={String(summary.isLoading)}
+      className={className}
+    />
   ),
 }));
 
@@ -80,6 +99,7 @@ beforeEach(() => {
   mocks.viewerPosition = null;
   mocks.localVoteSide = null;
   mocks.summaryLoading = false;
+  mocks.claimRead = 'found';
 });
 
 afterEach(cleanup);
@@ -93,16 +113,6 @@ describe('DebateClaimFooter', () => {
     expect(screen.getByRole('button', { name: 'Agree' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Disagree' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Comments (2)' })).toBeInTheDocument();
-  });
-
-  it.each([claim, null])('keeps the response pills without an empty actions row in galleries (%s)', claim => {
-    renderFooter({ claim, actions: null });
-
-    expect(screen.getAllByRole('button')).toHaveLength(2);
-    expect(screen.getByRole('button', { name: 'Agree' })).toBeInTheDocument();
-    const grid = screen.getByRole('button', { name: 'Disagree' }).parentElement!.parentElement!;
-    expect(grid.children).toHaveLength(2);
-    expect(grid).toHaveClass('grid-cols-1', 'claim-pills-wide:grid-cols-2');
   });
 
   // The position is the claim's, so it lands wherever else that claim is answered.
@@ -147,22 +157,6 @@ describe('DebateClaimFooter', () => {
     expect(agree.querySelector('.rounded-full')).toBeNull();
   });
 
-  it('closes the card with the claim’s split, inline on the grey band', () => {
-    renderFooter();
-
-    const summary = screen.getByTestId('claim-summary');
-    expect(summary).toHaveAttribute('data-entity', 'claimentity');
-    expect(summary).toHaveAttribute('data-layout', 'inline');
-    expect(summary).toHaveClass('claim-card-summary-band');
-  });
-
-  it('leaves the split out until the counts have answered', () => {
-    mocks.summaryLoading = true;
-    renderFooter();
-
-    expect(screen.queryByTestId('claim-summary')).toBeNull();
-  });
-
   // A card far down the feed has no reason to read its claim yet; once it has, scrolling away
   // must not drop the numbers it is showing.
   it('reads the claim only once enabled, and keeps reading after', () => {
@@ -202,16 +196,6 @@ describe('DebateClaimFooter', () => {
     });
   });
 
-  // Signed out, a vote is kept on this device until the viewer saves it, and the card says so.
-  it('notes a side held only on this device under its pill', () => {
-    mocks.viewerPosition = true;
-    mocks.localVoteSide = true;
-    renderFooter();
-
-    expect(screen.getByText(/^Not counted yet/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
-  });
-
   // The explore card draws the footer before its debate resolves. The row is there at its finished
   // size, so the card doesn't grow when the claim lands, and it starts in the disabled state the live
   // pills open in, so it doesn't look pressable and then dim.
@@ -224,57 +208,106 @@ describe('DebateClaimFooter', () => {
     expect(mocks.hookArgs).toHaveLength(0);
   });
 
-  // Too narrow for both labels and the actions, the actions drop under the pills rather than
-  // squeezing "Disagree" to "Dis...".
-  it('lets the debate actions wrap under the pills in a narrow card', () => {
-    renderFooter();
+  // GEO-3833: the debates app's card, the one look on every surface — Geo's meta row under the
+  // video, then the claim, the vote row and the results once voted.
+  const follows = (a: Node, b: Node) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
 
-    const slot = screen.getByRole('button', { name: 'Comments (2)' }).parentElement!;
-    expect(slot).toHaveClass('col-span-2', 'claim-row-end-inline:col-span-1');
-    expect(slot.parentElement).toHaveClass(
-      'grid-cols-2',
-      'claim-row-end-inline:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]'
+  // The debates app's web fonts, over Geo's Calibre: the system stack, and Helvetica Neue for the claim.
+  it('sets the card in the debates app’s fonts', () => {
+    const { container } = renderFooter({ className: 'px-4' });
+    const root = container.firstElementChild!;
+    expect(root.className).toContain("[font-family:-apple-system,BlinkMacSystemFont,'Segoe_UI',Roboto,Helvetica,Arial,sans-serif]");
+    expect(root.className).toContain('px-4');
+    expect(screen.getByRole('heading', { name: claim.claim }).parentElement!.className).toContain(
+      "[&_h2]:[font-family:'Helvetica_Neue',Arial,sans-serif]!"
     );
   });
 
-  it.each([claim, null])('keeps mobile actions inline before and after the claim resolves (%s)', claim => {
-    const onComment = vi.fn();
-    const onShare = vi.fn();
-    renderFooter({
-      claim,
-      wideActions: true,
-      actions: (
-        <DebateInteractionBar
-          commentCount={123}
-          onComment={onComment}
-          onShare={onShare}
-          overflow={<button type="button">More debate options</button>}
-        />
-      ),
-    });
+  it('puts the meta row above the claim, then the vote row', () => {
+    renderFooter();
 
-    const comments = screen.getByRole('button', { name: 'Comments (123)' });
-    const slot = comments.parentElement!.parentElement!;
-    expect(slot).toHaveClass('md:col-span-1');
-    expect(slot.parentElement).toHaveClass('md:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)_auto]', 'md:gap-1');
-    expect(slot.parentElement!.parentElement).toHaveClass('@container/debate-actions');
-    expect(screen.getByRole('button', { name: 'Agree' })).toHaveClass('md:px-1.5', 'md:text-[15px]');
-    expect(screen.getByRole('button', { name: 'Disagree' })).toHaveClass('md:px-1.5', 'md:text-[15px]');
-    // Only the visual count collapses on very narrow rows; its exact accessible count stays.
-    expect(comments.querySelector('span.tabular-nums')).toHaveClass('md:@max-[300px]/debate-actions:hidden');
-    fireEvent.click(comments);
-    fireEvent.click(screen.getByRole('button', { name: 'Share debate' }));
-    expect(onComment).toHaveBeenCalledOnce();
-    expect(onShare).toHaveBeenCalledOnce();
-    expect(screen.getByRole('button', { name: 'More debate options' })).toBeEnabled();
+    const title = screen.getByRole('heading', { name: claim.claim });
+    const agree = screen.getByRole('button', { name: 'Agree' });
+    const meta = screen.getByText('Relationships');
+    expect(follows(meta, title)).toBe(true);
+    expect(follows(title, agree)).toBe(true);
   });
 
-  // A third action needs a wider row to stay beside the pills, so it wraps sooner.
-  it('wraps a row carrying a third action at the wider breakpoint', () => {
-    renderFooter({ wideActions: true });
+  it('draws the app’s 44px outlined pills, with the actions on the same row', () => {
+    renderFooter();
 
-    const slot = screen.getByRole('button', { name: 'Comments (2)' }).parentElement!;
-    expect(slot).toHaveClass('col-span-2', 'claim-row-wide-end-inline:col-span-1');
-    expect(slot).not.toHaveClass('claim-row-end-inline:col-span-1');
+    const agree = screen.getByRole('button', { name: 'Agree' });
+    expect(agree).toHaveClass('h-11', 'rounded-full', 'border-[#8a8a8a]', 'font-semibold');
+    expect(agree).not.toHaveClass('border-dashed');
+    const grid = agree.parentElement!.parentElement!;
+    expect(grid).toHaveClass('grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]');
+    expect(grid.children).toHaveLength(3);
+    // The label gives way to the thumb in a narrow row, but stays the button's name.
+    expect(screen.getByText('Agree')).toHaveClass('@max-[300px]/debate-actions:sr-only');
+  });
+
+  it('shows no results before a vote', () => {
+    renderFooter();
+
+    expect(screen.queryByTestId('claim-summary')).toBeNull();
+  });
+
+  it('reveals the results row once the viewer holds a side, and marks the picked pill', () => {
+    mocks.viewerPosition = false;
+    renderFooter();
+
+    const disagree = screen.getByRole('button', { name: /^Disagree/ });
+    expect(disagree).toHaveAttribute('aria-pressed', 'true');
+    expect(disagree).toHaveClass('border-[#151515]', 'font-bold');
+    const results = screen.getByTestId('claim-summary');
+    expect(results).toHaveAttribute('data-layout', 'results');
+    expect(follows(disagree, results)).toBe(true);
+    expect(follows(screen.getByText('Relationships'), disagree)).toBe(true);
+  });
+
+  // Signed out: the vote is on this device only. The note moves from under the pill to under the
+  // results, where the app's row would show the count it is not yet part of.
+  it('notes a side held only on this device under the results, not under its pill', () => {
+    mocks.viewerPosition = true;
+    mocks.localVoteSide = true;
+    renderFooter();
+
+    const note = screen.getByText(/^Not counted yet/);
+    const agree = screen.getByRole('button', { name: /^Agree/ });
+    expect(agree.parentElement!.contains(note)).toBe(false);
+    expect(follows(screen.getByTestId('claim-summary'), note)).toBe(true);
+    expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
+  });
+
+  it('holds a disabled app row while the debate is unresolved', () => {
+    renderFooter({ claim: null });
+
+    expect(screen.getByRole('button', { name: 'Agree' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Agree' })).toHaveClass('h-11');
+    expect(screen.getByRole('button', { name: 'Comments (2)' })).toBeEnabled();
+  });
+});
+
+// GEO-3833: a device vote shows the results row before the claim's entity is read. Until that read
+// lands the counts are held back, so the row is told it is loading — but only while it is in
+// flight: a read that failed or found nothing must not say "Loading results…" forever.
+describe('DebateClaimFooter results row before the claim resolves', () => {
+  it.each([
+    ['pending', 'true'],
+    ['missing', 'false'],
+    ['found', 'false'],
+  ] as const)('with the claim read %s, the row reads loading=%s', (claimRead, loading) => {
+    mocks.claimRead = claimRead;
+    mocks.localVoteSide = true;
+    renderFooter();
+
+    expect(screen.getByTestId('claim-summary')).toHaveAttribute('data-loading', loading);
+  });
+
+  it('reads as loading on a card that has not asked for its claim yet', () => {
+    mocks.localVoteSide = true;
+    renderFooter({ enabled: false });
+
+    expect(screen.getByTestId('claim-summary')).toHaveAttribute('data-loading', 'true');
   });
 });

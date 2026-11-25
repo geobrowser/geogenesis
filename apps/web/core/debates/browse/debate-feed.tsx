@@ -7,10 +7,12 @@ import { useAtomValue, useSetAtom, useStore } from 'jotai';
 
 import { capture } from '~/core/analytics';
 import { type Debate, GeoChatRequestError } from '~/core/debates/api';
+import { compositeTopSlot } from '~/core/debates/composite-top-slot';
 import type { DebatePageFeedState, DebatePagePlayerState } from '~/core/debates/debate-page-outcome';
 import { clickAsksToPlay, useFeedPlaybackYield } from '~/core/debates/debate-playback-gate';
 import { isRemovedDebateAnswer } from '~/core/debates/debate-removal';
-import { useDebate, useProcessedVideoDebateIds, useSpaceDebates } from '~/core/debates/hooks';
+import { useDebate, useDebateMedia, useProcessedVideoDebateIds, useSpaceDebates } from '~/core/debates/hooks';
+import { MomentsCardPlayer } from '~/core/debates/moments-player/moments-card-player';
 import { isWatchableDebate } from '~/core/debates/playback-utils';
 import { type DebatePageOutcome, useDebatePageOutcome } from '~/core/debates/use-debate-page-outcome';
 import { DEEP_LINK_MODALS } from '~/core/deep-links/modal-deep-link';
@@ -43,6 +45,7 @@ import { DebateFeedMobileBar } from './debate-feed-mobile-bar';
 import { DebateFeedPlayer } from './debate-feed-player';
 import { type DebateFeedSurface, debateFeedHref } from './debate-feed-url';
 import { DebateInteractionBar } from './debate-interaction-bar';
+import { DebateMediaModeToggle, useDebateMediaMode } from './debate-media-mode';
 import { DebateOverflowMenu, useCanRemoveDebate } from './debate-overflow-menu';
 import { DebateScrollHint, scrollHintBounceProps, useDebateScrollHint } from './debate-scroll-hint';
 import { DEBATE_FEED_HOLDS_FULL_PLAYBACK } from './feed-full-playback';
@@ -64,15 +67,17 @@ const LINKED_START_HOLD_MS = 8_000;
 /**
  * How wide the debate card's column may get, which with its fixed-ratio media is really a height
  * budget: grow or shrink the media with the viewport while reserving the navbar, the 20px above the
- * card, and the card's chrome under the media — frame, meta row, a two-line claim, the pill row and
- * the split band. Measured in Chrome (GEO-3454), that chrome is 169px with two claim lines and 17px
- * more under a signed-out vote's "Not counted yet" note, so even then a 900px viewport ends the card
- * about 15px above the fold. Where the card is narrow enough for its actions to wrap, the wrapped
- * row is budgeted too; see `debateCardColumnWidth`.
+ * card, and the card's chrome under the media — frame, the meta line under the video, a two-line
+ * claim at the debates app's size and the app's 44px vote row (GEO-3833). That chrome is about
+ * 196px: 40 for the meta line and the 16px above it, 94 for the claim and its 20px above and below,
+ * 44 for the vote row, 16 under it and the frame — 27px more than the 169px the earlier, compact
+ * footer measured in Chrome (GEO-3454), which is the 1.4rem added to the budget below. The results
+ * row a vote reveals is not reserved, as in the app. The app's row never wraps (its labels give way to the thumbs instead), so the wrapped
+ * budget in `debateCardColumnWidth` only ever narrows a card that was already narrow.
  *
  * Phones get a budget of their own (`--debate-feed-phone-column-width`), since their chrome differs:
- * the feed's own 44px bar, 12px above and below the card, and the same 169px under the media, so
- * `width ≤ (dvh − 44 − 24 − 169 − 2) / 1.2042 + 2`, i.e. `83dvh − 197px`. `dvh` is what keeps the
+ * the feed's own 44px bar, 12px above and below the card, and the same 196px under the media, so
+ * `width ≤ (dvh − 44 − 24 − 196 − 2) / 1.2042 + 2`, i.e. `83dvh − 219px`. `dvh` is what keeps the
  * card inside the part of the screen a phone browser's toolbars leave. It does not reserve the
  * signed-out note: the item scrolls, so the note is reachable. Phone actions stay on one compact
  * row, so their budget does not subtract the desktop wrapped row. Claims open in the entity panel
@@ -81,8 +86,8 @@ const LINKED_START_HOLD_MS = 8_000;
  */
 const debateColumnStyle = (wrapsBelow: number) =>
   ({
-    '--debate-feed-column-width': `clamp(280px, min(calc(100cqw - 2rem), ${debateCardColumnWidth('82.9dvh - 13.65rem', wrapsBelow)}), 640px)`,
-    '--debate-feed-phone-column-width': 'clamp(240px, calc(83dvh - 197px), calc(100cqw - 2rem))',
+    '--debate-feed-column-width': `clamp(280px, min(calc(100cqw - 2rem), ${debateCardColumnWidth('82.9dvh - 15.05rem', wrapsBelow)}), 640px)`,
+    '--debate-feed-phone-column-width': 'clamp(240px, calc(83dvh - 219px), calc(100cqw - 2rem))',
   }) as React.CSSProperties;
 
 const DEBATE_COLUMN_STYLE = debateColumnStyle(DEBATE_CARD_WRAPS_BELOW);
@@ -521,6 +526,7 @@ export function DebatesBrowseFeed({
           spaceName={space?.entity.name ?? 'Space'}
           spaceImage={space?.entity.image}
           active={activeId === debate.id}
+          linked={initialDebateId != null && ID.equals(debate.id, initialDebateId)}
           initialSeekSeconds={
             initialDebateId != null && ID.equals(debate.id, initialDebateId) ? initialSeekSeconds : null
           }
@@ -626,6 +632,7 @@ function DebateFeedItem({
   spaceName,
   spaceImage,
   active,
+  linked,
   initialSeekSeconds,
   preload,
   buffer,
@@ -645,6 +652,12 @@ function DebateFeedItem({
   spaceName: string;
   spaceImage?: string | null;
   active: boolean;
+  /**
+   * The debate the page's link opened. It starts on the full debate, as the link asked (with its
+   * `t`, if any), and its full player is the one the page's outcome follows; the button still
+   * switches it to its moments.
+   */
+  linked: boolean;
   initialSeekSeconds: number | null;
   preload: boolean;
   /** Buffer the recordings too — the card after the active one. See `DebateFeedPlayer`. */
@@ -678,6 +691,16 @@ function DebateFeedItem({
   // One player in the app (GEO-3812): a debate tapped in the side panel over this feed plays in
   // place of this one, and a click asking this one to play takes playback back.
   const { yielding, reclaim } = useFeedPlaybackYield();
+
+  // Moments or the full debate, as on an Explore card (GEO-3833): moments first, the button at the
+  // video's top right to switch, back on the moments once the card leaves the preload window.
+  const media = useDebateMediaMode(debate.id, { enabled: !releaseMedia, initialMode: linked ? 'full' : 'moments' });
+  const showReel = media.reel !== null && media.mode === 'moments';
+  // The linked debate starts on the full debate whatever the read says, so it never waits on it.
+  const waitingForMoments = media.pending && !releaseMedia && !linked;
+  // The turns put the moment on screen on the recordings' clock for the switch. Cached with the
+  // full player's own read.
+  const turns = useDebateMedia(debate.id, !releaseMedia && media.reel !== null).data?.turn_segments;
 
   React.useEffect(() => {
     const element = itemRef.current;
@@ -728,19 +751,46 @@ function DebateFeedItem({
                 : undefined
             }
           >
-            <DebateFeedPlayer
-              debate={debate}
-              active={active && !yielding}
-              preload={preload}
-              buffer={buffer}
-              holdFullPlayback={holdFullPlayback}
-              releaseMedia={releaseMedia}
-              initialSeekSeconds={initialSeekSeconds}
-              framed
-              onOpenClaims={onOpenClaims}
-              onPlaybackRequest={onPlaybackRequest}
-              onPlaybackState={onPlaybackState}
-            />
+            {showReel ? (
+              <MomentsCardPlayer
+                debate={debate}
+                moments={media.reel!}
+                topSlot={compositeTopSlot(debate.participants)}
+                active={active && !yielding}
+                mountMedia={!releaseMedia}
+                upNext={buffer && !active}
+                tapToPlay={false}
+                onPlaybackRequest={onPlaybackRequest}
+                onShowFullDebate={media.showFull}
+                turns={turns}
+                barOverClip
+                framed
+                surface="debate_feed"
+              />
+            ) : (
+              <DebateFeedPlayer
+                debate={debate}
+                // While the moments read is out, the player shows its stills and loads nothing, so
+                // the card does not sign two recordings and then swap them for clips.
+                active={active && !yielding && !waitingForMoments}
+                preload={preload && !waitingForMoments}
+                buffer={buffer && !waitingForMoments}
+                // Chosen with the button, the full debate plays at once and from the moment the
+                // viewer was on: they asked for it.
+                holdFullPlayback={holdFullPlayback && !media.fullChosen}
+                releaseMedia={releaseMedia || waitingForMoments}
+                initialSeekSeconds={media.fullChosen ? media.fullStartSeconds : initialSeekSeconds}
+                framed
+                onOpenClaims={onOpenClaims}
+                onPlaybackRequest={onPlaybackRequest}
+                onPlaybackState={onPlaybackState}
+                topRight={
+                  media.reel ? (
+                    <DebateMediaModeToggle mode="full" onChange={mode => mode === 'moments' && media.showMoments()} />
+                  ) : undefined
+                }
+              />
+            )}
           </div>
           <DebateClaimFooter
             claim={debate.claim}
@@ -755,6 +805,7 @@ function DebateFeedItem({
                 onComment={onOpenComments}
                 onShare={share.onOpen}
                 shareOpen={share.open}
+                variant="circles"
                 overflow={
                   hasMenu ? (
                     <span className="md:hidden">
@@ -765,6 +816,7 @@ function DebateFeedItem({
               />
             }
             wideActions={hasMenu}
+            className="px-4 pb-4"
           />
         </div>
         {/* `top-full` hangs it just below the debate without taking part in the column's

@@ -4632,3 +4632,88 @@ describe('the moments editor player (GEO-3773)', () => {
     expect(watchedMocks.markDebateWatched).toHaveBeenCalledWith(debate.id);
   });
 });
+
+// GEO-3833: the debates app draws the Agree speaker on top. The tiles swap by flex `order`, never by
+// DOM order (moving a playing <video> pauses it), and the controls that belong to a *position* — play,
+// mute and Start over on top, the scrubber at the bottom — must follow the swap onto the right tile.
+describe('Agree speaker on top', () => {
+  const withLabels = (slot1: string, slot2: string) =>
+    ({
+      ...debate,
+      participants: [
+        { participant_slot: 1, position_label: slot1 },
+        { participant_slot: 2, position_label: slot2 },
+      ],
+    }) as unknown as Debate;
+
+  const tile = (container: HTMLElement, slot: 1 | 2) =>
+    container.querySelector(`[data-debate-slot="${slot}"]`) as HTMLElement;
+
+  it('puts slot 2 on top when it argues Agree, with the top controls and the scrubber on the right tiles', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false });
+    const { container } = render(<DebateFeedPlayer debate={withLabels('Disagree', ' agree ')} active />);
+    const top = tile(container, 2);
+    const bottom = tile(container, 1);
+
+    // DOM order kept; drawn order swapped.
+    expect(container.querySelectorAll('[data-debate-slot]')[0]).toBe(bottom);
+    expect(top.classList.contains('order-1')).toBe(true);
+    expect(bottom.classList.contains('order-2')).toBe(true);
+
+    expect(within(top).getByRole('button', { name: 'Unmute' })).toBeTruthy();
+    expect(within(bottom).queryByRole('button', { name: 'Unmute' })).toBeNull();
+    expect(within(bottom).getByRole('slider', { name: 'Debate timeline' })).toBeTruthy();
+    expect(within(top).queryByRole('slider', { name: 'Debate timeline' })).toBeNull();
+  });
+
+  it.each([
+    ['no agree label yet', withLabels('Verify', 'Dispute')],
+    ['agree already in slot 1', withLabels('Agree', 'Disagree')],
+    ['no participants', debate],
+  ])('keeps slot 1 on top with %s', (_label, subject) => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false });
+    const { container } = render(<DebateFeedPlayer debate={subject} active />);
+    const top = tile(container, 1);
+    const bottom = tile(container, 2);
+
+    expect(top.classList.contains('order-1')).toBe(false);
+    expect(top.classList.contains('order-2')).toBe(false);
+    expect(bottom.classList.contains('order-1')).toBe(false);
+    expect(within(top).getByRole('button', { name: 'Unmute' })).toBeTruthy();
+    expect(within(bottom).getByRole('slider', { name: 'Debate timeline' })).toBeTruthy();
+    expect(within(top).queryByRole('slider', { name: 'Debate timeline' })).toBeNull();
+  });
+});
+
+// GEO-3833: on a ~300px gallery card, Play, Mute and Start over do not fit one row beside the
+// Moments / Full debate button. They stop short of it and wrap instead of running under it.
+describe('DebateFeedPlayer top-left controls beside a top-right button', () => {
+  const controlsRow = () => screen.getByRole('button', { name: 'Unmute' }).parentElement!;
+
+  it('stop short of the button and wrap', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
+    render(
+      <DebateFeedPlayer
+        debate={debate}
+        active
+        topRight={
+          <button type="button" data-testid="mode">
+            Full debate
+          </button>
+        }
+      />
+    );
+
+    expect(controlsRow().classList.contains('flex-wrap')).toBe(true);
+    expect(controlsRow().parentElement!.className).toContain(
+      'max-w-[calc(100%-var(--debate-top-right-width,7rem)-1.75rem)]'
+    );
+  });
+
+  it('keep the whole row without one', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
+    render(<DebateFeedPlayer debate={debate} active />);
+
+    expect(controlsRow().parentElement!.className).not.toContain('max-w-');
+  });
+});
