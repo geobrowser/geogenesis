@@ -146,18 +146,29 @@ export function ClaimSummary({
  *
  * Height is the caller's, because that genuinely differs: 8px where the page has room for it, 6px
  * in a card. Everything else is the same everywhere and now says so.
+ *
+ * `tone="mono"` is the graph explorer's open claim (GEO-3841): the agreeing share in black on a grey
+ * track, as in the prototype's map panel. Same label, so the two cannot say different things.
  */
-export function ClaimSplitBar({ percent, className }: { percent: number; className?: string }) {
+export function ClaimSplitBar({
+  percent,
+  className,
+  tone = 'split',
+}: {
+  percent: number;
+  className?: string;
+  tone?: 'split' | 'mono';
+}) {
   const copy = CLAIM_RESPONSE_COPY;
 
   return (
     <div
-      className={cx('flex overflow-hidden rounded-full bg-grey-01', className)}
+      className={cx('flex overflow-hidden rounded-full', tone === 'mono' ? 'bg-divider' : 'bg-grey-01', className)}
       role="img"
       aria-label={`${percent}% ${copy.positiveAction.toLowerCase()}, ${100 - percent}% ${copy.negativeAction.toLowerCase()}`}
     >
-      <span className="bg-green" style={{ width: `${percent}%` }} />
-      <span className="bg-red-01" style={{ width: `${100 - percent}%` }} />
+      <span className={tone === 'mono' ? 'bg-text' : 'bg-green'} style={{ width: `${percent}%` }} />
+      {tone === 'split' ? <span className="bg-red-01" style={{ width: `${100 - percent}%` }} /> : null}
     </div>
   );
 }

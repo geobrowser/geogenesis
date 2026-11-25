@@ -12,7 +12,16 @@ import type { GraphSelection } from '~/core/graph-explorer/select-graph';
 import type { SelectedNode } from '~/core/graph-explorer/select-graph';
 import { SKELETON_SELECTION, isSkeletonNode } from '~/core/graph-explorer/skeleton-graph';
 
-import { ConnectionsCanvas, clearance, nodeScale, overlapShare, overlaps } from './connections-canvas';
+import {
+  ConnectionsCanvas,
+  clearance,
+  coveredLabels,
+  nodeScale,
+  overlapShare,
+  overlaps,
+  tooSmallToRead,
+} from './connections-canvas';
+import { BandLegend } from './connections-view';
 import { GraphSearch, searchNodes } from './graph-search';
 import { GraphTopBar } from './graph-top-bar';
 
@@ -278,6 +287,48 @@ describe('ConnectionsCanvas', () => {
     expect(view.distance).toBe(zoomed);
   });
 
+  it('marks a hop-1 card far while zoomed out past reading size, never the centre, and drops it zoomed back in', () => {
+    motion.reduce = true;
+    render(<Canvas />);
+    runFrames(100);
+    const isaac = () => screen.getByRole('button', { name: 'Isaac Herzog' });
+    const centreButton = screen.getByRole('button', { name: 'Centre' });
+    const zoom = (name: 'Zoom in' | 'Zoom out', times: number) => {
+      for (let i = 0; i < times; i++) {
+        fireEvent.click(screen.getByRole('button', { name }));
+        runFrames(now + 100);
+      }
+    };
+    expect(isaac().dataset.far).toBeUndefined();
+    zoom('Zoom out', 8);
+    expect(isaac().dataset.far).toBe('');
+    expect(centreButton.dataset.far).toBeUndefined();
+
+    zoom('Zoom in', 8);
+    expect(isaac().dataset.far).toBeUndefined();
+  });
+
+  it('clears a `data-far` its button carries from before, once the card is drawn readable', () => {
+    // A node picked again while its button is still fading out keeps that button, and its
+    // `data-far`, but gets a fresh view; the frame must go by the button.
+    motion.reduce = true;
+    render(<Canvas />);
+    runFrames(100);
+    const isaac = screen.getByRole('button', { name: 'Isaac Herzog' });
+    isaac.dataset.far = '';
+    // Wakes the settled loop for a frame.
+    fireEvent.mouseEnter(isaac);
+    runFrames(now + 100);
+    expect(isaac.dataset.far).toBeUndefined();
+  });
+
+  it('draws the centre focus ring clear of its white ring', () => {
+    render(<Canvas />);
+    expect(screen.getByRole('button', { name: 'Centre' }).className).toContain('focus-visible:outline-offset-[9px]');
+    expect(screen.getByRole('button', { name: 'Centre' }).className).not.toContain('focus-visible:outline-offset-4');
+    expect(screen.getByRole('button', { name: 'Isaac Herzog' }).className).toContain('focus-visible:outline-offset-4');
+  });
+
   it('sleeps after the idle spin has run its course', () => {
     render(<Canvas />);
     runFrames(2600 + 45_000 + 500);
@@ -424,7 +475,7 @@ describe('GraphTopBar chips', () => {
   const bar = (kinds: GraphKind[], kindFilter: GraphKind | 'all' = 'all') => (
     <GraphTopBar
       back={null}
-      trail={['Centre']}
+      trail={[{ name: 'Centre', index: 0 }]}
       search={null}
       kinds={kinds}
       kindFilter={kindFilter}
@@ -515,7 +566,7 @@ describe('GraphTopBar share', () => {
     render(
       <GraphTopBar
         back={null}
-        trail={['Centre']}
+        trail={[{ name: 'Centre', index: 0 }]}
         search={null}
         kinds={[]}
         kindFilter="all"
@@ -564,6 +615,102 @@ describe('GraphSearch', () => {
   });
 });
 
+// jsdom applies no media queries, so these read the phone (`md:`) classes the layout relies on.
+describe('the top bar on a phone (GEO-3849)', () => {
+  afterEach(cleanup);
+  const box = () => screen.getByRole('combobox', { name: 'Find on the map' });
+
+  it('folds the search into an icon that opens the field, focused, over the path', () => {
+    render(
+      <GraphTopBar
+        back={null}
+        trail={[{ name: 'Israel-Gaza war', index: 0 }]}
+        search={<GraphSearch nodes={[person]} onPick={vi.fn()} />}
+        kinds={['ent']}
+        kindFilter="all"
+        onKindFilter={() => {}}
+        close={{ href: '/explore', label: 'Close' }}
+      />
+    );
+    expect(box().className).toContain('md:hidden');
+    // The path gives way to the open field on a phone.
+    expect(screen.getByRole('navigation', { name: 'Your path' }).className).toContain(
+      'md:group-has-[[data-search-open]]/bar:hidden'
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Search the map' }));
+    expect(box().className).not.toContain('md:hidden');
+    expect(document.activeElement).toBe(box());
+    expect(box().closest('[data-search-open]')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Search the map' })).toBeNull();
+
+    fireEvent.blur(box());
+    expect(box().closest('[data-search-open]')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Search the map' })).toBeTruthy();
+  });
+
+  it('stays open while it holds a search, and folds again after a pick', () => {
+    const onPick = vi.fn();
+    render(<GraphSearch nodes={[person]} onPick={onPick} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Search the map' }));
+    fireEvent.change(box(), { target: { value: 'Isa' } });
+    fireEvent.blur(box());
+    expect(box().closest('[data-search-open]')).toBeTruthy();
+
+    fireEvent.focus(box());
+    fireEvent.click(screen.getByRole('option'));
+    expect(onPick).toHaveBeenCalledWith(person);
+    expect(box().closest('[data-search-open]')).toBeNull();
+  });
+
+  it('hands focus back to the icon when Escape folds an empty field', () => {
+    render(<GraphSearch nodes={[person]} onPick={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Search the map' }));
+    fireEvent.keyDown(box(), { key: 'Escape' });
+    expect(box().closest('[data-search-open]')).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Search the map' }));
+  });
+
+  it('leaves focus alone when the field loses it, say to a tap on the map', () => {
+    render(<GraphSearch nodes={[person]} onPick={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Search the map' }));
+    act(() => box().blur());
+    expect(box().closest('[data-search-open]')).toBeNull();
+    // Only Escape and a pick take focus to the icon; a blur must not pull it back from elsewhere.
+    expect(document.activeElement).not.toBe(screen.getByRole('button', { name: 'Search the map' }));
+  });
+
+  it('hands focus back to the icon after picking with Enter', () => {
+    const onPick = vi.fn();
+    render(<GraphSearch nodes={[person]} onPick={onPick} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Search the map' }));
+    fireEvent.change(box(), { target: { value: 'Isa' } });
+    fireEvent.keyDown(box(), { key: 'Enter' });
+    expect(onPick).toHaveBeenCalledWith(person);
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Search the map' }));
+  });
+});
+
+describe('BandLegend', () => {
+  afterEach(cleanup);
+
+  it('drops to the three bands on a tablet, wrapping only between whole items, and hides on a phone', () => {
+    render(<BandLegend />);
+    const legend = screen.getByTestId('band-legend');
+    // A forced single line overflows under the zoom controls at 320px (GEO-3849 review).
+    expect(legend.className).not.toContain('flex-nowrap');
+    expect(legend.className).toContain('flex-wrap');
+    for (const item of legend.children) expect(item.className).toContain('whitespace-nowrap');
+    expect(legend.textContent).toContain('Widely agreed');
+    expect(legend.className).toContain('graph-phone:hidden');
+    // Desktop keeps the fourth item; a tablet drops it.
+    const unvoted = screen.getByText('No responses yet');
+    expect(unvoted.className).toContain('md:hidden');
+    for (const band of ['Widely agreed', 'Contested', 'Widely rejected'])
+      expect(screen.getByText(band).className).not.toContain('md:hidden');
+  });
+});
+
 describe('searchNodes', () => {
   it('finds names containing the text, those starting with it first, ignoring case', () => {
     const nodes = [node(3, 'ent', 'Benjamin Netanyahu'), node(4, 'story', 'Netanyahu visits'), node(5, 'src', 'Other')];
@@ -608,5 +755,149 @@ describe('nodeScale', () => {
     expect(nodeScale(true, 0, 2, true)).toBe(1);
     expect(nodeScale(false, 2, 1, false)).toBeCloseTo(0.95);
     expect(nodeScale(false, 1, 0.1, true)).toBe(0.3);
+  });
+});
+
+describe('coveredLabels', () => {
+  const box = (left: number, top = 0) => ({ left, right: left + 100, top, bottom: top + 40 });
+  const slot = (left: number, depth: number, extra: { keep?: boolean; shown?: boolean; top?: number } = {}) => ({
+    rect: box(left, extra.top),
+    depth,
+    keep: extra.keep ?? false,
+    shown: extra.shown ?? true,
+  });
+
+  it('fades the farther of two touching labels and leaves apart ones alone', () => {
+    expect(coveredLabels([slot(0, 50), slot(60, -20), slot(400, 90)])).toEqual([true, false, false]);
+    // Edges that only meet do not overlap.
+    expect(coveredLabels([slot(0, 50), slot(100, -20)])).toEqual([false, false]);
+  });
+
+  it('lets a label a faded one would have covered show, so a chain keeps every other card', () => {
+    expect(coveredLabels([slot(0, 0), slot(60, 10), slot(120, 20)])).toEqual([false, true, false]);
+  });
+
+  it('never fades the hovered card or its neighbours, and fades what they cover instead', () => {
+    expect(coveredLabels([slot(0, 100, { keep: true }), slot(60, -50)])).toEqual([false, true]);
+    expect(coveredLabels([slot(0, 100, { keep: true }), slot(60, -50, { keep: true })])).toEqual([false, false]);
+  });
+
+  it('keeps the one already showing when depths cross, so the pair does not flicker', () => {
+    expect(coveredLabels([slot(0, 10, { shown: true }), slot(60, 9, { shown: false })])).toEqual([false, true]);
+  });
+});
+
+describe('tooSmallToRead', () => {
+  it('turns a card into its marker below 0.6 and back only above 0.7, so it does not flap', () => {
+    expect(tooSmallToRead(0.59, false, false)).toBe(true);
+    expect(tooSmallToRead(0.65, false, false)).toBe(false);
+    expect(tooSmallToRead(0.65, true, false)).toBe(true);
+    expect(tooSmallToRead(0.71, true, false)).toBe(false);
+  });
+
+  it('cuts lower on phone, whose whole map is drawn smaller', () => {
+    expect(tooSmallToRead(0.55, false, true)).toBe(false);
+    expect(tooSmallToRead(0.49, false, true)).toBe(true);
+    expect(tooSmallToRead(0.55, true, true)).toBe(true);
+    expect(tooSmallToRead(0.59, true, true)).toBe(false);
+  });
+});
+
+describe('the top bar path (GEO-3852)', () => {
+  afterEach(cleanup);
+  const steps = (...names: string[]) => names.map((name, index) => ({ name, index }));
+  const bar = (trail: ReturnType<typeof steps>, onStep = vi.fn()) => {
+    render(
+      <GraphTopBar
+        back={null}
+        trail={trail}
+        onStep={onStep}
+        search={null}
+        kinds={[]}
+        kindFilter="all"
+        onKindFilter={() => {}}
+        close={null}
+      />
+    );
+    return onStep;
+  };
+  const path = () => screen.getByRole('navigation', { name: 'Your path' });
+
+  it('shows three steps or fewer whole, the centre last and current', () => {
+    bar(steps('Gaza', 'International criminal justice', 'There’s no genocide in Gaza'));
+    expect(path().textContent).toBe('Gaza›International criminal justice›There’s no genocide in Gaza');
+    expect(screen.queryByRole('button', { name: /more step/ })).toBeNull();
+    expect(screen.getByText('There’s no genocide in Gaza').getAttribute('aria-current')).toBe('location');
+  });
+
+  it('folds the middle of a longer path into "…", keeping the first step and the centre', () => {
+    bar(steps('Gaza', 'Justice', 'Simas vs. Scott', 'Kevin Garvey', 'There’s no genocide in Gaza'));
+    expect(path().textContent).toBe('Gaza›…›There’s no genocide in Gaza');
+    // The centre takes the room the earlier steps, each capped, leave it.
+    expect(screen.getByText('There’s no genocide in Gaza').className).toContain('flex-1');
+    expect(screen.getByRole('button', { name: 'Gaza' }).className).toContain('max-w-[min(220px,28%)]');
+  });
+
+  it('lists the folded steps, oldest first, and jumps back to the one picked', () => {
+    const onStep = bar(steps('Gaza', 'Justice', 'Simas vs. Scott', 'Kevin Garvey', 'Centre'));
+    fireEvent.click(screen.getByRole('button', { name: 'Show 3 more steps' }));
+    const items = ['Justice', 'Simas vs. Scott', 'Kevin Garvey'].map(name => screen.getByRole('button', { name }));
+    expect(items.map(item => item.textContent)).toEqual(['Justice', 'Simas vs. Scott', 'Kevin Garvey']);
+    fireEvent.click(items[1]);
+    expect(onStep).toHaveBeenCalledWith(2);
+    expect(screen.queryByRole('button', { name: 'Simas vs. Scott' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Gaza' }));
+    expect(onStep).toHaveBeenLastCalledWith(0);
+  });
+
+  /** A path that walks back the way the viewer does: the step picked becomes the centre. */
+  function Walk({ names }: { names: string[] }) {
+    const [count, setCount] = React.useState(names.length);
+    return (
+      <GraphTopBar
+        back={null}
+        trail={steps(...names.slice(0, count))}
+        onStep={index => setCount(index + 1)}
+        search={null}
+        kinds={[]}
+        kindFilter="all"
+        onKindFilter={() => {}}
+        close={null}
+      />
+    );
+  }
+
+  it('keeps keyboard focus on the path when the step pressed turns into the centre', () => {
+    render(<Walk names={['Gaza', 'Justice', 'Centre']} />);
+    const justice = screen.getByRole('button', { name: 'Justice' });
+    justice.focus();
+    fireEvent.click(justice);
+    expect(screen.queryByRole('button', { name: 'Justice' })).toBeNull();
+    expect(document.activeElement).toBe(path());
+  });
+
+  it('keeps keyboard focus on the path when a pick from "…" folds the "…" away', () => {
+    render(<Walk names={['Gaza', 'Justice', 'Simas vs. Scott', 'Kevin Garvey', 'Centre']} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Show 3 more steps' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Justice' }));
+    expect(path().textContent).toBe('Gaza›Justice');
+    expect(document.activeElement).toBe(path());
+  });
+
+  it('reports the "…" opening with how many steps it holds, as a count of its own', () => {
+    const session = startGraphExplorerSession({ entityId: 'c', topicId: 't', spaceId: null, trailDepth: 4 });
+    session.opened('ready', { layout: 'desktop', trailDepth: 4 });
+    render(
+      <GraphAnalyticsProvider value={session}>
+        <Walk names={['Gaza', 'Justice', 'Simas vs. Scott', 'Kevin Garvey', 'Centre']} />
+      </GraphAnalyticsProvider>
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Show 3 more steps' }));
+    const opened = vi
+      .mocked(captureSafely)
+      .mock.calls.filter(([name, props]) => name === 'graph_explorer_interacted' && props?.interaction === 'trail_menu')
+      .map(([, props]) => props);
+    expect(opened).toEqual([expect.objectContaining({ step_count: 3 })]);
+    expect(opened[0]).not.toHaveProperty('value');
   });
 });

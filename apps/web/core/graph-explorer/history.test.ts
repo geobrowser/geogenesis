@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import {
   GRAPH_HISTORY_LIMIT,
+  collapseTrail,
   goBack,
   graphHistoryHref,
   historyFromUrl,
+  jumpBack,
   recentre,
   sameHistory,
   startGraphHistory,
@@ -96,5 +98,41 @@ describe('graph history in the URL', () => {
     const history = recentre(recentre(startGraphHistory(id(1)), id(2)), id(3));
     const url = new URL(graphHistoryHref(history, new URLSearchParams()), 'https://geo.test');
     expect(sameHistory(historyFromUrl(url.pathname.split('/').at(-1)!, url.searchParams), history)).toBe(true);
+  });
+});
+
+describe('jumpBack', () => {
+  it('centres on an earlier step and drops the steps after it, so Back walks on from there', () => {
+    const history = { centreId: id(5), back: [id(1), id(2), id(3), id(4)] };
+    const jumped = jumpBack(history, 1);
+    expect(jumped).toEqual({ centreId: id(2), back: [id(1)] });
+    expect(goBack(jumped)).toEqual({ centreId: id(1), back: [] });
+    expect(jumpBack(history, 0)).toEqual({ centreId: id(1), back: [] });
+  });
+
+  it('ignores a step that is not on the trail', () => {
+    const history = { centreId: id(2), back: [id(1)] };
+    expect(jumpBack(history, 1)).toBe(history);
+    expect(jumpBack(history, -1)).toBe(history);
+  });
+});
+
+describe('collapseTrail (GEO-3852)', () => {
+  it('shows up to three steps whole', () => {
+    expect(collapseTrail([])).toEqual([]);
+    expect(collapseTrail(['a', 'b', 'c'])).toEqual([
+      { kind: 'step', step: 'a' },
+      { kind: 'step', step: 'b' },
+      { kind: 'step', step: 'c' },
+    ]);
+  });
+
+  it('keeps the first step and the centre past three and folds the rest, in order, into one part', () => {
+    expect(collapseTrail(['a', 'b', 'c', 'd'])).toEqual([
+      { kind: 'step', step: 'a' },
+      { kind: 'more', steps: ['b', 'c'] },
+      { kind: 'step', step: 'd' },
+    ]);
+    expect(collapseTrail(['a', 'b', 'c', 'd', 'e', 'f'])[1]).toEqual({ kind: 'more', steps: ['b', 'c', 'd', 'e'] });
   });
 });

@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { NavUtils } from '~/core/utils/utils';
 
 import type { EntityActionCallbacks, TopicTemplateModel, TopicTimelineHighlightModel } from '../models';
+import { TEMPLATE_ONTOLOGY, formatOntologyDate } from '../ontology';
 import {
   AddEntityItemPopover,
   ArrowRightIcon,
@@ -27,6 +28,13 @@ import {
   TemplateTitleRow,
 } from '../primitives';
 import { PUBLISHING_LABEL, usePendingAdds } from '../primitives/use-pending-adds';
+
+/**
+ * The Add event form edits `Event date` with the entity page's date input in its date-only (DATE) mode: no
+ * time fields. That mode writes the same midnight-UTC ISO string (`2026-11-18T00:00:00.000Z`) as a DATETIME
+ * date with no time, and `buildEventEdits` still stages it as DATETIME, so the property type doesn't change.
+ */
+const EVENT_DATE_INPUT = { propertyId: TEMPLATE_ONTOLOGY.EVENT_DATE_PROPERTY_ID, dataType: 'DATE' } as const;
 
 export interface TopicTemplateProps {
   model: TopicTemplateModel;
@@ -252,7 +260,7 @@ export function TopicTemplate({
                     primaryLabel="Event"
                     primaryPlaceholder="e.g. UN Security Council adopts resolution"
                     secondaryLabel="Date"
-                    secondaryPlaceholder="e.g. 18 Nov 2026"
+                    secondaryDate={EVENT_DATE_INPUT}
                     tertiaryLabel="Summary (optional)"
                     tertiaryPlaceholder="Brief neutral summary of what happened..."
                     holdDraft={actionCallbacks?.holdAddDraft}
@@ -260,7 +268,10 @@ export function TopicTemplate({
                       addedTimelineTurns.add(
                         state => ({
                           pending: state.status === 'pending',
-                          when: state.status === 'pending' ? PUBLISHING_LABEL : (draft.secondary ?? 'Recent'),
+                          when:
+                            state.status === 'pending'
+                              ? PUBLISHING_LABEL
+                              : (formatOntologyDate(draft.secondary) ?? 'Recent'),
                           title: draft.primary,
                           summary: draft.tertiary,
                           href: state.status === 'published' ? NavUtils.toEntity(state.spaceId, state.id) : undefined,

@@ -29,9 +29,12 @@ import type { Entity } from '~/core/types';
  * Deliberately not in `core/claims/browse` beside `useClaimResponseState`: `matchmaking-claim-card`
  * imports from that directory, so a hook there importing back would close a cycle.
  *
- * The two claim surfaces outside a debate — the claim page and the explore card — keep wiring this
- * up themselves, and should. Neither sits inside a debate, so both leave `offersDebate` at its
- * default and *do* make the offer, which is the one thing fixed in place here. The claim page also
+ * The graph explorer's open claim (GEO-3841) is the one host outside a debate that uses this too:
+ * its panel is for reading a map, and a debate offer there would be the same wrong invitation.
+ *
+ * The other two claim surfaces outside a debate — the claim page and the explore card — keep wiring
+ * this up themselves, and should. Both leave `offersDebate` at its default and *do* make the offer,
+ * which is the one thing fixed in place here. The claim page also
  * resolves its state a level above the component that builds the control, so it has nothing to
  * hand this hook at the point it would be called.
  */

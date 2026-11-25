@@ -14,7 +14,7 @@ import type { useDebateClaimResponse } from './use-debate-claim-response';
  * A claim's Agree/Disagree pills, the error a failed response leaves, and — where the host wants it
  * — the claim's split, for a claim inside a debate.
  *
- * The claims panel, the end card and the debate card all draw this from the same
+ * The claims panel, the end card, the debate card and the graph explorer's open claim all draw this from the same
  * `useDebateClaimResponse` result. They were three copies of the same wiring, and the part worth
  * having once is the part that drifts: which `control` field feeds which pill prop, and that the
  * split waits for its counts rather than drawing an empty bar.
@@ -30,6 +30,7 @@ export function DebateClaimControls({
   className,
   summaryLayout,
   summaryClassName,
+  outline,
 }: {
   claimId: string;
   spaceId: string;
@@ -46,6 +47,8 @@ export function DebateClaimControls({
   /** Draw the claim's split after the pills, in this layout. Omitted: the host draws its own, or none. */
   summaryLayout?: 'stacked' | 'inline';
   summaryClassName?: string;
+  /** See `PositionRow`: `'solid'` only for the graph explorer's open claim. */
+  outline?: 'dashed' | 'solid';
 }) {
   return (
     <>
@@ -63,6 +66,7 @@ export function DebateClaimControls({
           endSlot={endSlot}
           endSlotWraps={endSlot == null ? undefined : wideEndSlot ? 'wide' : 'compact'}
           analyticsSurface={analyticsSurface}
+          outline={outline}
         />
         {control.responseError ? (
           <div role="alert" className="mt-1.5">
