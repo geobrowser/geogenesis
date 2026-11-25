@@ -41,10 +41,10 @@ vi.mock('~/core/graph-explorer/layout-3d', async importOriginal => {
   const real = await importOriginal<typeof import('~/core/graph-explorer/layout-3d')>();
   return {
     ...real,
-    fitView: (...args: Parameters<typeof real.fitView>) => {
-      const fitted = real.fitView(...args);
-      view.fits.push({ width: args[1], height: args[2], fit: fitted.distance });
-      return fitted;
+    fitDistance: (...args: Parameters<typeof real.fitDistance>) => {
+      const fit = real.fitDistance(...args);
+      view.fits.push({ width: args[1], height: args[2], fit });
+      return fit;
     },
     project: (...args: Parameters<typeof real.project>) => {
       view.distance = args[1].distance;
