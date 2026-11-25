@@ -68,9 +68,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-/** A list row: rows are split by a hairline, and the title underlines on hover as the prototype's do. */
 /*
- * The prototype's Geo look (Preston's pick over "Original"), in the app's font. No type-scale token
+ * The prototype's Geo look (picked over "Original"), in the app's font. No type-scale token
  * matches these sizes, and #4b4b4b has no color token yet, so they are arbitrary values here.
  */
 const SECTION_HEADING = 'mb-3 text-[16px] leading-[1.3] font-semibold text-text';
@@ -83,6 +82,7 @@ const ROW_ITEM = 'border-b border-grey-01 last:border-b-0';
 const ROW_TITLE =
   'text-[14px] leading-[1.35] font-normal wrap-break-word text-[#151515] decoration-grey-02 underline-offset-[3px] group-hover/row:underline group-focus-visible/row:underline';
 
+/** A list row: rows are split by a hairline, and the title underlines on hover as the prototype's do. */
 function Row({
   title,
   sub,
