@@ -621,6 +621,15 @@ describe('the top bar on a phone (GEO-3849)', () => {
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Search the map' }));
   });
 
+  it('leaves focus alone when the field loses it, say to a tap on the map', () => {
+    render(<GraphSearch nodes={[person]} onPick={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Search the map' }));
+    act(() => box().blur());
+    expect(box().closest('[data-search-open]')).toBeNull();
+    // Only Escape and a pick take focus to the icon; a blur must not pull it back from elsewhere.
+    expect(document.activeElement).not.toBe(screen.getByRole('button', { name: 'Search the map' }));
+  });
+
   it('hands focus back to the icon after picking with Enter', () => {
     const onPick = vi.fn();
     render(<GraphSearch nodes={[person]} onPick={onPick} />);
