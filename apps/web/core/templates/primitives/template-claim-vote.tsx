@@ -2,8 +2,6 @@
 
 import * as React from 'react';
 
-import cx from 'classnames';
-
 import { useClaimResponseState } from '~/core/claims/browse/use-claim-response-state';
 import type { DebateClaim } from '~/core/debates/api';
 import { useDebateClaims, useDebateClaimsBySpaces } from '~/core/debates/hooks';
@@ -312,30 +310,22 @@ export function ClaimVoteBinding({
 
 /**
  * The Agree / Disagree pair a claim list row draws from its binding: the debates app's buttons
- * (GEO-3845, see `debate-vote-buttons.tsx`). `fill` stretches the pair across its container, as a
- * Recent debates card does; otherwise it spans the row on phones and keeps two 116px buttons in a
- * wide (760px+) row. The counts live in the row's split line, as in the app, so the buttons carry none.
+ * (GEO-3845, see `debate-vote-buttons.tsx`). It spans the row on phones and keeps two natural-width
+ * buttons in a wide (760px+) row. The counts live in the row's result, as in the app, so the buttons
+ * carry none.
  */
-export function ClaimVotePills({
-  title,
-  vote,
-  fill = false,
-}: {
-  title: string;
-  vote: TemplateVoteBinding;
-  fill?: boolean;
-}) {
+export function ClaimVotePills({ title, vote }: { title: string; vote: TemplateVoteBinding }) {
   return (
-    <span className={cx('flex flex-col gap-1', fill ? 'w-full' : 'w-full @[760px]:w-auto @[760px]:shrink-0')}>
+    <span className="flex w-full flex-col gap-1 @[760px]:w-auto @[760px]:shrink-0">
       <DebateVoteButtons
         userVote={vote.userVote}
         disabled={vote.disabled}
-        compact={!fill}
+        compact
         label={`Vote on ${title}`}
         titleFor={vote.titleFor}
         onPress={vote.press}
-        className={fill ? 'w-full pt-0.5' : 'w-full'}
-        buttonClassName={fill ? undefined : 'flex-1 basis-0 @[760px]:flex-none'}
+        className="w-full"
+        buttonClassName="flex-1 basis-0 @[760px]:flex-none"
       />
       {vote.error && (
         <span role="alert" className="text-[12.5px] text-red-01">
