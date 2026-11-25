@@ -1,4 +1,7 @@
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
 
 import { decodeClaimsAbout } from '../claims-about';
 import { type GraphHop1, type GraphNode, decodeHop1, decodeNode } from '../fetch-graph-neighbourhood';
@@ -46,7 +49,14 @@ const hop1 = (nodes: GraphNode[], centre: Partial<GraphNode> = {}): GraphHop1 =>
 });
 
 const topicMeta: GraphCardMeta = {
-  centre: { id: TOPIC, name: 'Israel-Gaza war', description: 'War.', types: [], kind: 'topic', image: null },
+  centre: {
+    id: TOPIC,
+    name: 'Israel-Gaza war',
+    description: 'War.',
+    types: [{ id: TOPIC_TYPE_ID, name: 'Topic' }],
+    kind: 'topic',
+    image: null,
+  },
   topic: { id: TOPIC, name: 'Israel-Gaza war' },
 };
 
@@ -288,6 +298,41 @@ describe('loadGraphCardData', () => {
       });
       await loadGraphCardData(topicIds, d);
       expect(d.inlineImage).toHaveBeenCalledWith('ipfs://cover', 400, expect.any(Number));
+    });
+
+    // The page advertises the topic card by its template (Topic before Person), not by graph kind.
+    it('draws a Person + Topic as a topic card', async () => {
+      const d = deps({
+        loadMeta: vi.fn(async () => ({
+          ...topicMeta,
+          centre: {
+            ...topicMeta.centre,
+            kind: 'ent' as const,
+            types: [
+              { id: SystemIds.PERSON_TYPE, name: 'Person' },
+              { id: TOPIC_TYPE_ID, name: 'Topic' },
+            ],
+          },
+        })),
+        fetchHop1: vi.fn(async () => hop1(mixed)),
+      });
+      const data = await loadGraphCardData(topicIds, d);
+      expect(data?.variant).toBe('topic');
+      expect(data?.neighbours.map(node => node.kind)).not.toContain('claim');
+    });
+
+    it('gives a centre that is not a Topic page the full explorer card', async () => {
+      const d = deps({
+        loadMeta: vi.fn(async () => ({
+          ...topicMeta,
+          centre: { ...topicMeta.centre, kind: 'ent' as const, types: [{ id: SystemIds.PERSON_TYPE, name: 'Person' }] },
+        })),
+        fetchHop1: vi.fn(async () => hop1(mixed)),
+      });
+      const data = await loadGraphCardData(topicIds, d);
+      expect(data?.variant).toBe('graph');
+      expect(data?.neighbours.map(node => node.kind)).toContain('claim');
+      expect(d.inlineImage).not.toHaveBeenCalledWith(expect.anything(), 400, expect.any(Number));
     });
 
     it('renders with what exists when the topic has no image and no neighbours', async () => {

@@ -53,7 +53,7 @@ describe('GET /explore/graph/[entityId]/card', () => {
   });
 
   it('draws the Topic link preview for variant=topic, cached like the explorer card', async () => {
-    mocks.load.mockResolvedValue({ degraded: false, centre: { kind: 'topic' } });
+    mocks.load.mockResolvedValue({ degraded: false, variant: 'topic' });
     const response = await get(TOPIC, `topic=${TOPIC}&space=${SPACE}&variant=topic&v=1`);
     expect(await response.text()).toBe('topic');
     expect(response.headers.get('Cache-Control')).toBe(
@@ -63,8 +63,9 @@ describe('GET /explore/graph/[entityId]/card', () => {
     expect(mocks.render).not.toHaveBeenCalled();
   });
 
-  it('falls back to the explorer card when variant=topic names an entity that is not a topic', async () => {
-    mocks.load.mockResolvedValue({ degraded: false, centre: { kind: 'ent' } });
+  // The loader decides: a centre whose page isn't a Topic page comes back shaped for the explorer card.
+  it('draws the explorer card when the loader shaped the data for it despite variant=topic', async () => {
+    mocks.load.mockResolvedValue({ degraded: false, variant: 'graph' });
     const response = await get(TOPIC, `topic=${TOPIC}&variant=topic`);
     expect(await response.text()).toBe('jpeg');
     expect(mocks.renderTopic).not.toHaveBeenCalled();

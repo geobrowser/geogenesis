@@ -1,6 +1,7 @@
 import { fetchFeaturedSpacesShared } from '~/core/io/subgraph/fetch-featured-spaces';
 import { inlineOgImage } from '~/core/og-image-inline';
 import { fetchClaimResponseSummaries } from '~/core/responses/claim-response-summaries';
+import { entityBrowseViewFromTypes } from '~/core/utils/entity-browse-view';
 import { normId } from '~/core/utils/norm-id';
 
 import { nodeClaimSpaceId } from '../claims-about';
@@ -42,6 +43,8 @@ export type GraphCardData = {
   summary: TopicClaimsSummary | null;
   /** The scope fell back or an image ran out of time: cached briefly so a full card follows. */
   degraded: boolean;
+  /** The card this data is shaped for: `topic` only when asked for and the centre is a Topic page. */
+  variant: GraphCardVariant;
 };
 
 export const CARD_NEIGHBOURS = 6;
@@ -141,7 +144,10 @@ export async function loadGraphCardData(
   const filter = resolveGraphFilter({ spaceIds: ids.size ? [...ids].sort() : null, topicId, topicSpaceId: spaceId });
 
   const isTopicCentre = meta.centre.id === normId(topicId);
-  const topicVariant = variant === 'topic';
+  // The same rule the entity page uses to advertise the topic card, so a Person + Topic gets it too
+  // (its graph kind is `ent`). Any other centre behind `variant=topic` gets the full explorer card.
+  const topicVariant = variant === 'topic' && entityBrowseViewFromTypes(meta.centre.types) === 'topic';
+  const cardVariant: GraphCardVariant = topicVariant ? 'topic' : 'graph';
   const [hop1, about] = await Promise.all([
     deps.fetchHop1(meta.centre.id, filter),
     meta.centre.kind === 'topic' && !topicVariant ? deps.fetchAllClaimsAbout(meta.centre.id, filter, spaceId) : null,
@@ -189,11 +195,11 @@ export async function loadGraphCardData(
       ? null
       : deps.inlineImage(
           (topicVariant ? meta.centre.cover : null) ?? meta.centre.image ?? hop1.centre?.image,
-          HUB_IMAGE_PX[variant],
+          HUB_IMAGE_PX[cardVariant],
           IMAGE_BUDGET_MS
         ),
     ...picked.map(({ node }) =>
-      node.kind === 'ent' ? deps.inlineImage(node.image, PERSON_IMAGE_PX[variant], IMAGE_BUDGET_MS) : null
+      node.kind === 'ent' ? deps.inlineImage(node.image, PERSON_IMAGE_PX[cardVariant], IMAGE_BUDGET_MS) : null
     ),
   ]);
   if ([centreImage, ...neighbourImages].some(image => image?.timedOut)) degraded = true;
@@ -239,6 +245,7 @@ export async function loadGraphCardData(
       ? summariseTopicClaims(about.claims, claim => countsOf(claim.id, claim.spaceId), about.truncated)
       : null,
     degraded,
+    variant: cardVariant,
   };
 }
 

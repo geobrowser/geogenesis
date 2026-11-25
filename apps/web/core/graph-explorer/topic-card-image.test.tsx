@@ -63,6 +63,7 @@ const data = (centre: Partial<GraphCardData['centre']> = {}, rest: Partial<Graph
   kindCounts: [],
   summary: null,
   degraded: false,
+  variant: 'topic',
   ...rest,
 });
 

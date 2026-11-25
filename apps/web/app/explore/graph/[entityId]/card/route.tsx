@@ -11,7 +11,7 @@ export const runtime = 'nodejs';
 /**
  * The share card for `/explore/graph/{id}?topic&space`. Kept outside /api/, which robots.txt
  * disallows: X shows no image it may not fetch. `v` only busts caches. `variant=topic` is a Topic
- * page's link preview (no claims); a centre that isn't a topic gets the explorer card instead.
+ * page's link preview (no claims); a centre whose page isn't a Topic page gets the explorer card.
  */
 export async function GET(req: Request, { params }: { params: Promise<{ entityId: string }> }): Promise<Response> {
   const rateLimit = await checkRankingOgIpRateLimit(getClientIp(req));
@@ -37,7 +37,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ entityId
       notFound.headers.set('Cache-Control', DEGRADED_CACHE);
       return notFound;
     }
-    const image = await (variant === 'topic' && data.centre.kind === 'topic'
+    const image = await (data.variant === 'topic'
       ? generateTopicCardResponse(data)
       : generateGraphCardResponse(data));
     image.headers.set('Cache-Control', data.degraded ? DEGRADED_CACHE : CARD_CACHE);

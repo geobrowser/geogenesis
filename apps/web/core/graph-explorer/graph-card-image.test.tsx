@@ -77,6 +77,7 @@ const base = (centre: Partial<GraphCardData['centre']>, rest: Partial<GraphCardD
   ],
   summary: null,
   degraded: false,
+  variant: 'graph',
   ...rest,
 });
 

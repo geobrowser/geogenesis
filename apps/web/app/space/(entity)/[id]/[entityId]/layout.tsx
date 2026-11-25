@@ -78,9 +78,9 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
   const title = entity?.name ?? 'Entity';
   const description = firstLine(Entities.description(entity?.values ?? []));
 
-  // A Topic unfurls as its own card. Next lets a level's own `images` win over the file-based
-  // `opengraph-image` attached at that level, so this covers the Topic's tab routes and `page.tsx`
-  // repeats it for the page itself. Every other type keeps the file.
+  // A Topic unfurls as its own card. The segment's `opengraph-image` file beats these `images` on the
+  // page itself, so `page.tsx` sets them again there. On the Topic's tab routes (`/claims`, ...) only
+  // twitter:image becomes the card; og:image stays the file, as before. Every other type keeps the file.
   if (entity && entityBrowseViewFromTypes(entity.types) === 'topic') {
     const origin = originOfHost((await headers()).get('host'));
     return { title, description, ...topicCardMetadata({ topicId: entityId, spaceId, title, description, origin }) };
