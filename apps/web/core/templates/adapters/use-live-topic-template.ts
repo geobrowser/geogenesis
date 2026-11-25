@@ -56,6 +56,7 @@ import {
   resolvePostAuthor,
   resolveTemplateImageUrl,
 } from '../ontology';
+import { debateParticipantsKey, formatUnixSecDate, toDebateGalleryModel } from './debate-gallery-model';
 import { topicCoverageIngestionLink } from './source-ingestion-links';
 import {
   activeStanceVotes,
@@ -63,7 +64,7 @@ import {
   baselineVoteFor,
   fetchMultiSpaceClaimVoteRows,
 } from './topic-claim-votes';
-import { resolveDebateStillSrc, useDebateParticipantsBatch } from './use-debate-participants-batch';
+import { useDebateParticipantsBatch } from './use-debate-participants-batch';
 import { fetchPostAuthorMetadata } from './use-hydrated-source-cards';
 import { useInitialHydrationGate } from './use-initial-hydration-gate';
 import { useLiveEntityActions } from './use-live-entity-actions';
@@ -140,46 +141,6 @@ function classifyCoverage(
     return { kind: 'source', label: typeName ?? 'Dataset', mediaType: 'dataset' };
   }
   return { kind: 'source', label: typeName ?? 'Document', mediaType: 'document' };
-}
-
-function formatUnixSecDate(sec: number | undefined): string | undefined {
-  if (!sec || !Number.isFinite(sec)) return undefined;
-  return new Date(sec * 1000).toLocaleDateString('en-US', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'UTC',
-  });
-}
-
-/**
- * Parse speaker names & claim text from live Geo Debate titles, which follow either:
- * - `"Alice vs. Bob on <Claim>"`
- * - `"<Claim> | Alice vs. Bob"`
- */
-function parseDebateTitle(
-  rawTitle: string,
-  fallbackClaim?: string
-): { claimTitle: string; speakers: [string, string] } {
-  const clean = rawTitle.trim();
-  const pipeMatch = clean.match(/^(.+?)\s*\|\s*(.+?)\s+vs\.?\s+(.+)$/i);
-  if (pipeMatch) {
-    return {
-      claimTitle: fallbackClaim?.trim() || pipeMatch[1]!.trim(),
-      speakers: [pipeMatch[2]!.trim(), pipeMatch[3]!.trim()],
-    };
-  }
-  const onMatch = clean.match(/^(.+?)\s+vs\.?\s+(.+?)\s+on\s+(.+)$/i);
-  if (onMatch) {
-    return {
-      claimTitle: fallbackClaim?.trim() || onMatch[3]!.trim(),
-      speakers: [onMatch[1]!.trim(), onMatch[2]!.trim()],
-    };
-  }
-  return {
-    claimTitle: fallbackClaim?.trim() || clean,
-    speakers: ['For', 'Against'],
-  };
 }
 
 /**
@@ -674,44 +635,16 @@ export function useLiveTopicTemplate({
     // 2. Live Recent Debates gallery
     const debateParticipantsByHex = debateParticipantsQuery.data;
     const recentDebates: TopicRecentDebateModel[] = bestDebates.slice(0, 8).map(item => {
-      const { claimTitle, speakers } = parseDebateTitle(item.title, item.debateClaim?.name);
-      const claimId = item.debateClaim?.entityId ?? item.entityId;
-      const claimSplit = buildSplitForClaim(claimId);
-      const normDebateId = ID.uuidToHex(item.entityId).toLowerCase();
-      const slot1Avatar = resolveDebateStillSrc(item.debatePosters?.slot1, normDebateId, 1);
-      const slot2Avatar = resolveDebateStillSrc(item.debatePosters?.slot2, normDebateId, 2);
-      const livePair = debateParticipantsByHex?.[normDebateId];
-      const dateStr = formatUnixSecDate(item.createdAtSec) ?? 'Debate';
+      const claimSplit = buildSplitForClaim(item.debateClaim?.entityId ?? item.entityId);
       const votesLabel =
         claimSplit.total > 0
           ? `${formatCompactCount(claimSplit.total)} ${claimSplit.total === 1 ? 'vote' : 'votes'}`
           : item.spaceName || 'Geo';
 
-      return {
-        id: item.entityId,
-        claimId,
-        claimTitle,
-        date: dateStr,
-        duration: '',
+      return toDebateGalleryModel(item, debateParticipantsByHex?.[debateParticipantsKey(item.entityId)], {
+        fallbackSpaceId: spaceId,
         votesLabel,
-        participants: [
-          {
-            name: livePair?.slot1?.name ?? speakers[0],
-            position: livePair?.slot1?.position ?? 'Agree',
-            communityColor: '#3963fe',
-            avatarUrl: slot1Avatar,
-            profileAvatarUrl: livePair?.slot1?.avatarUrl ?? null,
-          },
-          {
-            name: livePair?.slot2?.name ?? speakers[1],
-            position: livePair?.slot2?.position ?? 'Disagree',
-            communityColor: '#6833ff',
-            avatarUrl: slot2Avatar,
-            profileAvatarUrl: livePair?.slot2?.avatarUrl ?? null,
-          },
-        ],
-        href: NavUtils.toEntity(item.spaceId || spaceId, item.entityId),
-      };
+      });
     });
 
     // 3. Timeline: combine News events + recent dated News stories (newest first, capped at 8)

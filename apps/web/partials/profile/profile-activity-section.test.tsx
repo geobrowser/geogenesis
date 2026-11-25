@@ -7,17 +7,36 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import type { ExploreFeedRow } from '~/core/explore/explore-card-item';
+import { DEBATE_GALLERY_CARD_WIDTH_CLASS } from '~/core/templates/primitives/debate-gallery-card';
 
 import { ProfileActivitySection } from './profile-activity-section';
 
 // The gallery is local to the file under test, so its dependencies are mocked
 // rather than the gallery itself.
-vi.mock('~/partials/explore/explore-feed-card', () => ({
-  ExploreFeedCard: ({ item }: { item: { entityId: string } }) => (
-    <button type="button" data-testid="card">
+vi.mock('./gallery-debate-card', () => ({
+  GalleryDebateCard: ({
+    item,
+    participants,
+  }: {
+    item: { entityId: string };
+    participants?: { slot1?: { name?: string } | null };
+  }) => (
+    <button type="button" data-testid="card" data-speaker={participants?.slot1?.name}>
       {item.entityId}
     </button>
   ),
+}));
+
+const participantsMock = vi.hoisted(() => ({
+  ids: [] as (readonly string[])[],
+  data: undefined as Record<string, unknown> | undefined,
+}));
+
+vi.mock('~/core/templates/adapters/use-debate-participants-batch', () => ({
+  useDebateParticipantsBatch: (ids: readonly string[]) => {
+    participantsMock.ids.push(ids);
+    return { data: participantsMock.data };
+  },
 }));
 
 vi.mock('./gallery-claim-card', () => ({
@@ -195,6 +214,22 @@ describe('ProfileActivitySection', () => {
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
+  });
+
+  it("looks up only the debates' speakers, once for the row, and hands each card its own pair", () => {
+    const debateId = '11111111-2222-3333-4444-555555555555';
+    participantsMock.data = {
+      '11111111222233334444555555555555': { slot1: { name: 'Avery Stone' }, slot2: null },
+    };
+    try {
+      render(<ProfileActivitySection kinds={[kind({ rows: [row(debateId), claimRow('c1')] })]} />);
+
+      expect(participantsMock.ids.at(-1)).toEqual([debateId]);
+      expect(screen.getByText(debateId)).toHaveAttribute('data-speaker', 'Avery Stone');
+    } finally {
+      participantsMock.data = undefined;
+      participantsMock.ids.length = 0;
+    }
   });
 
   it('renders nothing when both kinds are genuinely empty', () => {
@@ -494,8 +529,9 @@ describe('ProfileActivitySection', () => {
 
     const cards = screen.getAllByTestId('card');
     expect(cards).toHaveLength(2);
-    expect(cards[0]?.parentElement).toHaveClass('w-[min(300px,84cqw)]');
-    // The playable card owns its frame and its 12px inset. A second frame squeezed the pills.
+    // The Topic page gallery's widths (GEO-3871), so a debate reads at the same size there and here.
+    expect(cards[0]?.parentElement).toHaveClass(...DEBATE_GALLERY_CARD_WIDTH_CLASS.split(' '));
+    // The card owns its frame. A second frame around it would spend the row's room twice.
     expect(cards[0]?.parentElement).not.toHaveClass('border');
     expect(cards[0]?.parentElement).not.toHaveClass('px-3');
   });
