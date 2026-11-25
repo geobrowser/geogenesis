@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ClaimResponseSummary } from './claim-response-summary';
 import { summarizeClaimResponses } from './claim-response-summary';
-import { ClaimSummary, ControversialTag } from './claim-summary';
+import { ClaimSplitBar, ClaimSummary, ControversialTag } from './claim-summary';
 
 // The faces and the list each run their own responder query, which is not what this is about. The
 // avatars still render something pressable, because where the popover lands is.
@@ -115,6 +115,22 @@ describe('the responder list’s portal', () => {
  * anything failing: the flame, and the red that is the design's `#ff523a`. There is no behaviour to
  * assert in their place.
  */
+// GEO-3841 added a mono tone for the graph explorer; every other host keeps the green/red split.
+describe('ClaimSplitBar', () => {
+  it('splits green and red on a grey-01 track unless the host asks for mono', () => {
+    const { unmount } = render(<ClaimSplitBar percent={70} />);
+    const split = screen.getByRole('img', { name: '70% agree, 30% disagree' });
+    expect(split).toHaveClass('bg-grey-01');
+    expect(Array.from(split.children, child => child.className)).toEqual(['bg-green', 'bg-red-01']);
+    unmount();
+
+    render(<ClaimSplitBar percent={70} tone="mono" />);
+    const mono = screen.getByRole('img', { name: '70% agree, 30% disagree' });
+    expect(mono).toHaveClass('bg-divider');
+    expect(Array.from(mono.children, child => child.className)).toEqual(['bg-text']);
+  });
+});
+
 describe('ControversialTag', () => {
   afterEach(cleanup);
 
