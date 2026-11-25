@@ -24,6 +24,7 @@ import {
 import { BandLegend } from './connections-view';
 import { GraphSearch, searchNodes } from './graph-search';
 import { GraphTopBar } from './graph-top-bar';
+import { SkeletonNode } from './skeleton-node';
 
 const motion = vi.hoisted(() => ({ reduce: false }));
 /** IntersectionObserver callbacks, so a test can scroll the stage off-screen. */
@@ -162,11 +163,11 @@ function runFrames(until: number) {
   });
 }
 
-function Canvas({ onSelect = vi.fn() }: { onSelect?: (node: GraphNode) => void }) {
+function Canvas({ onSelect = vi.fn(), phone = false }: { onSelect?: (node: GraphNode) => void; phone?: boolean }) {
   return (
     <ConnectionsCanvas
       selection={selection}
-      phone={false}
+      phone={phone}
       onSelect={onSelect}
       renderNode={entry => entry.node.name}
       labelFor={() => 'label'}
@@ -315,6 +316,72 @@ describe('ConnectionsCanvas', () => {
 
     zoom('Zoom in', 8);
     expect(isaac().dataset.far).toBeUndefined();
+  });
+
+  it('draws a hop-1 node on a phone as a pin: full size, its marker scaled by depth, never far', () => {
+    motion.reduce = true;
+    // The stage only: overlays keep jsdom's empty boxes, so nothing is in the names' way.
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const size = this.dataset.testid === 'connections-stage' ? { width: 390, height: 844 } : { width: 0, height: 0 };
+      return { ...size, x: 0, y: 0, top: 0, left: 0, right: size.width, bottom: size.height } as DOMRect;
+    });
+    render(<Canvas phone />);
+    runFrames(100);
+    const isaac = screen.getByRole('button', { name: 'Isaac Herzog' });
+    const centreButton = screen.getByRole('button', { name: 'Centre' });
+    const marker = () => Number(isaac.style.getPropertyValue('--pin-scale'));
+    expect(isaac.style.transform).toMatch(/scale\(1\.000\)$/);
+    expect(isaac.style.getPropertyValue('--pin-label')).toBe('1.000');
+    const before = marker();
+    for (let i = 0; i < 8; i++) {
+      fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }));
+      runFrames(now + 100);
+    }
+    expect(isaac.dataset.far).toBeUndefined();
+    expect(isaac.style.transform).toMatch(/scale\(1\.000\)$/);
+    expect(marker()).toBeLessThan(before);
+    expect(centreButton.style.getPropertyValue('--pin-scale')).toBe('');
+  });
+
+  it.each([
+    ['turns hop 2', { phone: true, hop: 2 as const }],
+    ['leaves the phone layout', { phone: false, hop: 1 as const }],
+  ])('drops `data-covered` from a covered pin that %s, so it stays tappable', (_, next) => {
+    motion.reduce = true;
+    const canvas = (phone: boolean, hop: 1 | 2) => (
+      <ConnectionsCanvas
+        selection={{ ...selection, nodes: [selection.nodes[0], { ...selection.nodes[1], hop }] }}
+        phone={phone}
+        onSelect={vi.fn()}
+        renderNode={entry => entry.node.name}
+        labelFor={() => 'label'}
+      />
+    );
+    // The loop restarts when `phone` flips; the old one's pending frame must really be cancelled.
+    const pending = new Map<number, FrameRequestCallback>();
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation(callback => {
+      frames.push(callback);
+      pending.set(pending.size + 1, callback);
+      return pending.size;
+    });
+    vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(id => {
+      frames = frames.filter(callback => callback !== pending.get(id));
+    });
+    // jsdom's stage is 0 by 0, so the pin's name has no place on it and counts as covered.
+    const { rerender } = render(canvas(true, 1));
+    runFrames(100);
+    const isaac = () => screen.getByRole('button', { name: 'Isaac Herzog' });
+    expect(isaac().dataset.covered).toBe('');
+    rerender(canvas(next.phone, next.hop));
+    runFrames(now + 1200);
+    expect(isaac().dataset.covered).toBeUndefined();
+  });
+
+  it('keeps desktop cards free of pin styles', () => {
+    motion.reduce = true;
+    render(<Canvas />);
+    runFrames(100);
+    expect(screen.getByRole('button', { name: 'Isaac Herzog' }).style.getPropertyValue('--pin-scale')).toBe('');
   });
 
   it('clears a `data-far` its button carries from before, once the card is drawn readable', () => {
@@ -478,6 +545,17 @@ describe('ConnectionsCanvas', () => {
     } finally {
       sizes.forEach(restore => restore());
     }
+  });
+});
+
+describe('SkeletonNode on a phone', () => {
+  it('draws a hop-1 placeholder as a dot over a name bar, and hop 2 as the bare dot', () => {
+    const shapes = (hop: 1 | 2) =>
+      render(<SkeletonNode kind="ent" isCentre={false} hop={hop} phone pulse={false} />).container.firstElementChild!
+        .children.length;
+    expect(shapes(1)).toBe(2);
+    cleanup();
+    expect(shapes(2)).toBe(1);
   });
 });
 
@@ -847,6 +925,11 @@ describe('depthOrder', () => {
     expect(depthOrder(300, false, true)).toBe(6700);
     expect(depthOrder(300, false, true)).toBeGreaterThan(depthOrder(-1000, false));
     expect(depthOrder(-1500, false, true)).toBe(8499);
+  });
+
+  it("sinks a phone's hop-2 markers under the hop-1 pins, even when nearer", () => {
+    expect(depthOrder(-800, false, false, true)).toBeLessThan(depthOrder(800, false));
+    expect(depthOrder(-800, false, false, true)).toBeGreaterThan(0);
   });
 });
 

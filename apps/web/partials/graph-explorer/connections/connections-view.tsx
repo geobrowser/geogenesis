@@ -62,6 +62,7 @@ export function ConnectionsStage({
           <SkeletonNode
             kind={entry.node.kind === 'claim' ? 'claim' : 'ent'}
             isCentre={isCentre}
+            hop={entry.hop}
             phone={phone}
             pulse={!reduceMotion && 'animate-pulse'}
           />

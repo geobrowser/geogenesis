@@ -9,6 +9,7 @@ import {
   hash01,
   project,
   simulateLayout,
+  tallen,
 } from './layout-3d';
 
 const ids = Array.from({ length: 41 }, (_, i) => `n${i}`);
@@ -72,6 +73,31 @@ describe('simulateLayout', () => {
     });
     const [a, b] = [stacked.get('a')!, stacked.get('b')!];
     expect(Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])).toBeGreaterThan(100);
+  });
+
+  it('lays phone graphs out taller than wide, and a re-centre from its own output does not stretch them further', () => {
+    const spread = (p: Map<string, Vec3>) => {
+      const hop1 = ids.slice(1, 15).map(id => p.get(id)!);
+      const mean = (f: (v: Vec3) => number) => hop1.reduce((sum, v) => sum + f(v), 0) / hop1.length;
+      return mean(v => Math.abs(v[1])) / mean(v => Math.hypot(v[0], v[2]));
+    };
+    const flat = simulateLayout({
+      ids,
+      links,
+      centreId: 'n0',
+      previous: new Map(),
+      settings: { ...PHONE_LAYOUT, tall: undefined },
+    });
+    const tall = simulateLayout({ ids, links, centreId: 'n0', previous: new Map(), settings: PHONE_LAYOUT });
+    expect(spread(tall)).toBeGreaterThan(spread(flat) * 1.8);
+    const again = simulateLayout({ ids, links, centreId: 'n0', previous: tall, settings: PHONE_LAYOUT });
+    expect(spread(again)).toBeCloseTo(spread(tall), 1);
+  });
+
+  it('takes a tall point back exactly', () => {
+    const p: Vec3 = [120, -40, 75];
+    tallen(tallen(p, 1.3), 1.3, true).forEach((v, i) => expect(v).toBeCloseTo(p[i]));
+    tallen(p, 1.3).forEach((v, i) => expect(v).toBeCloseTo([120 / 1.3, -40 * 1.69, 75 / 1.3][i]));
   });
 
   it('lays out the design’s largest graph quickly', () => {

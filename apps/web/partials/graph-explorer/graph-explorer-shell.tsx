@@ -43,11 +43,13 @@ export function StaticSkeletonStage() {
                 opacity: node.opacity,
                 transform: `translate(-50%, -50%) scale(${node.scale})`,
                 zIndex: node.hop === 0 ? 2 : 1,
+                ...(node.markerScale !== undefined && { '--pin-scale': node.markerScale }),
               }}
             >
               <SkeletonNode
                 kind={node.kind}
                 isCentre={node.hop === 0}
+                hop={node.hop}
                 phone={phone}
                 pulse="motion-safe:animate-pulse"
               />
