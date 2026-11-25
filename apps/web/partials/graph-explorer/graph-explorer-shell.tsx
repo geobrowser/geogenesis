@@ -61,10 +61,12 @@ export function StaticSkeletonStage() {
 
 /**
  * The page's frame: one screen with the map filling what the top bar leaves on a phone and on
- * desktop; from 600 to 767px a page that scrolls past the map to the panel.
+ * desktop; from 600 to 767px a page that scrolls past the map to the panel. On a phone `h-screen`
+ * comes first for browsers without `dvh` (iOS Safari before 15.4): without it the frame falls back
+ * to md:h-auto and the map, which only fills the frame, collapses to nothing.
  */
 export const GRAPH_PAGE_FRAME =
-  'flex h-[100dvh] flex-col overflow-hidden bg-white md:h-auto md:min-h-[100dvh] md:overflow-visible graph-phone:h-[100dvh] graph-phone:min-h-0 graph-phone:overflow-hidden';
+  'flex h-[100dvh] flex-col overflow-hidden bg-white md:h-auto md:min-h-[100dvh] md:overflow-visible graph-phone:h-screen graph-phone:supports-[height:100dvh]:h-[100dvh] graph-phone:min-h-0 graph-phone:overflow-hidden';
 
 /** The explorer's layout with skeletons in it: the page before hydration, server-rendered. */
 export function GraphExplorerShell() {
@@ -85,7 +87,7 @@ export function GraphExplorerShell() {
           <span
             aria-hidden
             className={cx(
-              'absolute bottom-4 left-1/2 z-[10000] h-10 w-[160px] -translate-x-1/2 rounded-full bg-white/10 motion-safe:animate-pulse',
+              'absolute bottom-[max(16px,env(safe-area-inset-bottom))] left-1/2 z-[10000] h-10 w-[160px] -translate-x-1/2 rounded-full bg-white/10 motion-safe:animate-pulse',
               ON_PHONE
             )}
           />

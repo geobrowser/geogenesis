@@ -49,7 +49,7 @@ export function PhonePanelSheet({
           data-stage-control
           data-testid="graph-panel-handle"
           aria-label={centreName ? `Details for ${centreName}` : 'Details'}
-          className="absolute bottom-4 left-1/2 z-[10000] flex h-10 max-w-[calc(100%-32px)] -translate-x-1/2 items-center gap-2 rounded-full border border-white/20 bg-[rgba(30,30,33,.85)] px-4 text-[14px] text-[#f2f2f2] hover:border-white"
+          className="absolute bottom-[max(16px,env(safe-area-inset-bottom))] left-1/2 z-[10000] flex h-10 max-w-[calc(100%-32px)] -translate-x-1/2 items-center gap-2 rounded-full border border-white/20 bg-[rgba(30,30,33,.85)] px-4 text-[14px] text-[#f2f2f2] hover:border-white"
         >
           <span className="truncate">{centreName ?? 'Details'}</span>
           <span className="shrink-0">

@@ -110,7 +110,7 @@ export function BandLegend() {
     <div
       data-stage-control
       data-testid="band-legend"
-      className="absolute bottom-4 left-4 z-[10000] flex max-w-[calc(100%-80px)] flex-wrap gap-x-3 gap-y-1 rounded-xl bg-white/10 px-3 py-[6px] text-[12px] text-[#e6e6e6] md:max-w-[calc(100%-68px)] md:gap-x-2.5 md:px-2.5 graph-phone:bottom-[68px]"
+      className="absolute bottom-4 left-4 z-[10000] flex max-w-[calc(100%-80px)] flex-wrap gap-x-3 gap-y-1 rounded-xl bg-white/10 px-3 py-[6px] text-[12px] text-[#e6e6e6] md:max-w-[calc(100%-68px)] md:gap-x-2.5 md:px-2.5 graph-phone:bottom-[calc(max(16px,env(safe-area-inset-bottom))+52px)]"
     >
       {(Object.keys(CLAIM_BAND_LABELS) as Array<keyof typeof CLAIM_BAND_LABELS>).map(band => (
         <span key={band} className="flex items-center gap-[6px] whitespace-nowrap">
