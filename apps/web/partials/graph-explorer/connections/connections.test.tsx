@@ -650,9 +650,16 @@ describe('coveredLabels', () => {
 
 describe('tooSmallToRead', () => {
   it('turns a card into its marker below 0.6 and back only above 0.7, so it does not flap', () => {
-    expect(tooSmallToRead(0.59, false)).toBe(true);
-    expect(tooSmallToRead(0.65, false)).toBe(false);
-    expect(tooSmallToRead(0.65, true)).toBe(true);
-    expect(tooSmallToRead(0.71, true)).toBe(false);
+    expect(tooSmallToRead(0.59, false, false)).toBe(true);
+    expect(tooSmallToRead(0.65, false, false)).toBe(false);
+    expect(tooSmallToRead(0.65, true, false)).toBe(true);
+    expect(tooSmallToRead(0.71, true, false)).toBe(false);
+  });
+
+  it('cuts lower on phone, whose whole map is drawn smaller', () => {
+    expect(tooSmallToRead(0.55, false, true)).toBe(false);
+    expect(tooSmallToRead(0.49, false, true)).toBe(true);
+    expect(tooSmallToRead(0.55, true, true)).toBe(true);
+    expect(tooSmallToRead(0.59, true, true)).toBe(false);
   });
 });

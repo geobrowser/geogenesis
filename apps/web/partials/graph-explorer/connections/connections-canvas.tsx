@@ -407,7 +407,7 @@ export function ConnectionsCanvas({
         const fog = Math.max(0.28, Math.min(1, 1 - (point.depth + 150) / 1100));
         const scale = nodeScale(isCentre, node.hop, point.scale, phone);
         // Hop 2 is always a marker; a hop-1 card turns into one while drawn too small to read.
-        const far = !isCentre && node.hop === 1 && tooSmallToRead(scale, node.far);
+        const far = !isCentre && node.hop === 1 && tooSmallToRead(scale, node.far, phone);
         if (far !== node.far) {
           node.far = far;
           if (far) element.dataset.far = '';
@@ -856,13 +856,17 @@ export function overlaps(centre: Rect, rect: Rect): boolean {
   return dx !== 0 || dy !== 0;
 }
 
-/** Below this a card's text is under ~7px; it must grow past the higher one to come back, so it doesn't flap. */
-const FAR_BELOW = 0.6;
-const READABLE_ABOVE = 0.7;
+/**
+ * Scale below which a card's text is too small to read, and the higher one it must grow past to
+ * come back, so it doesn't flap. Phone's whole map is drawn smaller and on a denser screen, so its
+ * cut is lower or most of its cards would go.
+ */
+const FAR_SCALE = { desktop: [0.6, 0.7], phone: [0.5, 0.58] } as const;
 
 /** Whether a card drawn at `scale` is too small to read, with hysteresis on `wasFar`. */
-export function tooSmallToRead(scale: number, wasFar: boolean) {
-  return wasFar ? scale <= READABLE_ABOVE : scale < FAR_BELOW;
+export function tooSmallToRead(scale: number, wasFar: boolean, phone: boolean) {
+  const [below, above] = FAR_SCALE[phone ? 'phone' : 'desktop'];
+  return wasFar ? scale <= above : scale < below;
 }
 
 /** A covered card's opacity factor: low enough that its text no longer reads over the front one. */
