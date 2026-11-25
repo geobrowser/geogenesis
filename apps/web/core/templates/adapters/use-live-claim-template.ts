@@ -48,6 +48,7 @@ import { useHydratedSourceCards } from './use-hydrated-source-cards';
 import { useInitialHydrationGate } from './use-initial-hydration-gate';
 import { useLiveEntityActions } from './use-live-entity-actions';
 import { useTemplateClaimVoteCounts } from './use-template-claim-vote-counts';
+import { spacesWhere, useEntityInScope, useTemplateSpaceScope } from './use-template-space-scope';
 import { useTopicMediaBatch } from './use-topic-media-batch';
 import { useEntityWithViewerSources, useViewerSpaceId } from './use-viewer-sources';
 
@@ -130,12 +131,18 @@ export function useLiveClaimTemplate({
     savePromptSurface: 'single',
   });
 
+  // Every list reads the canonical spaces, not only the route space (`useTemplateSpaceScope`). The
+  // claim's own vote, response state and geo-chat row stay in the route space: that is where the
+  // viewer is voting.
+  const { spaceIds, isResolving: isScopeResolving } = useTemplateSpaceScope(spaceId);
+  const scopedEntity = useEntityInScope({ entity, entityId, spaceId, spaceIds });
+
   // Incoming stance claims: `<subclaim> --[Supports / Opposes]--> <this claim>` (verified live direction).
-  // Incoming lists hold only entities in the viewed space.
+  // Incoming lists hold entities living in a scope space.
   const incomingSupportsWhere = React.useMemo(
     () => ({
       types: [{ id: { equals: CLAIM_TYPE_ID } }],
-      spaces: [{ equals: normId(spaceId) }],
+      spaces: spacesWhere(spaceIds),
       relations: [
         {
           typeOf: { id: { equals: TEMPLATE_ONTOLOGY.CLAIM_SUPPORTS_PROPERTY_ID } },
@@ -143,12 +150,12 @@ export function useLiveClaimTemplate({
         },
       ],
     }),
-    [entityId, spaceId]
+    [entityId, spaceIds]
   );
   const incomingOpposesWhere = React.useMemo(
     () => ({
       types: [{ id: { equals: CLAIM_TYPE_ID } }],
-      spaces: [{ equals: normId(spaceId) }],
+      spaces: spacesWhere(spaceIds),
       relations: [
         {
           typeOf: { id: { equals: TEMPLATE_ONTOLOGY.CLAIM_OPPOSES_PROPERTY_ID } },
@@ -156,15 +163,15 @@ export function useLiveClaimTemplate({
         },
       ],
     }),
-    [entityId, spaceId]
+    [entityId, spaceIds]
   );
   const incomingQuotesWhere = React.useCallback(
     (propertyId: string) => ({
       types: [{ id: { equals: TEMPLATE_ONTOLOGY.QUOTE_TYPE_ID } }],
-      spaces: [{ equals: normId(spaceId) }],
+      spaces: spacesWhere(spaceIds),
       relations: [{ typeOf: { id: { equals: propertyId } }, toEntity: { id: { equals: entityId } } }],
     }),
-    [entityId, spaceId]
+    [entityId, spaceIds]
   );
   const incomingSupportingQuotesWhere = React.useMemo(
     () => incomingQuotesWhere(TEMPLATE_ONTOLOGY.CLAIM_SUPPORTS_PROPERTY_ID),
@@ -234,7 +241,7 @@ export function useLiveClaimTemplate({
   const topicRelations = React.useMemo(() => {
     const seen = new Set<string>();
     const out = [];
-    for (const relation of entity?.relations ?? []) {
+    for (const relation of scopedEntity?.relations ?? []) {
       if (relation.isDeleted === true || !ID.equals(relation.type.id, TOPICS_PROPERTY_ID)) continue;
       const hex = ID.uuidToHex(relation.toEntity.id);
       if (seen.has(hex)) continue;
@@ -242,23 +249,23 @@ export function useLiveClaimTemplate({
       out.push(relation);
     }
     return out;
-  }, [entity?.relations]);
+  }, [scopedEntity?.relations]);
 
   const topicIds = React.useMemo(() => topicRelations.map(relation => relation.toEntity.id), [topicRelations]);
 
   // Batch-hydrate topic thumbnail images (Avatar preferred, then Cover) for Topic pills
   const topicMediaQuery = useTopicMediaBatch(topicIds);
 
-  // Page-space Sources plus the viewer's own personal-space ones, so a non-member who added a source
+  // Scope-space Sources plus the viewer's own personal-space ones, so a non-member who added a source
   // sees it (GEO-3819).
-  const sourcesEntity = useEntityWithViewerSources({ entity, entityId, spaceId });
+  const sourcesEntity = useEntityWithViewerSources({ entity: scopedEntity, entityId, spaceId });
   const sources = React.useMemo(() => getClaimSources(sourcesEntity?.relations ?? []), [sourcesEntity?.relations]);
   const { items: hydratedSourceCards, isLoading: isSourcesLoading } = useHydratedSourceCards({
     sources,
     spaceId,
     enabled: isMounted,
   });
-  const record = useClaimRecord({ claimId: entityId, spaceId, topicIds });
+  const record = useClaimRecord({ claimId: entityId, spaceId, spaceIds, topicIds });
 
   const debateIdsForParticipants = React.useMemo(
     () => record.debateRows.slice(0, 8).map(item => item.entityId),
@@ -325,12 +332,12 @@ export function useLiveClaimTemplate({
       });
     }
 
-    const outgoingSupports = readEntityRelations(entity, [
+    const outgoingSupports = readEntityRelations(sourcesEntity, [
       TEMPLATE_ONTOLOGY.SUPPORTED_BY_PROPERTY_ID,
       TEMPLATE_ONTOLOGY.SUPPORTING_ARGUMENTS_PROPERTY_ID,
       TEMPLATE_ONTOLOGY.CLAIM_SUPPORTS_PROPERTY_ID,
     ]);
-    const outgoingOpposes = readEntityRelations(entity, [
+    const outgoingOpposes = readEntityRelations(sourcesEntity, [
       TEMPLATE_ONTOLOGY.OPPOSED_BY_PROPERTY_ID,
       TEMPLATE_ONTOLOGY.OPPOSING_ARGUMENTS_PROPERTY_ID,
       TEMPLATE_ONTOLOGY.CLAIM_OPPOSES_PROPERTY_ID,
@@ -456,7 +463,7 @@ export function useLiveClaimTemplate({
         ]
       : undefined;
 
-    const broaderClaims = readEntityRelations(entity, TEMPLATE_ONTOLOGY.BROADER_CLAIMS_PROPERTY_ID);
+    const broaderClaims = readEntityRelations(sourcesEntity, TEMPLATE_ONTOLOGY.BROADER_CLAIMS_PROPERTY_ID);
     const subClaims: SubClaimModel[] = subClaimSeedList
       .map(item => {
         const hex = ID.uuidToHex(item.id);
@@ -549,7 +556,7 @@ export function useLiveClaimTemplate({
     const supportingQuotes = quoteSection(
       'quotes',
       'Supporting quotes',
-      readEntityRelations(entity, [
+      readEntityRelations(sourcesEntity, [
         TEMPLATE_ONTOLOGY.QUOTES_THAT_SUPPORT_CLAIMS_LIVE_PROPERTY_ID,
         TEMPLATE_ONTOLOGY.QUOTES_THAT_SUPPORT_CLAIMS_PROPERTY_ID,
       ]),
@@ -560,7 +567,7 @@ export function useLiveClaimTemplate({
     const opposingQuotes = quoteSection(
       'opposing-quotes',
       'Opposing quotes',
-      readEntityRelations(entity, TEMPLATE_ONTOLOGY.QUOTES_THAT_OPPOSE_CLAIMS_PROPERTY_ID),
+      readEntityRelations(sourcesEntity, TEMPLATE_ONTOLOGY.QUOTES_THAT_OPPOSE_CLAIMS_PROPERTY_ID),
       incomingOpposingQuotes,
       spaceId
     );
@@ -672,6 +679,7 @@ export function useLiveClaimTemplate({
     row,
     serverCoverUrl,
     hydratedSourceCards,
+    sourcesEntity,
     space?.entity?.name,
     spaceId,
     state,
@@ -683,6 +691,7 @@ export function useLiveClaimTemplate({
 
   const isSectionsLoading = useInitialHydrationGate(
     !isMounted ||
+      isScopeResolving ||
       isSupportingLoading ||
       isOpposingLoading ||
       isSourcesLoading ||

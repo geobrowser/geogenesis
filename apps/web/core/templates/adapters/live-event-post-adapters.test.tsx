@@ -28,6 +28,8 @@ vi.mock('~/core/sync/use-store', () => ({
   useValues: ({ selector }: { selector: (v: Value) => boolean }) => state.values.filter(selector),
 }));
 vi.mock('~/core/hooks/use-space', () => ({ useSpace: () => ({ space: null }) }));
+// The canonical-space scope reads the sidebar's spaces; these tests are about one space's entity.
+vi.mock('~/core/topics/use-topic-space-scope', () => ({ useTopicSpaceScope: () => undefined }));
 vi.mock('~/core/responses/use-claim-response-summaries', () => ({
   useClaimResponseSummaryBatch: () => ({ data: undefined }),
 }));

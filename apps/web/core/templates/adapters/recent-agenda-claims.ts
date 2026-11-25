@@ -12,6 +12,7 @@ import { DEBATE_AGENDA_TYPE_ID } from '~/core/debates/ontology';
 import { ID } from '~/core/id';
 import { graphql } from '~/core/io/graphql-client';
 import { type CursorPage, collectCursorPages } from '~/core/sync/collect-cursor-pages';
+import { getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
 
 /**
  * GEO-3873. A claim listed on any Debate agenda in this many days leads a Topic page's Claims list,
@@ -315,17 +316,30 @@ export function useRecentAgendaClaims() {
 }
 
 /**
- * The agenda claims a Topic page shows: the ones the page's space itself tagged with the topic, the
- * same space rule the page's other claims follow.
+ * The agenda claims a Topic page shows: the ones any space in the page's scope tagged with the topic
+ * (`useTemplateSpaceScope`), the same space rule the page's other claims follow (GEO-3877). Which
+ * agendas count is a separate rule, applied in `fetchRecentAgendaClaims`.
  */
 export function agendaClaimsForTopic(
   claims: readonly RecentAgendaClaim[],
   topicId: string,
-  spaceId: string
+  spaceIds: readonly string[]
 ): RecentAgendaClaim[] {
   const topicHex = ID.uuidToHex(topicId);
-  const spaceHex = ID.uuidToHex(spaceId);
-  return claims.filter(claim => claim.topicSpaces.get(topicHex)?.has(spaceHex));
+  const scope = new Set(spaceIds.map(id => ID.uuidToHex(id)));
+  return claims.filter(claim => {
+    const tagged = claim.topicSpaces.get(topicHex);
+    return tagged ? [...tagged].some(id => scope.has(id)) : false;
+  });
+}
+
+/**
+ * The space an agenda claim's row opens: the page's space when the claim lives there, otherwise its
+ * best-ranked space, as the page's other rows link.
+ */
+export function agendaClaimSpaceId(claim: RecentAgendaClaim, routeSpaceId: string): string {
+  if (claim.spaceIds.includes(ID.uuidToHex(routeSpaceId))) return routeSpaceId;
+  return getTopRankedSpaceId(claim.spaceIds) ?? routeSpaceId;
 }
 
 /**

@@ -15,7 +15,7 @@ describe('fetchTopicTaggedInSpace', () => {
 
     const tagged = await fetchTopicTaggedInSpace({
       topicId: TOPIC,
-      spaceId: SPACE,
+      spaceIds: [SPACE],
       entityIds: [
         'aaaaaaaa-0000-4000-8000-000000000001',
         'aaaaaaaa000040008000000000000001',
@@ -34,7 +34,7 @@ describe('fetchTopicTaggedInSpace', () => {
 
   it('asks for nothing without ids', async () => {
     const fetchPage = vi.fn();
-    expect(await fetchTopicTaggedInSpace({ topicId: TOPIC, spaceId: SPACE, entityIds: [], fetchPage })).toEqual(
+    expect(await fetchTopicTaggedInSpace({ topicId: TOPIC, spaceIds: [SPACE], entityIds: [], fetchPage })).toEqual(
       new Set()
     );
     expect(fetchPage).not.toHaveBeenCalled();

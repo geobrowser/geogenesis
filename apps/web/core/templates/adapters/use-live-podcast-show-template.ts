@@ -15,6 +15,7 @@ import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import type { Entity } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
+import { getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
 import { NavUtils } from '~/core/utils/utils';
 
 import type {
@@ -38,6 +39,7 @@ import {
 } from '../ontology';
 import { formatPodcastDuration } from '../views/podcast-shared';
 import { useLiveEntityActions } from './use-live-entity-actions';
+import { useTemplateSpaceScope } from './use-template-space-scope';
 
 const EPISODES_FETCH_PAGE_SIZE = 30;
 
@@ -252,9 +254,11 @@ export function useLivePodcastShowTemplate({
     return map;
   }, [firstHopById, hostAvatarEntities]);
 
-  // Paginated Episodes belonging to this Podcast Show, only those in the viewed space
+  // Paginated Episodes belonging to this Podcast Show, living in any canonical space
+  // (`useTemplateSpaceScope`), all spaces in one request.
+  const { spaceIds } = useTemplateSpaceScope(spaceId);
   const episodesQuery = useInfiniteQuery({
-    queryKey: ['podcast-show-episodes', ID.uuidToHex(entityId), ID.uuidToHex(spaceId)],
+    queryKey: ['podcast-show-episodes', ID.uuidToHex(entityId), ID.uuidToHex(spaceId), spaceIds.join(',')],
     enabled: Boolean(entityId),
     initialPageParam: null as string | null,
     staleTime: 60_000,
@@ -266,7 +270,7 @@ export function useLivePodcastShowTemplate({
             episodeTypeId: TEMPLATE_ONTOLOGY.EPISODE_TYPE_ID,
             podcastPropertyId: TEMPLATE_ONTOLOGY.PODCAST_PROPERTY_ID,
             showId: ID.uuidToHex(entityId),
-            spaceIds: [ID.uuidToHex(spaceId)],
+            spaceIds: spaceIds.map(id => ID.uuidToHex(id)),
             avatarPropertyId: TEMPLATE_ONTOLOGY.AVATAR_PROPERTY_ID,
             first: EPISODES_FETCH_PAGE_SIZE,
             after: pageParam ?? undefined,
@@ -386,7 +390,11 @@ export function useLivePodcastShowTemplate({
           ID.equals(v.propertyId, TEMPLATE_ONTOLOGY.IMAGE_URL_PROPERTY_ID)
         );
         const epArtwork = resolveTemplateImageUrl(avUrlVal?.text);
-        const epSpaceId = node.spaceIds?.includes(spaceId) ? spaceId : (node.spaceIds?.[0] ?? spaceId);
+        // The route space when the episode lives there, else its best-ranked space.
+        const nodeSpaceIds = node.spaceIds ?? [];
+        const epSpaceId = nodeSpaceIds.some(id => ID.equals(id, spaceId))
+          ? spaceId
+          : (getTopRankedSpaceId(nodeSpaceIds) ?? spaceId);
 
         episodes.push({
           id: node.id,

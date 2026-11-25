@@ -34,6 +34,7 @@ import {
 import { useInitialHydrationGate } from './use-initial-hydration-gate';
 import { useLiveEntityActions } from './use-live-entity-actions';
 import { useTemplateClaimVoteCounts } from './use-template-claim-vote-counts';
+import { spacesWhere, useEntityInScope, useTemplateSpaceScope } from './use-template-space-scope';
 import { useTopicMediaBatch } from './use-topic-media-batch';
 import { useViewerSpaceId } from './use-viewer-sources';
 
@@ -66,38 +67,40 @@ export function useLiveSourceTemplate({
     setIsMounted(true);
   }, []);
 
-  // Citing claims, quotes and stories: only those in the viewed space.
+  // Citing claims, quotes and stories: those living in a canonical space (`useTemplateSpaceScope`).
+  const { spaceIds, isResolving: isScopeResolving } = useTemplateSpaceScope(spaceId);
+  const scopedEntity = useEntityInScope({ entity, entityId, spaceId, spaceIds });
   const citingClaimsWhere = React.useMemo(
     () => ({
       types: [{ id: { equals: TEMPLATE_ONTOLOGY.CLAIM_TYPE_ID } }],
-      spaces: [{ equals: normId(spaceId) }],
+      spaces: spacesWhere(spaceIds),
       relations: [
         { typeOf: { id: { equals: TEMPLATE_ONTOLOGY.SOURCES_PROPERTY_ID } }, toEntity: { id: { equals: entityId } } },
       ],
     }),
-    [entityId, spaceId]
+    [entityId, spaceIds]
   );
 
   const quotesWhere = React.useMemo(
     () => ({
       types: [{ id: { equals: TEMPLATE_ONTOLOGY.QUOTE_TYPE_ID } }],
-      spaces: [{ equals: normId(spaceId) }],
+      spaces: spacesWhere(spaceIds),
       relations: [
         { typeOf: { id: { equals: TEMPLATE_ONTOLOGY.SOURCES_PROPERTY_ID } }, toEntity: { id: { equals: entityId } } },
       ],
     }),
-    [entityId, spaceId]
+    [entityId, spaceIds]
   );
 
   const citingStoriesWhere = React.useMemo(
     () => ({
       types: [{ id: { equals: TEMPLATE_ONTOLOGY.NEWS_STORY_TYPE_ID } }],
-      spaces: [{ equals: normId(spaceId) }],
+      spaces: spacesWhere(spaceIds),
       relations: [
         { typeOf: { id: { equals: TEMPLATE_ONTOLOGY.SOURCES_PROPERTY_ID } }, toEntity: { id: { equals: entityId } } },
       ],
     }),
-    [entityId, spaceId]
+    [entityId, spaceIds]
   );
 
   const { entities: citingClaims, isLoading: isCitingClaimsLoading } = useQueryEntities({
@@ -142,12 +145,12 @@ export function useLiveSourceTemplate({
   // Outgoing claims directly linked from the article/source (e.g. `Related claims`, `Notable claims`, `Claims`)
   const outgoingClaimRelations = React.useMemo(
     () =>
-      readEntityRelations(entity, [
+      readEntityRelations(scopedEntity, [
         TEMPLATE_ONTOLOGY.RELATED_CLAIMS_PROPERTY_ID,
         TEMPLATE_ONTOLOGY.NOTABLE_CLAIMS_PROPERTY_ID,
         TEMPLATE_ONTOLOGY.TOPIC_CLAIMS_PROPERTY_ID,
       ]),
-    [entity]
+    [scopedEntity]
   );
 
   const outgoingClaimIds = React.useMemo(() => {
@@ -171,7 +174,7 @@ export function useLiveSourceTemplate({
 
   // Deduplicated topic relations + batch-hydrated Avatar/Cover thumbnails for Topic pills
   const topicRelations = React.useMemo(() => {
-    const raw = readEntityRelations(entity, TEMPLATE_ONTOLOGY.TOPICS_PROPERTY_ID);
+    const raw = readEntityRelations(scopedEntity, TEMPLATE_ONTOLOGY.TOPICS_PROPERTY_ID);
     const seen = new Set<string>();
     const out: Relation[] = [];
     for (const rel of raw) {
@@ -181,7 +184,7 @@ export function useLiveSourceTemplate({
       out.push(rel);
     }
     return out;
-  }, [entity]);
+  }, [scopedEntity]);
 
   const topicIds = React.useMemo(() => topicRelations.map(rel => rel.toEntity.id), [topicRelations]);
   const topicMediaQuery = useTopicMediaBatch(topicIds);
@@ -423,6 +426,7 @@ export function useLiveSourceTemplate({
 
   const isSectionsLoading = useInitialHydrationGate(
     !isMounted ||
+      isScopeResolving ||
       isCitingClaimsLoading ||
       isQuotesLoading ||
       isStoriesLoading ||

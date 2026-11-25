@@ -36,6 +36,7 @@ import {
 } from '../ontology';
 import { useInitialHydrationGate } from './use-initial-hydration-gate';
 import { useLiveEntityActions } from './use-live-entity-actions';
+import { useEntityInScope, useTemplateSpaceScope } from './use-template-space-scope';
 import { useEntitySummaryBatch } from './use-topic-media-batch';
 import { useEntityWithViewerSources } from './use-viewer-sources';
 
@@ -81,6 +82,11 @@ export function useLiveNewsStoryTemplate({
 }): TemplateDataSource<NewsStoryTemplateModel> {
   const { entity, isLoading } = useQueryEntity({ id: entityId, spaceId });
   const { space } = useSpace(spaceId);
+  // Side rails, Sources and claims read the canonical spaces (`useTemplateSpaceScope`). The story's
+  // own narrative Blocks and Perspectives stay the route space's: they are one ordered body, and
+  // interleaving another space's blocks into it would garble the story.
+  const { spaceIds } = useTemplateSpaceScope(spaceId);
+  const scopedEntity = useEntityInScope({ entity, entityId, spaceId, spaceIds });
 
   // Ordered narrative Blocks + Perspectives relations from this NewsStory
   const sectionRelations = React.useMemo(() => {
@@ -95,9 +101,9 @@ export function useLiveNewsStoryTemplate({
   }, [entity]);
 
   // Source relations to batch-hydrate for Publisher, Publish datetime, Cover, Summary, and Web URL
-  // Page-space Sources plus the viewer's own personal-space ones, so a non-member who added a source
+  // Scope-space Sources plus the viewer's own personal-space ones, so a non-member who added a source
   // sees it (GEO-3819).
-  const sourcesEntity = useEntityWithViewerSources({ entity, entityId, spaceId });
+  const sourcesEntity = useEntityWithViewerSources({ entity: scopedEntity, entityId, spaceId });
   const sourceRelations = React.useMemo(
     () => readEntityRelations(sourcesEntity, TEMPLATE_ONTOLOGY.SOURCES_PROPERTY_ID),
     [sourcesEntity]
@@ -117,30 +123,30 @@ export function useLiveNewsStoryTemplate({
 
   // Deduplicated side-rail relations (Topics, People involved, Related projects, Related entities, Timelines)
   const topicRelations = React.useMemo(
-    () => dedupeRelations(readEntityRelations(entity, TEMPLATE_ONTOLOGY.TOPICS_PROPERTY_ID)),
-    [dedupeRelations, entity]
+    () => dedupeRelations(readEntityRelations(scopedEntity, TEMPLATE_ONTOLOGY.TOPICS_PROPERTY_ID)),
+    [dedupeRelations, scopedEntity]
   );
   const peopleRelations = React.useMemo(
-    () => dedupeRelations(readEntityRelations(entity, TEMPLATE_ONTOLOGY.RELATED_PEOPLE_PROPERTY_ID)),
-    [dedupeRelations, entity]
+    () => dedupeRelations(readEntityRelations(scopedEntity, TEMPLATE_ONTOLOGY.RELATED_PEOPLE_PROPERTY_ID)),
+    [dedupeRelations, scopedEntity]
   );
   const projectRelations = React.useMemo(
-    () => dedupeRelations(readEntityRelations(entity, TEMPLATE_ONTOLOGY.RELATED_PROJECTS_PROPERTY_ID)),
-    [dedupeRelations, entity]
+    () => dedupeRelations(readEntityRelations(scopedEntity, TEMPLATE_ONTOLOGY.RELATED_PROJECTS_PROPERTY_ID)),
+    [dedupeRelations, scopedEntity]
   );
   const relatedEntityRelations = React.useMemo(
     () =>
       dedupeRelations(
-        readEntityRelations(entity, [
+        readEntityRelations(scopedEntity, [
           TEMPLATE_ONTOLOGY.RELATED_ENTITIES_PROPERTY_ID,
           TEMPLATE_ONTOLOGY.HIGHLIGHTED_RELATED_ENTITIES_PROPERTY_ID,
         ])
       ),
-    [dedupeRelations, entity]
+    [dedupeRelations, scopedEntity]
   );
   const timelineRelations = React.useMemo(
-    () => dedupeRelations(readEntityRelations(entity, TEMPLATE_ONTOLOGY.ASSOCIATED_TIMELINES_PROPERTY_ID)),
-    [dedupeRelations, entity]
+    () => dedupeRelations(readEntityRelations(scopedEntity, TEMPLATE_ONTOLOGY.ASSOCIATED_TIMELINES_PROPERTY_ID)),
+    [dedupeRelations, scopedEntity]
   );
 
   // Batch-hydrate circular Avatar/Cover thumbnails for ALL side-rail pills & timeline cards in one query
@@ -310,7 +316,7 @@ export function useLiveNewsStoryTemplate({
     const summary =
       readEntityTextValue(entity, TEMPLATE_ONTOLOGY.SUMMARY_PROPERTY_ID) ?? entity.description ?? undefined;
 
-    const relatedStories = readEntityRelations(entity, TEMPLATE_ONTOLOGY.RELATED_STORIES_PROPERTY_ID);
+    const relatedStories = readEntityRelations(scopedEntity, TEMPLATE_ONTOLOGY.RELATED_STORIES_PROPERTY_ID);
 
     const firstTopic = topicRelations[0];
     const breadcrumbs: BreadcrumbItem[] | undefined = firstTopic
@@ -502,6 +508,7 @@ export function useLiveNewsStoryTemplate({
     rawClaimGroups,
     relatedEntityRelations,
     responseBatch.data,
+    scopedEntity,
     serverCoverUrl,
     sourceRelations,
     space?.entity?.name,

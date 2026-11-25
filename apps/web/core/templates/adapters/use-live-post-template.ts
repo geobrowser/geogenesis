@@ -33,6 +33,7 @@ import {
 import { sourcesIngestionLink } from './source-ingestion-links';
 import { useHydratedSourceCards, usePostAuthorMetadata } from './use-hydrated-source-cards';
 import { useLiveEntityActions } from './use-live-entity-actions';
+import { useEntityInScope, useTemplateSpaceScope } from './use-template-space-scope';
 import { useEntityWithViewerSources } from './use-viewer-sources';
 
 /**
@@ -68,9 +69,11 @@ export function useLivePostTemplate({
   });
   const authorMeta = usePostAuthorMetadata(entity ? entityId : undefined);
 
-  // Page-space links plus the viewer's own personal-space ones, so a non-member who added a source
-  // (GEO-3819) or a claim (GEO-3836) sees it.
-  const sourcesEntity = useEntityWithViewerSources({ entity, entityId, spaceId });
+  // Canonical-space links (`useTemplateSpaceScope`) plus the viewer's own personal-space ones, so a
+  // non-member who added a source (GEO-3819) or a claim (GEO-3836) sees it.
+  const { spaceIds } = useTemplateSpaceScope(spaceId);
+  const scopedEntity = useEntityInScope({ entity, entityId, spaceId, spaceIds });
+  const sourcesEntity = useEntityWithViewerSources({ entity: scopedEntity, entityId, spaceId });
   const claimRelations = React.useMemo(
     () => readEntityRelations(sourcesEntity, TEMPLATE_ONTOLOGY.RELATED_CLAIMS_PROPERTY_ID),
     [sourcesEntity]
@@ -128,9 +131,9 @@ export function useLivePostTemplate({
     const authorName = knownAuthor ?? 'Unknown author';
     const authorHandle = handle && handle !== authorName ? handle : undefined;
     const when = formatOntologyDate(readEntityTextValue(entity, TEMPLATE_ONTOLOGY.PUBLISH_DATE_PROPERTY_ID));
-    const topics = readEntityRelations(entity, TEMPLATE_ONTOLOGY.TOPICS_PROPERTY_ID);
+    const topics = readEntityRelations(sourcesEntity, TEMPLATE_ONTOLOGY.TOPICS_PROPERTY_ID);
     const communityNotes = readEntityRelations(entity, TEMPLATE_ONTOLOGY.COMMUNITY_NOTES_PROPERTY_ID);
-    const quotedPosts = readEntityRelations(entity, TEMPLATE_ONTOLOGY.QUOTED_POSTS_PROPERTY_ID);
+    const quotedPosts = readEntityRelations(sourcesEntity, TEMPLATE_ONTOLOGY.QUOTED_POSTS_PROPERTY_ID);
 
     const rawTitle = entity.name?.trim();
     // A tweet's name is its own text, which the author card shows, so the page is titled by its
@@ -319,6 +322,7 @@ export function useLivePostTemplate({
     noteValues,
     responseBatch.data,
     serverCoverUrl,
+    sourcesEntity,
     space?.entity?.name,
     spaceId,
   ]);
