@@ -96,6 +96,8 @@ describe('Activity gallery debate card', () => {
     expect(topChip).toHaveClass('bottom-2');
     expect(bottomChip).toHaveClass('bottom-2');
     expect(topChip).not.toHaveClass('bottom-7');
+    // With no owner action, the bottom chip runs to the card's own right inset.
+    expect(bottomChip).toHaveClass('right-2.5');
     const zOf = (el: Element | null) => Number(/z-\[(\d+)\]/.exec(el?.className ?? '')?.[1] ?? 0);
     expect(zOf(card!.querySelector('[data-debate-play]'))).toBeGreaterThan(zOf(topChip));
 
@@ -141,6 +143,11 @@ describe('Activity gallery debate card', () => {
     const hide = screen.getByRole('button', { name: 'Hide from profile' });
     expect(hide.closest('a')).toBeNull();
     expect(hide.closest('[data-debate-gallery-card]')).not.toBeNull();
+    // The bottom speaker's chip stops short of the Hide chip in the same corner, so a long name
+    // truncates before its stance instead of the Hide chip covering it.
+    const bottomChip = hide.closest('[data-debate-gallery-card]')!.querySelector('[data-speaker-chip="bottom"]');
+    expect(bottomChip).toHaveClass('right-12');
+    expect(bottomChip).not.toHaveClass('right-2.5');
     fireEvent.click(hide);
     expect(onHide).toHaveBeenCalled();
   });

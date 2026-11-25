@@ -58,7 +58,7 @@ export function DebateGalleryCard({
     <div className="relative flex flex-col overflow-hidden bg-[#18191c]">
       <SpeakerVideoStill participant={slot1} tone="top" />
       <div className="h-px w-full bg-white/15" aria-hidden />
-      <SpeakerVideoStill participant={slot2} tone="bottom" />
+      <SpeakerVideoStill participant={slot2} tone="bottom" clearAction={Boolean(action)} />
 
       {/* Claim over the top of the video, two lines max, on a dark scrim so it reads on any frame */}
       <div
@@ -191,9 +191,12 @@ function SpeakerProfileAvatar({
 function SpeakerVideoStill({
   participant,
   tone,
+  clearAction = false,
 }: {
   participant: TopicRecentDebateParticipantModel;
   tone: 'top' | 'bottom';
+  /** Keep the chip clear of the card's action chip, which shares this panel's bottom-right corner. */
+  clearAction?: boolean;
 }) {
   const [imgFailed, setImgFailed] = React.useState(false);
   const [imgLoaded, setImgLoaded] = React.useState(false);
@@ -252,7 +255,12 @@ function SpeakerVideoStill({
         data-speaker-chip={tone}
         // Both chips sit the same 8px off their panel's bottom edge. The play button on the seam draws
         // over the top chip where a long name reaches it, rather than the chip moving up out of its way.
-        className="pointer-events-none absolute right-2.5 bottom-2 left-2.5 z-[3] flex max-w-[calc(100%-20px)] items-center gap-1.5 self-start"
+        // With an action chip (24px at 8px from the right) the chip stops 8px short of it, so a long name
+        // truncates before the stance rather than the action drawing over it.
+        className={cx(
+          'pointer-events-none absolute bottom-2 left-2.5 z-[3] flex items-center gap-1.5 self-start',
+          clearAction ? 'right-12 max-w-[calc(100%-58px)]' : 'right-2.5 max-w-[calc(100%-20px)]'
+        )}
       >
         <span className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-black/60 py-0.5 pr-2.5 pl-1 text-[12px] leading-[16px] text-white backdrop-blur-xs">
           <SpeakerProfileAvatar
