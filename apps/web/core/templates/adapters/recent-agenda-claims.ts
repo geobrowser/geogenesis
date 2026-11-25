@@ -20,6 +20,7 @@ import { type CursorPage, collectCursorPages } from '~/core/sync/collect-cursor-
 export const AGENDA_PIN_DAYS = 21;
 
 const PAGE_SIZE = 1_000;
+const TOPICS_LIMIT = 200;
 const DAY_SECONDS = 86_400;
 
 /** One claim listed on a Debate agenda in the window. */
@@ -41,16 +42,29 @@ const AGENDAS_QUERY = parse(/* GraphQL */ `
       nodes {
         id
         createdAt
+        spacesIn {
+          id
+          type
+        }
       }
     }
   }
 `) as TypedDocumentNode<
-  { entitiesConnection?: { nodes?: Array<{ id: string; createdAt: string } | null> | null } | null },
+  {
+    entitiesConnection?: {
+      nodes?: Array<{
+        id: string;
+        createdAt: string;
+        spacesIn?: Array<{ id: string; type?: string | null } | null> | null;
+      } | null> | null;
+    } | null;
+  },
   { agendaTypeId: string; since: string; first: number }
 >;
 
 // Versions, not current relations, for both hops: a claim taken off an agenda once it has enough
-// debates still counts, and so does a data block later removed from its agenda (GEO-3873).
+// debates still counts, and so does a data block later removed from its agenda (GEO-3873). Each
+// version's space is read so a relation written from someone else's space never counts.
 const RELATION_VERSIONS_QUERY = parse(/* GraphQL */ `
   query AgendaRelationVersions($fromIds: [UUID!]!, $typeId: UUID!, $first: Int!, $after: Cursor) {
     relationVersionsConnection(
@@ -65,6 +79,7 @@ const RELATION_VERSIONS_QUERY = parse(/* GraphQL */ `
       nodes {
         fromEntityId
         toEntityId
+        spaceId
       }
     }
   }
@@ -72,7 +87,7 @@ const RELATION_VERSIONS_QUERY = parse(/* GraphQL */ `
   {
     relationVersionsConnection?: {
       pageInfo?: { hasNextPage?: boolean | null; endCursor?: string | null } | null;
-      nodes?: Array<{ fromEntityId: string; toEntityId: string } | null> | null;
+      nodes?: Array<{ fromEntityId: string; toEntityId: string; spaceId: string } | null> | null;
     } | null;
   },
   { fromIds: string[]; typeId: string; first: number; after?: string }
@@ -80,13 +95,20 @@ const RELATION_VERSIONS_QUERY = parse(/* GraphQL */ `
 
 // Claims only: "All spaces" agendas list debates, which never lead a Claims list.
 const LISTED_CLAIMS_QUERY = parse(/* GraphQL */ `
-  query AgendaListedClaims($ids: [UUID!]!, $claimTypeId: UUID!, $topicsPropertyId: UUID!, $first: Int!) {
+  query AgendaListedClaims(
+    $ids: [UUID!]!
+    $claimTypeId: UUID!
+    $topicsPropertyId: UUID!
+    $topicsLimit: Int!
+    $first: Int!
+  ) {
     entitiesConnection(first: $first, filter: { id: { in: $ids }, typeIds: { anyEqualTo: $claimTypeId } }) {
       nodes {
         id
         name
         spaceIds
-        relationsList(filter: { typeId: { is: $topicsPropertyId } }) {
+        # Every space tags Topics on its own; with no first the list stops at 25.
+        relationsList(first: $topicsLimit, filter: { typeId: { is: $topicsPropertyId } }) {
           toEntityId
           spaceId
         }
@@ -104,12 +126,13 @@ const LISTED_CLAIMS_QUERY = parse(/* GraphQL */ `
       } | null> | null;
     } | null;
   },
-  { ids: string[]; claimTypeId: string; topicsPropertyId: string; first: number }
+  { ids: string[]; claimTypeId: string; topicsPropertyId: string; topicsLimit: number; first: number }
 >;
 
-type Agenda = { id: string; createdAt: number };
-/** One version of a relation, current or since removed. */
-type Edge = { fromId: string; toId: string };
+/** `spaceIds`: the DAO spaces the agenda lives in, the only ones its listings count from. */
+type Agenda = { id: string; createdAt: number; spaceIds: string[] };
+/** One version of a relation, current or since removed, and the space it was written in. */
+type Edge = { fromId: string; toId: string; spaceId: string };
 type ListedEntity = {
   id: string;
   name: string;
@@ -141,7 +164,15 @@ const liveIo: AgendaClaimsIo = {
         },
         decoder: data =>
           (data.entitiesConnection?.nodes ?? []).flatMap(node =>
-            node ? [{ id: node.id, createdAt: Number(node.createdAt) }] : []
+            node
+              ? [
+                  {
+                    id: node.id,
+                    createdAt: Number(node.createdAt),
+                    spaceIds: (node.spacesIn ?? []).flatMap(space => (space?.type === 'DAO' ? [space.id] : [])),
+                  },
+                ]
+              : []
           ),
         signal,
       })
@@ -153,7 +184,7 @@ const liveIo: AgendaClaimsIo = {
         variables: { fromIds, typeId, first: PAGE_SIZE, after },
         decoder: (data): CursorPage<Edge> => ({
           items: (data.relationVersionsConnection?.nodes ?? []).flatMap(node =>
-            node ? [{ fromId: node.fromEntityId, toId: node.toEntityId }] : []
+            node ? [{ fromId: node.fromEntityId, toId: node.toEntityId, spaceId: node.spaceId }] : []
           ),
           endCursor: data.relationVersionsConnection?.pageInfo?.endCursor ?? null,
           hasNextPage: data.relationVersionsConnection?.pageInfo?.hasNextPage ?? false,
@@ -169,6 +200,7 @@ const liveIo: AgendaClaimsIo = {
           ids,
           claimTypeId: CLAIM_TYPE_ID,
           topicsPropertyId: TOPICS_PROPERTY_ID,
+          topicsLimit: TOPICS_LIMIT,
           first: PAGE_SIZE,
         },
         decoder: data =>
@@ -205,21 +237,28 @@ export async function fetchRecentAgendaClaims({
   const since = Math.floor(nowMs / 1000) - AGENDA_PIN_DAYS * DAY_SECONDS;
   const agendas = await io.agendas(since, signal);
 
-  const agendaCreatedAt = new Map<string, number>();
+  // As gaia reads agendas (currentDebateAgendas): an agenda in a DAO space, its Blocks written in that
+  // space, and each block's items in the same space. Otherwise anyone could pin claims to a Topic
+  // page with an agenda in their personal space, or a Blocks relation of their own on a real agenda.
+  const agendaListings = new Map<string, Map<string, number>>();
   for (const agenda of agendas) {
     if (!Number.isFinite(agenda.createdAt) || agenda.createdAt < since) continue;
-    agendaCreatedAt.set(ID.uuidToHex(agenda.id), agenda.createdAt);
+    const bySpace = new Map<string, number>();
+    for (const spaceId of agenda.spaceIds) bySpace.set(ID.uuidToHex(spaceId), agenda.createdAt);
+    if (bySpace.size > 0) agendaListings.set(ID.uuidToHex(agenda.id), bySpace);
   }
-  if (agendaCreatedAt.size === 0) return [];
+  if (agendaListings.size === 0) return [];
 
-  const blockListedAt = await listedAtByTarget(io, agendaCreatedAt, ID.uuidToHex(SystemIds.BLOCKS), signal);
-  if (blockListedAt.size === 0) return [];
-  const itemListedAt = await listedAtByTarget(
+  const blockListings = await listingsByTarget(io, agendaListings, ID.uuidToHex(SystemIds.BLOCKS), signal);
+  if (blockListings.size === 0) return [];
+  const itemListings = await listingsByTarget(
     io,
-    blockListedAt,
+    blockListings,
     ID.uuidToHex(SystemIds.COLLECTION_ITEM_RELATION_TYPE),
     signal
   );
+  const itemListedAt = new Map<string, number>();
+  for (const [id, bySpace] of itemListings) itemListedAt.set(id, Math.max(...bySpace.values()));
   if (itemListedAt.size === 0) return [];
 
   const claims = await io.claims([...itemListedAt.keys()], signal);
@@ -238,23 +277,32 @@ export async function fetchRecentAgendaClaims({
   });
 }
 
-/** Each `typeId` target of `listedAtBySource`'s ids, ever, with the newest date of a source pointing at it. */
-async function listedAtByTarget(
+/** Entity hex id -> the space it is listed in, hex -> the newest listing date there. */
+type Listings = Map<string, Map<string, number>>;
+
+/**
+ * Each `typeId` target of the sources' ids, ever, keyed by the space the relation was written in and
+ * kept only where its source is listed in that same space, with the newest date of such a source.
+ */
+async function listingsByTarget(
   io: AgendaClaimsIo,
-  listedAtBySource: Map<string, number>,
+  sources: Listings,
   typeId: string,
   signal: AbortSignal | undefined
-): Promise<Map<string, number>> {
-  const fromIds = [...listedAtBySource.keys()];
+): Promise<Listings> {
+  const fromIds = [...sources.keys()];
   const edges = await collectCursorPages(after => io.versions(fromIds, typeId, after, signal));
-  const listedAt = new Map<string, number>();
+  const targets: Listings = new Map();
   for (const edge of edges) {
-    const at = listedAtBySource.get(ID.uuidToHex(edge.fromId));
+    const spaceHex = ID.uuidToHex(edge.spaceId);
+    const at = sources.get(ID.uuidToHex(edge.fromId))?.get(spaceHex);
     if (at === undefined) continue;
     const hex = ID.uuidToHex(edge.toId);
-    listedAt.set(hex, Math.max(listedAt.get(hex) ?? 0, at));
+    const bySpace = targets.get(hex) ?? new Map<string, number>();
+    bySpace.set(spaceHex, Math.max(bySpace.get(spaceHex) ?? 0, at));
+    targets.set(hex, bySpace);
   }
-  return listedAt;
+  return targets;
 }
 
 /** The recent agenda claims, read once for every Topic page. */

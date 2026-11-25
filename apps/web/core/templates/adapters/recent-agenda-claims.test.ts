@@ -38,18 +38,19 @@ function fakeIo({
   itemVersions,
   claims,
 }: {
-  agendas: { id: string; createdAt: number }[];
-  blockVersions: { fromId: string; toId: string }[];
-  itemVersions: { fromId: string; toId: string }[];
+  agendas: { id: string; createdAt: number; spaceIds?: string[] }[];
+  blockVersions: { fromId: string; toId: string; spaceId?: string }[];
+  itemVersions: { fromId: string; toId: string; spaceId?: string }[];
   claims: Awaited<ReturnType<AgendaClaimsIo['claims']>>;
 }) {
   return {
-    agendas: vi.fn(async () => agendas),
+    // Every agenda and relation in SPACE unless a test says otherwise.
+    agendas: vi.fn(async () => agendas.map(agenda => ({ spaceIds: [SPACE], ...agenda }))),
     // Two pages each, so a walk that stops at the first page loses rows.
     versions: vi.fn(async (fromIds: string[], typeId: string, after: string | undefined) => {
-      const all = (typeId === BLOCKS ? blockVersions : typeId === ITEM ? itemVersions : []).filter(edge =>
-        fromIds.includes(edge.fromId)
-      );
+      const all = (typeId === BLOCKS ? blockVersions : typeId === ITEM ? itemVersions : [])
+        .filter(edge => fromIds.includes(edge.fromId))
+        .map(edge => ({ spaceId: SPACE, ...edge }));
       const half = Math.ceil(all.length / 2);
       return after
         ? { items: all.slice(half), endCursor: '2', hasNextPage: false }
@@ -122,6 +123,38 @@ describe('fetchRecentAgendaClaims', () => {
     const claims = await fetchRecentAgendaClaims({ nowMs: NOW_S * 1000, io });
 
     expect(claims.map(c => c.name).sort()).toEqual(['There is no genocide in Gaza', 'Two']);
+  });
+
+  // Only gaia's agendas count: an agenda in a DAO space, its Blocks written in that space, and each
+  // block's items in the same space.
+  it('ignores listings outside the agenda space chain', async () => {
+    const PERSONAL = hex(500);
+    const io = fakeIo({
+      agendas: [
+        { id: 'real', createdAt: NOW_S - DAY },
+        // A personal-space agenda reads as one with no DAO space.
+        { id: 'personal', createdAt: NOW_S - DAY, spaceIds: [] },
+      ],
+      blockVersions: [
+        { fromId: 'real', toId: 'b1' },
+        // Someone else's Blocks relation on the real agenda, written in their own space.
+        { fromId: 'real', toId: 'spam', spaceId: PERSONAL },
+        { fromId: 'personal', toId: 'pb', spaceId: PERSONAL },
+      ],
+      itemVersions: [
+        { fromId: 'b1', toId: hex(1) },
+        // An item added to the real block from another space.
+        { fromId: 'b1', toId: hex(2), spaceId: OTHER_SPACE },
+        { fromId: 'spam', toId: hex(3), spaceId: PERSONAL },
+        { fromId: 'pb', toId: hex(4), spaceId: PERSONAL },
+      ],
+      claims: [1, 2, 3, 4].map(n => ({ id: hex(n), name: `C${n}`, spaceIds: [SPACE], topics: [] })),
+    });
+
+    const claims = await fetchRecentAgendaClaims({ nowMs: NOW_S * 1000, io });
+
+    expect(claims.map(c => c.id)).toEqual([hex(1)]);
+    expect(io.versions.mock.calls[0]![0]).toEqual(['real']);
   });
 
   it('asks nothing more when no agenda is in the window', async () => {
