@@ -54,14 +54,14 @@ const DARK_CARD =
   'bg-[rgba(28,28,32,.86)] text-[#f2f2f2] shadow-[inset_0_0_0_1px_rgba(255,255,255,.16),0_10px_30px_rgba(0,0,0,.45)]';
 
 /**
- * How many lines a card's name gets. On a phone the centre's name is never cut: the panel below
- * leaves out its name block there (GEO-3849), so the map is the one place it is shown whole.
+ * How many lines a card's name gets. On a phone the centre gets four, so most names show whole
+ * without a long claim filling the middle of the map; the panel below shows the whole name.
  */
 function labelClamp(
   { isCentre, phone }: Pick<CardProps, 'isCentre' | 'phone'>,
   lines: 'line-clamp-2' | 'line-clamp-3'
 ) {
-  return isCentre && phone ? null : lines;
+  return isCentre && phone ? 'line-clamp-4' : lines;
 }
 
 /** Label size: the design's 11px on phone and for far nodes, larger for the centre. */

@@ -30,15 +30,18 @@ const node = (kind: GraphKind): GraphNode => ({
 
 const clamps = () => screen.getByText(NAME).className.match(/line-clamp-\d/g) ?? [];
 
-// On a phone the panel leaves out the centre's name block (GEO-3849), so the map card is the one
-// place the whole name shows.
+// On a phone the centre's card gets four lines: more than its neighbours, but bounded, so a long claim
+// can't fill the middle of the map. The panel under the map shows the whole name.
 describe('NodeCard names', () => {
   afterEach(cleanup);
 
-  it.each<GraphKind>(['ent', 'topic', 'story', 'claim'])('shows a phone centre’s %s name whole', kind => {
-    render(<NodeCard node={node(kind)} hop={0} isCentre phone claimSpaceId="space" />);
-    expect(clamps()).toEqual([]);
-  });
+  it.each<GraphKind>(['ent', 'topic', 'story', 'claim'])(
+    'gives a phone centre’s %s name four lines, and no more',
+    kind => {
+      render(<NodeCard node={node(kind)} hop={0} isCentre phone claimSpaceId="space" />);
+      expect(clamps()).toEqual(['line-clamp-4']);
+    }
+  );
 
   it.each<[GraphKind, string]>([
     ['ent', 'line-clamp-2'],

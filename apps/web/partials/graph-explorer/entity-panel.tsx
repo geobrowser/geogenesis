@@ -76,12 +76,17 @@ export function EntityPanel({
 
   return (
     <section aria-label={`About ${centre.name ?? centre.id}`} className="flex min-h-0 flex-col gap-5">
-      {/* On a phone the map right above already names the centre, so its space goes to the map. */}
-      <div data-testid="entity-panel-header" className="flex items-start gap-3 md:hidden">
-        <EntityAvatar entity={centre} size={48} />
+      {/* On a phone (the map's own sub-600px breakpoint) the panel's peek above the fold keeps only
+          the centre's whole name, in body size: the map card cuts a long one to four lines. */}
+      <div data-testid="entity-panel-header" className="flex items-start gap-3">
+        <span data-testid="entity-panel-avatar" className="shrink-0 max-[599px]:hidden">
+          <EntityAvatar entity={centre} size={48} />
+        </span>
         <div className="flex min-w-0 flex-col gap-1">
-          <h2 className="text-mediumTitle wrap-break-word text-text">{centre.name ?? centre.id}</h2>
-          <div className="flex flex-wrap gap-1">
+          <h2 className="text-mediumTitle wrap-break-word text-text max-[599px]:text-body max-[599px]:font-semibold">
+            {centre.name ?? centre.id}
+          </h2>
+          <div data-testid="entity-panel-types" className="flex flex-wrap gap-1 max-[599px]:hidden">
             {typeNames(centre).map(name => (
               <span key={name} className="rounded border border-grey-02 px-1.5 text-footnote text-grey-04">
                 {name}
