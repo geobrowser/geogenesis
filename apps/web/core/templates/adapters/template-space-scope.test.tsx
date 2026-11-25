@@ -627,7 +627,7 @@ describe('Topic template', () => {
     expect(result.current.data!.timelineHighlights![0]!.when).toBe('Nov 23, 2026');
   });
 
-  it('lists an undated News event after every dated one', async () => {
+  it('lists an undated News event after every dated one, pre-1970 included', async () => {
     topicCorpus();
     state.corpus = [
       linked('undated', 'Event with no date', SPACE, [TEMPLATE_ONTOLOGY.NEWS_EVENT_TYPE_ID], TOPICS_PROPERTY_ID),
@@ -635,12 +635,18 @@ describe('Topic template', () => {
         ...linked('d1', 'Dated event', SPACE, [TEMPLATE_ONTOLOGY.NEWS_EVENT_TYPE_ID], TOPICS_PROPERTY_ID),
         values: [eventDate('d1', SPACE, '2026-11-01T00:00:00Z')],
       },
+      // Before 1970 its timestamp is negative, which must still rank above having no date at all.
+      {
+        ...linked('d0', 'Event from 1967', SPACE, [TEMPLATE_ONTOLOGY.NEWS_EVENT_TYPE_ID], TOPICS_PROPERTY_ID),
+        values: [eventDate('d0', SPACE, '1967-06-05T00:00:00Z')],
+      },
     ];
     const { result } = renderHook(() => useLiveTopicTemplate({ entityId: PAGE, spaceId: SPACE }));
 
     await waitFor(() => expect(result.current.data?.timelineHighlights).toBeDefined());
     expect(result.current.data!.timelineHighlights!.map(item => [item.title, item.when])).toEqual([
       ['Dated event', 'Nov 1, 2026'],
+      ['Event from 1967', 'Jun 5, 1967'],
       ['Event with no date', 'Event'],
     ]);
   });

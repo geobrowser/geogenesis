@@ -634,7 +634,8 @@ export function useLiveTopicTemplate({
 
     // 3. Timeline: News events only, newest Event date first, capped at TIMELINE_LIMIT. The space's
     // page arrives in that order; re-sorting merges in the viewer's own events. Undated events last.
-    const timelineCandidates: { item: TopicTimelineHighlightModel; sortTs: number }[] = [];
+    // `sortTs` is null without a usable date, so undated events stay last even behind pre-1970 ones.
+    const timelineCandidates: { item: TopicTimelineHighlightModel; sortTs: number | null }[] = [];
     const seenTimelineHex = new Set<string>();
 
     for (const eventEntity of [...linkedEvents, ...viewerLinkedEvents]) {
@@ -643,9 +644,9 @@ export function useLiveTopicTemplate({
       if (seenTimelineHex.has(hex)) continue;
       seenTimelineHex.add(hex);
       const rawDate = readEntityTextValue(eventEntity, TEMPLATE_ONTOLOGY.EVENT_DATE_PROPERTY_ID);
-      const ts = rawDate ? Date.parse(rawDate) : 0;
+      const ts = rawDate ? Date.parse(rawDate) : NaN;
       timelineCandidates.push({
-        sortTs: Number.isFinite(ts) ? ts : 0,
+        sortTs: Number.isFinite(ts) ? ts : null,
         item: {
           id: eventEntity.id,
           when: formatOntologyDate(rawDate) ?? 'Event',
@@ -657,7 +658,10 @@ export function useLiveTopicTemplate({
     }
 
     const timelineHighlights = timelineCandidates
-      .sort((a, b) => b.sortTs - a.sortTs)
+      .sort((a, b) => {
+        if (a.sortTs === null || b.sortTs === null) return a.sortTs === null ? (b.sortTs === null ? 0 : 1) : -1;
+        return b.sortTs - a.sortTs;
+      })
       .slice(0, TIMELINE_LIMIT)
       .map(entry => entry.item);
 
