@@ -1,7 +1,7 @@
 'use client';
 
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -56,6 +56,13 @@ import {
   resolvePostAuthor,
   resolveTemplateImageUrl,
 } from '../ontology';
+import {
+  type FrozenClaimOrder,
+  applyFrozenClaimOrder,
+  claimOrderKey,
+  freezeClaimOrder,
+  orderClaimsByVotes,
+} from './claim-vote-order';
 import { debateParticipantsKey, formatUnixSecDate, toDebateGalleryModel } from './debate-gallery-model';
 import { agendaClaimsForTopic, pinAgendaClaims, useRecentAgendaClaims } from './recent-agenda-claims';
 import { topicCoverageIngestionLink } from './source-ingestion-links';
@@ -73,6 +80,8 @@ import { useTopicTaggedInSpace } from './use-topic-tagged-in-space';
 import { useViewerSpaceId, useViewerTopicSources } from './use-viewer-sources';
 
 const LIVE_CLAIMS_LIMIT = 40;
+/** How long the sections wait, from first render, for the claim vote counts that order the Claims list. */
+const CLAIM_VOTES_MAX_WAIT_MS = 4000;
 const LIVE_COVERAGE_LIMIT = 12;
 const NO_COVERAGE_ROWS: TopicCoveragePage['rows'] = [];
 const NO_FEED_ITEMS: ExploreFeedItem[] = [];
@@ -505,6 +514,8 @@ export function useLiveTopicTemplate({
     queryKey: ['live-topic-template', 'multi-space-votes', personalSpaceId ?? null, allVoteClaimIds],
     enabled: allVoteClaimIds.length > 0,
     staleTime: 30_000,
+    // A new claim set keeps the counts already drawn while its own counts load.
+    placeholderData: keepPreviousData,
     queryFn: async ({ signal }) => {
       const response = await fetchMultiSpaceClaimVoteRows({ objectIds: allVoteClaimIds, signal });
 
@@ -513,6 +524,57 @@ export function useLiveTopicTemplate({
       return { byClaim: aggregateClaimVotes(activeVotes, personalSpaceId) };
     },
   });
+
+  // Rows go most votes first (GEO-3876), agenda claims among themselves and then the rest; ties and
+  // claims with no votes keep Best order. The order is made once the reads that pick the claims have
+  // settled and the counts for those claims are in, and then held, so a refetch (say after the viewer
+  // votes) never moves a row. Once the rows are drawn they hold even when the claim set changes: see
+  // the freeze after the sections gate below.
+  const agendaLeadCount = React.useMemo(
+    () => new Set(agendaClaims.map(claim => ID.uuidToHex(claim.id))).size,
+    [agendaClaims]
+  );
+  const currentClaimOrderKey = React.useMemo(
+    () => claimOrderKey(orderedClaimSeeds, agendaLeadCount),
+    [agendaLeadCount, orderedClaimSeeds]
+  );
+  const votesForOrder = votesQuery.isPlaceholderData ? undefined : votesQuery.data?.byClaim;
+  const [frozenClaimOrder, setFrozenClaimOrder] = React.useState<FrozenClaimOrder | null>(null);
+  // Every read that adds claims or moves them into the agenda group. Frozen before these settle, the
+  // order would be made again, and the rows reshuffled, when the agenda claims land on top.
+  const claimSetSettled =
+    !topClaimsQuery.isLoading &&
+    !bestClaimsQuery.isLoading &&
+    !bestDebatesQuery.isLoading &&
+    !recentAgendaClaimsQuery.isLoading &&
+    !isTaggedLoading;
+  const byVotesNow = React.useMemo(
+    () =>
+      votesForOrder
+        ? orderClaimsByVotes({
+            seeds: orderedClaimSeeds,
+            leadingCount: agendaLeadCount,
+            voteTotalFor: hex => {
+              const raw = votesForOrder.get(hex);
+              return (raw?.totalPositive ?? 0) + (raw?.totalNegative ?? 0);
+            },
+          })
+        : null,
+    [agendaLeadCount, orderedClaimSeeds, votesForOrder]
+  );
+  const displayedClaimSeeds = React.useMemo(() => {
+    if (frozenClaimOrder) {
+      return applyFrozenClaimOrder({
+        seeds: orderedClaimSeeds,
+        leadingCount: agendaLeadCount,
+        frozen: frozenClaimOrder,
+      });
+    }
+    return byVotesNow ?? orderedClaimSeeds;
+  }, [agendaLeadCount, byVotesNow, frozenClaimOrder, orderedClaimSeeds]);
+  const claimOrderPending =
+    !claimSetSettled ||
+    (orderedClaimSeeds.length > 0 && frozenClaimOrder?.key !== currentClaimOrderKey && !votesQuery.isError);
 
   const actionCallbacks = useLiveEntityActions({
     entityId,
@@ -605,11 +667,10 @@ export function useLiveTopicTemplate({
       debateCountByClaimHex.set(hex, (debateCountByClaimHex.get(hex) ?? 0) + 1);
     }
 
-    // One list in seed order (GEO-3868): no disputed / accepted split and no re-sort, so a row's
-    // rank is its Best position.
+    // One list (GEO-3868), no disputed / accepted split: in vote order (GEO-3876), Best for ties.
     const claims: ClaimSummaryModel[] = [];
 
-    for (const seed of orderedClaimSeeds) {
+    for (const seed of displayedClaimSeeds) {
       const hex = ID.uuidToHex(seed.id);
       const kind = seed.kind ?? hydratedClaimKindByHex.get(hex);
       const { rows, total, agreeCount, disagreeCount, percent, userVote, isAccepted } = buildSplitForClaim(seed.id);
@@ -829,7 +890,7 @@ export function useLiveTopicTemplate({
     hydratedClaimKindByHex,
     linkedEvents,
     viewerLinkedEvents,
-    orderedClaimSeeds,
+    displayedClaimSeeds,
     queryClient,
     serverCoverUrl,
     spaceId,
@@ -837,7 +898,8 @@ export function useLiveTopicTemplate({
     votesQuery.data,
   ]);
 
-  const isSectionsLoading = useInitialHydrationGate(
+  const sectionsGateKey = `${ID.uuidToHex(entityId)}:${ID.uuidToHex(spaceId)}:${isSpaceHome ? 'home' : 'entity'}`;
+  const isBaseSectionsLoading = useInitialHydrationGate(
     topClaimsQuery.isLoading ||
       bestClaimsQuery.isLoading ||
       bestDebatesQuery.isLoading ||
@@ -845,9 +907,28 @@ export function useLiveTopicTemplate({
       isTaggedLoading ||
       coverage.isLoading ||
       (orderedClaimSeeds.length > 0 && votesQuery.isLoading),
-    `${ID.uuidToHex(entityId)}:${ID.uuidToHex(spaceId)}:${isSpaceHome ? 'home' : 'entity'}`,
+    sectionsGateKey,
     1100
   );
+  // The Claims list is ordered by its vote counts, so it waits a little longer than the other
+  // sections, for its claims and their counts: drawn before, it would reshuffle when they land (GEO-3876).
+  const isWaitingForClaimVotes = useInitialHydrationGate(
+    isBaseSectionsLoading || claimOrderPending,
+    sectionsGateKey,
+    CLAIM_VOTES_MAX_WAIT_MS
+  );
+  const isSectionsLoading = isBaseSectionsLoading || isWaitingForClaimVotes;
+  if (orderedClaimSeeds.length > 0 && frozenClaimOrder?.key !== currentClaimOrderKey) {
+    if (isSectionsLoading) {
+      // Not drawn yet: order the claims by their counts once the set has settled and the counts are in.
+      if (claimSetSettled && byVotesNow) setFrozenClaimOrder(freezeClaimOrder(currentClaimOrderKey, byVotesNow));
+    } else {
+      // Drawn: hold what this render shows, so no row on screen moves. A claim that joins the list (one
+      // the viewer adds, or a refetch brings in) goes after the rows of its group, and past the wait
+      // with no counts the rows keep Best order.
+      setFrozenClaimOrder(freezeClaimOrder(currentClaimOrderKey, displayedClaimSeeds));
+    }
+  }
 
   return {
     data: model,

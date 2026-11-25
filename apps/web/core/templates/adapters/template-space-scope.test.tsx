@@ -1,5 +1,5 @@
 import { ContentIds } from '@geoprotocol/geo-sdk/lite';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -46,6 +46,9 @@ const state = vi.hoisted(() => ({
   infiniteQueries: [] as { queryKey: unknown[]; queryFn: (ctx: { pageParam: string | null }) => Promise<unknown> }[],
   graphqlVariables: [] as Record<string, unknown>[],
   votes: undefined as unknown,
+  /** Recent Debate agenda claims (GEO-3873), and whether that read is still loading. */
+  agendaClaims: undefined as unknown,
+  agendaLoading: false,
   /** Topic feed claims, and which of them the viewed space tagged (null: still checking). */
   feedClaims: undefined as { entityId: string; title: string; spaceId: string }[] | undefined,
   /** Best-ranked topic feed claims and best debates (GEO-3868). */
@@ -106,20 +109,22 @@ vi.mock('@tanstack/react-query', async importOriginal => ({
   ...(await importOriginal<typeof import('@tanstack/react-query')>()),
   useQuery: ({ queryKey }: { queryKey: unknown[] }) => ({
     data:
-      queryKey[1] === 'multi-space-votes'
-        ? state.votes
-        : queryKey[1] === 'tweet-authors'
-          ? state.tweetAuthors
-          : queryKey[1] === 'top-claims'
-            ? state.feedClaims
-            : queryKey[1] === 'best-claims'
-              ? state.bestClaims
-              : queryKey[1] === 'best-debates'
-                ? state.bestDebates
-                : queryKey[1] === 'best-news'
-                  ? state.feedNews
-                  : undefined,
-    isLoading: false,
+      queryKey[0] === 'recent-agenda-claims'
+        ? state.agendaClaims
+        : queryKey[1] === 'multi-space-votes'
+          ? state.votes
+          : queryKey[1] === 'tweet-authors'
+            ? state.tweetAuthors
+            : queryKey[1] === 'top-claims'
+              ? state.feedClaims
+              : queryKey[1] === 'best-claims'
+                ? state.bestClaims
+                : queryKey[1] === 'best-debates'
+                  ? state.bestDebates
+                  : queryKey[1] === 'best-news'
+                    ? state.feedNews
+                    : undefined,
+    isLoading: queryKey[0] === 'recent-agenda-claims' && state.agendaLoading,
   }),
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),
   useInfiniteQuery: (options: (typeof state.infiniteQueries)[number]) => {
@@ -251,6 +256,8 @@ beforeEach(() => {
   state.infiniteQueries = [];
   state.graphqlVariables = [];
   state.votes = undefined;
+  state.agendaClaims = undefined;
+  state.agendaLoading = false;
   state.tweetAuthors = undefined;
   state.feedClaims = undefined;
   state.bestClaims = undefined;
@@ -522,7 +529,7 @@ describe('Topic template', () => {
     );
   });
 
-  it('lists claims in Best order, then fills from Top, debate claims and linked claims, never regrouped (GEO-3868)', async () => {
+  it('lists the claims with the most votes first, then the rest in Best order, then Top, debate and linked claims (GEO-3876)', async () => {
     topicCorpus();
     state.bestClaims = [
       { entityId: 'b1', title: 'Best 1, accepted', spaceId: SPACE },
@@ -539,7 +546,7 @@ describe('Topic template', () => {
       ],
     };
     state.taggedInSpace = new Set(['b1', 'b2', 't1', 'd1']);
-    // Top 1 has the most votes and Best 1 is accepted: neither moves either one.
+    // Top 1 has the most votes, then Best 1; the claims with none keep Best order and the fill order.
     const vote = (userId: string, objectId: string, voteType: number) => ({
       userId,
       objectId,
@@ -562,13 +569,178 @@ describe('Topic template', () => {
     await waitFor(() => expect(result.current.data?.claims).toBeDefined());
     const claims = result.current.data!.claims!;
     expect(claims.map(claim => claim.title)).toEqual([
+      'Top 1, most votes',
       'Best 1, accepted',
       'Best 2, disputed',
-      'Top 1, most votes',
       'Debated claim',
       'Claim here',
     ]);
-    expect(claims.map(claim => claim.split.isSplit)).toEqual([false, true, true, true, true]);
+    expect(claims.map(claim => claim.split.totalVotes)).toEqual([6, 2, undefined, undefined, undefined]);
+    expect(claims.map(claim => claim.split.isSplit)).toEqual([true, false, true, true, true]);
+  });
+
+  it('keeps the sections loading past the usual wait until the claim vote counts are in (GEO-3876)', async () => {
+    vi.useFakeTimers();
+    try {
+      topicCorpus();
+      state.corpus = [];
+      state.bestClaims = [{ entityId: 'b1', title: 'Best 1', spaceId: SPACE }];
+      state.taggedInSpace = new Set(['b1']);
+      const { result, rerender } = renderHook(() => useLiveTopicTemplate({ entityId: PAGE, spaceId: SPACE }));
+      await act(async () => {
+        vi.advanceTimersByTime(2000);
+      });
+      // The other sections' wait (1.1 s) is over, but the Claims order needs its counts.
+      expect(result.current.isSectionsLoading).toBe(true);
+
+      state.votes = { byClaim: new Map() };
+      rerender();
+      await act(async () => {
+        vi.advanceTimersByTime(0);
+      });
+      expect(result.current.isSectionsLoading).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('waits for the agenda claims before drawing the vote order, then puts them first (GEO-3876)', async () => {
+    vi.useFakeTimers();
+    try {
+      topicCorpus();
+      state.corpus = [];
+      state.bestClaims = [
+        { entityId: 'b1', title: 'Best 1', spaceId: SPACE },
+        { entityId: 'b2', title: 'Best 2', spaceId: SPACE },
+      ];
+      state.taggedInSpace = new Set(['b1', 'b2']);
+      const vote = (userId: string, objectId: string) => ({
+        userId,
+        objectId,
+        spaceId: SPACE,
+        voteType: 0,
+        voteKind: CLAIM_STANCE_VOTE_KIND,
+      });
+      state.votes = {
+        byClaim: aggregateClaimVotes(activeStanceVotes([vote('u1', 'b2'), vote('u2', 'b2'), vote('u1', 'b1')]), null),
+      };
+      state.agendaLoading = true;
+      const { result, rerender } = renderHook(() => useLiveTopicTemplate({ entityId: PAGE, spaceId: SPACE }));
+      await act(async () => {
+        vi.advanceTimersByTime(2000);
+      });
+      // Counts are in, but the agenda read that moves Best 1 to the top is not.
+      expect(result.current.isSectionsLoading).toBe(true);
+
+      state.agendaLoading = false;
+      state.agendaClaims = [
+        {
+          id: 'b1',
+          name: 'Best 1',
+          spaceIds: [SPACE],
+          topicSpaces: new Map([[PAGE, new Set([SPACE])]]),
+          listedAt: 1,
+        },
+      ];
+      rerender();
+      await act(async () => {
+        vi.advanceTimersByTime(0);
+      });
+      expect(result.current.isSectionsLoading).toBe(false);
+      expect(result.current.data!.claims!.map(c => c.title)).toEqual(['Best 1', 'Best 2']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('draws the claims in Best order past the wait for their counts, and holds that order when the counts land (GEO-3876)', async () => {
+    vi.useFakeTimers();
+    try {
+      topicCorpus();
+      state.corpus = [];
+      state.bestClaims = [
+        { entityId: 'b1', title: 'Best 1', spaceId: SPACE },
+        { entityId: 'b2', title: 'Best 2', spaceId: SPACE },
+      ];
+      state.taggedInSpace = new Set(['b1', 'b2']);
+      const { result, rerender } = renderHook(() => useLiveTopicTemplate({ entityId: PAGE, spaceId: SPACE }));
+      await act(async () => {
+        vi.advanceTimersByTime(4100);
+      });
+      // The vote read is still out: the sections stop waiting and the rows keep Best order.
+      expect(result.current.isSectionsLoading).toBe(false);
+      expect(result.current.data!.claims!.map(c => c.title)).toEqual(['Best 1', 'Best 2']);
+
+      // The counts land and would put Best 2 first: the rows already drawn stay put.
+      state.votes = {
+        byClaim: aggregateClaimVotes(
+          activeStanceVotes([
+            { userId: 'u1', objectId: 'b2', spaceId: SPACE, voteType: 0, voteKind: CLAIM_STANCE_VOTE_KIND },
+          ]),
+          null
+        ),
+      };
+      rerender();
+      await act(async () => {
+        vi.advanceTimersByTime(0);
+      });
+      expect(result.current.data!.claims!.map(c => [c.title, c.split.totalVotes])).toEqual([
+        ['Best 1', undefined],
+        ['Best 2', 1],
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('holds the vote order when the counts change or a claim joins the list once the rows are drawn (GEO-3876)', async () => {
+    topicCorpus();
+    state.corpus = [];
+    state.bestClaims = [
+      { entityId: 'b1', title: 'Best 1', spaceId: SPACE },
+      { entityId: 'b2', title: 'Best 2', spaceId: SPACE },
+    ];
+    state.taggedInSpace = new Set(['b1', 'b2', 'b3']);
+    const vote = (userId: string, objectId: string) => ({
+      userId,
+      objectId,
+      spaceId: SPACE,
+      voteType: 0,
+      voteKind: CLAIM_STANCE_VOTE_KIND,
+    });
+    const votesFor = (votes: [string, string][]) => ({
+      byClaim: aggregateClaimVotes(activeStanceVotes(votes.map(([u, c]) => vote(u, c))), null),
+    });
+    state.votes = votesFor([['u1', 'b2']]);
+    const { result, rerender } = renderHook(() => useLiveTopicTemplate({ entityId: PAGE, spaceId: SPACE }));
+    await waitFor(() => expect(result.current.data?.claims?.map(c => c.title)).toEqual(['Best 2', 'Best 1']));
+
+    // The viewer votes and Best 1 pulls ahead: the count changes, the rows stay put.
+    state.votes = votesFor([
+      ['u1', 'b2'],
+      ['u2', 'b1'],
+      ['u3', 'b1'],
+    ]);
+    rerender();
+    expect(result.current.data!.claims!.map(c => [c.title, c.split.totalVotes])).toEqual([
+      ['Best 2', 1],
+      ['Best 1', 2],
+    ]);
+
+    // A new claim joins the list with the most votes: the rows on screen stay put and it goes after them.
+    state.bestClaims = [...state.bestClaims, { entityId: 'b3', title: 'Best 3', spaceId: SPACE }];
+    state.votes = votesFor([
+      ['u1', 'b2'],
+      ['u2', 'b1'],
+      ['u3', 'b1'],
+      ['u1', 'b3'],
+      ['u2', 'b3'],
+      ['u3', 'b3'],
+    ]);
+    rerender();
+    await waitFor(() => expect(result.current.data?.claims?.map(c => c.title)).toEqual(['Best 2', 'Best 1', 'Best 3']));
+    rerender();
+    expect(result.current.data!.claims!.map(c => c.title)).toEqual(['Best 2', 'Best 1', 'Best 3']);
   });
 
   it('shows the first 40 Best claims alone when Best has 40 or more', async () => {
