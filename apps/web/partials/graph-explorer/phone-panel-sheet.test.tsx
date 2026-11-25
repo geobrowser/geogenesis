@@ -3,27 +3,24 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import * as React from 'react';
 
-import { Provider, createStore } from 'jotai';
+import { Provider, createStore, useStore } from 'jotai';
 import { afterEach, describe, expect, it } from 'vitest';
-
-import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
 
 import { PhonePanelSheet } from './phone-panel-sheet';
 import { slideUpPopoverContainerAtom } from '~/atoms';
 
-// A popover inside the panel that portals the way a claim's voters list does: it reads the container on
-// the render that opens it (entity-vote-buttons.tsx RespondersPopover).
+// A popover inside the panel that portals the way a claim's voters list does once the React Compiler
+// has memoized it (entity-vote-buttons.tsx RespondersPopover): it keeps the container it read on its
+// first render, and falls back to the body.
 function PanelPopover() {
-  const [open, setOpen] = React.useState(false);
-  const portal = useElevatedPopoverPortal();
+  const store = useStore();
+  const [container] = React.useState(() => store.get(slideUpPopoverContainerAtom));
   return (
-    <Popover.Root open={open} onOpenChange={setOpen}>
+    <Popover.Root>
       <Popover.Trigger>Voters</Popover.Trigger>
-      {portal ? (
-        <Popover.Portal container={portal}>
-          <Popover.Content data-testid="panel-popover">Five people</Popover.Content>
-        </Popover.Portal>
-      ) : null}
+      <Popover.Portal container={container ?? undefined}>
+        <Popover.Content data-testid="panel-popover">Five people</Popover.Content>
+      </Popover.Portal>
     </Popover.Root>
   );
 }
