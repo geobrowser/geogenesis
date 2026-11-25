@@ -156,6 +156,14 @@ describe('centreEyebrow', () => {
   it.each<[string, PanelCentre, string | null]>([
     ['a claim says Claim once', centreOf('claim', { types: [type(CLAIM_TYPE_ID, 'Claim')] }), 'Claim'],
     ['a topic', centreOf('topic', { types: [type(NEIGHBOUR_KIND_TYPE_IDS.topic[0], 'Topic')] }), 'Topic'],
+    // Review round 7: Timeline belongs to the event kind, but beside Topic it says what the topic is.
+    [
+      'a timeline topic keeps Timeline',
+      centreOf('topic', {
+        types: [type(NEIGHBOUR_KIND_TYPE_IDS.topic[0], 'Topic'), type('3b22262d7919441db1a839eee9c2b3e9', 'Timeline')],
+      }),
+      'Topic · Timeline',
+    ],
     [
       'a source: kind, type, date',
       centreOf('src', { types: [type(DATASET_TYPE_ID, 'Dataset')], date: '2026-11-15T00:00:00.000Z' }),

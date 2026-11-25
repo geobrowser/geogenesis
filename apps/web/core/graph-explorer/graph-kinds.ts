@@ -121,10 +121,12 @@ for (const kind of GRAPH_KINDS) for (const id of GRAPH_KIND_TYPE_IDS[kind]) KIND
 /**
  * Whether a type says what a node of `kind` is: one of that kind's own types, or a type no kind lists
  * that isn't plumbing ("Politician" on a person). A type of another kind (Claim on a News event, the
- * Topic tag on a person) or a structural type (Page) doesn't.
+ * Topic tag on a person) or a structural type (Page) doesn't. Timeline on a topic does: as in
+ * graphKindOf, a topic beside Timeline is a timeline topic.
  */
 export function typeDescribesKind(typeId: string, kind: GraphKind): boolean {
   const id = normId(typeId);
+  if (id === TIMELINE_TYPE_ID && kind === 'topic') return true;
   const typeKind = KIND_BY_TYPE.get(id);
   return typeKind ? typeKind === kind : !PLUMBING.has(id);
 }
