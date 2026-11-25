@@ -334,6 +334,22 @@ export function TemplateAddRelationPillPopover({
 
 const stopPropagation = (event: React.SyntheticEvent) => event.stopPropagation();
 
+/**
+ * A template "+" form's analytics names, from its (code-defined) label: `surface` is the `add_surface`
+ * its publish records (`add_supporting_claim`), `label` the `data-geo-analytics-label` stem of its
+ * trigger, form and buttons (`Template add supporting claim`).
+ */
+export function addFormAnalytics(label: string): { surface: string; label: string } {
+  const words = label.trim().toLowerCase();
+  return {
+    surface: words
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 64),
+    label: `Template ${words}`,
+  };
+}
+
 /** An Add form's Cancel and submit row. In the phone sheet it stays at the bottom while the fields scroll. */
 export const ADD_FORM_ACTIONS_CLASS =
   'flex items-center justify-end gap-1.5 pt-1 md:sticky md:bottom-0 md:bg-white md:pb-1';
@@ -372,12 +388,15 @@ export function AddFormSurface({
 }) {
   const phone = useIsPhoneLayout();
   const popoverContainer = useTemplatePopoverContainer();
+  const analytics = addFormAnalytics(label);
 
   const trigger = (
     <button
       type="button"
       aria-label={label}
       title={label}
+      data-geo-analytics-label={analytics.label}
+      data-geo-analytics-intent="open_add_form"
       onClick={stopPropagation}
       className={cx(
         'inline-grid size-7 cursor-pointer place-items-center border-0 bg-transparent text-grey-04 transition-colors hover:text-text',
@@ -395,6 +414,8 @@ export function AddFormSurface({
         type="button"
         onClick={onClose}
         aria-label={`Close ${label.toLowerCase()}`}
+        data-geo-analytics-label={`${analytics.label} close`}
+        data-geo-analytics-intent="close_add_form"
         className="inline-grid size-6 cursor-pointer place-items-center border-0 bg-transparent text-grey-04 hover:text-text"
       >
         <CloseIcon className="size-3.5" />
@@ -688,7 +709,7 @@ export function AddClaimPopover({
   placeholder?: string;
   onSubmit: (draft: { title: string; kind: ClaimKind; note?: string }) => void;
   /** Told as the form submits, with a way to put the draft back (see `EntityActionCallbacks.holdAddDraft`). */
-  holdDraft?: (restore: () => void) => void;
+  holdDraft?: (restore: () => void, surface?: string) => void;
   align?: 'start' | 'center' | 'end';
 }) {
   const [open, setOpen] = React.useState(false);
@@ -696,6 +717,7 @@ export function AddClaimPopover({
   const [title, setTitle] = React.useState('');
   const [kind, setKind] = React.useState<ClaimKind>('fact');
   const [note, setNote] = React.useState('');
+  const analytics = addFormAnalytics(label);
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -706,7 +728,7 @@ export function AddClaimPopover({
       setKind(draft.kind);
       setNote(draft.note);
       setOpen(true);
-    });
+    }, analytics.surface);
     onSubmit({ title: title.trim(), kind, note: note.trim() || undefined });
     setTitle('');
     setKind('fact');
@@ -729,7 +751,12 @@ export function AddClaimPopover({
         }
       }}
     >
-      <form onSubmit={handleSubmit} className="flex flex-col gap-2.5">
+      <form
+        onSubmit={handleSubmit}
+        className="flex flex-col gap-2.5"
+        data-geo-analytics-label={analytics.label}
+        data-geo-analytics-intent="submit_add"
+      >
         <div className="flex flex-wrap gap-1.5" role="group" aria-label="Claim epistemic type">
           {(
             [
@@ -781,6 +808,8 @@ export function AddClaimPopover({
           <button
             type="button"
             onClick={() => setOpen(false)}
+            data-geo-analytics-label={`${analytics.label} cancel`}
+            data-geo-analytics-intent="cancel_add"
             className="inline-flex h-8 cursor-pointer items-center rounded-full border border-grey-02 bg-white px-3.5 text-[13px] font-medium text-text hover:border-text"
           >
             Cancel
@@ -788,6 +817,8 @@ export function AddClaimPopover({
           <button
             type="submit"
             disabled={title.trim().length < 4}
+            data-geo-analytics-label={`${analytics.label} submit`}
+            data-geo-analytics-intent="submit_add"
             className="inline-flex h-8 cursor-pointer items-center rounded-full border border-text bg-text px-3.5 text-[13px] font-medium text-white disabled:opacity-40"
           >
             {label}
@@ -831,7 +862,7 @@ export function AddEntityItemPopover({
   secondaryDate?: { propertyId: string; dataType: DataType };
   onSubmit: (draft: { primary: string; secondary?: string; tertiary?: string }) => void;
   /** Told as the form submits, with a way to put the draft back (see `EntityActionCallbacks.holdAddDraft`). */
-  holdDraft?: (restore: () => void) => void;
+  holdDraft?: (restore: () => void, surface?: string) => void;
   align?: 'start' | 'center' | 'end';
 }) {
   const [open, setOpen] = React.useState(false);
@@ -844,6 +875,7 @@ export function AddEntityItemPopover({
   const dateValueRef = React.useRef('');
   const dateValidRef = React.useRef(true);
   const [showDateError, setShowDateError] = React.useState(false);
+  const analytics = addFormAnalytics(label);
 
   const resetDate = () => {
     dateValueRef.current = '';
@@ -881,7 +913,7 @@ export function AddEntityItemPopover({
       dateValueRef.current = draft.date;
       dateValidRef.current = true;
       setOpen(true);
-    });
+    }, analytics.surface);
     onSubmit({
       primary: primary.trim(),
       secondary: (secondaryDate ? dateValueRef.current : secondary.trim()) || undefined,
@@ -910,7 +942,12 @@ export function AddEntityItemPopover({
         }
       }}
     >
-      <form onSubmit={handleSubmit} className="flex flex-col gap-2.5">
+      <form
+        onSubmit={handleSubmit}
+        className="flex flex-col gap-2.5"
+        data-geo-analytics-label={analytics.label}
+        data-geo-analytics-intent="submit_add"
+      >
         <label className="flex flex-col gap-1">
           <span className="text-[12.5px] font-medium text-grey-04">{primaryLabel}</span>
           {multilinePrimary ? (
@@ -988,6 +1025,8 @@ export function AddEntityItemPopover({
           <button
             type="button"
             onClick={() => setOpen(false)}
+            data-geo-analytics-label={`${analytics.label} cancel`}
+            data-geo-analytics-intent="cancel_add"
             className="inline-flex h-8 cursor-pointer items-center rounded-full border border-grey-02 bg-white px-3.5 text-[13px] font-medium text-text hover:border-text"
           >
             Cancel
@@ -995,6 +1034,8 @@ export function AddEntityItemPopover({
           <button
             type="submit"
             disabled={primary.trim().length < 2}
+            data-geo-analytics-label={`${analytics.label} submit`}
+            data-geo-analytics-intent="submit_add"
             className="inline-flex h-8 cursor-pointer items-center rounded-full border border-text bg-text px-3.5 text-[13px] font-medium text-white disabled:opacity-40"
           >
             {label}

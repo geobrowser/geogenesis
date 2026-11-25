@@ -45,6 +45,32 @@ describe('analytics', () => {
     window.history.replaceState({}, '', '/');
   });
 
+  it('page views, captures and auth attempts on a template page carry the template that drew it', async () => {
+    const runtime = { capture: vi.fn(), pageViewed: vi.fn() };
+    window.lytics = runtime as never;
+    const { registerPageTemplate } = await import('./action-context');
+    const { capture, pageViewed } = await import('./analytics');
+    const { authProperties } = await import('./auth-attempt');
+    const space = '11111111111111111111111111111111';
+    const topic = '22222222222222222222222222222222';
+    window.history.replaceState({}, '', `/space/${space}/${topic}`);
+    const unregister = registerPageTemplate({ entityId: topic, template: 'topic', renderer: 'template' });
+
+    pageViewed();
+    capture('mode_toggled', { mode: 'edit' });
+    const template = { page_template: 'topic', page_template_renderer: 'template' };
+    expect(runtime.pageViewed).toHaveBeenCalledWith(expect.objectContaining({ page_entity_id: topic, ...template }));
+    expect(runtime.capture).toHaveBeenCalledWith('mode_toggled', expect.objectContaining(template));
+    expect(authProperties({ auth_control: 'navbar' })).toMatchObject(template);
+
+    // Once the page is gone, nothing claims to be drawn by it.
+    unregister();
+    window.history.replaceState({}, '', `/space/${space}/${topic}?x=1`);
+    pageViewed();
+    expect(runtime.pageViewed.mock.calls.at(-1)?.[0]).not.toHaveProperty('page_template');
+    window.history.replaceState({}, '', '/');
+  });
+
   // A blocked runtime script never drains the queue, so it must not grow for the life of the tab
   // (GEO-3067); identity calls still get through when it does load.
   it('bounds the queue while the runtime is missing but keeps identity calls', async () => {
@@ -195,6 +221,39 @@ describe('analytics', () => {
       login_account_type: 'email',
     });
     expect(properties).not.toHaveProperty('wallet');
+  });
+
+  it('puts the first-touch click id on signed_up and the geo_account_created push', async () => {
+    const signedUp = vi.fn();
+    window.lytics = { capture: vi.fn(), signedUp };
+    (window as any).dataLayer = [];
+    window.history.replaceState({}, '', '/?fbclid=test123&utm_source=fb');
+    const { initAnalytics, trackPrivyAuth } = await import('./analytics');
+    initAnalytics();
+    window.history.replaceState({}, '', '/');
+
+    trackPrivyAuth({
+      user: { id: 'did:privy:user-fb' },
+      isNewUser: true,
+      wasAlreadyAuthenticated: false,
+      loginMethod: 'email',
+      loginAccount: { type: 'email' },
+    } as any);
+
+    const [, properties] = signedUp.mock.calls[0];
+    expect(properties).toMatchObject({
+      first_touch_fbclid: 'test123',
+      fbc: expect.stringMatching(/^fb\.1\.\d+\.test123$/),
+      first_touch_utm_source: 'fb',
+    });
+    expect((window as any).dataLayer).toContainEqual(
+      expect.objectContaining({
+        event: 'geo_account_created',
+        user_id: 'did:privy:user-fb',
+        fbclid: 'test123',
+        fbc: properties.fbc,
+      })
+    );
   });
 
   // GEO-3139: a Google-only user has no `user.email`; the address is on the google_oauth account.

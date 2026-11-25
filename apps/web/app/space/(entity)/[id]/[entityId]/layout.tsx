@@ -17,6 +17,7 @@ import { isHiddenEntity } from '~/core/moderation/hidden';
 import { firstLine } from '~/core/opengraph';
 import { RouteEditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
+import { PageTemplateAnalytics } from '~/core/templates/page-template-analytics';
 import { TabEntity } from '~/core/types';
 import { Entity, Relation } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
@@ -121,6 +122,9 @@ export default async function ProfileLayout(props: Props) {
   if (entityBrowseViewFromTypes(entityTypes) !== 'person') {
     return (
       <ActionContextProvider value={actionContext}>
+        {pageType && pageType !== 'person' && (
+          <PageTemplateAnalytics entityId={entityId} spaceId={spaceId} template={pageType} />
+        )}
         {stickyHeader}
         {children}
       </ActionContextProvider>

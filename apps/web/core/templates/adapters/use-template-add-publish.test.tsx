@@ -7,6 +7,7 @@ import { Effect } from 'effect';
 import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { registerPageTemplate } from '~/core/action-context';
 import { pendingActionsAtom } from '~/core/state/pending-actions';
 
 import type { TemplateAddResult } from '../models';
@@ -29,6 +30,12 @@ const mocks = vi.hoisted(() => ({
   makeProposal: vi.fn(),
   dispatch: vi.fn(),
   store: { setValues: vi.fn(), setRelations: vi.fn(), setAsPublished: vi.fn() },
+  capture: vi.fn(),
+}));
+
+vi.mock('~/core/analytics', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/analytics')>()),
+  capture: mocks.capture,
 }));
 
 vi.mock('~/core/wallet/auth-hooks', () => ({
@@ -108,6 +115,7 @@ beforeEach(() => {
   mocks.ensure.mockReset().mockResolvedValue(false);
   mocks.makeProposal.mockReset();
   mocks.dispatch.mockReset();
+  mocks.capture.mockReset();
   Object.values(mocks.store).forEach(fn => fn.mockReset());
   role(true);
   publishes(true);
@@ -382,5 +390,126 @@ describe('useTemplateAddPublish', () => {
     unmount();
     expect(store.get(pendingActionsAtom)).toHaveLength(0);
     await expect(pending).resolves.toMatchObject({ ok: false });
+  });
+});
+
+/** The `action_completed` / `action_failed` events the add recorded. */
+function captured(event: string) {
+  return mocks.capture.mock.calls.filter(([name]) => name === event).map(([, properties]) => properties);
+}
+
+describe('useTemplateAddPublish analytics', () => {
+  it('a published add records one publish action with its page, kind, surface and new entity', async () => {
+    const { result } = renderPublisher();
+
+    let outcome: TemplateAddResult | undefined;
+    await act(async () => {
+      result.current.holdAddDraft(() => {}, 'add_supporting_claim');
+      outcome = await result.current.add(CLAIM);
+    });
+
+    expect(captured('action_completed')).toEqual([
+      expect.objectContaining({
+        action_kind: 'publish',
+        outcome: 'succeeded',
+        component: 'template_add_form',
+        target_type: 'entity',
+        target_id: PAGE,
+        add_kind: 'claim',
+        add_surface: 'add_supporting_claim',
+        replayed: false,
+        entity_id: outcome?.ok ? outcome.id : 'missing',
+        space_id: PAGE_SPACE,
+      }),
+    ]);
+    // Nothing the viewer wrote goes out with it.
+    expect(JSON.stringify(mocks.capture.mock.calls)).not.toContain('Aid entered');
+    expect(captured('action_failed')).toEqual([]);
+  });
+
+  it('a failed publish records the publish as failed', async () => {
+    publishes(false);
+    const { result } = renderPublisher();
+
+    await act(async () => {
+      await result.current.add({ kind: 'event', draft: { title: 'Ceasefire signed' } });
+    });
+
+    expect(captured('action_completed')).toEqual([
+      expect.objectContaining({
+        action_kind: 'publish',
+        outcome: 'failed',
+        failure_code: 'publish_failed',
+        add_kind: 'event',
+        replayed: false,
+      }),
+    ]);
+    expect(captured('action_failed')).toEqual([expect.objectContaining({ failure_code: 'publish_failed' })]);
+  });
+
+  it('a draft queued signed out records nothing until it publishes after sign-up, then records the replay', async () => {
+    role(false, false);
+    auth.authenticated = false;
+    Object.assign(account, { personalSpaceId: null, isRegistered: false, address: null });
+    const { result, rerender, store, queryClient } = renderPublisher();
+
+    // Pressed on the topic's own page, drawn by its template.
+    const pressPath = `/space/${PAGE_SPACE}/${PAGE}`;
+    window.history.replaceState(null, '', pressPath);
+    const unregister = registerPageTemplate({ entityId: PAGE, template: 'topic', renderer: 'template' });
+    act(() => {
+      result.current.holdAddDraft(() => {}, 'add_claim');
+      void result.current.add(CLAIM);
+    });
+    const [queued] = store.get(pendingActionsAtom);
+    const pressViewId = queued!.context?.page_view_id;
+    // The "+" it came from survives the sign-up (and a Google redirect) inside the queued intent.
+    expect(JSON.parse(queued!.intent!)).toEqual({ ...CLAIM, surface: 'add_claim' });
+    expect(queued!.context).toMatchObject({ component: 'template_add_form', page_template: 'topic' });
+    expect(captured('action_completed')).toEqual([]);
+
+    // By the time it publishes the viewer is somewhere else, with no template registered.
+    unregister();
+    window.history.replaceState(null, '', '/explore');
+
+    auth.authenticated = true;
+    Object.assign(account, { personalSpaceId: PERSONAL_SPACE, isRegistered: true, address: ADDRESS });
+    queryClient.setQueryData(['personal-space-id', ADDRESS.toLowerCase()], {
+      isRegistered: true,
+      personalSpaceId: PERSONAL_SPACE,
+      personalEntityId: null,
+    });
+    rerender();
+    await act(async () => {
+      await queued!.run();
+    });
+
+    expect(captured('action_completed')).toEqual([
+      expect.objectContaining({
+        action_kind: 'publish',
+        outcome: 'succeeded',
+        component: 'template_add_form',
+        target_id: PAGE,
+        add_kind: 'claim',
+        add_surface: 'add_claim',
+        replayed: true,
+        space_id: PERSONAL_SPACE,
+        // The press's page, not the one the viewer is on when it publishes.
+        page_path: pressPath,
+        page_view_id: pressViewId,
+        page_template: 'topic',
+        page_template_renderer: 'template',
+      }),
+    ]);
+    window.history.replaceState(null, '', '/');
+  });
+
+  it('drops a surface that is not a plain form name', async () => {
+    const { result } = renderPublisher();
+    await act(async () => {
+      result.current.holdAddDraft(() => {}, 'Aid entered on Monday');
+      await result.current.add(CLAIM);
+    });
+    expect(captured('action_completed')[0]).not.toHaveProperty('add_surface');
   });
 });
