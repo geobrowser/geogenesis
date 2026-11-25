@@ -14,7 +14,7 @@ import { graphShareLanding, takeGraphExplorerEntry } from './graph-share';
 
 export type GraphEntry = 'shared_link' | 'in_app' | 'reload' | 'history' | 'external_link' | 'direct' | 'internal_link';
 export type GraphLoadOutcome = 'ready' | 'error' | 'not_in_graph';
-export type RecentreMethod = 'node' | 'search' | 'panel' | 'summary' | 'back' | 'history';
+export type RecentreMethod = 'node' | 'search' | 'panel' | 'summary' | 'back' | 'trail' | 'history';
 export type GraphExit = 'close' | 'open_claim' | 'open_entity' | 'navigated' | 'page_hidden';
 type Interaction =
   | { interaction: 'rotate' }
@@ -22,6 +22,8 @@ type Interaction =
   | { interaction: 'filter'; value: string }
   | { interaction: 'search'; result_count: number }
   | { interaction: 'summary_seen' }
+  /** The path's "…" opened. Its own integer, as search's count is: `value` is a string elsewhere. */
+  | { interaction: 'trail_menu'; step_count: number }
   // Each open of the phone's panel sheet (GEO-3849).
   | { interaction: 'panel_sheet' }
   // Each open of the phone's color key (GEO-3849).
