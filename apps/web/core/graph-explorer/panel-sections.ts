@@ -3,7 +3,13 @@ import { normId } from '~/core/utils/norm-id';
 
 import { type ClaimBand, MIN_RESPONSES_FOR_BAND, agreePercent, claimBand } from './claim-band';
 import type { GraphNode } from './fetch-graph-neighbourhood';
-import type { GraphKind } from './graph-kinds';
+import {
+  GRAPH_KIND_REDUNDANT_LABELS,
+  type GraphKind,
+  type RowCentre,
+  isGenericRelationLabel,
+  labelKey,
+} from './graph-kinds';
 import type { GraphKindFilter, GraphSelection } from './select-graph';
 import type { Spoke } from './spokes';
 import type { SummarisedClaim } from './topic-claims-summary';
@@ -127,6 +133,47 @@ export function groupByKind(spokes: readonly Spoke[], nodes: ReadonlyMap<string,
     const list = groups.get(kind);
     return list ? [{ kind, spokes: list }] : [];
   });
+}
+
+const INCOMING_FALLBACK = /^(.+) \(incoming\)$/i;
+
+/**
+ * A row's line above (its relations) and below (its type and date). The line above keeps only
+ * relations that say how the row connects. A label goes when it only says "related", only repeats
+ * the group's heading, or only names an end of the relation: a label that is one of the row's type
+ * names ("Person" on a person), or a fallback "<noun> (incoming)" whose noun is the centre's kind or
+ * one of its type names ("Skills (incoming)" around a skill). Nouns match by labelKey.
+ */
+export function rowLabels({
+  kind,
+  relations,
+  centre,
+  typeLabel = null,
+  typeNames = [],
+  date = null,
+}: {
+  kind: GraphKind;
+  relations: readonly string[];
+  centre: RowCentre;
+  /** The row's type shown below. */
+  typeLabel?: string | null;
+  /** All of the row's type names. */
+  typeNames?: readonly string[];
+  date?: string | null;
+}): { relation: string | null; sub: string | null } {
+  const redundant = new Set(GRAPH_KIND_REDUNDANT_LABELS[kind].map(labelKey));
+  const rowTypes = new Set([...typeNames, ...(typeLabel ? [typeLabel] : [])].map(labelKey));
+  const centreNouns = new Set([...GRAPH_KIND_REDUNDANT_LABELS[centre.kind], ...centre.typeNames].map(labelKey));
+  const type = typeLabel && !redundant.has(labelKey(typeLabel)) ? typeLabel : null;
+  const shown = relations.filter(label => {
+    if (isGenericRelationLabel(label) || redundant.has(labelKey(label))) return false;
+    const incoming = INCOMING_FALLBACK.exec(label.trim());
+    return incoming ? !centreNouns.has(labelKey(incoming[1])) : !rowTypes.has(labelKey(label));
+  });
+  return {
+    relation: shown.join(' · ') || null,
+    sub: [type, date].filter(Boolean).join(' · ') || null,
+  };
 }
 
 /** Banded claims per band, for the Claims group's bar: only claims past the threshold count. */

@@ -1,0 +1,502 @@
+[
+  {
+    "name": "NDCs",
+    "relations": 232232,
+    "type": "NDC"
+  },
+  {
+    "name": "Time zone",
+    "relations": 124364,
+    "type": "Time zone"
+  },
+  {
+    "name": "System Type",
+    "relations": 120258,
+    "type": null
+  },
+  {
+    "name": "Skills",
+    "relations": 117967,
+    "type": "Skill"
+  },
+  {
+    "name": "Data source type",
+    "relations": 94112,
+    "type": null
+  },
+  {
+    "name": "View",
+    "relations": 89949,
+    "type": "View"
+  },
+  {
+    "name": "Proposals",
+    "relations": 26214,
+    "type": "Proposal"
+  },
+  {
+    "name": "City",
+    "relations": 23698,
+    "type": "City"
+  },
+  {
+    "name": "Quoted posts",
+    "relations": 21202,
+    "type": null
+  },
+  {
+    "name": "Claims",
+    "relations": 18239,
+    "type": "Claim"
+  },
+  {
+    "name": "Properties",
+    "relations": 16904,
+    "type": "Property"
+  },
+  {
+    "name": "Target property",
+    "relations": 14190,
+    "type": null
+  },
+  {
+    "name": "Listen on",
+    "relations": 14052,
+    "type": null
+  },
+  {
+    "name": "Skill scope",
+    "relations": 12544,
+    "type": "Skill scope"
+  },
+  {
+    "name": "Semantic clinical drugs",
+    "relations": 12039,
+    "type": "Semantic clinical drug"
+  },
+  {
+    "name": "Brand names",
+    "relations": 11733,
+    "type": "Brand name"
+  },
+  {
+    "name": "DINs",
+    "relations": 11083,
+    "type": "DIN"
+  },
+  {
+    "name": "Bounties",
+    "relations": 9682,
+    "type": "Bounty"
+  },
+  {
+    "name": "FEC Report",
+    "relations": 9465,
+    "type": "FEC Report"
+  },
+  {
+    "name": "Tweeted",
+    "relations": 9381,
+    "type": null
+  },
+  {
+    "name": "Issuing body",
+    "relations": 8848,
+    "type": null
+  },
+  {
+    "name": "Semantic branded drugs",
+    "relations": 8573,
+    "type": "Semantic branded drug"
+  },
+  {
+    "name": "Ingredients",
+    "relations": 8536,
+    "type": "Ingredient"
+  },
+  {
+    "name": "Books",
+    "relations": 7353,
+    "type": "Book"
+  },
+  {
+    "name": "Donations",
+    "relations": 7109,
+    "type": null
+  },
+  {
+    "name": "Donor Organizations",
+    "relations": 7073,
+    "type": null
+  },
+  {
+    "name": "Podcast",
+    "relations": 7012,
+    "type": "Podcast"
+  },
+  {
+    "name": "product of",
+    "relations": 6046,
+    "type": null
+  },
+  {
+    "name": "Multiple ingredients",
+    "relations": 5967,
+    "type": "Multiple ingredient"
+  },
+  {
+    "name": "substrate of",
+    "relations": 5921,
+    "type": null
+  },
+  {
+    "name": "Platform",
+    "relations": 5823,
+    "type": null
+  },
+  {
+    "name": "Models",
+    "relations": 5489,
+    "type": "Model"
+  },
+  {
+    "name": "Side effects",
+    "relations": 5193,
+    "type": "Side effect"
+  },
+  {
+    "name": "Concepts",
+    "relations": 5174,
+    "type": "Concept"
+  },
+  {
+    "name": "Contributors",
+    "relations": 4845,
+    "type": null
+  },
+  {
+    "name": "catalysed by",
+    "relations": 4800,
+    "type": null
+  },
+  {
+    "name": "Benchmark",
+    "relations": 4692,
+    "type": "Benchmark"
+  },
+  {
+    "name": "part of",
+    "relations": 4595,
+    "type": null
+  },
+  {
+    "name": "Suspicious Votes",
+    "relations": 4490,
+    "type": null
+  },
+  {
+    "name": "Dose forms",
+    "relations": 4399,
+    "type": "Dose form"
+  },
+  {
+    "name": "Related drugs",
+    "relations": 4353,
+    "type": null
+  },
+  {
+    "name": "State",
+    "relations": 4205,
+    "type": "State"
+  },
+  {
+    "name": "Interested In",
+    "relations": 3933,
+    "type": null
+  },
+  {
+    "name": "Associated conditions",
+    "relations": 3925,
+    "type": null
+  },
+  {
+    "name": "Has facet",
+    "relations": 3897,
+    "type": null
+  },
+  {
+    "name": "Data type",
+    "relations": 3865,
+    "type": "Data type"
+  },
+  {
+    "name": "Broader skills",
+    "relations": 3860,
+    "type": null
+  },
+  {
+    "name": "Top Donors",
+    "relations": 3791,
+    "type": null
+  },
+  {
+    "name": "Addresses",
+    "relations": 3620,
+    "type": null
+  },
+  {
+    "name": "Genres",
+    "relations": 3529,
+    "type": "Genre"
+  },
+  {
+    "name": "Symptoms",
+    "relations": 3193,
+    "type": "Symptom"
+  },
+  {
+    "name": "Evidence level",
+    "relations": 3055,
+    "type": "Evidence level"
+  },
+  {
+    "name": "Life Domains",
+    "relations": 2917,
+    "type": "Life Domain"
+  },
+  {
+    "name": "Answers",
+    "relations": 2737,
+    "type": "Answer"
+  },
+  {
+    "name": "Lives in",
+    "relations": 2703,
+    "type": null
+  },
+  {
+    "name": "Precise ingredients",
+    "relations": 2600,
+    "type": "Precise ingredient"
+  },
+  {
+    "name": "Has statement",
+    "relations": 2594,
+    "type": null
+  },
+  {
+    "name": "Claim posture",
+    "relations": 2594,
+    "type": null
+  },
+  {
+    "name": "Predicate",
+    "relations": 2594,
+    "type": null
+  },
+  {
+    "name": "Claim origin",
+    "relations": 2594,
+    "type": null
+  },
+  {
+    "name": "Statement subject",
+    "relations": 2594,
+    "type": null
+  },
+  {
+    "name": "Statement type",
+    "relations": 2594,
+    "type": null
+  },
+  {
+    "name": "Review status",
+    "relations": 2594,
+    "type": null
+  },
+  {
+    "name": "Employment",
+    "relations": 2534,
+    "type": "Employment"
+  },
+  {
+    "name": "Political party",
+    "relations": 2524,
+    "type": "Political party"
+  },
+  {
+    "name": "Canadian Generic Drugs",
+    "relations": 2515,
+    "type": "Canadian Generic Drug"
+  },
+  {
+    "name": "Canadian Branded Drugs",
+    "relations": 2501,
+    "type": "Canadian Branded Drug"
+  },
+  {
+    "name": "Lessons",
+    "relations": 2474,
+    "type": "Lesson"
+  },
+  {
+    "name": "Broader fields",
+    "relations": 2432,
+    "type": null
+  },
+  {
+    "name": "Indications",
+    "relations": 2363,
+    "type": "Indication"
+  },
+  {
+    "name": "Published",
+    "relations": 2303,
+    "type": null
+  },
+  {
+    "name": "Practices",
+    "relations": 2124,
+    "type": "Practice"
+  },
+  {
+    "name": "Topics",
+    "relations": 1895,
+    "type": "Topic"
+  },
+  {
+    "name": "Participants",
+    "relations": 1780,
+    "type": null
+  },
+  {
+    "name": "Capabilities",
+    "relations": 1750,
+    "type": null
+  },
+  {
+    "name": "Contributions",
+    "relations": 1695,
+    "type": "Contribution"
+  },
+  {
+    "name": "Quotes that support claims",
+    "relations": 1550,
+    "type": null
+  },
+  {
+    "name": "Regions",
+    "relations": 1550,
+    "type": "Region"
+  },
+  {
+    "name": "Investors",
+    "relations": 1505,
+    "type": "Investor"
+  },
+  {
+    "name": "References",
+    "relations": 1482,
+    "type": "References"
+  },
+  {
+    "name": "Lead investors",
+    "relations": 1479,
+    "type": null
+  },
+  {
+    "name": "Therapeutic approaches",
+    "relations": 1472,
+    "type": null
+  },
+  {
+    "name": "Statement object",
+    "relations": 1457,
+    "type": null
+  },
+  {
+    "name": "Continent",
+    "relations": 1449,
+    "type": "Continent"
+  },
+  {
+    "name": "Body systems",
+    "relations": 1447,
+    "type": "Body system"
+  },
+  {
+    "name": "To entity types",
+    "relations": 1404,
+    "type": null
+  },
+  {
+    "name": "Primary Industry",
+    "relations": 1397,
+    "type": null
+  },
+  {
+    "name": "Therapeutic areas",
+    "relations": 1387,
+    "type": "Therapeutic area"
+  },
+  {
+    "name": "Weeks",
+    "relations": 1348,
+    "type": "Week"
+  },
+  {
+    "name": "Chains",
+    "relations": 1347,
+    "type": null
+  },
+  {
+    "name": "Causes",
+    "relations": 1329,
+    "type": null
+  },
+  {
+    "name": "Payout",
+    "relations": 1322,
+    "type": "Payout"
+  },
+  {
+    "name": "Payout bounty",
+    "relations": 1322,
+    "type": null
+  },
+  {
+    "name": "Network",
+    "relations": 1280,
+    "type": "Network"
+  },
+  {
+    "name": "Broader roles",
+    "relations": 1210,
+    "type": null
+  },
+  {
+    "name": "Accounts",
+    "relations": 1156,
+    "type": "Account"
+  },
+  {
+    "name": "Complications",
+    "relations": 1155,
+    "type": null
+  },
+  {
+    "name": "Principles",
+    "relations": 1151,
+    "type": "Principle"
+  },
+  {
+    "name": "Broader facet",
+    "relations": 1135,
+    "type": null
+  },
+  {
+    "name": "Submitted to Ranking Block",
+    "relations": 1121,
+    "type": null
+  }
+]

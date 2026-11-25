@@ -13,7 +13,7 @@ import type { ClaimBand } from '~/core/graph-explorer/claim-band';
 import { CLAIM_BAND_LABELS } from '~/core/graph-explorer/claim-band';
 import type { GraphNode } from '~/core/graph-explorer/fetch-graph-neighbourhood';
 import { type GraphFilter, graphFilterKey } from '~/core/graph-explorer/graph-filter';
-import { GRAPH_KIND_LABELS, type GraphKind } from '~/core/graph-explorer/graph-kinds';
+import { GRAPH_KIND_LABELS, type GraphKind, type RowCentre } from '~/core/graph-explorer/graph-kinds';
 import {
   type Counts,
   GROUP_ROWS,
@@ -23,6 +23,7 @@ import {
   bandTally,
   latestNews,
   mostLinked,
+  rowLabels,
   shownAgreement,
   topClaimsInBand,
 } from '~/core/graph-explorer/panel-sections';
@@ -40,7 +41,7 @@ import { typeNames } from './entity-panel';
 import { ClaimBatchRow, type ClaimBatchStatus, useClaimSpaceBatches } from './graph-claim-list';
 
 /** A claim the panel lists: read and counted in its own space. */
-export type PanelClaim = { id: string; name: string; spaceId: string; relation?: string };
+export type PanelClaim = { id: string; name: string; spaceId: string; relations?: string[] };
 
 type Open = (id: string, name: string | null) => void;
 
@@ -135,6 +136,8 @@ export function TopicOverview({
                 claim={claim}
                 listId="graph_explorer_fights"
                 position={index + 1}
+                // The overview's claims come from the topic summary, with no relations to label.
+                centre={null}
                 onOpen={onOpen}
               />
             ))}
@@ -150,6 +153,8 @@ export function TopicOverview({
                 claim={claim}
                 listId="graph_explorer_agreed"
                 position={index + 1}
+                // The overview's claims come from the topic summary, with no relations to label.
+                centre={null}
                 onOpen={onOpen}
               />
             ))}
@@ -200,10 +205,23 @@ function ShowAll({ total, onClick }: { total: number; onClick: () => void }) {
   );
 }
 
-/** The neighbour's type for its kind, and its date where it has one. */
-function rowSub(entity: { types: Array<{ name: string | null }> }, node: GraphNode | undefined) {
-  if (!node) return typeNames(entity)[0] ?? null;
-  return [nodeTypeLabel(node) ?? typeNames(entity)[0], nodeDateLabel(node)].filter(Boolean).join(' · ') || null;
+/** The row's relations above, and its type for its kind and its date below, minus what the group says. */
+function neighbourLabels(
+  kind: GraphKind,
+  spoke: NeighbourGroup['spokes'][number]['spoke'],
+  node: GraphNode | undefined,
+  centre: RowCentre
+) {
+  const names = typeNames(node ?? spoke.entity);
+  const typeLabel = (node && nodeTypeLabel(node)) ?? names[0] ?? null;
+  return rowLabels({
+    kind,
+    relations: spoke.labels,
+    centre,
+    typeLabel,
+    typeNames: names,
+    date: node ? nodeDateLabel(node) : null,
+  });
 }
 
 function heading(kind: GraphKind, count: number, more: boolean) {
@@ -211,24 +229,37 @@ function heading(kind: GraphKind, count: number, more: boolean) {
 }
 
 /** One group of neighbours: six rows, then the rest behind "Show all". */
-function KindGroup({ group, more, onOpen }: { group: NeighbourGroup; more: boolean; onOpen: Open }) {
+function KindGroup({
+  group,
+  centre,
+  more,
+  onOpen,
+}: {
+  group: NeighbourGroup;
+  centre: RowCentre;
+  more: boolean;
+  onOpen: Open;
+}) {
   const [all, setAll] = React.useState(false);
   const shown = (all ? group.spokes : group.spokes.slice(0, GROUP_ROWS)).map(({ spoke }) => spoke.entity.id);
   const focus = useFocusRevealed(shown);
   return (
     <Section title={heading(group.kind, group.spokes.length, more)}>
       <ul ref={focus.listRef} className="flex flex-col">
-        {group.spokes.map(({ spoke, node }, index) => (
-          <Row
-            key={spoke.entity.id}
-            rowId={spoke.entity.id}
-            hidden={!all && index >= GROUP_ROWS}
-            relation={spoke.labels.join(' · ')}
-            title={spoke.entity.name ?? spoke.entity.id}
-            sub={rowSub(spoke.entity, node)}
-            onClick={() => onOpen(spoke.entity.id, spoke.entity.name)}
-          />
-        ))}
+        {group.spokes.map(({ spoke, node }, index) => {
+          const { relation, sub } = neighbourLabels(group.kind, spoke, node, centre);
+          return (
+            <Row
+              key={spoke.entity.id}
+              rowId={spoke.entity.id}
+              hidden={!all && index >= GROUP_ROWS}
+              relation={relation}
+              title={spoke.entity.name ?? spoke.entity.id}
+              sub={sub}
+              onClick={() => onOpen(spoke.entity.id, spoke.entity.name)}
+            />
+          );
+        })}
       </ul>
       {!all && group.spokes.length > GROUP_ROWS && (
         <ShowAll
@@ -318,18 +349,21 @@ function ClaimRow({
   listId,
   position,
   batch,
+  centre,
   onOpen,
 }: {
   claim: PanelClaim;
   listId: string;
   position: number;
+  /** What the row's relation labels hang from; null for a list whose claims carry no relations. */
+  centre: RowCentre | null;
   /** The claim space's batch, when the list loads one; without it the row reads its own counts. */
   batch?: ClaimBatchStatus;
   onOpen: Open;
 }) {
   const content = (
     <ActionContextProvider value={{ list_id: listId, item_position: position }}>
-      <ClaimRowContent claim={claim} onOpen={onOpen} />
+      <ClaimRowContent claim={claim} centre={centre} onOpen={onOpen} />
     </ActionContextProvider>
   );
   return <li data-row-id={claim.id}>{batch ? <ClaimBatchRow status={batch}>{content}</ClaimBatchRow> : content}</li>;
@@ -346,10 +380,11 @@ export function ClaimAgreementLine({ claimId, spaceId }: { claimId: string; spac
   );
 }
 
-function ClaimRowContent({ claim, onOpen }: { claim: PanelClaim; onOpen: Open }) {
+function ClaimRowContent({ claim, centre, onOpen }: { claim: PanelClaim; centre: RowCentre | null; onOpen: Open }) {
   const summary = useClaimResponseSummary(claim.id, claim.spaceId, 'stance');
   const counts = summary.hasCounts ? { positive: summary.positive, negative: summary.negative } : undefined;
   const band = shownAgreement(counts).band;
+  const relation = centre ? rowLabels({ kind: 'claim', relations: claim.relations ?? [], centre }).relation : null;
   return (
     <div className="flex flex-col gap-1 rounded-md px-1 py-1.5 transition-colors hover:bg-grey-01">
       <button
@@ -365,7 +400,7 @@ function ClaimRowContent({ claim, onOpen }: { claim: PanelClaim; onOpen: Open })
           )}
         />
         <span className="flex min-w-0 flex-col">
-          {claim.relation && <span className="truncate text-footnote text-grey-04">{claim.relation}</span>}
+          {relation && <span className="truncate text-footnote text-grey-04">{relation}</span>}
           <span className="text-metadataMedium wrap-break-word text-text">{claim.name}</span>
         </span>
       </button>
@@ -380,6 +415,7 @@ function ClaimRowContent({ claim, onOpen }: { claim: PanelClaim; onOpen: Open })
 /** Claims around the centre, most votes first once counted, with their bands in one bar. */
 function ClaimsGroup({
   claims,
+  centre,
   more,
   loading,
   onLoadMore,
@@ -387,6 +423,7 @@ function ClaimsGroup({
   onOpen,
 }: {
   claims: readonly PanelClaim[];
+  centre: RowCentre;
   more: boolean;
   loading: boolean;
   onLoadMore: (() => void) | null;
@@ -417,6 +454,7 @@ function ClaimsGroup({
                   listId="graph_explorer_claims"
                   position={index + 1}
                   batch={status[claim.spaceId] ?? 'pending'}
+                  centre={centre}
                   onOpen={onOpen}
                 />
               )
@@ -475,6 +513,7 @@ function BandBar({ bands, banded }: { bands: Record<ClaimBand, number>; banded: 
 /** Everything around the centre in one list, by kind, in the prototype's order. */
 export function NeighbourGroups({
   groups,
+  centre,
   claims,
   claimsState,
   moreKinds,
@@ -483,6 +522,8 @@ export function NeighbourGroups({
   onOpen,
 }: {
   groups: readonly NeighbourGroup[];
+  /** The panel's centre, whose kind and types a row's "(incoming)" label may only repeat. */
+  centre: RowCentre;
   /** Claims about the centre and claims linked to it; they replace `groups`' claim group. */
   claims: readonly PanelClaim[];
   claimsState: {
@@ -506,6 +547,7 @@ export function NeighbourGroups({
       {hasClaims && (
         <ClaimsGroup
           claims={claims}
+          centre={centre}
           more={claimsState.hasNextPage}
           loading={claimsState.isLoading && claims.length === 0}
           onLoadMore={claimsState.hasNextPage ? claimsState.fetchNextPage : null}
@@ -520,7 +562,13 @@ export function NeighbourGroups({
         </Section>
       )}
       {others.map(group => (
-        <KindGroup key={group.kind} group={group} more={moreKinds.includes(group.kind)} onOpen={onOpen} />
+        <KindGroup
+          key={group.kind}
+          group={group}
+          centre={centre}
+          more={moreKinds.includes(group.kind)}
+          onOpen={onOpen}
+        />
       ))}
       {others.length === 0 && !hasClaims && <p className="text-metadata text-grey-04">{emptyMessage}</p>}
       {claimsSettledEmpty && (

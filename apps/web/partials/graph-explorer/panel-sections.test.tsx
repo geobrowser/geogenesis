@@ -230,6 +230,7 @@ describe('NeighbourGroups', () => {
     wrap(
       <NeighbourGroups
         groups={[]}
+        centre={{ kind: 'topic', typeNames: ['Topic'] }}
         claims={[]}
         claimsState={idle}
         moreKinds={[]}
@@ -252,6 +253,80 @@ describe('NeighbourGroups', () => {
     expect(document.activeElement).toBe(within(region).getByRole('button', { name: /Node 16/ }));
   });
 
+  it('leaves out labels that repeat the group, and keeps the ones that add something', () => {
+    const row = (n: number, kind: NeighbourGroup['kind'], labels: string[], extra: Partial<GraphNode>) => ({
+      spoke: { entity: node(n, kind, extra), labels, edgeSpaceIds: [], nodeSpaceId: null, hasOutgoing: true },
+      node: node(n, kind, extra),
+    });
+    const topicType = { id: NEIGHBOUR_KIND_TYPE_IDS.topic[0], name: 'Topic' };
+    const storyType = { id: NEWS_STORY_TYPE_ID, name: 'News story' };
+    groups({
+      groups: [
+        {
+          kind: 'story',
+          spokes: [
+            row(20, 'story', ['Story', 'On this topic'], {
+              name: 'Ceasefire talks',
+              types: [storyType],
+              date: '2026-11-03',
+            }),
+          ],
+        },
+        { kind: 'topic', spokes: [row(21, 'topic', ['Topic'], { name: 'Civilian casualties', types: [topicType] })] },
+        {
+          kind: 'ent',
+          spokes: [
+            row(23, 'ent', ['Related entity'], {
+              name: 'International Court of Justice',
+              types: [{ id: NEIGHBOUR_KIND_TYPE_IDS.organisation[0], name: 'Organization' }],
+            }),
+          ],
+        },
+        {
+          kind: 'other',
+          spokes: [row(22, 'other', ['Mentions'], { name: 'A memo', types: [{ id: 'x', name: 'Memo' }] })],
+        },
+      ],
+    });
+    expect(rows(screen.getByRole('region', { name: 'Topics · 1' }))).toEqual(['Civilian casualties']);
+    expect(rows(screen.getByRole('region', { name: 'News · 1' }))).toEqual(['Ceasefire talksNov 3, 2026']);
+    expect(rows(screen.getByRole('region', { name: 'People and groups · 1' }))).toEqual([
+      'International Court of JusticeOrganization',
+    ]);
+    expect(rows(screen.getByRole('region', { name: 'Other · 1' }))).toEqual(['MentionsA memoMemo']);
+  });
+
+  it('hides a fallback that only names the centre, on neighbour and claim rows, and keeps it elsewhere', async () => {
+    const skill = node(30, 'other', { name: 'Rust', types: [{ id: 'x', name: 'Language' }] });
+    const neighbours: NeighbourGroup = {
+      kind: 'other',
+      spokes: [
+        {
+          spoke: {
+            entity: skill,
+            labels: ['Skills (incoming)'],
+            edgeSpaceIds: [],
+            nodeSpaceId: null,
+            hasOutgoing: false,
+          },
+          node: skill,
+        },
+      ],
+    };
+    const claims: PanelClaim[] = [{ id: id(31), name: 'Rust is safe', spaceId: 'a', relations: ['Skills (incoming)'] }];
+    seed(31, 'a', 1, 0);
+    const labelsUnder = async (centre: React.ComponentProps<typeof NeighbourGroups>['centre']) => {
+      const view = groups({ groups: [neighbours], claims, centre });
+      const other = rows(screen.getByRole('region', { name: 'Other · 1' }));
+      await waitFor(() => expect(rows(screen.getByRole('region', { name: /^Claims/ }))[0]).toContain('Rust is safe'));
+      const claim = rows(screen.getByRole('region', { name: /^Claims/ }));
+      view.unmount();
+      return [...other, ...claim].map(text => text?.includes('Skills (incoming)'));
+    };
+    expect(await labelsUnder({ kind: 'other', typeNames: ['Skill'] })).toEqual([false, false]);
+    expect(await labelsUnder({ kind: 'ent', typeNames: ['Person'] })).toEqual([true, true]);
+  });
+
   it('moves focus to the first revealed claim after Show all and Show more claims', async () => {
     const claims: PanelClaim[] = Array.from({ length: 7 }, (_, i) => ({
       id: id(i + 1),
@@ -264,6 +339,7 @@ describe('NeighbourGroups', () => {
       <QueryClientProvider client={client}>
         <NeighbourGroups
           groups={[]}
+          centre={{ kind: 'topic', typeNames: ['Topic'] }}
           claims={list}
           claimsState={{ ...idle, hasNextPage: true, fetchNextPage }}
           moreKinds={[]}
@@ -289,7 +365,7 @@ describe('NeighbourGroups', () => {
   it('sorts claims by votes in their own spaces, with a band bar, one batch per space and votes in place', async () => {
     const claims: PanelClaim[] = [
       { id: id(1), name: 'Few', spaceId: 'a' },
-      { id: id(2), name: 'Many', spaceId: 'b', relation: 'Supports' },
+      { id: id(2), name: 'Many', spaceId: 'b', relations: ['Claim', 'Supports'] },
       { id: id(3), name: 'Some', spaceId: 'a' },
     ];
     seed(1, 'a', 1, 0);
