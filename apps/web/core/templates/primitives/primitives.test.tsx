@@ -375,14 +375,14 @@ describe('ClaimExplorer row layout (GEO-3845)', () => {
     expect(group).toHaveTextContent('71%·7 votes·Judgment');
     expect(group.parentElement).toContainElement(agree);
 
-    // The whole list switches at one width (GEO-3870): no part of the row, card or buttons keeps the
-    // old 760px switch, so a 640-760px column (the Space home beside its sidebar) gets no mix of
-    // phone and wide parts. The bar is shorter below 720px so the result fits beside the buttons.
+    // The whole list switches layout at one width, 640px (GEO-3870), so a 640-760px column (the
+    // Space home beside its sidebar) gets no mix of phone and wide parts. The only other step is the
+    // bar's length: shorter below 760px so the result fits beside the buttons.
     const classes = Array.from(surface!.querySelectorAll('[class]'), node => node.getAttribute('class') ?? '');
     classes.push(surface!.getAttribute('class') ?? '');
     const switches = new Set(classes.flatMap(name => name.match(/@\[\d+px\]/g) ?? []));
-    expect([...switches].sort()).toEqual(['@[640px]', '@[720px]']);
-    expect(within(group).getByRole('meter')).toHaveClass('w-[96px]', '@[720px]:w-[140px]');
+    expect([...switches].sort()).toEqual(['@[640px]', '@[760px]']);
+    expect(within(group).getByRole('meter')).toHaveClass('w-[96px]', '@[760px]:w-[140px]');
   });
 
   it('says "No votes yet" beside the buttons when nobody has voted', () => {

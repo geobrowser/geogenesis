@@ -219,10 +219,11 @@ export interface ClaimListRowProps {
  * result beside them on wide rows ("bar 71% · 7 votes · Judgment"), so nothing floats at the far
  * right. Phones keep the split as its own line under the buttons, as the Claim page's vote box draws it.
  *
- * Wide starts at a 640px template (GEO-3870): the wide row needs about 650px (rank gutter, two 112px
- * buttons, the bar, "71% · 7 votes · Judgment", the "…" menu), so the Space home's 680-750px column
- * gets it, while phones and the 600px side panel keep the phone row. Every part of the row, the list
- * card and its pager switch at the same width, so no width mixes the two layouts.
+ * Wide starts at a 640px template (GEO-3870): with the short bar the wide row needs about 650px
+ * (rank gutter, two 112px buttons, the bar, "71% · 7 votes · Judgment", the "…" menu), so the Space
+ * home's 680-750px column gets it, while phones and the 600px side panel keep the phone row. Every
+ * part of the row, the list card and its pager switch at the same width, so no width mixes the two
+ * layouts.
  */
 export function ClaimListRow({ rank, claim, hideKindOnPhone = true, details }: ClaimListRowProps) {
   const voteMetaIndex = claim.meta?.findIndex(part => /\bvotes?\b/i.test(part)) ?? -1;
@@ -465,8 +466,9 @@ export function claimRowResult(
 
 /**
  * The overall split drawn inline beside the vote buttons on a wide row: a short bar and its percentage.
- * The bar is shorter below 720px so a row in a 640-720px column (the Space home beside its sidebar,
- * GEO-3870) keeps its buttons and result on one line.
+ * The bar is shorter below a 760px template so a row in the Space home's 680-750px column (beside its
+ * sidebar, GEO-3870) keeps its buttons and result on one line. Full pages pad the list 24px a side, so
+ * a 640-700px page still wraps the result under the buttons.
  */
 function InlineSplit({ row }: { row: SplitRow }) {
   const clamped = Math.max(0, Math.min(100, row.percent));
@@ -478,7 +480,7 @@ function InlineSplit({ row }: { row: SplitRow }) {
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={Math.round(clamped)}
-        className="block h-2 w-[96px] overflow-hidden rounded-full bg-grey-01 @[720px]:w-[140px]"
+        className="block h-2 w-[96px] overflow-hidden rounded-full bg-grey-01 @[760px]:w-[140px]"
       >
         <span
           className="block h-full rounded-full transition-[width] duration-200"
