@@ -21,6 +21,7 @@ import {
 } from '~/core/hooks/use-entity-vote';
 import { useLastSettled } from '~/core/hooks/use-last-settled';
 import { useNearViewport } from '~/core/hooks/use-near-viewport';
+import { useShowOnboarding } from '~/core/hooks/use-onboarding';
 import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { ID } from '~/core/id';
@@ -512,17 +513,29 @@ export function useClaimPositionControl({
     // say "veracity" — which selects no SDK method, so the click throws. See `CLAIM_RESPONSE_KIND`.
     responseKind: CLAIM_RESPONSE_KIND,
   };
-  const { submitResponse, submitResponseAsync, isConnected, personalSpaceId } = useEntityResponse(target);
+  const { submitResponse, submitResponseAsync, isConnected, hasNoPersonalSpace, personalSpaceId } =
+    useEntityResponse(target);
   const responseIndexing = useEntityResponseIndexingSnapshot(target);
   const resetResponseIndexing = useResetEntityResponseIndexingSnapshot(target);
   // Publishing before the personal space finishes registering fails, so a press in that window is
   // queued for the runner (`respond`) rather than published or refused.
-  const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
+  const { isPending: isAccountSetupPending, topicId: accountSetupTopicId } = usePendingPersonalSpace();
   const { ready: authReady, authenticated } = useGeoChatAuth();
   // Known to be signed out. Privy reports `authenticated: false` while it is still restoring a
   // session, and a press in that window is a returning account's, not a visitor's to keep on the
   // device — the saver would clear it as somebody else's the moment the session came back.
   const signedOut = authReady && !authenticated;
+  // Signed in, the index says there is no personal space, and none is being made: nothing could
+  // publish a press, so it reopens account setup instead (GEO-3822). Not after a setup run failed:
+  // that one recovers through the status bar's retry, as `useOnboarding` does.
+  const needsAccountSetup =
+    authReady &&
+    authenticated &&
+    !isConnected &&
+    !isAccountSetupPending &&
+    !accountSetupTopicId &&
+    Boolean(hasNoPersonalSpace);
+  const showOnboarding = useShowOnboarding();
   const queryClient = useQueryClient();
 
   const copy = CLAIM_RESPONSE_COPY;
@@ -705,10 +718,14 @@ export function useClaimPositionControl({
         else queuePosition(position);
         return;
       }
-      // Signed in with no space and none being made: nothing would ever publish a queued side. A host
-      // that doesn't allow signed-out votes leaves the pills disabled, so there is nothing to keep
-      // for either.
-      // Still restoring a session, the press is dropped rather than guessed at: it lasts a moment, and
+      // Signed in with no space and none being made: nothing would ever publish a queued side, so
+      // the press opens account setup. Once it is under way the pills queue as above.
+      if (needsAccountSetup) {
+        showOnboarding();
+        return;
+      }
+      // A host that doesn't allow signed-out votes leaves the pills disabled, so there is nothing to
+      // keep. Still restoring a session, the press is dropped rather than guessed at: it lasts a moment, and
       // the alternative is a returning account's vote kept as a visitor's and then cleared.
       if (!signedOut || !allowsSignedOutVotes) return;
       voteOnThisDevice(position);
@@ -739,6 +756,8 @@ export function useClaimPositionControl({
     if (responseBlockedReason) return responseBlockedReason;
     // Ahead of the rest: it is the only one of these the reader can do nothing about, and naming
     // the side they cannot take yet is the least useful thing to say about a dead control.
+    // Live without waiting on answers, so its title says what a press does.
+    if (needsAccountSetup) return copy.finishSetup;
     if (!answersReady && !isAccountSetupPending) return 'Loading this claim’s responses…';
     // Signed out where a press is kept on this device: the pill does what its label says.
     if (!isConnected && signedOut && allowsSignedOutVotes) {
@@ -751,6 +770,8 @@ export function useClaimPositionControl({
 
   return {
     viewerPosition,
+    /** Signed in with no personal space: a press opens account setup (see `copy.finishSetup`). */
+    needsAccountSetup,
     optimisticPositions,
     respond,
     actionTitle,
@@ -778,9 +799,11 @@ export function useClaimPositionControl({
     // drawn at once, rather than the pills going dead for the seconds — or minutes — that takes.
     // `answersReady` is waived for the same window. It waits for the viewer's own side so a press on
     // a held side clears it rather than republishing — and an account this new holds no side.
+    // Live for a signed-in account with no space too: a press opens account setup rather than doing
+    // nothing.
     canRespond:
-      (isConnected || allowsSignedOutVotes || isAccountSetupPending) &&
-      (answersReady || isAccountSetupPending) &&
+      (isConnected || allowsSignedOutVotes || isAccountSetupPending || needsAccountSetup) &&
+      (answersReady || isAccountSetupPending || needsAccountSetup) &&
       !responseBlockedReason,
   };
 }

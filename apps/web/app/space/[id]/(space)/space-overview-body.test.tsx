@@ -12,7 +12,7 @@ vi.mock('~/core/constants', async importOriginal => ({
 vi.mock('../cached-fetch-space', () => ({ cachedFetchSpace: vi.fn() }));
 vi.mock('../../(entity)/[id]/[entityId]/cached-fetch-entity', () => ({ cachedFetchEntityPage: vi.fn() }));
 vi.mock('~/core/telemetry/tracked-error-boundary', () => ({ TrackedErrorBoundary: () => null }));
-vi.mock('~/core/topics/browse/topic-feed', () => ({ SpaceTopicFeed: () => null }));
+vi.mock('./space-topic-explore-content', () => ({ SpaceTopicExploreContent: () => null }));
 vi.mock('~/partials/editor/editor', () => ({ Editor: () => null }));
 vi.mock('~/partials/entity-page/backlinks-server-container', () => ({ BacklinksServerContainer: () => null }));
 vi.mock('~/partials/entity-page/toggle-entity-page', () => ({ ToggleEntityPage: () => null }));
