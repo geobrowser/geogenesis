@@ -373,7 +373,7 @@ describe('ConnectionsCanvas', () => {
     expect(target.style.transform).toBe(first);
   });
 
-  it('keeps a card crossing the centre on its projected path, drawn by depth, never pushed aside', () => {
+  it('keeps a card crossing the centre on its projected path and under the centre, even when nearer, never pushed aside', () => {
     // Cards this big always cover each other, so the old centre push would have moved Isaac.
     const sizes = (['offsetWidth', 'offsetHeight'] as const).map(key => {
       const old = Object.getOwnPropertyDescriptor(HTMLElement.prototype, key);
@@ -392,10 +392,10 @@ describe('ConnectionsCanvas', () => {
         view.projected.find(point => Math.abs(point.x - spot.x) < 0.06 && Math.abs(point.y - spot.y) < 0.06);
       // Settle the move in, then sample the idle spin frame by frame.
       runFrames(2600 + 1000);
-      let behind = 0;
-      let inFront = 0;
-      let faintest = 1;
-      const shown: number[] = [];
+      let farther = 0;
+      let nearer = 0;
+      let faintestNearer = 1;
+      let faintestFarther = 1;
       for (let i = 0; i < 2400; i++) {
         view.projected = [];
         runFrames(now + 16);
@@ -403,34 +403,35 @@ describe('ConnectionsCanvas', () => {
         const middle = pointAt(at(centreButton));
         expect(own).toBeDefined();
         expect(middle).toBeDefined();
-        const lower = Number(isaac.style.zIndex) < Number(centreButton.style.zIndex);
-        expect(lower).toBe(own!.depth > middle!.depth);
-        const opacity = Number(isaac.style.opacity);
-        if (lower) {
-          behind++;
-          faintest = Math.min(faintest, opacity);
+        // Whichever side of the centre Isaac is in depth, the centre draws over him.
+        expect(Number(isaac.style.zIndex)).toBeLessThan(Number(centreButton.style.zIndex));
+        if (own!.depth > middle!.depth) {
+          farther++;
+          faintestFarther = Math.min(faintestFarther, Number(isaac.style.opacity));
         } else {
-          inFront++;
-          shown.push(opacity);
+          nearer++;
+          faintestNearer = Math.min(faintestNearer, Number(isaac.style.opacity));
         }
       }
-      // The spin carried Isaac across the centre both ways, faint behind it and readable over it.
-      expect(behind).toBeGreaterThan(0);
-      expect(inFront).toBeGreaterThan(0);
-      expect(faintest).toBeLessThanOrEqual(0.121);
-      expect(Math.max(...shown)).toBeGreaterThan(0.3);
+      // The spin carried Isaac both behind the centre and nearer the camera than it. Behind, it
+      // covered him fully and he went faint; nearer (where depth fog leaves him fully opaque) he
+      // still passed under it and faded by the share it covered, so the centre's name reads.
+      expect(farther).toBeGreaterThan(0);
+      expect(nearer).toBeGreaterThan(0);
+      expect(faintestFarther).toBeLessThanOrEqual(0.121);
+      expect(faintestNearer).toBeLessThan(0.6);
     } finally {
       sizes.forEach(restore => restore());
     }
   });
 
-  it("keeps a hovered card's neighbour on its own side of the centre, and lifts only the hovered card", () => {
+  it("keeps a hovered card's neighbour under the centre, and lifts only the hovered card over it", () => {
     const sizes = (['offsetWidth', 'offsetHeight'] as const).map(key => {
       const old = Object.getOwnPropertyDescriptor(HTMLElement.prototype, key);
       Object.defineProperty(HTMLElement.prototype, key, { configurable: true, get: () => 600 });
       return () => old && Object.defineProperty(HTMLElement.prototype, key, old);
     });
-    // A hop-2 marker whose only neighbour is Isaac, so hovering it lifts Isaac but not the centre.
+    // A hop-2 marker whose only neighbour is Isaac, so hovering it lifts Isaac over the other cards.
     const marker = node(3, 'ent', 'Marker');
     const withMarker: GraphSelection = {
       nodes: [...selection.nodes, { node: marker, hop: 2, parentId: person.id }],
@@ -457,24 +458,21 @@ describe('ConnectionsCanvas', () => {
       const markerButton = screen.getByRole('button', { name: 'Marker' });
       runFrames(2600 + 1000);
       fireEvent.mouseEnter(markerButton);
-      let behind = 0;
       let faintest = 1;
       for (let i = 0; i < 2400; i++) {
         view.projected = [];
         runFrames(now + 16);
         expect(Number(markerButton.style.zIndex)).toBe(9500);
-        if (Number(isaac.style.zIndex) < Number(centreButton.style.zIndex)) {
-          behind++;
-          faintest = Math.min(faintest, Number(isaac.style.opacity));
-        }
+        // Isaac, the marker's neighbour, is lifted over other cards but stays under the centre.
+        expect(Number(isaac.style.zIndex)).toBeLessThan(Number(centreButton.style.zIndex));
+        faintest = Math.min(faintest, Number(isaac.style.opacity));
       }
-      // Isaac still passes behind the centre, and fades there, while the marker is hovered.
-      expect(behind).toBeGreaterThan(0);
       expect(faintest).toBeLessThanOrEqual(0.121);
-      // The hovered card itself is never faded by the centre.
+      // The hovered card itself goes over the centre and is never faded by it.
       fireEvent.mouseLeave(markerButton);
       fireEvent.mouseEnter(isaac);
       runFrames(now + 2000);
+      expect(Number(isaac.style.zIndex)).toBeGreaterThan(Number(centreButton.style.zIndex));
       expect(Number(isaac.style.opacity)).toBe(1);
     } finally {
       sizes.forEach(restore => restore());
@@ -740,32 +738,31 @@ describe('searchNodes', () => {
 });
 
 describe('depthOrder', () => {
-  it('stacks nearer cards higher, the centre strictly between those behind and those in front', () => {
-    expect(depthOrder(0, true, 0)).toBe(5000);
-    expect(depthOrder(-200, false, 0)).toBe(5200);
-    expect(depthOrder(300, false, 0)).toBe(4700);
-    // Within rounding of the centre, a card still lands on its own side of it.
-    expect(depthOrder(0.2, false, 0)).toBe(4999);
-    expect(depthOrder(-0.2, false, 0)).toBe(5001);
-    expect(depthOrder(0, false, 0)).toBe(5001);
+  it('stacks nearer cards higher and pins the centre above all of them', () => {
+    expect(depthOrder(0, true)).toBe(8500);
+    expect(depthOrder(-200, false)).toBe(5200);
+    expect(depthOrder(300, false)).toBe(4700);
+    // However near the camera a card comes, it stays under the centre.
+    expect(depthOrder(-5000, false)).toBe(8499);
+  });
+
+  it("lifts a hovered card's neighbours over the other cards, still under the centre", () => {
+    expect(depthOrder(300, false, true)).toBe(6700);
+    expect(depthOrder(300, false, true)).toBeGreaterThan(depthOrder(-1000, false));
+    expect(depthOrder(-1500, false, true)).toBe(8499);
   });
 });
 
 describe('centreCrossDim', () => {
-  const centre = { rect: { left: 100, right: 200, top: 100, bottom: 160 }, depth: 0 };
+  const centre = { left: 100, right: 200, top: 100, bottom: 160 };
 
   it('leaves a card clear of the centre alone', () => {
-    expect(centreCrossDim({ left: 220, right: 300, top: 100, bottom: 140 }, 50, centre)).toBe(1);
+    expect(centreCrossDim({ left: 220, right: 300, top: 100, bottom: 140 }, centre)).toBe(1);
   });
 
-  it('fades a card behind the centre in step with how much of it is covered, down to faint', () => {
-    expect(centreCrossDim({ left: 120, right: 180, top: 110, bottom: 150 }, 50, centre)).toBeCloseTo(0.12);
-    expect(centreCrossDim({ left: 170, right: 230, top: 110, bottom: 150 }, 50, centre)).toBeCloseTo(0.56);
-  });
-
-  it('fades a card passing in front only a little', () => {
-    expect(centreCrossDim({ left: 120, right: 180, top: 110, bottom: 150 }, -50, centre)).toBeCloseTo(0.75);
-    expect(centreCrossDim({ left: 170, right: 230, top: 110, bottom: 150 }, -50, centre)).toBeCloseTo(0.875);
+  it('fades a card under the centre in step with how much of it is covered, down to faint', () => {
+    expect(centreCrossDim({ left: 120, right: 180, top: 110, bottom: 150 }, centre)).toBeCloseTo(0.12);
+    expect(centreCrossDim({ left: 170, right: 230, top: 110, bottom: 150 }, centre)).toBeCloseTo(0.56);
   });
 });
 

@@ -434,17 +434,13 @@ export function ConnectionsCanvas({
         }))
       );
       const covered = new Set(labelled.filter((_, i) => hidden[i]).map(entry => entry.node));
-      const centreDepth = centrePoint?.depth ?? 0;
       for (const entry of drawn) {
         let target = covered.has(entry.node) ? COVERED_DIM : 1;
-        // Only the hovered card is lifted over the centre; its neighbours keep their side of it.
+        // The centre draws over every card but the hovered one, so any other card crossing it fades.
         if (centreRect && !entry.isCentre && entry.node.id !== hover)
           target = Math.min(
             target,
-            centreCrossDim(rectAt(entry.point.x, entry.point.y, entry.box, entry.scale), entry.point.depth, {
-              rect: centreRect,
-              depth: centreDepth,
-            })
+            centreCrossDim(rectAt(entry.point.x, entry.point.y, entry.box, entry.scale), centreRect)
           );
         if (Math.abs(target - entry.node.dim) > 0.01) moving = true;
         entry.node.dim += (target - entry.node.dim) * (reduceMotion ? 1 : 0.2);
@@ -456,11 +452,7 @@ export function ConnectionsCanvas({
         element.style.transform = `translate3d(${point.x.toFixed(1)}px,${point.y.toFixed(1)}px,0) translate(-50%,-${anchor}px) scale(${scale.toFixed(3)})`;
         element.style.opacity = (opacity * node.dim).toFixed(3);
         element.style.zIndex = String(
-          node.id === hover
-            ? 9500
-            : // The centre rises with the hovered card's neighbours, so one behind it stays behind it.
-              depthOrder(point.depth, isCentre, centreDepth) +
-                (neighbours.has(node.id) || (isCentre && hover) ? 2000 : 0)
+          node.id === hover ? HOVER_ORDER : depthOrder(point.depth, isCentre, neighbours.has(node.id))
         );
       }
 
@@ -828,31 +820,32 @@ export function nodeScale(isCentre: boolean, hop: number, depthScale: number, ph
   return Math.max(0.3, Math.min(1.2, depthScale * (hop === 2 ? 0.95 : 1)));
 }
 
+/** The hovered card draws over everything, the centre included. */
+const HOVER_ORDER = 9500;
+/** The centre is pinned above every other card, so cards glide behind it whichever side they're on. */
+const CENTRE_ORDER = 8500;
+/** How far a hovered card's neighbours rise over the other cards (still under the centre). */
+const NEIGHBOUR_LIFT = 2000;
+
 /**
- * A card's stacking order: nearer is higher, and the centre is always strictly between the cards
- * behind it and those in front, so a card crossing it passes behind or over it, never level.
+ * A card's stacking order when it isn't hovered: nearer is higher, a hovered card's neighbours sit
+ * over the rest, and the centre stays above them all, so a card in front of it in depth still
+ * passes under it and the centre's name stays readable.
  */
-export function depthOrder(depth: number, isCentre: boolean, centreDepth: number): number {
-  const centre = 5000 - Math.round(centreDepth);
-  if (isCentre) return centre;
-  const own = 5000 - Math.round(depth);
-  return depth > centreDepth ? Math.min(own, centre - 1) : Math.max(own, centre + 1);
+export function depthOrder(depth: number, isCentre: boolean, lifted = false): number {
+  if (isCentre) return CENTRE_ORDER;
+  return Math.min(CENTRE_ORDER - 1, 5000 - Math.round(depth) + (lifted ? NEIGHBOUR_LIFT : 0));
 }
 
-/** Opacity factor at full cover for a card behind the centre: faint enough that the centre reads. */
-const BEHIND_CENTRE_DIM = 0.12;
-/** The same for a card passing in front: it stays readable, but the centre's name shows through. */
-const FRONT_OF_CENTRE_DIM = 0.75;
+/** Opacity factor at full cover for a card under the centre: faint enough that the centre reads. */
+const UNDER_CENTRE_DIM = 0.12;
 
 /**
  * Opacity factor for a card crossing the centre's box, in step with how much of it the two share,
- * so it fades in and out smoothly as it passes behind (a lot) or in front (a little).
+ * so it fades in and out smoothly as it passes under the centre.
  */
-export function centreCrossDim(rect: Rect, depth: number, centre: { rect: Rect; depth: number }): number {
-  const share = overlapShare(rect, centre.rect);
-  if (share === 0) return 1;
-  const floor = depth > centre.depth ? BEHIND_CENTRE_DIM : FRONT_OF_CENTRE_DIM;
-  return 1 - share * (1 - floor);
+export function centreCrossDim(rect: Rect, centre: Rect): number {
+  return 1 - overlapShare(rect, centre) * (1 - UNDER_CENTRE_DIM);
 }
 
 /**
