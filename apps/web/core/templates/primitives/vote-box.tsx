@@ -71,15 +71,22 @@ export function VoteBox({ prompt, split, control, className }: VoteBoxProps) {
       <div className="flex flex-col gap-4 @[680px]:flex-row @[680px]:flex-wrap @[680px]:items-end @[680px]:justify-between @[680px]:gap-x-6 @[680px]:gap-y-5">
         <Headline row={headlineRow} countSummary={countSummary} noVotes={noVotes} />
 
-        <DebateVoteButtons
-          userVote={userVote}
-          disabled={disabled}
-          label="Do you agree?"
-          onPress={press}
-          className="order-3 w-full shrink-0 @[680px]:order-2 @[680px]:w-auto"
-          // On the narrowest phones (320px) the pill padding gives way so "Disagree" is not cut off.
-          buttonClassName="flex-1 basis-0 @max-[300px]:px-2 @[680px]:min-w-[124px] @[680px]:flex-none"
-        />
+        {/* "Do you agree?" over the buttons (Preston); a News story's prompt already asks. */}
+        <div
+          data-testid="vote-box-ask"
+          className="order-3 flex w-full shrink-0 flex-col gap-2 @[680px]:order-2 @[680px]:w-auto"
+        >
+          {!prompt && <span className="text-[13.5px] leading-[18px] font-medium text-grey-04">Do you agree?</span>}
+          <DebateVoteButtons
+            userVote={userVote}
+            disabled={disabled}
+            label="Do you agree?"
+            onPress={press}
+            className="w-full"
+            // On the narrowest phones (320px) the pill padding gives way so "Disagree" is not cut off.
+            buttonClassName="flex-1 basis-0 @max-[300px]:px-2 @[680px]:min-w-[124px] @[680px]:flex-none"
+          />
+        </div>
 
         <div className="order-2 hidden @[680px]:order-3 @[680px]:block @[680px]:basis-full">
           <ResultBar row={headlineRow} noVotes={noVotes} />

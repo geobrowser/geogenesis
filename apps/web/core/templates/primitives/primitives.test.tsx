@@ -163,7 +163,14 @@ describe('VoteBox: the result leads, over a full-width split bar (GEO-3845)', ()
     expect(percent).toHaveClass('text-[40px]', 'font-medium');
     expect(within(result).getByText('7 votes')).toHaveClass('text-grey-04');
     expect(screen.queryByText('World affairs')).toBeNull();
-    expect(screen.queryByText('Do you agree?')).toBeNull();
+    // "Do you agree?" sits over the buttons.
+    const ask = screen.getByTestId('vote-box-ask');
+    expect(within(ask).getByText('Do you agree?')).toBeInTheDocument();
+    expect(
+      within(ask)
+        .getByText('Do you agree?')
+        .compareDocumentPosition(screen.getByRole('button', { name: 'Agree' })) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
   });
 
   it('puts the buttons on the result line and the bar across the card, with both shares at its ends', () => {
@@ -179,7 +186,7 @@ describe('VoteBox: the result leads, over a full-width split bar (GEO-3845)', ()
     expect(meter).toHaveClass('w-full', 'bg-grey-02');
     // One line on wide cards (buttons right of the result), the bar on its own line under both.
     expect(result.parentElement).toContainElement(buttons);
-    expect(buttons).toHaveClass('@[680px]:order-2', 'order-3', 'w-full', '@[680px]:w-auto');
+    expect(screen.getByTestId('vote-box-ask')).toHaveClass('@[680px]:order-2', 'order-3', 'w-full', '@[680px]:w-auto');
     expect(meter.closest('[class*="basis-full"]')).toHaveClass(
       'order-2',
       'hidden',
@@ -200,8 +207,7 @@ describe('VoteBox: the result leads, over a full-width split bar (GEO-3845)', ()
     expect(phone).toHaveClass('order-4', '@[680px]:hidden');
     expect(phone).toHaveTextContent('71%(7)');
     expect(within(phone).queryByText('World affairs')).toBeNull();
-    const buttons = screen.getByRole('group', { name: 'Do you agree?' });
-    expect(buttons).toHaveClass('order-3', 'w-full');
+    expect(screen.getByTestId('vote-box-ask')).toHaveClass('order-3', 'w-full');
   });
 
   it('keeps the bar ends to agree votes', () => {
