@@ -34,6 +34,7 @@ describe('feature flags', () => {
     expect(defaultFeatureFlags.googleSignIn).toBe(false);
     expect(defaultFeatureFlags.bountiesTab).toBe(true);
     expect(defaultFeatureFlags.signInRecoveryAutoOpen).toBe(true);
+    expect(defaultFeatureFlags.entityTemplatesV2).toBe(true);
     expect(normalizeFeatureFlags(null)).toEqual({
       playbackDiagnostics: false,
       debugDebatesPage: false,
@@ -50,6 +51,8 @@ describe('feature flags', () => {
       graphExplorer: false,
       bountiesTab: true,
       signInRecoveryAutoOpen: true,
+      entityTemplatesV2: true,
+      templateListRanking: false,
     });
   });
 
@@ -87,6 +90,8 @@ describe('feature flags', () => {
       graphExplorer: false,
       bountiesTab: true,
       signInRecoveryAutoOpen: true,
+      entityTemplatesV2: true,
+      templateListRanking: false,
     });
   });
 

@@ -3,7 +3,6 @@ import * as React from 'react';
 import { ROOT_SPACE } from '~/core/constants';
 import { InPageTabSwitch, OverviewOnly } from '~/core/state/in-page-tab-switch';
 import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
-import { SpaceTopicFeed } from '~/core/topics/browse/topic-feed';
 import { spacePageEntityId } from '~/core/utils/space/space-page';
 
 import { EmptyErrorComponent } from '~/design-system/empty-error-component';
@@ -19,6 +18,7 @@ import { SpaceOverviewSidePanelContainer } from '~/partials/space-page/space-ove
 
 import { cachedFetchEntityPage } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
 import { cachedFetchSpace } from '../cached-fetch-space';
+import { SpaceTopicExploreContent } from './space-topic-explore-content';
 
 type CachedSpace = Awaited<ReturnType<typeof cachedFetchSpace>>;
 
@@ -107,7 +107,7 @@ export async function SpaceOverviewBody({
 export function SpaceTopicExploreBody({ spaceId, spaceTopicId }: { spaceId: string; spaceTopicId: string }) {
   return (
     <EntityPageSidebarLayout sidebar={<SpaceOverviewSidebar spaceId={spaceId} isRootSpace={spaceId === ROOT_SPACE} />}>
-      <SpaceTopicFeed spaceId={spaceId} spaceTopicId={spaceTopicId} />
+      <SpaceTopicExploreContent spaceId={spaceId} spaceTopicId={spaceTopicId} />
     </EntityPageSidebarLayout>
   );
 }
