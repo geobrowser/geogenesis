@@ -1,4 +1,4 @@
-import { cleanup, render } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -179,5 +179,42 @@ describe('source cards', () => {
     expect(card(report, 0).querySelector('[data-source-card]')!.className).toContain('w-[220px]');
     expect(card(node('claim'), 1).querySelector('[data-label]')!.className).not.toContain('border-dashed');
     expect(card(node('story'), 1).querySelector('[data-label]')!.className).not.toContain('border-dashed');
+  });
+});
+
+const NAME = 'Federal Reserve System of the United States and its twelve regional banks';
+
+// The first match is the card's own label; a near entity also carries its far-state name after it.
+const clamps = () => screen.getAllByText(NAME)[0].className.match(/line-clamp-\d/g) ?? [];
+
+// On a phone the centre's card gets four lines: more than its neighbours, but bounded, so a long claim
+// can't fill the middle of the map. The panel under the map leaves the name out on a phone (GEO-3849).
+describe('NodeCard names', () => {
+  it.each<GraphKind>(['ent', 'topic', 'story', 'claim'])(
+    'gives a phone centre’s %s name four lines, and no more',
+    kind => {
+      render(<NodeCard node={node(kind, { name: NAME })} hop={0} isCentre phone claimSpaceId="space" />);
+      expect(clamps()).toEqual(['line-clamp-4']);
+    }
+  );
+
+  it.each<[GraphKind, string]>([
+    ['ent', 'line-clamp-2'],
+    ['topic', 'line-clamp-2'],
+    ['story', 'line-clamp-3'],
+    ['claim', 'line-clamp-2'],
+  ])('still cuts the %s name of a card around the centre on a phone', (kind, clamp) => {
+    render(<NodeCard node={node(kind, { name: NAME })} hop={1} isCentre={false} phone claimSpaceId="space" />);
+    expect(clamps()).toEqual([clamp]);
+  });
+
+  it.each<[GraphKind, string]>([
+    ['ent', 'line-clamp-2'],
+    ['topic', 'line-clamp-2'],
+    ['story', 'line-clamp-3'],
+    ['claim', 'line-clamp-3'],
+  ])('keeps the desktop centre’s %s name to its lines', (kind, clamp) => {
+    render(<NodeCard node={node(kind, { name: NAME })} hop={0} isCentre phone={false} claimSpaceId="space" />);
+    expect(clamps()).toEqual([clamp]);
   });
 });

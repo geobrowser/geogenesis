@@ -98,9 +98,21 @@ export const CENTRE_RING = 'animate-graph-centre-glow motion-reduce:[animation-p
 
 type CardProps = { node: GraphNode; hop: 0 | 1 | 2; isCentre: boolean; phone: boolean };
 
-const LABEL = 'line-clamp-2 text-[12px] font-medium leading-[1.3]';
+const LABEL = 'text-[12px] font-medium leading-[1.3]';
 const DARK_CARD =
   'bg-[rgba(28,28,32,.86)] text-[#f2f2f2] shadow-[inset_0_0_0_1px_rgba(255,255,255,.16),0_10px_30px_rgba(0,0,0,.45)]';
+
+/**
+ * How many lines a card's name gets. On a phone the centre gets four, so most names show whole
+ * without a long claim filling the middle of the map. The panel below leaves the name out on a
+ * phone (GEO-3849), so a name past four lines shows whole only on its own page.
+ */
+function labelClamp(
+  { isCentre, phone }: Pick<CardProps, 'isCentre' | 'phone'>,
+  lines: 'line-clamp-2' | 'line-clamp-3'
+) {
+  return isCentre && phone ? 'line-clamp-4' : lines;
+}
 
 /** Label size: the design's 11px on phone and for far nodes, larger for the centre. */
 function labelSize({ isCentre, phone, hop }: Pick<CardProps, 'isCentre' | 'phone' | 'hop'>) {
@@ -169,7 +181,7 @@ function TopicCard({ node, isCentre, phone }: CardProps) {
           phone ? 'max-w-[130px]' : 'max-w-[170px]'
         )}
       >
-        <span className={cx(LABEL, 'text-[11px]')}>{node.name}</span>
+        <span className={cx(LABEL, 'line-clamp-2 text-[11px]')}>{node.name}</span>
       </span>
     );
   return (
@@ -182,7 +194,9 @@ function TopicCard({ node, isCentre, phone }: CardProps) {
       )}
     >
       {/* Geo sets the centre topic in medium (LABEL's weight), not the semibold other centres use. */}
-      <span className={cx(LABEL, phone ? 'text-[13px]' : 'text-[14px]')}>{node.name}</span>
+      <span className={cx(LABEL, labelClamp({ isCentre, phone }, 'line-clamp-2'), phone ? 'text-[13px]' : 'text-[14px]')}>
+        {node.name}
+      </span>
     </span>
   );
 }
@@ -228,6 +242,7 @@ function EntityCard({ node, hop, isCentre, phone }: CardProps) {
           data-label
           className={cx(
             LABEL,
+            labelClamp({ isCentre, phone }, 'line-clamp-2'),
             'rounded-md bg-white px-2 py-[2px] text-[#151515]',
             !isCentre && 'group-data-[far]:hidden',
             labelSize({ isCentre, phone, hop })
@@ -299,7 +314,9 @@ function ItemCard({ node, hop, isCentre, phone, centreId }: CardProps & { centre
           {meta}
         </span>
       )}
-      <span className={cx(LABEL, 'line-clamp-3', labelSize({ isCentre, phone, hop }))}>{node.name}</span>
+      <span className={cx(LABEL, labelClamp({ isCentre, phone }, 'line-clamp-3'), labelSize({ isCentre, phone, hop }))}>
+        {node.name}
+      </span>
     </span>
   );
 }
@@ -326,7 +343,15 @@ function ClaimCard({ node, hop, isCentre, phone, spaceId }: CardProps & { spaceI
         cardBox({ isCentre, phone }, ['w-[260px]', 'w-[200px]'])
       )}
     >
-      <span className={cx(LABEL, !phone && 'line-clamp-3', labelSize({ isCentre, phone, hop }))}>{node.name}</span>
+      <span
+        className={cx(
+          LABEL,
+          labelClamp({ isCentre, phone }, phone ? 'line-clamp-2' : 'line-clamp-3'),
+          labelSize({ isCentre, phone, hop })
+        )}
+      >
+        {node.name}
+      </span>
       {band && summary.percent !== null ? (
         <span className="flex w-full flex-col gap-1">
           <span className={cx('font-medium', phone ? 'text-[11px]' : 'text-[12px]')}>{summary.percent}% agree</span>

@@ -21,6 +21,7 @@ import {
   overlaps,
   tooSmallToRead,
 } from './connections-canvas';
+import { BandLegend } from './connections-view';
 import { GraphSearch, searchNodes } from './graph-search';
 import { GraphTopBar } from './graph-top-bar';
 
@@ -611,6 +612,102 @@ describe('GraphSearch', () => {
     fireEvent.focus(box);
     fireEvent.blur(box);
     expect(onSearched.mock.calls).toEqual([[1]]);
+  });
+});
+
+// jsdom applies no media queries, so these read the phone (`md:`) classes the layout relies on.
+describe('the top bar on a phone (GEO-3849)', () => {
+  afterEach(cleanup);
+  const box = () => screen.getByRole('combobox', { name: 'Find on the map' });
+
+  it('folds the search into an icon that opens the field, focused, over the path', () => {
+    render(
+      <GraphTopBar
+        back={null}
+        trail={['Israel-Gaza war']}
+        search={<GraphSearch nodes={[person]} onPick={vi.fn()} />}
+        kinds={['ent']}
+        kindFilter="all"
+        onKindFilter={() => {}}
+        close={{ href: '/explore', label: 'Close' }}
+      />
+    );
+    expect(box().className).toContain('md:hidden');
+    // The path gives way to the open field on a phone.
+    expect(screen.getByRole('navigation', { name: 'Your path' }).className).toContain(
+      'md:group-has-[[data-search-open]]/bar:hidden'
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Search the map' }));
+    expect(box().className).not.toContain('md:hidden');
+    expect(document.activeElement).toBe(box());
+    expect(box().closest('[data-search-open]')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Search the map' })).toBeNull();
+
+    fireEvent.blur(box());
+    expect(box().closest('[data-search-open]')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Search the map' })).toBeTruthy();
+  });
+
+  it('stays open while it holds a search, and folds again after a pick', () => {
+    const onPick = vi.fn();
+    render(<GraphSearch nodes={[person]} onPick={onPick} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Search the map' }));
+    fireEvent.change(box(), { target: { value: 'Isa' } });
+    fireEvent.blur(box());
+    expect(box().closest('[data-search-open]')).toBeTruthy();
+
+    fireEvent.focus(box());
+    fireEvent.click(screen.getByRole('option'));
+    expect(onPick).toHaveBeenCalledWith(person);
+    expect(box().closest('[data-search-open]')).toBeNull();
+  });
+
+  it('hands focus back to the icon when Escape folds an empty field', () => {
+    render(<GraphSearch nodes={[person]} onPick={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Search the map' }));
+    fireEvent.keyDown(box(), { key: 'Escape' });
+    expect(box().closest('[data-search-open]')).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Search the map' }));
+  });
+
+  it('leaves focus alone when the field loses it, say to a tap on the map', () => {
+    render(<GraphSearch nodes={[person]} onPick={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Search the map' }));
+    act(() => box().blur());
+    expect(box().closest('[data-search-open]')).toBeNull();
+    // Only Escape and a pick take focus to the icon; a blur must not pull it back from elsewhere.
+    expect(document.activeElement).not.toBe(screen.getByRole('button', { name: 'Search the map' }));
+  });
+
+  it('hands focus back to the icon after picking with Enter', () => {
+    const onPick = vi.fn();
+    render(<GraphSearch nodes={[person]} onPick={onPick} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Search the map' }));
+    fireEvent.change(box(), { target: { value: 'Isa' } });
+    fireEvent.keyDown(box(), { key: 'Enter' });
+    expect(onPick).toHaveBeenCalledWith(person);
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Search the map' }));
+  });
+});
+
+describe('BandLegend', () => {
+  afterEach(cleanup);
+
+  it('drops to the three bands on a tablet, wrapping only between whole items, and hides on a phone', () => {
+    render(<BandLegend />);
+    const legend = screen.getByTestId('band-legend');
+    // A forced single line overflows under the zoom controls at 320px (GEO-3849 review).
+    expect(legend.className).not.toContain('flex-nowrap');
+    expect(legend.className).toContain('flex-wrap');
+    for (const item of legend.children) expect(item.className).toContain('whitespace-nowrap');
+    expect(legend.textContent).toContain('Widely agreed');
+    expect(legend.className).toContain('graph-phone:hidden');
+    // Desktop keeps the fourth item; a tablet drops it.
+    const unvoted = screen.getByText('No responses yet');
+    expect(unvoted.className).toContain('md:hidden');
+    for (const band of ['Widely agreed', 'Contested', 'Widely rejected'])
+      expect(screen.getByText(band).className).not.toContain('md:hidden');
   });
 });
 
