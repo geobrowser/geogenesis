@@ -1,4 +1,4 @@
-import { parse } from 'graphql';
+import { parse, visit } from 'graphql';
 import { describe, expect, it } from 'vitest';
 
 import { exploreCardNodeFields, exploreCardPropertyFragment } from './explore-card-selection';
@@ -28,6 +28,23 @@ describe('explore card selection', () => {
 
     expect(fields).toContain('activityComments');
     expect(fields).toContain('activityDebates');
+  });
+
+  it('selects toEntityId on the type-filtered relationsList, so a target can be tied to its relation', () => {
+    for (const options of [undefined, { scopeListsToSpaces: false }]) {
+      const doc = parse(`query { entities { ${exploreCardNodeFields('Frag', options)} } }`);
+      const found: string[][] = [];
+      visit(doc, {
+        Field(node) {
+          if (node.name.value === 'relationsList' && node.selectionSet) {
+            found.push(node.selectionSet.selections.map(sel => ('name' in sel ? sel.name.value : '')));
+          }
+        },
+      });
+      const withTarget = found.filter(names => names.includes('toEntity'));
+      expect(withTarget).toHaveLength(1);
+      expect(withTarget[0]).toContain('toEntityId');
+    }
   });
 });
 
