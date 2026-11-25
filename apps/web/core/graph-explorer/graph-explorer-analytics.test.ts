@@ -48,6 +48,15 @@ describe('classifyEntry', () => {
 });
 
 describe('a graph explorer session', () => {
+  it('sends the entry point of whichever template page opened it (GEO-3866)', () => {
+    markGraphExplorerEntry('news_story_page');
+    const session = startGraphExplorerSession(init, now);
+    session.opened('ready', layout);
+
+    expect(named('graph_explorer_opened')[0]?.props).toMatchObject({ entry: 'in_app', entry_point: 'news_story_page' });
+    session.left('unmount');
+  });
+
   it('sends opened once, with the in-app entry point, and every event unstamped and without text', () => {
     markGraphExplorerEntry('topic_page');
     const session = startGraphExplorerSession(init, now);

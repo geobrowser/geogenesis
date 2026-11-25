@@ -58,6 +58,7 @@ export function LiveClaimTemplateView({
           isVoteable={false}
           compact={compact}
           variant="template"
+          graphEntryPoint="claim_page"
         />
       }
     />
