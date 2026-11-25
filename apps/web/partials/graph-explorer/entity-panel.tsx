@@ -2,12 +2,11 @@
 
 import * as React from 'react';
 
-import { TOPIC_TYPE_ID } from '~/core/claims/ontology';
 import { type ClaimAbout, nodeClaimSpaceId } from '~/core/graph-explorer/claims-about';
 import { type GraphNode, HOP1_PER_KIND } from '~/core/graph-explorer/fetch-graph-neighbourhood';
 import type { GraphCentre } from '~/core/graph-explorer/graph-entity';
 import { useGraphAnalytics } from '~/core/graph-explorer/graph-explorer-analytics';
-import { GRAPH_KIND_TYPE_IDS, type GraphKind } from '~/core/graph-explorer/graph-kinds';
+import { GRAPH_KIND_TYPE_IDS, type GraphKind, typeDescribesKind } from '~/core/graph-explorer/graph-kinds';
 import { groupByKind } from '~/core/graph-explorer/panel-sections';
 import type { Spoke } from '~/core/graph-explorer/spokes';
 import { normId } from '~/core/utils/norm-id';
@@ -41,8 +40,8 @@ export type PanelCentre = GraphCentre & Pick<GraphNode, 'kind' | 'date'>;
 /**
  * The line above the centre's title, in the prototype's form: the kind, then its types (best first),
  * then its date, joined with " · " ("Source · Dataset · Nov 15, 2026"). A type a kind is made of
- * alone ("Claim", "News story") is the kind's word already, so it isn't said twice, and only a
- * topic says Topic.
+ * alone ("Claim", "News story") is the kind's word already, so it isn't said twice, and a type of
+ * another kind or a structural one is left out.
  */
 export function centreEyebrow(centre: PanelCentre): string | null {
   const kindWord = KIND_EYEBROW[centre.kind];
@@ -50,8 +49,8 @@ export function centreEyebrow(centre: PanelCentre): string | null {
   const sole = kindTypeIds.length === 1 ? kindTypeIds[0] : null;
   const names = centre.types
     .filter(type => normId(type.id) !== sole)
-    // Topic is a tag many people and events also carry; on anything but a topic it isn't what it is.
-    .filter(type => centre.kind === 'topic' || normId(type.id) !== TOPIC_TYPE_ID)
+    // Another kind's type isn't what this is: the Topic tag on a person, Claim on a News event.
+    .filter(type => typeDescribesKind(type.id, centre.kind))
     .map(type => type.name)
     .filter((name): name is string => Boolean(name));
   const best = nodeTypeLabel(centre);
@@ -213,7 +212,7 @@ function CentreHeader({ centre, pageSpaceId }: { centre: PanelCentre; pageSpaceI
               className="rounded-[4px] decoration-grey-03 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text"
             >
               {name}
-              <span aria-hidden className="font-medium text-[#8b8b8b]">
+              <span aria-hidden className="font-medium text-link">
                 {' →'}
               </span>
             </Link>

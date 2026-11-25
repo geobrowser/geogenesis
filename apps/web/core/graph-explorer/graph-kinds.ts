@@ -119,6 +119,17 @@ const KIND_BY_TYPE = new Map<string, GraphKind>();
 for (const kind of GRAPH_KINDS) for (const id of GRAPH_KIND_TYPE_IDS[kind]) KIND_BY_TYPE.set(id, kind);
 
 /**
+ * Whether a type says what a node of `kind` is: one of that kind's own types, or a type no kind lists
+ * that isn't plumbing ("Politician" on a person). A type of another kind (Claim on a News event, the
+ * Topic tag on a person) or a structural type (Page) doesn't.
+ */
+export function typeDescribesKind(typeId: string, kind: GraphKind): boolean {
+  const id = normId(typeId);
+  const typeKind = KIND_BY_TYPE.get(id);
+  return typeKind ? typeKind === kind : !PLUMBING.has(id);
+}
+
+/**
  * The node's kind from its types. Topic wins only alone or beside Timeline, since it is often a second
  * type; a News event (also typed Claim) is an event. Unlisted types are `other`; null only for plumbing.
  */

@@ -16,6 +16,7 @@ import {
   RELATED_PEOPLE_PROPERTY_ID,
   TOPIC_TYPE_ID,
 } from '~/core/graph-explorer/ontology';
+import { NavUtils } from '~/core/utils/utils';
 
 import { GraphViewer } from './graph-viewer';
 
@@ -432,6 +433,37 @@ describe('GraphViewer', () => {
     expect(screen.getByText('A topic.')).toBeTruthy();
     expect(screen.queryByRole('heading', { name: /^Claims/ })).toBeNull();
     expect(screen.queryByText(/No claims/)).toBeNull();
+  });
+
+  // The title is the way to the centre's page: a claim's in the space its vote is in, anything
+  // else's where its text was read. They differ when the scope picks a space other than the claim's home.
+  it('links a claim’s title to the claim’s own space and a person’s to the space it was read in', () => {
+    const OTHER_SPACE = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+    hooks.hopFor.mockImplementation((id: string) =>
+      id === TOPIC
+        ? {
+            ...hops[TOPIC],
+            centre: {
+              ...hops[TOPIC].centre!,
+              types: [{ id: CLAIM_TYPE_ID, name: 'Claim' }],
+              spaceIds: [OTHER_SPACE, SPACE],
+              namedSpaceIds: [OTHER_SPACE, SPACE],
+            },
+          }
+        : hops[id]
+    );
+    const titleHref = () =>
+      within(screen.getByRole('region', { name: /^About / }))
+        .getByRole('heading', { level: 2 })
+        .querySelector('a')
+        ?.getAttribute('href');
+
+    render(<Viewer start={TOPIC} scope={scope} />);
+    expect(titleHref()).toBe(NavUtils.toEntity(OTHER_SPACE, TOPIC));
+
+    cleanup();
+    render(<Viewer start={PERSON} scope={scope} />);
+    expect(titleHref()).toBe(NavUtils.toEntity(SPACE, PERSON));
   });
 
   // GEO-3841: a claim centre's vote block sits above its description, so the buttons are on screen.

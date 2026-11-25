@@ -1,5 +1,6 @@
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -11,6 +12,7 @@ import type { GraphNode } from '~/core/graph-explorer/fetch-graph-neighbourhood'
 import { NEIGHBOUR_KIND_TYPE_IDS } from '~/core/graph-explorer/ontology';
 import type { NeighbourGroup } from '~/core/graph-explorer/panel-sections';
 import { DATASET_TYPE_ID } from '~/core/topics/ontology';
+import { NavUtils } from '~/core/utils/utils';
 
 import { EntityPanel, type PanelCentre, centreEyebrow, panelClaims } from './entity-panel';
 
@@ -74,18 +76,16 @@ const centreOf = (kind: GraphNode['kind'], extra: Partial<PanelCentre> = {}): Pa
   ...extra,
 });
 
-const renderPanel = ({
-  kind = 'claim',
-  centre = centreOf(kind),
-  showClaims = kind !== 'claim',
+function PanelFor({
+  centre,
+  showClaims = centre.kind !== 'claim',
   pageSpaceId = 's',
 }: {
-  kind?: GraphNode['kind'];
-  centre?: PanelCentre;
+  centre: PanelCentre;
   showClaims?: boolean;
   pageSpaceId?: string | null;
-} = {}) =>
-  render(
+}) {
+  return (
     <EntityPanel
       centre={centre}
       pageSpaceId={pageSpaceId}
@@ -108,6 +108,19 @@ const renderPanel = ({
       summaryFirst={centre.kind === 'claim'}
     />
   );
+}
+
+const renderPanel = ({
+  kind = 'claim',
+  centre = centreOf(kind),
+  showClaims = kind !== 'claim',
+  pageSpaceId = 's',
+}: {
+  kind?: GraphNode['kind'];
+  centre?: PanelCentre;
+  showClaims?: boolean;
+  pageSpaceId?: string | null;
+} = {}) => render(<PanelFor centre={centre} showClaims={showClaims} pageSpaceId={pageSpaceId} />);
 
 describe('EntityPanel summary placement', () => {
   afterEach(cleanup);
@@ -159,6 +172,20 @@ describe('centreEyebrow', () => {
       'Event · News event',
     ],
     [
+      'a News event also typed Claim: not "Claim"',
+      centreOf('event', {
+        types: [type(CLAIM_TYPE_ID, 'Claim'), type('bb9a85bd6dc64efd8232e2782cb4b5f8', 'News event')],
+      }),
+      'Event · News event',
+    ],
+    [
+      'a person on a Page: not "Page"',
+      centreOf('ent', {
+        types: [type(NEIGHBOUR_KIND_TYPE_IDS.person[0], 'Person'), type(SystemIds.PAGE_TYPE, 'Page')],
+      }),
+      'Person',
+    ],
+    [
       'a court case',
       centreOf('case', { types: [type('c058821272ef463fa97a93693456c8ba', 'Legal case')] }),
       'Court case',
@@ -204,7 +231,7 @@ describe('EntityPanel header', () => {
       renderPanel({ kind });
       const link = screen.getByRole('link', { name: 'Claim 9' });
       expect(screen.getByRole('heading', { level: 2 })).toContainElement(link);
-      expect(link).toHaveAttribute('href', expect.stringContaining('s'));
+      expect(link).toHaveAttribute('href', NavUtils.toEntity('s', id(9)));
       expect(link.textContent).toBe('Claim 9 →');
       expect(screen.getAllByRole('link')).toHaveLength(1);
       expect(screen.queryByText(/Open (the claim|page)/)).toBeNull();
@@ -257,6 +284,15 @@ describe('EntityPanel header', () => {
     // No lettered circle either: the text column is the header's only child.
     expect(header.children).toHaveLength(1);
     expect(header.firstElementChild).toContainElement(screen.getByRole('heading', { level: 2 }));
+  });
+
+  it('drops a picture that fails to load, and draws the next centre’s', () => {
+    const { rerender } = renderPanel({ centre: centreOf('ent', { image: 'https://example.com/broken.png' }) });
+    fireEvent.error(document.querySelector('header img')!);
+    expect(document.querySelector('header img')).toBeNull();
+
+    rerender(<PanelFor centre={centreOf('ent', { id: id(8), image: 'https://example.com/face.png' })} />);
+    expect(document.querySelector('header img')).toHaveAttribute('src', 'https://example.com/face.png');
   });
 
   it('draws the image as a 56px rounded square left of the title', () => {
