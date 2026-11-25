@@ -17,8 +17,16 @@ import { SmallButton } from '~/design-system/button';
 import { Minus } from '~/design-system/icons/minus';
 import { Spacer } from '~/design-system/spacer';
 
+/**
+ * Where the typed date stands after a field loses focus. `empty` is every field blank; `valid` is a
+ * whole, real date (an empty field counts as valid, since callers may treat the date as optional).
+ */
+export type DateInputValidity = { valid: boolean; empty: boolean };
+
 interface DateFieldProps {
   onBlur?: ({ value, format }: { value: string; format?: string }) => void;
+  /** Called after each blur, valid or not; `onBlur` only fires for a whole, real date. */
+  onValidityChange?: (validity: DateInputValidity) => void;
   variant?: 'body' | 'tableCell' | 'tableProperty';
   value: string;
   isEditing?: boolean;
@@ -31,8 +39,18 @@ interface DateInputProps {
   variant?: 'body' | 'tableCell' | 'tableProperty';
   initialDate: string;
   onDateChange: (date: string) => void;
+  onValidityChange?: (validity: DateInputValidity) => void;
   label?: string;
   timezone?: 'utc' | 'local';
+}
+
+/** The ISO string, or null when the parts aren't a real date (`new Date('2026-13-01')` throws on toISOString). */
+function toISOStringOrNull(build: () => string): string | null {
+  try {
+    return build();
+  } catch {
+    return null;
+  }
 }
 
 const dateTextStyles = cva('', {
@@ -270,7 +288,7 @@ function useSelectAllOnFocus(refs: React.RefObject<HTMLInputElement | null>[]) {
  * Only shows date fields (year, month, day)
  * Serializes to date-only ISO string (YYYY-MM-DDT00:00:00.000Z)
  */
-export function DateOnlyInput({ variant, initialDate, onDateChange, label }: DateInputProps) {
+export function DateOnlyInput({ variant, initialDate, onDateChange, onValidityChange, label }: DateInputProps) {
   const { day: initialDay, month: initialMonth, year: initialYear } = GeoDate.fromISOStringUTC(initialDate);
 
   const formattedInitialDay = initialDay === '' ? initialDay : initialDay.padStart(2, '0');
@@ -344,18 +362,18 @@ export function DateOnlyInput({ variant, initialDate, onDateChange, label }: Dat
     const isValidYearCheck = year.value !== '' || (!year.isValidating && year.isValid);
     const isValid = isValidDayCheck && isValidMonthCheck && isValidYearCheck && dateFormState.isValid;
 
-    if (isValid) {
-      // Pass empty hour to produce date-only ISO string
-      const isoString = GeoDate.toISOStringUTC({
-        day: newDay,
-        month: newMonth,
-        year: newYear,
-        hour: '',
-        minute: '',
-      });
+    const isEmpty = newDay === '' && newMonth === '' && newYear === '';
+    const isComplete = newDay !== '' && newMonth !== '' && newYear !== '';
+    // Pass empty hour to produce date-only ISO string
+    const isoString =
+      isValid && isComplete
+        ? toISOStringOrNull(() =>
+            GeoDate.toISOStringUTC({ day: newDay, month: newMonth, year: newYear, hour: '', minute: '' })
+          )
+        : null;
 
-      onDateChange(isoString);
-    }
+    if (isoString) onDateChange(isoString);
+    onValidityChange?.({ valid: isoString !== null || isEmpty, empty: isEmpty });
   };
 
   const onDayChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -651,7 +669,14 @@ function TimeOnlyInput({ variant, initialDate, onDateChange, label }: DateInputP
  * Serializes to a UTC ISO string. By default typed values are UTC; pass
  * `timezone="local"` to interpret wall-clock fields in the user's timezone.
  */
-export function DateTimeInput({ variant, initialDate, onDateChange, label, timezone = 'utc' }: DateInputProps) {
+export function DateTimeInput({
+  variant,
+  initialDate,
+  onDateChange,
+  onValidityChange,
+  label,
+  timezone = 'utc',
+}: DateInputProps) {
   const {
     day: initialDay,
     month: initialMonth,
@@ -778,18 +803,24 @@ export function DateTimeInput({ variant, initialDate, onDateChange, label, timez
       isValidMinuteCheck &&
       timeFormState.isValid;
 
-    if (isValid) {
-      const parts = {
-        day: newDay,
-        month: newMonth,
-        year: newYear,
-        minute: newMinute,
-        hour: to24HourString(newHour, newMeridiem),
-      };
-      const isoString = timezone === 'local' ? GeoDate.toISOStringLocal(parts) : GeoDate.toISOStringUTC(parts);
+    const isEmpty = [newDay, newMonth, newYear, newHour, newMinute].every(part => part === '');
+    const isComplete = newDay !== '' && newMonth !== '' && newYear !== '';
+    const parts = {
+      day: newDay,
+      month: newMonth,
+      year: newYear,
+      minute: newMinute,
+      hour: to24HourString(newHour, newMeridiem),
+    };
+    const isoString =
+      isValid && isComplete
+        ? toISOStringOrNull(() =>
+            timezone === 'local' ? GeoDate.toISOStringLocal(parts) : GeoDate.toISOStringUTC(parts)
+          )
+        : null;
 
-      onDateChange(isoString);
-    }
+    if (isoString) onDateChange(isoString);
+    onValidityChange?.({ valid: isoString !== null || isEmpty, empty: isEmpty });
   };
 
   const onToggleMeridiem = () => {
@@ -999,19 +1030,51 @@ export function DateTimeInput({ variant, initialDate, onDateChange, label, timez
 /**
  * Internal DateInput dispatcher - routes to the appropriate variant based on dataType
  */
-function DateInput({ variant, initialDate, onDateChange, label, dataType }: DateInputProps & { dataType?: DataType }) {
+function DateInput({
+  variant,
+  initialDate,
+  onDateChange,
+  onValidityChange,
+  label,
+  dataType,
+}: DateInputProps & { dataType?: DataType }) {
   switch (dataType) {
     case 'DATE':
-      return <DateOnlyInput variant={variant} initialDate={initialDate} onDateChange={onDateChange} label={label} />;
+      return (
+        <DateOnlyInput
+          variant={variant}
+          initialDate={initialDate}
+          onDateChange={onDateChange}
+          onValidityChange={onValidityChange}
+          label={label}
+        />
+      );
     case 'TIME':
       return <TimeOnlyInput variant={variant} initialDate={initialDate} onDateChange={onDateChange} label={label} />;
     case 'DATETIME':
     default:
-      return <DateTimeInput variant={variant} initialDate={initialDate} onDateChange={onDateChange} label={label} />;
+      return (
+        <DateTimeInput
+          variant={variant}
+          initialDate={initialDate}
+          onDateChange={onDateChange}
+          onValidityChange={onValidityChange}
+          label={label}
+        />
+      );
   }
 }
 
-export function DateField({ value, isEditing, variant, onBlur, className = '', propertyId, dataType }: DateFieldProps) {
+export function DateField({
+  value,
+  isEditing,
+  variant,
+  onBlur,
+  onValidityChange,
+  className = '',
+  propertyId,
+  dataType,
+}: DateFieldProps) {
   const isDateInterval = React.useMemo(() => GeoDate.isDateInterval(value), [value]);
   const [intervalError, setIntervalError] = React.useState<string | null>(null);
 
@@ -1087,12 +1150,24 @@ export function DateField({ value, isEditing, variant, onBlur, className = '', p
   return (
     <div className={cx('flex min-w-0 flex-col gap-1', className)}>
       <div className="flex min-w-0 flex-row flex-wrap items-start gap-4">
-        <DateInput variant={variant} initialDate={startDate} onDateChange={handleStartDateChange} dataType={dataType} />
+        <DateInput
+          variant={variant}
+          initialDate={startDate}
+          onDateChange={handleStartDateChange}
+          onValidityChange={onValidityChange}
+          dataType={dataType}
+        />
 
         {isDateInterval && (
           <>
             <span>—</span>
-            <DateInput variant={variant} initialDate={endDate} onDateChange={handleEndDateChange} dataType={dataType} />
+            <DateInput
+              variant={variant}
+              initialDate={endDate}
+              onDateChange={handleEndDateChange}
+              onValidityChange={onValidityChange}
+              dataType={dataType}
+            />
           </>
         )}
       </div>
