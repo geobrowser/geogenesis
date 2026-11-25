@@ -109,16 +109,25 @@ export function NodeCard({
   centreId = null,
   ...props
 }: CardProps & { claimSpaceId: string | null; centreId?: string | null }) {
-  const far = isFarNode(props.hop, props.isCentre);
   if (props.node.kind === 'claim' && claimSpaceId) return <ClaimCard {...props} spaceId={claimSpaceId} />;
   if (props.node.kind === 'ent' || props.node.kind === 'other') return <EntityCard {...props} centreId={centreId} />;
-  if (far) return <FarMarker node={props.node} band={null} />;
-  const card = props.node.kind === 'topic' ? <TopicCard {...props} /> : <ItemCard {...props} centreId={centreId} />;
-  return props.isCentre ? (
-    card
-  ) : (
-    <ShrinksToMarker marker={<FarMarker node={props.node} band={null} />}>{card}</ShrinksToMarker>
+  return (
+    <Placed {...props}>
+      {props.node.kind === 'topic' ? <TopicCard {...props} /> : <ItemCard {...props} centreId={centreId} />}
+    </Placed>
   );
+}
+
+/** Where a card sits decides its form: far nodes are a marker, hop 1 shrinks to one, the centre is the card. */
+function Placed({
+  node,
+  hop,
+  isCentre,
+  children,
+}: Pick<CardProps, 'node' | 'hop' | 'isCentre'> & { children: React.ReactNode }) {
+  const marker = <FarMarker node={node} band={null} />;
+  if (isFarNode(hop, isCentre)) return marker;
+  return isCentre ? children : <ShrinksToMarker marker={marker}>{children}</ShrinksToMarker>;
 }
 
 /**
@@ -186,21 +195,25 @@ function TopicCard({ node, hop, isCentre, phone }: CardProps) {
  * load, it is a name card like the map's other cards: a letter in a gray circle says nothing.
  */
 function EntityCard({ centreId, ...props }: CardProps & { centreId: string | null }) {
-  const { node, hop, isCentre } = props;
-  const src = entityImageSrc(node);
+  const src = entityImageSrc(props.node);
   // Keyed by URL, so a node whose picture changes tries the new one.
   const [failedSrc, setFailedSrc] = React.useState<string | null>(null);
   if (src && failedSrc !== src) return <EntityPhotoCard {...props} src={src} onError={() => setFailedSrc(src)} />;
-  if (isFarNode(hop, isCentre)) return <FarMarker node={node} band={null} />;
-  const card = <ItemCard {...props} centreId={centreId} />;
-  return isCentre ? (
-    card
-  ) : (
-    <ShrinksToMarker marker={<FarMarker node={node} band={null} />}>{card}</ShrinksToMarker>
+  return (
+    <Placed {...props}>
+      <ItemCard {...props} centreId={centreId} />
+    </Placed>
   );
 }
 
-function EntityPhotoCard({ node, hop, isCentre, phone, src, onError }: CardProps & { src: string; onError: () => void }) {
+function EntityPhotoCard({
+  node,
+  hop,
+  isCentre,
+  phone,
+  src,
+  onError,
+}: CardProps & { src: string; onError: () => void }) {
   const far = isFarNode(hop, isCentre);
   const size = isCentre ? (phone ? 64 : 84) : far ? 24 : phone ? 40 : 52;
   const width = isCentre ? (phone ? 'w-[110px]' : 'w-[150px]') : far ? null : phone ? 'w-[84px]' : 'w-[112px]';
@@ -277,7 +290,11 @@ function ItemCard({ node, hop, isCentre, phone, centreId }: CardProps & { centre
         <span
           className={cx(
             'text-[11px] font-medium',
-            source || named ? 'line-clamp-1 text-[#a8a8a8]' : node.kind === 'story' ? 'text-[#4b4b4b]' : 'text-[#d9b46a]'
+            source || named
+              ? 'line-clamp-1 text-[#a8a8a8]'
+              : node.kind === 'story'
+                ? 'text-[#4b4b4b]'
+                : 'text-[#d9b46a]'
           )}
         >
           {meta}

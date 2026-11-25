@@ -215,6 +215,19 @@ describe('entities without a picture', () => {
     expect(photo.querySelector('[data-far-marker]')).toBeNull();
   });
 
+  it('tries a new picture after the old one failed, but not the failed one again when the centre moves', () => {
+    const NEW_PHOTO = 'https://example.com/portrait-2.png';
+    const props = { hop: 1, isCentre: false, phone: false, claimSpaceId: null } as const;
+    const { container, rerender } = render(<NodeCard node={person({ image: PHOTO })} {...props} />);
+    fireEvent.error(container.querySelector('img')!);
+    // The same broken picture, now at the centre: still a name card, wearing the ring.
+    rerender(<NodeCard node={person({ image: PHOTO })} {...props} hop={0} isCentre />);
+    expect(container.querySelector('img')).toBeNull();
+    expect(container.querySelector('[data-name-card]')!.className).toContain(CENTRE_RING);
+    rerender(<NodeCard node={person({ image: NEW_PHOTO })} {...props} hop={0} isCentre />);
+    expect(container.querySelector('img')?.getAttribute('src')).toBe(NEW_PHOTO);
+  });
+
   it('turns a far photo that fails to load into the dot', () => {
     const container = card(person({ image: PHOTO }), 2);
     fireEvent.error(container.querySelector('img')!);
