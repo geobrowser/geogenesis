@@ -263,7 +263,7 @@ export function TopicTemplate({
                     secondaryDate={EVENT_DATE_INPUT}
                     tertiaryLabel="Summary (optional)"
                     tertiaryPlaceholder="Brief neutral summary of what happened..."
-                    canOpen={actionCallbacks?.canOpenAddForm}
+                    holdDraft={actionCallbacks?.holdAddDraft}
                     onSubmit={draft => {
                       addedTimelineTurns.add(
                         state => ({

@@ -140,7 +140,7 @@ export function ClaimExplorer({
           />
           <AddClaimPopover
             label="Add claim"
-            canOpen={ctx?.callbacks?.canOpenAddForm}
+            holdDraft={ctx?.callbacks?.holdAddDraft}
             onSubmit={draft => {
               // The new claim goes to the top of the list, so show page 1 where it lands.
               setPage(1);
