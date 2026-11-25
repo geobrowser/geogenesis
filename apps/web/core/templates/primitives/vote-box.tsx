@@ -137,8 +137,8 @@ function Headline({ row, countSummary, noVotes }: { row?: SplitRow; countSummary
 }
 
 /**
- * The split across the card: the agree share in the row's ink over a light gray track, with the two
- * shares at its ends for Agree / Disagree votes. With no votes it is an empty track and no meter.
+ * The split across the card: the agree share in the row's ink over a light gray track, with no share
+ * labels under it (the result above says it). With no votes it is an empty track and no meter.
  * With several spaces and no overall row it draws nothing (the list carries the bars).
  */
 function ResultBar({ row, noVotes, className }: { row?: SplitRow; noVotes: boolean; className?: string }) {
@@ -153,7 +153,6 @@ function ResultBar({ row, noVotes, className }: { row?: SplitRow; noVotes: boole
     );
   }
   const clamped = Math.max(0, Math.min(100, row.percent));
-  const isAgreeUnit = !row.unit || row.unit === 'agree';
   return (
     <div className={cx('flex flex-col gap-2', className)}>
       <div
@@ -169,15 +168,6 @@ function ResultBar({ row, noVotes, className }: { row?: SplitRow; noVotes: boole
           style={{ width: `${clamped.toFixed(2)}%`, backgroundColor: row.color }}
         />
       </div>
-      {isAgreeUnit && (
-        <div
-          data-testid="vote-box-bar-ends"
-          className="flex justify-between text-[13px] leading-[18px] text-grey-04 tabular-nums"
-        >
-          <span>Agree {formatPercentInt(clamped)}</span>
-          <span>Disagree {formatPercentInt(100 - clamped)}</span>
-        </div>
-      )}
     </div>
   );
 }

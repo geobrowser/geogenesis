@@ -177,7 +177,9 @@ describe('VoteBox: the result leads, over a full-width split bar (GEO-3845)', ()
     expect(result.parentElement).toContainElement(buttons);
     expect(buttons).toHaveClass('@[680px]:order-2', 'order-3', 'w-full', '@[680px]:w-auto');
     expect(meter.parentElement).toHaveClass('order-2', '@[680px]:order-3', '@[680px]:basis-full');
-    expect(screen.getByTestId('vote-box-bar-ends')).toHaveTextContent('Agree 71%Disagree 29%');
+    // No Agree / Disagree share labels under the bar (Preston): the result above already says it.
+    expect(screen.queryByTestId('vote-box-bar-ends')).toBeNull();
+    expect(screen.queryByText('Disagree 29%')).toBeNull();
   });
 
   it('keeps the bar ends to agree votes', () => {
