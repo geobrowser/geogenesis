@@ -51,9 +51,19 @@ export function TopicClaimsSummary({
         </p>
       ) : (
         <>
-          <p className="text-metadata text-grey-04">
-            {truncated ? `At least ${headline.text}; ${counted}.` : `${headline.text}.`}
-          </p>
+          {/* The band counts below already add up to the claims with 3+ responses, so the count line
+              only stands in for them while no claim has 3 yet. A cut-short count still says so. */}
+          {!headline.bands ? (
+            <p className="text-metadata text-grey-04">
+              {truncated ? `At least ${headline.text}; ${counted}.` : `${headline.text}.`}
+            </p>
+          ) : (
+            truncated && (
+              <p className="text-metadata text-grey-04">
+                Only this topic’s first {MAX_TOPIC_CLAIMS.toLocaleString('en-US')} claims were counted.
+              </p>
+            )
+          )}
           {headline.bands && (
             <ul className="flex flex-col gap-1">
               {(Object.keys(CLAIM_BAND_LABELS) as ClaimBand[]).map(band => (

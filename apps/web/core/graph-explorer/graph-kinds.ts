@@ -14,7 +14,7 @@ import {
 } from '~/core/topics/ontology';
 import { normId } from '~/core/utils/norm-id';
 
-import { NEIGHBOUR_KIND_TYPE_IDS } from './ontology';
+import { NEIGHBOUR_KIND_TYPE_IDS, RELATION_LABELS, type RelationLabel } from './ontology';
 
 /**
  * What a node is drawn as, in the product team's priority order: it orders the chips and decides
@@ -33,6 +33,33 @@ export const GRAPH_KIND_LABELS: Record<GraphKind, string> = {
   case: 'Court cases',
   other: 'Other',
 };
+
+/**
+ * Relation and type labels that only repeat a group's heading, so its rows leave them out; they are
+ * also the kind's own nouns, so a centre of that kind hides "<noun> (incoming)". Matched ignoring
+ * case and a plural "s" or "ies". People and groups and Other hold mixed types, so they list none.
+ */
+export const GRAPH_KIND_REDUNDANT_LABELS: Record<GraphKind, readonly string[]> = {
+  topic: ['Topic'],
+  ent: [],
+  claim: ['Claim'],
+  story: ['News story', 'Story', 'Story in'],
+  event: ['Event'],
+  src: ['Source'],
+  case: ['Court case', 'Legal case'],
+  other: [],
+};
+
+/**
+ * A label compared ignoring case and a plural "s" or "ies": "Countries" and "Country" match. Kept
+ * this simple on purpose: an "-es" rule would read the verb "Addresses" as the type "Address".
+ */
+export function labelKey(label: string) {
+  return label.trim().toLowerCase().replace(/ies$/, 'y').replace(/s$/, '');
+}
+
+/** Where a panel's rows hang from: the centre's kind and its type names. */
+export type RowCentre = { kind: GraphKind; typeNames: readonly string[] };
 
 export const NEWS_EVENT_TYPE_ID = 'bb9a85bd6dc64efd8232e2782cb4b5f8';
 const TIMELINE_TYPE_ID = '3b22262d7919441db1a839eee9c2b3e9';
@@ -183,20 +210,22 @@ export const PLUMBING_RELATION_TYPE_IDS: readonly string[] = [
 ];
 
 /** How content relations read from each end; merged into RELATION_LABELS. */
-export const CONTENT_RELATION_LABELS: Record<string, { out: string; in: string }> = {
-  '806d52bc27e94c9193c057978b093351': { out: 'Topic', in: 'On this topic' }, // Topics
+export const CONTENT_RELATION_LABELS: Record<string, RelationLabel> = {
+  '806d52bc27e94c9193c057978b093351': { out: 'Topic', in: 'On this topic', generic: true }, // Topics
   '49c5d5e1679a4dbdbfd33f618f227c94': { out: 'Source', in: 'Cited by' }, // Sources
   '91a9e2f6e51a48f7997661de8561b690': { out: 'Author', in: 'Wrote' }, // Authors
   '9ec2b47e481947c0a99e8ddb27a3ed8e': { out: 'Publisher', in: 'Published' }, // Publisher
   e1371bcda7044396adb7ea7ecc8fe3d4: { out: 'Notable claim', in: 'Notable claim in' }, // Notable claims
-  '504e5776788844f6a77dba3ee811d8f0': { out: 'Related claim', in: 'Related to' }, // Related claims
+  '504e5776788844f6a77dba3ee811d8f0': { out: 'Related claim', in: 'Related to', generic: true }, // Related claims
   e81750db3f09440cab9dd01808a43ccb: { out: 'Similar claim', in: 'Similar claim' }, // Similar claims
   '1dc6a843458848198e7a6e672268f811': { out: 'Supporting argument', in: 'Supports' }, // Supporting arguments
   '4e6ec5d14292498a84e5f607ca1a08ce': { out: 'Opposing argument', in: 'Opposes' }, // Opposing arguments
   '09987fc8b20ddf11875d4e8e41336826': { out: 'Supports', in: 'Supported by' }, // Supports
   '71d1bcd5f1cf487fb9a3c7b1d53803eb': { out: 'Opposes', in: 'Opposed by' }, // Opposes
+  '81faa4adafad4009b1061374c1219f04': { out: 'Supports', in: 'Supported by' }, // Supports (debate publisher's, GEO-3142)
+  '818f2f7b85c687853d884ff96401dbaa': { out: 'Opposes', in: 'Opposed by' }, // Opposes (duplicate property)
   '249010038c9e4663a7922a63ffe23f39': { out: 'Story', in: 'Story in' }, // Stories
-  ff5c1866e5ea41ebbbd93b30536ec020: { out: 'Related story', in: 'Related story' }, // Related stories
+  ff5c1866e5ea41ebbbd93b30536ec020: { out: 'Related story', in: 'Related story', generic: true }, // Related stories
   d58d55c4d5434d4c94538092f2629d83: { out: 'Event', in: 'Part of' }, // Events
   '0c5ec2e899494c15a4bdbfaa3442dc4c': { out: 'Actor', in: 'Actor in' }, // Actors (Conflict event)
   '4fa2168bc6ab443ab269ad7ea02fb0a6': { out: 'Theatre', in: 'Theatre of' }, // Theatre
@@ -208,6 +237,25 @@ export const CONTENT_RELATION_LABELS: Record<string, { out: string; in: string }
   c72d9abbbca84e86b7e8b71e91d2b37e: { out: 'Host', in: 'Hosted' }, // Hosts
   cb60a1a66fb548c9b936200c5c271330: { out: 'Guest', in: 'Guest on' }, // Guests
 };
+
+/**
+ * Relation labels that only say a row is related, not how, so no row shows them: every label of a
+ * `generic` table entry ("Topic", "On this topic", "Related person", "Related to"…), any other
+ * "Related …" label (a fallback "Related topics (incoming)"), and the bare fallback "Relation".
+ * Matched ignoring case.
+ */
+const GENERIC_RELATION_LABELS = new Set([
+  ...[...Object.values(RELATION_LABELS), ...Object.values(CONTENT_RELATION_LABELS)]
+    .filter(label => label.generic)
+    .flatMap(label => [label.out, label.in].map(text => text.toLowerCase())),
+  'relation',
+  'relation (incoming)',
+]);
+
+export function isGenericRelationLabel(label: string) {
+  const key = label.trim().toLowerCase();
+  return GENERIC_RELATION_LABELS.has(key) || /^related\b/.test(key);
+}
 
 /** A claim's relation to another claim that makes it an argument for or against it. */
 export const ARGUMENT_RELATION_TYPE_IDS = [

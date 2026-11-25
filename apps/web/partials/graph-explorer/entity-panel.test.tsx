@@ -14,7 +14,7 @@ import type { NeighbourGroup } from '~/core/graph-explorer/panel-sections';
 import { DATASET_TYPE_ID } from '~/core/topics/ontology';
 import { NavUtils } from '~/core/utils/utils';
 
-import { EntityPanel, type PanelCentre, centreEyebrow, panelClaims } from './entity-panel';
+import { EntityPanel, type PanelCentre, centreEyebrow, panelClaims, rowCentreOf } from './entity-panel';
 
 const interacted = vi.hoisted(() => vi.fn());
 vi.mock('~/core/graph-explorer/graph-explorer-analytics', () => ({ useGraphAnalytics: () => ({ interacted }) }));
@@ -54,15 +54,15 @@ describe('panelClaims', () => {
     const nodes = [claimNode(1, 'a'), claimNode(2, 'b')];
     const claims = panelClaims([[about]], linked(nodes, 'Supporting argument'), new Map(nodes.map(n => [n.id, n])));
     expect(claims).toEqual([
-      { ...about, relation: 'Supporting argument' },
-      { id: id(2), name: 'Claim 2', spaceId: 'b', relation: 'Supporting argument' },
+      { ...about, relations: ['Supporting argument'] },
+      { id: id(2), name: 'Claim 2', spaceId: 'b', relations: ['Supporting argument'] },
     ]);
   });
 
   it('gives a claim centre its related claims without asking about it', () => {
     const nodes = [claimNode(3, 'c')];
     expect(panelClaims([], linked(nodes, 'Opposing argument'), new Map(nodes.map(n => [n.id, n])))).toEqual([
-      { id: id(3), name: 'Claim 3', spaceId: 'c', relation: 'Opposing argument' },
+      { id: id(3), name: 'Claim 3', spaceId: 'c', relations: ['Opposing argument'] },
     ]);
   });
 });
@@ -310,5 +310,22 @@ describe('EntityPanel header', () => {
     expect(img).toHaveAttribute('src', 'https://example.com/face.png');
     expect(img).toHaveClass('h-14', 'w-14', 'rounded-[12px]', 'object-cover');
     expect(header.firstElementChild).toBe(img);
+  });
+});
+
+describe('rowCentreOf', () => {
+  it("takes the centre's kind from its type ids and the type names its header shows", () => {
+    const centre = {
+      types: [
+        { id: NEIGHBOUR_KIND_TYPE_IDS.person[0], name: 'Person' },
+        { id: 'aaaabbbbccccddddeeeeffff00001111', name: 'Investor' },
+        { id: 'aaaabbbbccccddddeeeeffff00002222', name: null },
+      ],
+    };
+    expect(rowCentreOf(centre)).toEqual({ kind: 'ent', typeNames: ['Person', 'Investor'] });
+    expect(rowCentreOf({ types: [{ id: 'aaaabbbbccccddddeeeeffff00003333', name: 'Skill' }] })).toEqual({
+      kind: 'other',
+      typeNames: ['Skill'],
+    });
   });
 });

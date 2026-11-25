@@ -11,9 +11,9 @@ import { ActionContextProvider } from '~/core/action-context-provider';
 import { CLAIM_RESPONSE_OBJECT_TYPE, useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
 import type { ClaimBand } from '~/core/graph-explorer/claim-band';
 import { CLAIM_BAND_LABELS } from '~/core/graph-explorer/claim-band';
-import type { GraphNode } from '~/core/graph-explorer/fetch-graph-neighbourhood';
+import type { GraphNode, GraphPublisher } from '~/core/graph-explorer/fetch-graph-neighbourhood';
 import { type GraphFilter, graphFilterKey } from '~/core/graph-explorer/graph-filter';
-import { GRAPH_KIND_LABELS, type GraphKind } from '~/core/graph-explorer/graph-kinds';
+import { GRAPH_KIND_LABELS, type GraphKind, type RowCentre } from '~/core/graph-explorer/graph-kinds';
 import {
   type Counts,
   GROUP_ROWS,
@@ -21,8 +21,11 @@ import {
   type NeighbourGroup,
   agreementLine,
   bandTally,
+  claimRowLine,
   latestNews,
   mostLinked,
+  rowLabels,
+  rowPublisher,
   shownAgreement,
   topClaimsInBand,
 } from '~/core/graph-explorer/panel-sections';
@@ -36,19 +39,28 @@ import { Skeleton } from '~/design-system/skeleton';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
 import { BAND_SWATCHES, nodeDateLabel, nodeTypeLabel } from './connections/node-card';
+import { EntityAvatar } from './entity-avatar';
 import { typeNames } from './entity-panel';
 import { ClaimBatchRow, type ClaimBatchStatus, useClaimSpaceBatches } from './graph-claim-list';
 
 /** A claim the panel lists: read and counted in its own space. */
-export type PanelClaim = { id: string; name: string; spaceId: string; relation?: string };
+export type PanelClaim = { id: string; name: string; spaceId: string; relations?: string[] };
 
 type Open = (id: string, name: string | null) => void;
 
+/**
+ * A panel section as the prototype draws it: a gray band across the panel's full width above a bold
+ * heading. The negative margins undo the panel's padding (p-6, phones p-4) so the band meets its edges.
+ */
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   const id = React.useId();
   return (
-    <section aria-labelledby={id} className="flex flex-col gap-1">
-      <h3 id={id} className="text-footnote text-grey-04 uppercase">
+    <section
+      aria-labelledby={id}
+      data-panel-section
+      className="-mx-6 flex flex-col border-t-8 border-grey-01 px-6 pt-6 md:-mx-4 md:px-4 md:pt-5"
+    >
+      <h3 id={id} className="mb-2 text-smallTitle text-text">
         {title}
       </h3>
       {children}
@@ -56,10 +68,16 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+/** A list row: rows are split by a hairline, and the title underlines on hover as the prototype's do. */
+const ROW_ITEM = 'border-b border-grey-01 last:border-b-0';
+const ROW_TITLE =
+  'text-metadataMedium wrap-break-word text-text decoration-grey-02 underline-offset-[3px] group-hover/row:underline group-focus-visible/row:underline';
+
 function Row({
   title,
   sub,
   relation,
+  publisher = null,
   hidden = false,
   onClick,
   rowId,
@@ -67,23 +85,32 @@ function Row({
   title: string;
   sub?: string | null;
   relation?: string | null;
+  /** A source's or story's publisher, whose favicon leads the line below. */
+  publisher?: GraphPublisher | null;
   hidden?: boolean;
   onClick: () => void;
   rowId?: string;
 }) {
   if (hidden) return null;
   return (
-    <li data-row-id={rowId}>
+    <li data-row-id={rowId} className={ROW_ITEM}>
       <button
         type="button"
         onClick={onClick}
-        className="flex w-full items-start gap-2 rounded-md px-1 py-1.5 text-left transition-colors hover:bg-grey-01 focus-visible:bg-grey-01"
+        className="group/row flex w-full min-w-0 flex-col gap-0.5 py-2 text-left focus-visible:outline-none"
       >
-        <span className="flex min-w-0 flex-col">
-          {relation && <span className="truncate text-footnote text-grey-04">{relation}</span>}
-          <span className="text-metadataMedium wrap-break-word text-text">{title}</span>
-          {sub && <span className="text-footnote text-grey-04 tabular-nums">{sub}</span>}
-        </span>
+        {relation && <span className="truncate text-footnote text-grey-04">{relation}</span>}
+        <span className={ROW_TITLE}>{title}</span>
+        {sub && (
+          <span className="flex min-w-0 items-center gap-1.5 text-footnote text-grey-04 tabular-nums">
+            {publisher && (
+              <span data-publisher-icon className="contents">
+                <EntityAvatar entity={publisher} size={16} />
+              </span>
+            )}
+            <span className="min-w-0">{sub}</span>
+          </span>
+        )}
       </button>
     </li>
   );
@@ -135,6 +162,8 @@ export function TopicOverview({
                 claim={claim}
                 listId="graph_explorer_fights"
                 position={index + 1}
+                // The overview's claims come from the topic summary, with no relations to label.
+                centre={null}
                 onOpen={onOpen}
               />
             ))}
@@ -150,6 +179,8 @@ export function TopicOverview({
                 claim={claim}
                 listId="graph_explorer_agreed"
                 position={index + 1}
+                // The overview's claims come from the topic summary, with no relations to label.
+                centre={null}
                 onOpen={onOpen}
               />
             ))}
@@ -173,14 +204,18 @@ export function TopicOverview({
       {news.length > 0 && (
         <Section title="Latest news">
           <ul className="flex flex-col">
-            {news.map(({ node }) => (
-              <Row
-                key={node.id}
-                title={node.name ?? node.id}
-                sub={[nodeTypeLabel(node), nodeDateLabel(node)].filter(Boolean).join(' · ')}
-                onClick={() => onOpen(node.id, node.name)}
-              />
-            ))}
+            {news.map(({ node }) => {
+              const publisher = rowPublisher(node, topicId);
+              return (
+                <Row
+                  key={node.id}
+                  title={node.name ?? node.id}
+                  sub={[nodeTypeLabel(node), publisher?.name, nodeDateLabel(node)].filter(Boolean).join(' · ')}
+                  publisher={publisher}
+                  onClick={() => onOpen(node.id, node.name)}
+                />
+              );
+            })}
           </ul>
         </Section>
       )}
@@ -193,17 +228,39 @@ function ShowAll({ total, onClick }: { total: number; onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="self-start px-1 text-metadataMedium text-text underline-offset-2 hover:underline"
+      className="mt-1 self-start text-metadataMedium text-text underline decoration-grey-02 underline-offset-[3px] hover:decoration-text"
     >
       Show all {total}
     </button>
   );
 }
 
-/** The neighbour's type for its kind, and its date where it has one. */
-function rowSub(entity: { types: Array<{ name: string | null }> }, node: GraphNode | undefined) {
-  if (!node) return typeNames(entity)[0] ?? null;
-  return [nodeTypeLabel(node) ?? typeNames(entity)[0], nodeDateLabel(node)].filter(Boolean).join(' · ') || null;
+/**
+ * The row's relations above, and its type, publisher and date below, minus what the group says.
+ * `publisher` is the one named below, for its favicon.
+ */
+function neighbourLabels(
+  kind: GraphKind,
+  spoke: NeighbourGroup['spokes'][number]['spoke'],
+  node: GraphNode | undefined,
+  centre: RowCentre,
+  centreId: string | null
+) {
+  const names = typeNames(node ?? spoke.entity);
+  const typeLabel = (node && nodeTypeLabel(node)) ?? names[0] ?? null;
+  const publisher = rowPublisher(node, centreId);
+  return {
+    ...rowLabels({
+      kind,
+      relations: spoke.labels,
+      centre,
+      typeLabel,
+      typeNames: names,
+      publisher: publisher?.name ?? null,
+      date: node ? nodeDateLabel(node) : null,
+    }),
+    publisher,
+  };
 }
 
 function heading(kind: GraphKind, count: number, more: boolean) {
@@ -211,24 +268,40 @@ function heading(kind: GraphKind, count: number, more: boolean) {
 }
 
 /** One group of neighbours: six rows, then the rest behind "Show all". */
-function KindGroup({ group, more, onOpen }: { group: NeighbourGroup; more: boolean; onOpen: Open }) {
+function KindGroup({
+  group,
+  centre,
+  centreId,
+  more,
+  onOpen,
+}: {
+  group: NeighbourGroup;
+  centre: RowCentre;
+  centreId: string | null;
+  more: boolean;
+  onOpen: Open;
+}) {
   const [all, setAll] = React.useState(false);
   const shown = (all ? group.spokes : group.spokes.slice(0, GROUP_ROWS)).map(({ spoke }) => spoke.entity.id);
   const focus = useFocusRevealed(shown);
   return (
     <Section title={heading(group.kind, group.spokes.length, more)}>
       <ul ref={focus.listRef} className="flex flex-col">
-        {group.spokes.map(({ spoke, node }, index) => (
-          <Row
-            key={spoke.entity.id}
-            rowId={spoke.entity.id}
-            hidden={!all && index >= GROUP_ROWS}
-            relation={spoke.labels.join(' · ')}
-            title={spoke.entity.name ?? spoke.entity.id}
-            sub={rowSub(spoke.entity, node)}
-            onClick={() => onOpen(spoke.entity.id, spoke.entity.name)}
-          />
-        ))}
+        {group.spokes.map(({ spoke, node }, index) => {
+          const { relation, sub, publisher } = neighbourLabels(group.kind, spoke, node, centre, centreId);
+          return (
+            <Row
+              key={spoke.entity.id}
+              rowId={spoke.entity.id}
+              hidden={!all && index >= GROUP_ROWS}
+              relation={relation}
+              title={spoke.entity.name ?? spoke.entity.id}
+              sub={sub}
+              publisher={publisher}
+              onClick={() => onOpen(spoke.entity.id, spoke.entity.name)}
+            />
+          );
+        })}
       </ul>
       {!all && group.spokes.length > GROUP_ROWS && (
         <ShowAll
@@ -318,21 +391,28 @@ function ClaimRow({
   listId,
   position,
   batch,
+  centre,
   onOpen,
 }: {
   claim: PanelClaim;
   listId: string;
   position: number;
+  /** What the row's relation labels hang from; null for a list whose claims carry no relations. */
+  centre: RowCentre | null;
   /** The claim space's batch, when the list loads one; without it the row reads its own counts. */
   batch?: ClaimBatchStatus;
   onOpen: Open;
 }) {
   const content = (
     <ActionContextProvider value={{ list_id: listId, item_position: position }}>
-      <ClaimRowContent claim={claim} onOpen={onOpen} />
+      <ClaimRowContent claim={claim} centre={centre} onOpen={onOpen} />
     </ActionContextProvider>
   );
-  return <li data-row-id={claim.id}>{batch ? <ClaimBatchRow status={batch}>{content}</ClaimBatchRow> : content}</li>;
+  return (
+    <li data-row-id={claim.id} className={ROW_ITEM}>
+      {batch ? <ClaimBatchRow status={batch}>{content}</ClaimBatchRow> : content}
+    </li>
+  );
 }
 
 /** "62% agree · 140 votes" from the live counts, with the percent only from 3 votes. */
@@ -346,32 +426,56 @@ function ClaimAgreementLine({ claimId, spaceId }: { claimId: string; spaceId: st
   );
 }
 
-function ClaimRowContent({ claim, onOpen }: { claim: PanelClaim; onOpen: Open }) {
+/**
+ * Desktop shows a row's thumbs on hover or keyboard focus, so a long list reads as claims rather than
+ * buttons; phones (md: is phone width here) and touch screens, which have no hover, always show them.
+ * Faded rather than removed, so they stay in the tab order and focus reveals them.
+ */
+export const ROW_THUMBS_CLASS =
+  'opacity-0 transition-opacity group-hover/claim:opacity-100 group-focus-within/claim:opacity-100 md:opacity-100 [@media(hover:none)]:opacity-100';
+
+/**
+ * A claim row as the prototype draws it: its band's square, its text, and "63% agree" (or its votes
+ * below the threshold) under it. The text re-centres the map; the thumbs only vote.
+ */
+function ClaimRowContent({ claim, centre, onOpen }: { claim: PanelClaim; centre: RowCentre | null; onOpen: Open }) {
   const summary = useClaimResponseSummary(claim.id, claim.spaceId, 'stance');
   const counts = summary.hasCounts ? { positive: summary.positive, negative: summary.negative } : undefined;
   const band = shownAgreement(counts).band;
+  const relation = centre ? rowLabels({ kind: 'claim', relations: claim.relations ?? [], centre }).relation : null;
   return (
-    <div className="flex flex-col gap-1 rounded-md px-1 py-1.5 transition-colors hover:bg-grey-01">
+    <div className="group/claim flex flex-col gap-0.5 py-2">
       <button
         type="button"
         onClick={() => onOpen(claim.id, claim.name)}
-        className="flex items-start gap-2 text-left focus-visible:underline"
+        className="group/row flex min-w-0 flex-col gap-0.5 text-left focus-visible:outline-none"
       >
-        <i
-          aria-hidden
-          className={cx(
-            'mt-[5px] block h-[10px] w-[10px] shrink-0 rounded-[3px]',
-            band ? BAND_SWATCHES[band] : 'bg-grey-02'
-          )}
-        />
-        <span className="flex min-w-0 flex-col">
-          {claim.relation && <span className="truncate text-footnote text-grey-04">{claim.relation}</span>}
-          <span className="text-metadataMedium wrap-break-word text-text">{claim.name}</span>
+        {relation && <span className="truncate text-footnote text-grey-04">{relation}</span>}
+        <span className={ROW_TITLE}>
+          <i
+            aria-hidden
+            data-band={band ?? 'none'}
+            className={cx(
+              'mr-2 inline-block h-2 w-2 rounded-[2px] align-[1px]',
+              band ? BAND_SWATCHES[band] : 'bg-grey-02'
+            )}
+          />
+          {claim.name}
         </span>
       </button>
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 pl-[18px]">
-        <ClaimAgreementLine claimId={claim.id} spaceId={claim.spaceId} />
-        <EntityVoteButtons entityId={claim.id} spaceId={claim.spaceId} responseKind="stance" hideClaimShare />
+      <div className="flex min-h-5 items-center justify-between gap-3">
+        <span className="text-footnote text-grey-04 tabular-nums">
+          {summary.isLoading && !counts ? '…' : (claimRowLine(counts) ?? 'Votes unavailable')}
+        </span>
+        <div data-row-thumbs className={ROW_THUMBS_CLASS}>
+          <EntityVoteButtons
+            entityId={claim.id}
+            spaceId={claim.spaceId}
+            responseKind="stance"
+            hideClaimShare
+            hideResponderAvatars
+          />
+        </div>
       </div>
     </div>
   );
@@ -380,6 +484,7 @@ function ClaimRowContent({ claim, onOpen }: { claim: PanelClaim; onOpen: Open })
 /** Claims around the centre, most votes first once counted, with their bands in one bar. */
 function ClaimsGroup({
   claims,
+  centre,
   more,
   loading,
   onLoadMore,
@@ -387,6 +492,7 @@ function ClaimsGroup({
   onOpen,
 }: {
   claims: readonly PanelClaim[];
+  centre: RowCentre;
   more: boolean;
   loading: boolean;
   onLoadMore: (() => void) | null;
@@ -417,6 +523,7 @@ function ClaimsGroup({
                   listId="graph_explorer_claims"
                   position={index + 1}
                   batch={status[claim.spaceId] ?? 'pending'}
+                  centre={centre}
                   onOpen={onOpen}
                 />
               )
@@ -439,7 +546,7 @@ function ClaimsGroup({
                 focus.mark();
                 onLoadMore();
               }}
-              className="self-start px-1 text-metadataMedium text-text underline-offset-2 hover:underline disabled:text-grey-04"
+              className="mt-1 self-start text-metadataMedium text-text underline decoration-grey-02 underline-offset-[3px] hover:decoration-text disabled:text-grey-04"
             >
               {loadingMore ? 'Loading…' : 'Show more claims'}
             </button>
@@ -453,7 +560,7 @@ function ClaimsGroup({
 function BandBar({ bands, banded }: { bands: Record<ClaimBand, number>; banded: number }) {
   const order = Object.keys(CLAIM_BAND_LABELS) as ClaimBand[];
   return (
-    <div className="flex flex-col gap-1 px-1 pb-1">
+    <div className="flex flex-col gap-1 pb-1">
       <div aria-hidden className="flex h-1.5 overflow-hidden rounded-full bg-grey-02">
         {order.map(band =>
           bands[band] ? (
@@ -475,6 +582,8 @@ function BandBar({ bands, banded }: { bands: Record<ClaimBand, number>; banded: 
 /** Everything around the centre in one list, by kind, in the prototype's order. */
 export function NeighbourGroups({
   groups,
+  centre,
+  centreId = null,
   claims,
   claimsState,
   moreKinds,
@@ -483,6 +592,10 @@ export function NeighbourGroups({
   onOpen,
 }: {
   groups: readonly NeighbourGroup[];
+  /** The panel's centre, whose kind and types a row's "(incoming)" label may only repeat. */
+  centre: RowCentre;
+  /** The centre's id: a source's row doesn't name the publisher the panel is about. */
+  centreId?: string | null;
   /** Claims about the centre and claims linked to it; they replace `groups`' claim group. */
   claims: readonly PanelClaim[];
   claimsState: {
@@ -502,10 +615,11 @@ export function NeighbourGroups({
   const hasClaims = claims.length > 0 || claimsState.isLoading;
   const claimsSettledEmpty = claimsEmptyMessage !== null && !hasClaims && !claimsState.hasNextPage;
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-3">
       {hasClaims && (
         <ClaimsGroup
           claims={claims}
+          centre={centre}
           more={claimsState.hasNextPage}
           loading={claimsState.isLoading && claims.length === 0}
           onLoadMore={claimsState.hasNextPage ? claimsState.fetchNextPage : null}
@@ -515,12 +629,19 @@ export function NeighbourGroups({
       )}
       {!hasClaims && claimsState.hasNextPage && (
         <Section title="Claims">
-          <p className="px-1 text-metadata text-grey-04">None of the claims loaded so far can be shown here.</p>
+          <p className="text-metadata text-grey-04">None of the claims loaded so far can be shown here.</p>
           <ShowMoreClaims state={claimsState} />
         </Section>
       )}
       {others.map(group => (
-        <KindGroup key={group.kind} group={group} more={moreKinds.includes(group.kind)} onOpen={onOpen} />
+        <KindGroup
+          key={group.kind}
+          group={group}
+          centre={centre}
+          centreId={centreId}
+          more={moreKinds.includes(group.kind)}
+          onOpen={onOpen}
+        />
       ))}
       {others.length === 0 && !hasClaims && <p className="text-metadata text-grey-04">{emptyMessage}</p>}
       {claimsSettledEmpty && (
@@ -538,7 +659,7 @@ function ShowMoreClaims({ state }: { state: { isFetchingNextPage: boolean; fetch
       type="button"
       disabled={state.isFetchingNextPage}
       onClick={state.fetchNextPage}
-      className="self-start px-1 text-metadataMedium text-text underline-offset-2 hover:underline disabled:text-grey-04"
+      className="mt-1 self-start text-metadataMedium text-text underline decoration-grey-02 underline-offset-[3px] hover:decoration-text disabled:text-grey-04"
     >
       {state.isFetchingNextPage ? 'Loading…' : 'Show more claims'}
     </button>
