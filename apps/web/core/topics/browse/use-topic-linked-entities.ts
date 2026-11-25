@@ -38,6 +38,7 @@ export function useTopicLinkedEntities({
   rankInSpaceId,
   spaceIds,
   scopeRelationToSpaces = false,
+  sort,
 }: {
   topicId: string;
   /** Narrows to these types. Omit for everything that names the topic. */
@@ -54,6 +55,11 @@ export function useTopicLinkedEntities({
   spaceIds?: string[];
   /** Also require the Topics relation to be published in `spaceIds`. Ignored without `spaceIds`. */
   scopeRelationToSpaces?: boolean;
+  /**
+   * Orders the page by a property value on the server instead of by last update, e.g. a News event's
+   * `Event date`. Last update is when anything touched the entity, which is not when it happened.
+   */
+  sort?: { propertyId: string; direction: 'asc' | 'desc'; dataType?: string; includeWithoutValue?: boolean };
 }) {
   const where = React.useMemo(
     () => ({
@@ -82,7 +88,8 @@ export function useTopicLinkedEntities({
     where,
     first,
     after,
-    orderBy: [EntitiesOrderBy.UpdatedAtDesc],
+    // A property sort replaces the entity-level order; the two are mutually exclusive on the wire.
+    ...(sort ? { sort } : { orderBy: [EntitiesOrderBy.UpdatedAtDesc] }),
     // Holds the page being read while the next one loads, so stepping doesn't collapse the section
     // and shift everything below it — the same reason the claim page's lists do this.
     placeholderData: keepPreviousData,

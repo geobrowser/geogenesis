@@ -57,6 +57,7 @@ import {
   resolveTemplateImageUrl,
 } from '../ontology';
 import { debateParticipantsKey, formatUnixSecDate, toDebateGalleryModel } from './debate-gallery-model';
+import { agendaClaimsForTopic, pinAgendaClaims, useRecentAgendaClaims } from './recent-agenda-claims';
 import { topicCoverageIngestionLink } from './source-ingestion-links';
 import {
   activeStanceVotes,
@@ -78,6 +79,19 @@ const NO_FEED_ITEMS: ExploreFeedItem[] = [];
 const NO_ENTITIES: Entity[] = [];
 /** How many of the viewer's own personal-space claims or events a Topic reads. */
 const VIEWER_ADDED_LIMIT = 8;
+/** Rows the Topic Timeline shows. */
+const TIMELINE_LIMIT = 8;
+/**
+ * News events newest `Event date` first, read on the server. Last update would rank by when anyone
+ * last touched an event, which surfaced year-old events over last week's. Events without a date come
+ * after every dated one.
+ */
+const EVENTS_BY_DATE_SORT = {
+  propertyId: TEMPLATE_ONTOLOGY.EVENT_DATE_PROPERTY_ID,
+  direction: 'desc',
+  dataType: 'datetime',
+  includeWithoutValue: true,
+} as const;
 
 async function fetchTopicFeedSlice({
   topicId,
@@ -151,7 +165,7 @@ function classifyCoverage(
  *   batch-hydrated for `Is factual` (`Factual`/`Judgment`) and `userVotes` from every voter
  *   (`Disputed` / `Accepted` tabs and interactive inline voting).
  * - Live `Recent debates` horizontal gallery (via `/api/topics/feed` for `DEBATE_TYPE_ID`).
- * - Live `Timeline` combining `News events` (`Event date`) and dated `News stories`.
+ * - Live `Timeline` of the newest `News events` by `Event date`.
  * - Rich 2-column format-aware `Evidence` media cards (`layout: 'cards'`).
  * - Header stats (`countsByTopicId`), compact clickable `Subtopics` chips, `Context` relation
  *   pills, `Flags` (`Community notes` / `Disclaimer`), and live `useMutate` actions.
@@ -181,7 +195,7 @@ export function useLiveTopicTemplate({
 
   const queryClient = useQueryClient();
 
-  // 1. Top-voted AND Best-ranked Claims, Debates, and News stories from Geo's topic/space ranking feed
+  // 1. Top-voted AND Best-ranked Claims and Debates from Geo's topic/space ranking feed
   const topClaimsQuery = useQuery({
     queryKey: ['live-topic-template', 'top-claims', ID.uuidToHex(entityId), ID.uuidToHex(spaceId)],
     queryFn: ({ signal }) =>
@@ -217,48 +231,22 @@ export function useLiveTopicTemplate({
     staleTime: 60_000,
   });
 
-  const bestNewsQuery = useQuery({
-    queryKey: ['live-topic-template', 'best-news', ID.uuidToHex(entityId), ID.uuidToHex(spaceId), isSpaceHome],
-    queryFn: async ({ signal }) => {
-      if (isSpaceHome) {
-        const spaceNews = await fetchTopicFeedSlice({
-          topicId: entityId,
-          spaceId,
-          typeId: NEWS_STORY_TYPE_ID,
-          endpoint: 'space',
-          signal,
-        });
-        if (spaceNews.length > 0) return { items: spaceNews, fromSpaceFeed: true };
-      }
-      return {
-        items: await fetchTopicFeedSlice({ topicId: entityId, spaceId, typeId: NEWS_STORY_TYPE_ID, signal }),
-        fromSpaceFeed: false,
-      };
-    },
-    staleTime: 60_000,
-  });
-
   // The topic feed checks only that an entity lives in the space; keep what the space itself tagged.
   // The space feed lists the space's own items by space, not by tag, so its rows are not checked.
   const topicFeedDebates = bestDebatesQuery.data?.fromSpaceFeed ? undefined : bestDebatesQuery.data?.items;
-  const topicFeedNews = bestNewsQuery.data?.fromSpaceFeed ? undefined : bestNewsQuery.data?.items;
   const feedEntityIds = React.useMemo(
     () =>
-      [topClaimsQuery.data, bestClaimsQuery.data, topicFeedDebates, topicFeedNews].flatMap(
+      [topClaimsQuery.data, bestClaimsQuery.data, topicFeedDebates].flatMap(
         items => items?.map(item => item.entityId) ?? []
       ),
-    [bestClaimsQuery.data, topClaimsQuery.data, topicFeedDebates, topicFeedNews]
+    [bestClaimsQuery.data, topClaimsQuery.data, topicFeedDebates]
   );
   const { tagged: taggedInSpace, isLoading: isTaggedLoading } = useTopicTaggedInSpace({
     topicId: entityId,
     spaceId,
     entityIds: feedEntityIds,
     // One check once every slice has landed, rather than one per slice.
-    enabled:
-      !topClaimsQuery.isLoading &&
-      !bestClaimsQuery.isLoading &&
-      !bestDebatesQuery.isLoading &&
-      !bestNewsQuery.isLoading,
+    enabled: !topClaimsQuery.isLoading && !bestClaimsQuery.isLoading && !bestDebatesQuery.isLoading,
   });
   const keepTagged = React.useCallback(
     (items: ExploreFeedItem[] | undefined): ExploreFeedItem[] => {
@@ -275,10 +263,6 @@ export function useLiveTopicTemplate({
     () =>
       bestDebatesQuery.data?.fromSpaceFeed ? bestDebatesQuery.data.items : keepTagged(bestDebatesQuery.data?.items),
     [bestDebatesQuery.data, keepTagged]
-  );
-  const bestNews = React.useMemo(
-    () => (bestNewsQuery.data?.fromSpaceFeed ? bestNewsQuery.data.items : keepTagged(bestNewsQuery.data?.items)),
-    [bestNewsQuery.data, keepTagged]
   );
 
   const debateIdsForParticipants = React.useMemo(
@@ -300,7 +284,8 @@ export function useLiveTopicTemplate({
   const { entities: linkedEvents } = useTopicLinkedEntities({
     topicId: entityId,
     typeIds: [TEMPLATE_ONTOLOGY.NEWS_EVENT_TYPE_ID],
-    first: 8,
+    first: TIMELINE_LIMIT,
+    sort: EVENTS_BY_DATE_SORT,
     spaceIds,
     scopeRelationToSpaces: true,
   });
@@ -344,6 +329,7 @@ export function useLiveTopicTemplate({
     topicId: entityId,
     typeIds: [TEMPLATE_ONTOLOGY.NEWS_EVENT_TYPE_ID],
     first: VIEWER_ADDED_LIMIT,
+    sort: EVENTS_BY_DATE_SORT,
     spaceIds: viewerSpaceIds,
     scopeRelationToSpaces: true,
     enabled: viewerCoverageEnabled,
@@ -379,6 +365,13 @@ export function useLiveTopicTemplate({
     queryFn: () => fetchPostAuthorMetadata(tweetCoverageIds),
   });
 
+  // Claims from any Debate agenda in the last 21 days lead the list (GEO-3873), read once for every Topic.
+  const recentAgendaClaimsQuery = useRecentAgendaClaims();
+  const agendaClaims = React.useMemo(
+    () => agendaClaimsForTopic(recentAgendaClaimsQuery.data ?? [], entityId, spaceId),
+    [entityId, recentAgendaClaimsQuery.data, spaceId]
+  );
+
   const directClaimRels = React.useMemo(
     () => readEntityRelations(entity, TEMPLATE_ONTOLOGY.TOPIC_CLAIMS_PROPERTY_ID),
     [entity]
@@ -386,7 +379,8 @@ export function useLiveTopicTemplate({
 
   // The Claims list is the topic's Best order (GEO-3868): Best claims first, in Best's order. Only when
   // Best has fewer than the cap do the other sources fill the rest, after it and in this order: Top,
-  // the best debates' claims, linked claims, then the topic's own claim relations.
+  // the best debates' claims, linked claims, then the topic's own claim relations. Claims from a
+  // recent Debate agenda go before all of it, even when Best leaves them out (GEO-3873).
   const orderedClaimSeeds = React.useMemo(() => {
     const seen = new Set<string>();
     const seeds: {
@@ -443,8 +437,20 @@ export function useLiveTopicTemplate({
         spaceId: rel.toSpaceId ?? spaceId,
       });
     }
-    // After the cap, so the page's own claims never crowd out the viewer's additions.
-    const capped = seeds.slice(0, LIVE_CLAIMS_LIMIT);
+    const pinned = pinAgendaClaims<(typeof seeds)[number]>({
+      seeds,
+      agendaClaims,
+      bestIds: bestClaims.map(item => item.entityId),
+      makeSeed: claim => ({
+        id: claim.id,
+        title: claim.name,
+        spaceId: claim.spaceIds.includes(ID.uuidToHex(spaceId)) ? spaceId : (claim.spaceIds[0] ?? spaceId),
+      }),
+    });
+    // Every agenda claim stays, even past the cap. After the cap, so the page's own claims never
+    // crowd out the viewer's additions.
+    const capped = pinned.slice(0, Math.max(LIVE_CLAIMS_LIMIT, agendaClaims.length));
+    for (const seed of pinned) seen.add(ID.uuidToHex(seed.id));
     for (const claim of viewerLinkedClaims) {
       const hex = ID.uuidToHex(claim.id);
       if (!claim.name?.trim() || seen.has(hex)) continue;
@@ -457,7 +463,7 @@ export function useLiveTopicTemplate({
       });
     }
     return capped;
-  }, [bestClaims, bestDebates, directClaimRels, linkedClaims, spaceId, topClaims, viewerLinkedClaims]);
+  }, [agendaClaims, bestClaims, bestDebates, directClaimRels, linkedClaims, spaceId, topClaims, viewerLinkedClaims]);
 
   // Batch-hydrate claim entities that came from `/api/topics/feed` so we read their real `Is factual` value
   const claimIdsToHydrate = React.useMemo(
@@ -647,8 +653,10 @@ export function useLiveTopicTemplate({
       });
     });
 
-    // 3. Timeline: combine News events + recent dated News stories (newest first, capped at 8)
-    const timelineCandidates: { item: TopicTimelineHighlightModel; sortTs: number }[] = [];
+    // 3. Timeline: News events only, newest Event date first, capped at TIMELINE_LIMIT. The space's
+    // page arrives in that order; re-sorting merges in the viewer's own events. Undated events last.
+    // `sortTs` is null without a usable date, so undated events stay last even behind pre-1970 ones.
+    const timelineCandidates: { item: TopicTimelineHighlightModel; sortTs: number | null }[] = [];
     const seenTimelineHex = new Set<string>();
 
     for (const eventEntity of [...linkedEvents, ...viewerLinkedEvents]) {
@@ -657,9 +665,9 @@ export function useLiveTopicTemplate({
       if (seenTimelineHex.has(hex)) continue;
       seenTimelineHex.add(hex);
       const rawDate = readEntityTextValue(eventEntity, TEMPLATE_ONTOLOGY.EVENT_DATE_PROPERTY_ID);
-      const ts = rawDate ? Date.parse(rawDate) : 0;
+      const ts = rawDate ? Date.parse(rawDate) : NaN;
       timelineCandidates.push({
-        sortTs: Number.isFinite(ts) ? ts : 0,
+        sortTs: Number.isFinite(ts) ? ts : null,
         item: {
           id: eventEntity.id,
           when: formatOntologyDate(rawDate) ?? 'Event',
@@ -670,26 +678,12 @@ export function useLiveTopicTemplate({
       });
     }
 
-    for (const story of bestNews) {
-      if (!story.title) continue;
-      const hex = ID.uuidToHex(story.entityId);
-      if (seenTimelineHex.has(hex)) continue;
-      seenTimelineHex.add(hex);
-      timelineCandidates.push({
-        sortTs: (story.createdAtSec ?? 0) * 1000,
-        item: {
-          id: story.entityId,
-          when: formatUnixSecDate(story.createdAtSec) ?? 'News',
-          title: story.title,
-          summary: story.description ?? undefined,
-          href: NavUtils.toEntity(story.spaceId || spaceId, story.entityId),
-        },
-      });
-    }
-
     const timelineHighlights = timelineCandidates
-      .sort((a, b) => b.sortTs - a.sortTs)
-      .slice(0, 8)
+      .sort((a, b) => {
+        if (a.sortTs === null || b.sortTs === null) return a.sortTs === null ? (b.sortTs === null ? 0 : 1) : -1;
+        return b.sortTs - a.sortTs;
+      })
+      .slice(0, TIMELINE_LIMIT)
       .map(entry => entry.item);
 
     // 4. Evidence: rich format-aware 2-column media cards
@@ -825,7 +819,6 @@ export function useLiveTopicTemplate({
   }, [
     ancestors,
     bestDebates,
-    bestNews,
     countsByTopicId,
     coverage.page.rows,
     viewerCoverageRows,
@@ -848,6 +841,7 @@ export function useLiveTopicTemplate({
     topClaimsQuery.isLoading ||
       bestClaimsQuery.isLoading ||
       bestDebatesQuery.isLoading ||
+      recentAgendaClaimsQuery.isLoading ||
       isTaggedLoading ||
       coverage.isLoading ||
       (orderedClaimSeeds.length > 0 && votesQuery.isLoading),
