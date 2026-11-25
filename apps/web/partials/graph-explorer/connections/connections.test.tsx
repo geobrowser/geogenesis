@@ -342,6 +342,40 @@ describe('ConnectionsCanvas', () => {
     expect(centreButton.style.getPropertyValue('--pin-scale')).toBe('');
   });
 
+  it.each([
+    ['turns hop 2', { phone: true, hop: 2 as const }],
+    ['leaves the phone layout', { phone: false, hop: 1 as const }],
+  ])('drops `data-covered` from a covered pin that %s, so it stays tappable', (_, next) => {
+    motion.reduce = true;
+    const canvas = (phone: boolean, hop: 1 | 2) => (
+      <ConnectionsCanvas
+        selection={{ ...selection, nodes: [selection.nodes[0], { ...selection.nodes[1], hop }] }}
+        phone={phone}
+        onSelect={vi.fn()}
+        renderNode={entry => entry.node.name}
+        labelFor={() => 'label'}
+      />
+    );
+    // The loop restarts when `phone` flips; the old one's pending frame must really be cancelled.
+    const pending = new Map<number, FrameRequestCallback>();
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation(callback => {
+      frames.push(callback);
+      pending.set(pending.size + 1, callback);
+      return pending.size;
+    });
+    vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(id => {
+      frames = frames.filter(callback => callback !== pending.get(id));
+    });
+    // jsdom's stage is 0 by 0, so the pin's name has no place on it and counts as covered.
+    const { rerender } = render(canvas(true, 1));
+    runFrames(100);
+    const isaac = () => screen.getByRole('button', { name: 'Isaac Herzog' });
+    expect(isaac().dataset.covered).toBe('');
+    rerender(canvas(next.phone, next.hop));
+    runFrames(now + 1200);
+    expect(isaac().dataset.covered).toBeUndefined();
+  });
+
   it('keeps desktop cards free of pin styles', () => {
     motion.reduce = true;
     render(<Canvas />);

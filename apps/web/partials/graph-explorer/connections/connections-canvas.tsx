@@ -530,12 +530,13 @@ export function ConnectionsCanvas({
           if (entry.pin && overlapShare(labelRect(entry), centreRect) > 0) isCovered = true;
         }
         entry.node.dim = ease(entry.node.dim, target);
-        if (!entry.pin) continue;
-        entry.node.labelDim = ease(entry.node.labelDim, isCovered ? 0 : 1);
-        if (isCovered !== (entry.element.dataset.covered !== undefined)) {
-          if (isCovered) entry.element.dataset.covered = '';
+        // Synced on every card: a button that stops being a pin (hop 2, or past the breakpoint) must drop it.
+        const covers = entry.pin && isCovered;
+        if (covers !== (entry.element.dataset.covered !== undefined)) {
+          if (covers) entry.element.dataset.covered = '';
           else delete entry.element.dataset.covered;
         }
+        if (entry.pin) entry.node.labelDim = ease(entry.node.labelDim, isCovered ? 0 : 1);
       }
 
       for (const { node, element, point, box, scale, opacity, isCentre, pin, markerScale, name } of drawn) {
