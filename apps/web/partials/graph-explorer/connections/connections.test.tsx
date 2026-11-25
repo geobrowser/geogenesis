@@ -12,7 +12,15 @@ import type { GraphSelection } from '~/core/graph-explorer/select-graph';
 import type { SelectedNode } from '~/core/graph-explorer/select-graph';
 import { SKELETON_SELECTION, isSkeletonNode } from '~/core/graph-explorer/skeleton-graph';
 
-import { ConnectionsCanvas, clearance, coveredLabels, nodeScale, overlapShare, overlaps } from './connections-canvas';
+import {
+  ConnectionsCanvas,
+  clearance,
+  coveredLabels,
+  nodeScale,
+  overlapShare,
+  overlaps,
+  tooSmallToRead,
+} from './connections-canvas';
 import { GraphSearch, searchNodes } from './graph-search';
 import { GraphTopBar } from './graph-top-bar';
 
@@ -637,5 +645,14 @@ describe('coveredLabels', () => {
 
   it('keeps the one already showing when depths cross, so the pair does not flicker', () => {
     expect(coveredLabels([slot(0, 10, { shown: true }), slot(60, 9, { shown: false })])).toEqual([false, true]);
+  });
+});
+
+describe('tooSmallToRead', () => {
+  it('turns a card into its marker below 0.6 and back only above 0.7, so it does not flap', () => {
+    expect(tooSmallToRead(0.59, false)).toBe(true);
+    expect(tooSmallToRead(0.65, false)).toBe(false);
+    expect(tooSmallToRead(0.65, true)).toBe(true);
+    expect(tooSmallToRead(0.71, true)).toBe(false);
   });
 });

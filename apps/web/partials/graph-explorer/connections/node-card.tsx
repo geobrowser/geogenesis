@@ -98,8 +98,25 @@ export function NodeCard({ claimSpaceId, ...props }: CardProps & { claimSpaceId:
   if (props.node.kind === 'claim' && claimSpaceId) return <ClaimCard {...props} spaceId={claimSpaceId} />;
   if (props.node.kind === 'ent' || props.node.kind === 'other') return <EntityCard {...props} />;
   if (far) return <FarMarker node={props.node} band={null} />;
-  if (props.node.kind === 'topic') return <TopicCard {...props} />;
-  return <ItemCard {...props} />;
+  const card = props.node.kind === 'topic' ? <TopicCard {...props} /> : <ItemCard {...props} />;
+  return props.isCentre ? (
+    card
+  ) : (
+    <ShrinksToMarker marker={<FarMarker node={props.node} band={null} />}>{card}</ShrinksToMarker>
+  );
+}
+
+/**
+ * A hop-1 card the map draws too small to read (the canvas sets `data-far` on its button) swaps to
+ * its marker by CSS alone, so nothing re-renders per frame.
+ */
+function ShrinksToMarker({ children, marker }: { children: React.ReactNode; marker: React.ReactNode }) {
+  return (
+    <>
+      <span className="contents group-data-[far]:hidden">{children}</span>
+      <span className="hidden group-data-[far]:contents">{marker}</span>
+    </>
+  );
 }
 
 /** A far node: a small marker with no text; its name shows on hover or focus, below it. */
@@ -182,9 +199,19 @@ function EntityCard({ node, hop, isCentre, phone }: CardProps) {
       ) : (
         <span
           data-label
-          className={cx(LABEL, 'rounded-md bg-white px-2 py-[2px] text-[#151515]', labelSize({ isCentre, phone, hop }))}
+          className={cx(
+            LABEL,
+            'rounded-md bg-white px-2 py-[2px] text-[#151515]',
+            !isCentre && 'group-data-[far]:hidden',
+            labelSize({ isCentre, phone, hop })
+          )}
         >
           {node.name}
+        </span>
+      )}
+      {!far && !isCentre && (
+        <span className="hidden group-data-[far]:contents">
+          <FarName name={node.name} />
         </span>
       )}
     </span>
@@ -240,13 +267,13 @@ function ClaimCard({ node, hop, isCentre, phone, spaceId }: CardProps & { spaceI
   const ready = !summary.isLoading && summary.hasCounts;
   const band = ready ? claimBand(summary.positive, summary.negative) : null;
   const state = band ?? (ready ? 'none' : 'loading');
-  if (isFarNode(hop, isCentre))
-    return (
-      <span data-band={state} className="contents">
-        <FarMarker node={node} band={band} />
-      </span>
-    );
-  return (
+  const marker = (
+    <span data-band={state} className="contents">
+      <FarMarker node={node} band={band} />
+    </span>
+  );
+  if (isFarNode(hop, isCentre)) return marker;
+  const card = (
     <span
       data-band={state}
       data-label
@@ -270,6 +297,7 @@ function ClaimCard({ node, hop, isCentre, phone, spaceId }: CardProps & { spaceI
       )}
     </span>
   );
+  return isCentre ? card : <ShrinksToMarker marker={marker}>{card}</ShrinksToMarker>;
 }
 
 function ClaimStatusLine({ loading, answered }: { loading: boolean; answered: boolean }) {

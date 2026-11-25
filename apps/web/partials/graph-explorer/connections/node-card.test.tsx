@@ -79,6 +79,16 @@ describe('NodeCard far nodes', () => {
     }
   );
 
+  it.each(['topic', 'ent', 'claim', 'story', 'src'] as const)(
+    'lets a hop-1 %s swap its text for the marker while the map draws it too small (data-far)',
+    kind => {
+      const container = card(node(kind), 1);
+      expect(container.innerHTML).toContain('group-data-[far]:hidden');
+      expect(container.innerHTML).toContain('group-data-[far]:contents');
+      expect(card(node(kind), 0).innerHTML).not.toContain('group-data-[far]');
+    }
+  );
+
   it("colors a far claim's marker by its band", () => {
     const marker = card(node('claim'), 2).querySelector('[data-far-marker] > [aria-hidden]')!;
     expect(marker.className).toContain('bg-[#1e824c]');

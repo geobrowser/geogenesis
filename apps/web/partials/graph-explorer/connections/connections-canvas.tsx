@@ -52,6 +52,8 @@ type NodeView = {
   push: [number, number];
   /** Opacity factor while a nearer card covers its label, eased frame to frame. */
   dim: number;
+  /** Drawn too small to read, so shown as its marker (`data-far` on its button). */
+  far: boolean;
 };
 
 type DrawnLink = { a: string; b: string; hop: 1 | 2 | 3; edge: GraphEdge };
@@ -233,6 +235,7 @@ export function ConnectionsCanvas({
           entry,
           push: [0, 0],
           dim: 1,
+          far: false,
         });
       }
     }
@@ -403,6 +406,13 @@ export function ConnectionsCanvas({
         const isCentre = node.id === state.centreId;
         const fog = Math.max(0.28, Math.min(1, 1 - (point.depth + 150) / 1100));
         const scale = nodeScale(isCentre, node.hop, point.scale, phone);
+        // Hop 2 is always a marker; a hop-1 card turns into one while drawn too small to read.
+        const far = !isCentre && node.hop === 1 && tooSmallToRead(scale, node.far);
+        if (far !== node.far) {
+          node.far = far;
+          if (far) element.dataset.far = '';
+          else delete element.dataset.far;
+        }
         let opacity = node.alive ? fog : 0;
         if (hover && node.id !== hover && !neighbours.has(node.id)) opacity *= 0.22;
         if (node.id === hover && node.alive) opacity = 1;
@@ -429,7 +439,9 @@ export function ConnectionsCanvas({
       }
 
       // A labelled card a nearer one touches fades, so no two labels overlap; far markers carry no label.
-      const labelled = drawn.filter(entry => !entry.isCentre && entry.node.alive && entry.node.hop < 2);
+      const labelled = drawn.filter(
+        entry => !entry.isCentre && entry.node.alive && entry.node.hop < 2 && !entry.node.far
+      );
       const hidden = coveredLabels(
         labelled.map(entry => ({
           rect: rectAt(entry.point.x, entry.point.y, entry.box, entry.scale),
@@ -842,6 +854,15 @@ function shifted(rect: Rect, [dx, dy]: [number, number]): Rect {
 export function overlaps(centre: Rect, rect: Rect): boolean {
   const [dx, dy] = clearance(centre, rect);
   return dx !== 0 || dy !== 0;
+}
+
+/** Below this a card's text is under ~7px; it must grow past the higher one to come back, so it doesn't flap. */
+const FAR_BELOW = 0.6;
+const READABLE_ABOVE = 0.7;
+
+/** Whether a card drawn at `scale` is too small to read, with hysteresis on `wasFar`. */
+export function tooSmallToRead(scale: number, wasFar: boolean) {
+  return wasFar ? scale <= READABLE_ABOVE : scale < FAR_BELOW;
 }
 
 /** A covered card's opacity factor: low enough that its text no longer reads over the front one. */
