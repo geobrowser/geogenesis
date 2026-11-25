@@ -36,7 +36,8 @@ export function InterestGrid({
 }) {
   // Phones (md: is ≤767px) give each of the four columns only ~63-67px. Drop the column gap there (the 56px
   // circles keep their spacing) and size labels down a step so whole words like "Relationships" fit. Labels
-  // wrap only between words; a word still too wide for a very narrow phone hyphenates instead of splitting.
+  // wrap between words, and a word still too wide hyphenates (`lang="en"` on <html>). `break-words` stays as the
+  // last resort for names with no hyphenation point, so they split inside their cell instead of spilling over.
   return (
     <div className="mx-auto grid w-full grid-cols-4 items-start gap-x-2 gap-y-4 md:gap-x-0">
       {spaces.map(space => {
@@ -77,7 +78,9 @@ export function InterestGrid({
                 )}
               />
             </span>
-            <span className="min-h-8 w-full text-[13px] leading-4 font-medium break-normal hyphens-auto md:text-[12px]">{space.name}</span>
+            <span className="min-h-8 w-full text-[13px] leading-4 font-medium break-words hyphens-auto md:text-[12px]">
+              {space.name}
+            </span>
           </button>
         );
       })}
