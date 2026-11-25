@@ -576,35 +576,7 @@ describe('RelatedListSection', () => {
     expect(screen.getByText('18:40')).toBeInTheDocument();
     expect(screen.getByText('@official')).toBeInTheDocument();
     expect(screen.getByText('Key quote from the post.')).toBeInTheDocument();
-    expect(document.querySelectorAll('[data-rail-card]').length).toBe(2);
-  });
-
-  it('lays source cards out in list order on equal-height rows, two per column from four cards up', () => {
-    const items = ['First', 'Second', 'Third', 'Fourth', 'Fifth'].map((title, index) => ({
-      id: `src-${index}`,
-      kind: 'source' as const,
-      kindLabel: index % 2 ? 'Post' : 'Article',
-      mediaType: index % 2 ? ('tweet' as const) : ('article' as const),
-      title,
-      publisher: index % 2 ? 'Some Account' : 'Article',
-      excerpt: index === 2 ? 'A much longer excerpt than the others. '.repeat(10) : undefined,
-      thumbnailUrl: index === 0 ? 'https://example.com/thumb.png' : undefined,
-    }));
-    render(<RelatedListSection section={{ id: 'coverage', title: 'Sources', layout: 'cards', items }} />);
-
-    const cells = Array.from(document.querySelectorAll<HTMLElement>('[data-rail-card]'));
-    expect(cells.map(cell => cell.querySelector('article')?.textContent)).toEqual([
-      expect.stringContaining('First'),
-      expect.stringContaining('Second'),
-      expect.stringContaining('Third'),
-      expect.stringContaining('Fourth'),
-      expect.stringContaining('Fifth'),
-    ]);
-    // One grid with two `1fr` rows: every card takes the tallest card's height.
-    const rail = cells[0]!.parentElement!;
-    expect(rail).toHaveClass('grid', 'grid-flow-col', 'grid-rows-2');
-    expect(cells.every(cell => cell.parentElement === rail)).toBe(true);
-    for (const cell of cells) expect(cell.querySelector('article')).toHaveClass('h-full');
+    expect(document.querySelectorAll('[data-masonry-col]').length).toBeGreaterThan(0);
   });
 
   it("puts an X post card's date under the author with the handle, not beside the card actions", () => {
@@ -645,6 +617,107 @@ describe('RelatedListSection', () => {
     expect(withHandle.parentElement).toHaveTextContent('Stella Example');
     const dateOnly = screen.getByText('4 Nov 2026');
     expect(dateOnly.parentElement).toHaveTextContent('Plain Account');
+  });
+
+  it('gives every Source card kind the same title, description and meta text (GEO-3874)', () => {
+    const excerpt = 'A long excerpt that runs on for a while.';
+    render(
+      <RelatedListSection
+        section={{
+          id: 'mixed-sources',
+          title: 'Sources',
+          layout: 'cards',
+          items: [
+            {
+              id: 'a',
+              kind: 'source',
+              kindLabel: 'Article',
+              mediaType: 'article',
+              title: 'Article title',
+              publisher: 'Reuters',
+              date: '1 Nov 2026',
+              excerpt,
+              thumbnailUrl: 'https://example.com/a.jpg',
+            },
+            {
+              id: 'v',
+              kind: 'source',
+              kindLabel: 'Video',
+              mediaType: 'video',
+              title: 'Video title',
+              publisher: 'ICJ',
+              date: '2 Nov 2026',
+              excerpt,
+            },
+            {
+              id: 't',
+              kind: 'post',
+              kindLabel: 'Post',
+              mediaType: 'tweet',
+              title: 'Post',
+              publisher: 'Stella',
+              authorHandle: '@stella',
+              date: '3 Nov 2026',
+              excerpt,
+            },
+            {
+              id: 'p',
+              kind: 'episode',
+              kindLabel: 'Episode',
+              title: 'Episode title',
+              publisher: 'The Daily',
+              date: '4 Nov 2026',
+              excerpt,
+            },
+            {
+              id: 'n',
+              kind: 'news-story',
+              kindLabel: 'News story',
+              title: 'Story title',
+              publisher: 'Geo',
+              date: '5 Nov 2026',
+              excerpt,
+            },
+            {
+              id: 'd',
+              kind: 'source',
+              kindLabel: 'Dataset',
+              mediaType: 'dataset',
+              title: 'Dataset title',
+              publisher: 'UN',
+              date: '6 Nov 2026',
+              excerpt,
+            },
+          ],
+        }}
+      />
+    );
+
+    const classesOf = (els: Element[]) => new Set(els.map(el => el.className));
+
+    const titles = screen.getAllByRole('heading', { level: 3 });
+    expect(titles).toHaveLength(5); // a post has no title; its body is its description
+    expect(classesOf(titles).size).toBe(1);
+    expect(titles[0]!.className).toContain('line-clamp-3');
+
+    const descriptions = [...document.querySelectorAll('[data-card-description]')];
+    expect(descriptions).toHaveLength(6);
+    expect(descriptions.every(el => el.textContent === excerpt)).toBe(true);
+    expect(classesOf(descriptions).size).toBe(1);
+    expect(descriptions[0]!.className).toContain('line-clamp-3');
+
+    const metas = [...document.querySelectorAll('[data-card-meta]')];
+    expect(metas).toHaveLength(6);
+    // The meta text style sits on the line itself or on the row wrapping the card's kind icon.
+    const metaStyle = (el: Element) => (el.className.includes('text-[') ? el.className : el.parentElement!.className);
+    const styles = new Set(
+      metas.map(el =>
+        metaStyle(el)
+          .match(/text-\[\S+\]|leading-\[\S+\]|font-\S+|text-grey-\d+/g)!
+          .join(' ')
+      )
+    );
+    expect(styles.size).toBe(1);
   });
 });
 

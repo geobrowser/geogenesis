@@ -145,7 +145,7 @@ export function RelatedListSection({ section, className }: RelatedListSectionPro
     const measure = () => {
       frame = 0;
       const box = scroller.getBoundingClientRect();
-      const cols = Array.from(scroller.querySelectorAll<HTMLElement>('[data-rail-card]'));
+      const cols = Array.from(scroller.querySelectorAll<HTMLElement>('[data-masonry-col]'));
       const firstBox = cols.at(0)?.getBoundingClientRect();
       const lastBox = cols.at(-1)?.getBoundingClientRect();
       const next = {
@@ -176,7 +176,7 @@ export function RelatedListSection({ section, className }: RelatedListSectionPro
   const scrollRailByColumn = React.useCallback((direction: -1 | 1) => {
     const scroller = railRef.current;
     if (!scroller) return;
-    const firstCol = scroller.querySelector<HTMLElement>('[data-rail-card]');
+    const firstCol = scroller.querySelector<HTMLElement>('[data-masonry-col]');
     const colWidth = firstCol?.getBoundingClientRect().width || 360;
     scroller.scrollBy({ left: direction * (colWidth + 16), behavior: 'smooth' });
   }, []);
@@ -273,7 +273,7 @@ export function RelatedListSection({ section, className }: RelatedListSectionPro
       {allItems.length === 0 ? (
         <TemplateEmptyState>{emptyText}</TemplateEmptyState>
       ) : useCards ? (
-        <HorizontalCardRail items={visibleItems} scrollerRef={railRef} />
+        <HorizontalMasonryRail items={visibleItems} scrollerRef={railRef} />
       ) : (
         <div className={cx('divide-y divide-divider overflow-hidden', TEMPLATE_CARD_SURFACE)}>
           {visibleItems.map(item => (
@@ -296,6 +296,15 @@ export function RelatedListSection({ section, className }: RelatedListSectionPro
   );
 }
 
+function estimateCardWeight(item: EntityLinkRowModel): number {
+  const mediaType = inferMediaType(item);
+  let weight = 1;
+  if (mediaType === 'video' || Boolean(item.thumbnailUrl)) weight += 1.4;
+  if (item.quotes && item.quotes.length > 0) weight += 0.7;
+  if ((item.excerpt?.length ?? 0) > 140) weight += 0.3;
+  return weight;
+}
+
 /**
  * Column widths that fit a whole number of columns in the rail (`100cqw` is the rail's width).
  *
@@ -304,39 +313,64 @@ export function RelatedListSection({ section, className }: RelatedListSectionPro
  * starts out of view and the arrows bring it in; on a phone one column takes 84% and the next one
  * peeks on purpose. `scroll-px-2` on the scroller makes each snap point line up with that grid.
  */
-const RAIL_COLUMN_WIDTH_CLASS =
-  'auto-cols-[84cqw] @[540px]:auto-cols-[calc((100cqw-1rem)/2)] @[1000px]:auto-cols-[calc((100cqw-2rem)/3)]';
+const RAIL_COLUMN_WIDTH_CLASS = 'w-[84cqw] @[540px]:w-[calc((100cqw-1rem)/2)] @[1000px]:w-[calc((100cqw-2rem)/3)]';
 
 /**
- * Horizontally scrollable card rail laid out as a grid that fills column by column:
- * - 1–3 cards (e.g. News story Sources) sit in a single row, one card per column.
- * - 4+ cards (e.g. Topic Sources) fill two rows, two cards per column, in list order.
- *
- * Every row track is `1fr` of an auto-height grid, so all rows take the tallest card's height and
- * every card in the rail is the same size whatever it holds (a post, an article with or without a
- * thumbnail, a news story). Cards stretch to their cell and pin their footer to the bottom.
- * Users swipe or click `←` `→` horizontally through the columns.
+ * Horizontally scrollable masonry rail:
+ * - For 1–3 cards (e.g. News story Sources), renders a single horizontal snap-scroll row with
+ *   one card per column (widths from `RAIL_COLUMN_WIDTH_CLASS`).
+ * - For 4+ cards (e.g. Topic `Evidence`), packs cards into balanced 2-card vertical
+ *   masonry columns inside a horizontal snap-scroll strip so tall media cards never leave awkward
+ *   vertical whitespace AND users can smoothly swipe or click `←` `→` horizontally through all cards.
  */
-function HorizontalCardRail({
+function HorizontalMasonryRail({
   items,
   scrollerRef,
 }: {
   items: readonly EntityLinkRowModel[];
   scrollerRef: React.RefObject<HTMLDivElement | null>;
 }) {
+  const columns = React.useMemo<EntityLinkRowModel[][]>(() => {
+    if (items.length <= 3) {
+      return items.map(item => [item]);
+    }
+    const colCount = Math.ceil(items.length / 2);
+    const cols: EntityLinkRowModel[][] = Array.from({ length: colCount }, () => []);
+    const weights = new Array<number>(colCount).fill(0);
+
+    // Pack greedily into the lightest column that still has < 2 cards so every column stays balanced
+    for (const item of items) {
+      let bestIdx = 0;
+      let bestWeight = Infinity;
+      for (let i = 0; i < colCount; i++) {
+        if (cols[i]!.length >= 2) continue;
+        if (weights[i]! < bestWeight) {
+          bestWeight = weights[i]!;
+          bestIdx = i;
+        }
+      }
+      cols[bestIdx]!.push(item);
+      weights[bestIdx]! += estimateCardWeight(item);
+    }
+
+    return cols.filter(col => col.length > 0);
+  }, [items]);
+
   return (
     <div className="@container relative">
       <div
         ref={scrollerRef}
-        className={cx(
-          '-mx-2 grid snap-x snap-mandatory scroll-px-2 [scrollbar-width:none] grid-flow-col gap-4 overflow-x-auto px-2 py-2 [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden',
-          items.length <= 3 ? 'grid-rows-1' : 'grid-rows-2',
-          RAIL_COLUMN_WIDTH_CLASS
-        )}
+        className="-mx-2 flex snap-x snap-mandatory scroll-px-2 [scrollbar-width:none] items-start gap-4 overflow-x-auto px-2 py-2 [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
       >
-        {items.map(item => (
-          <div key={item.id} data-rail-card className="flex min-w-0 snap-start">
-            <RichMediaCard item={item} />
+        {columns.map((colItems, colIdx) => (
+          <div
+            key={colItems[0]?.id ?? colIdx}
+            data-masonry-col
+            className={cx('flex shrink-0 snap-start flex-col gap-4', RAIL_COLUMN_WIDTH_CLASS)}
+          >
+            {colItems.map(item => (
+              <RichMediaCard key={item.id} item={item} />
+            ))}
           </div>
         ))}
       </div>
@@ -440,15 +474,67 @@ function TweetAuthorAvatar({ name, avatarUrl }: { name: string; avatarUrl?: stri
   );
 }
 
+/**
+ * One set of text styles for every Source card kind (article, post, video, podcast, news story,
+ * document, dataset), so a rail of mixed kinds reads as one list (GEO-3874). Cards still differ in
+ * height (thumbnails, quotes, shorter text); only the text is uniform.
+ *
+ * - Title: 3 lines at most.
+ * - Description: the excerpt, 3 lines at most. A post has no separate title, so its body text is
+ *   its description and takes the same style and clamp.
+ * - Meta: publisher, author, date (and a post's handle), one line.
+ * - Spacing: meta row, then title, then description, each `CARD_TEXT_GAP` apart.
+ */
+const CARD_TITLE_CLASS =
+  'm-0 line-clamp-3 text-[18px] leading-[24px] font-semibold text-text transition-colors group-hover/link:text-[#4c1fd4]';
+const CARD_DESCRIPTION_CLASS = 'm-0 line-clamp-3 text-[15px] leading-[22px] text-grey-04';
+const CARD_META_CLASS = 'text-[14px] leading-[20px] font-medium text-grey-04';
+const CARD_TEXT_GAP = 'gap-1.5';
+
+function CardMetaRow({
+  item,
+  mediaType,
+  label,
+  actions,
+}: {
+  item: EntityLinkRowModel;
+  mediaType: SourceMediaKind;
+  label: string;
+  actions: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span className={cx('inline-flex min-w-0 items-center gap-2', CARD_META_CLASS)}>
+        <MediaIcon type={mediaType} />
+        <span className="truncate" data-card-meta>
+          {label || item.kindLabel}
+        </span>
+      </span>
+      <div className="flex shrink-0 items-center gap-1">{actions}</div>
+    </div>
+  );
+}
+
+function CardText({ item, title, description }: { item: EntityLinkRowModel; title?: string; description?: string }) {
+  return (
+    <CardClickable item={item}>
+      <div className={cx('flex flex-col', CARD_TEXT_GAP)}>
+        {title && <h3 className={CARD_TITLE_CLASS}>{title}</h3>}
+        {description && (
+          <p className={CARD_DESCRIPTION_CLASS} data-card-description>
+            {description}
+          </p>
+        )}
+      </div>
+    </CardClickable>
+  );
+}
+
 function RichMediaCard({ item }: { item: EntityLinkRowModel }) {
   const mediaType = inferMediaType(item);
   const leadQuote = item.quotes?.[0];
   const resolvedThumb = resolveTemplateImageUrl(item.thumbnailUrl);
-  // `h-full` fills the rail's equal-height cell; whatever a card has left over sits below its content.
-  const cardClasses = cx(
-    'flex h-full w-full flex-col gap-3 p-5 text-left text-text',
-    TEMPLATE_INTERACTIVE_CARD_SURFACE
-  );
+  const cardClasses = cx('flex w-full flex-col gap-3 p-5 text-left text-text', TEMPLATE_INTERACTIVE_CARD_SURFACE);
 
   const overflow = !item.plain ? (
     <EntityOverflowMenu target={{ id: item.id, kind: item.kindLabel || 'Source', title: item.title }} />
@@ -482,25 +568,14 @@ function RichMediaCard({ item }: { item: EntityLinkRowModel }) {
             </div>
           </CardClickable>
 
-          <div className="flex flex-col gap-1.5">
-            <div className="flex items-center justify-between gap-2">
-              <span className="inline-flex min-w-0 items-center gap-1.5 text-[14px] text-grey-04">
-                <PlayIcon className="size-3.5 text-purple" />
-                <span className="truncate">
-                  {[item.publisher, item.date].filter(Boolean).join(' · ') || item.meta || 'Video'}
-                </span>
-              </span>
-              {overflow}
-            </div>
-
-            <CardClickable item={item}>
-              <h3 className="m-0 line-clamp-3 text-[18px] leading-[24px] font-semibold text-text transition-colors group-hover/link:text-[#4c1fd4]">
-                {item.title}
-              </h3>
-              {item.excerpt && (
-                <p className="m-0 mt-1 line-clamp-2 text-[15px] leading-[22px] text-grey-04">{item.excerpt}</p>
-              )}
-            </CardClickable>
+          <div className={cx('flex flex-col', CARD_TEXT_GAP)}>
+            <CardMetaRow
+              item={item}
+              mediaType={mediaType}
+              label={[item.publisher, item.date].filter(Boolean).join(' · ') || item.meta || 'Video'}
+              actions={overflow}
+            />
+            <CardText item={item} title={item.title} description={item.excerpt} />
           </div>
 
           {leadQuote && <SourceQuoteBlock quote={leadQuote} />}
@@ -523,39 +598,39 @@ function RichMediaCard({ item }: { item: EntityLinkRowModel }) {
     return (
       <article className={cardClasses}>
         <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between gap-2">
-            <CardClickable item={item} className="min-w-0 flex-1">
-              <div className="flex min-w-0 items-center gap-2.5">
-                <TweetAuthorAvatar name={accountName} avatarUrl={item.authorAvatarUrl} />
-                <div className="flex min-w-0 flex-col">
-                  <span className="truncate text-[15px] leading-[19px] font-semibold text-text group-hover/link:text-[#4c1fd4]">
-                    {accountName}
-                  </span>
-                  {/* The date sits under the name with the handle (as on X), not beside the actions,
-                      so a narrow card doesn't cut the name to a few letters. */}
-                  {(secondaryHandle || item.date) && (
-                    <span className="truncate text-[13.5px] leading-[17px] text-grey-04">
-                      {[secondaryHandle, item.date].filter(Boolean).join(' · ')}
+          <div className={cx('flex flex-col', CARD_TEXT_GAP)}>
+            <div className="flex items-center justify-between gap-2">
+              <CardClickable item={item} className="min-w-0 flex-1">
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <TweetAuthorAvatar name={accountName} avatarUrl={item.authorAvatarUrl} />
+                  <div className="flex min-w-0 flex-col">
+                    <span className="truncate text-[15px] leading-[19px] font-semibold text-text group-hover/link:text-[#4c1fd4]">
+                      {accountName}
                     </span>
-                  )}
+                    {/* The date sits under the name with the handle (as on X), not beside the actions,
+                      so a narrow card doesn't cut the name to a few letters. */}
+                    {(secondaryHandle || item.date) && (
+                      <span className={cx('truncate', CARD_META_CLASS)} data-card-meta>
+                        {[secondaryHandle, item.date].filter(Boolean).join(' · ')}
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </CardClickable>
-
-            <div className="flex shrink-0 items-center gap-1">
-              {overflow}
-              <CardClickable
-                item={item}
-                className="inline-grid size-7 !w-7 shrink-0 place-items-center rounded-full text-grey-03 hover:text-text"
-              >
-                <ArrowUpRightIcon className="size-4" />
               </CardClickable>
-            </div>
-          </div>
 
-          <CardClickable item={item}>
-            <p className="m-0 line-clamp-4 text-[15px] leading-[23px] text-text">{item.excerpt ?? item.title}</p>
-          </CardClickable>
+              <div className="flex shrink-0 items-center gap-1">
+                {overflow}
+                <CardClickable
+                  item={item}
+                  className="inline-grid size-7 !w-7 shrink-0 place-items-center rounded-full text-grey-03 hover:text-text"
+                >
+                  <ArrowUpRightIcon className="size-4" />
+                </CardClickable>
+              </div>
+            </div>
+
+            <CardText item={item} description={item.excerpt ?? item.title} />
+          </div>
 
           {leadQuote && <SourceQuoteBlock quote={leadQuote} />}
           <EntityInlineContext targetId={item.id} targetTitle={item.title} targetKind={item.kindLabel || 'Source'} />
@@ -568,7 +643,7 @@ function RichMediaCard({ item }: { item: EntityLinkRowModel }) {
   const eyebrow = [item.publisher, item.date].filter(Boolean).join(' · ') || item.meta;
   return (
     <article className={cardClasses}>
-      <div className="flex flex-col gap-2.5">
+      <div className="flex flex-col gap-3">
         {resolvedThumb && (
           <CardClickable item={item}>
             <div className="aspect-[16/9] w-full overflow-hidden rounded-lg bg-grey-01">
@@ -576,38 +651,32 @@ function RichMediaCard({ item }: { item: EntityLinkRowModel }) {
             </div>
           </CardClickable>
         )}
-        {/* `min-h-9` matches a post's author row, so titles line up with post text across a row. */}
-        <div className="flex min-h-9 items-center justify-between gap-2">
-          <span className="inline-flex min-w-0 items-center gap-2 text-[14px] text-grey-04">
-            <MediaIcon type={mediaType} />
-            <span className="truncate font-medium">{eyebrow || item.kindLabel}</span>
-          </span>
-          <div className="flex shrink-0 items-center gap-1">
-            {overflow}
-            <CardClickable
-              item={item}
-              className="inline-grid size-7 !w-7 shrink-0 place-items-center rounded-full text-grey-03 hover:text-text"
-            >
-              <ArrowUpRightIcon className="size-4" />
-            </CardClickable>
-          </div>
+        <div className={cx('flex flex-col', CARD_TEXT_GAP)}>
+          <CardMetaRow
+            item={item}
+            mediaType={mediaType}
+            label={eyebrow ?? ''}
+            actions={
+              <>
+                {overflow}
+                <CardClickable
+                  item={item}
+                  className="inline-grid size-7 !w-7 shrink-0 place-items-center rounded-full text-grey-03 hover:text-text"
+                >
+                  <ArrowUpRightIcon className="size-4" />
+                </CardClickable>
+              </>
+            }
+          />
+          <CardText item={item} title={item.title} description={item.excerpt} />
         </div>
-
-        <CardClickable item={item}>
-          <h3 className="m-0 line-clamp-3 text-[18px] leading-[24px] font-semibold text-text transition-colors group-hover/link:text-[#4c1fd4]">
-            {item.title}
-          </h3>
-          {item.excerpt && (
-            <p className="m-0 mt-1 line-clamp-2 text-[15px] leading-[22px] text-grey-04">{item.excerpt}</p>
-          )}
-        </CardClickable>
 
         {leadQuote && <SourceQuoteBlock quote={leadQuote} />}
         <EntityInlineContext targetId={item.id} targetTitle={item.title} targetKind={item.kindLabel || 'Source'} />
       </div>
 
       {!item.excerpt && !leadQuote && item.meta && item.publisher && (
-        <span className="mt-auto text-[14px] text-grey-04">{item.meta}</span>
+        <span className={CARD_META_CLASS}>{item.meta}</span>
       )}
     </article>
   );
