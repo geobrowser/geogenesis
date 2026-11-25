@@ -186,6 +186,9 @@ const NAME = 'Federal Reserve System of the United States and its twelve regiona
 
 // The first match is the card's own label; a near entity also carries its far-state name after it.
 const clamps = () => screen.getAllByText(NAME)[0].className.match(/line-clamp-\d/g) ?? [];
+// An entity's two-line label sits under its photo; one with no picture is a name card instead (below).
+const named = (kind: GraphKind) =>
+  node(kind, { name: NAME, ...(kind === 'ent' && { image: 'https://example.com/portrait.png' }) });
 
 // On a phone the centre's card gets four lines: more than its neighbours, but bounded, so a long claim
 // can't fill the middle of the map. The panel under the map leaves the name out on a phone (GEO-3849).
@@ -204,7 +207,7 @@ describe('NodeCard names', () => {
     ['story', 'line-clamp-3'],
     ['claim', 'line-clamp-2'],
   ])('still cuts the %s name of a card around the centre on a phone', (kind, clamp) => {
-    render(<NodeCard node={node(kind, { name: NAME })} hop={1} isCentre={false} phone claimSpaceId="space" />);
+    render(<NodeCard node={named(kind)} hop={1} isCentre={false} phone claimSpaceId="space" />);
     expect(clamps()).toEqual([clamp]);
   });
 
@@ -214,7 +217,7 @@ describe('NodeCard names', () => {
     ['story', 'line-clamp-3'],
     ['claim', 'line-clamp-3'],
   ])('keeps the desktop centre’s %s name to its lines', (kind, clamp) => {
-    render(<NodeCard node={node(kind, { name: NAME })} hop={0} isCentre phone={false} claimSpaceId="space" />);
+    render(<NodeCard node={named(kind)} hop={0} isCentre phone={false} claimSpaceId="space" />);
     expect(clamps()).toEqual([clamp]);
   });
 });
