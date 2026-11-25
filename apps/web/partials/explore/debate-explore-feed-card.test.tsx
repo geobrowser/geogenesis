@@ -485,7 +485,7 @@ describe('DebateExploreFeedCard', () => {
     expect(frame?.className).not.toContain('shadow-');
     expect(frame?.style.getPropertyValue('--debate-card-media-width')).toBe('');
     // The player's top-left controls leave room for the compact Moments / Full debate button.
-    expect(frame?.className).toContain('[--debate-top-right-width:9.25rem]');
+    expect(frame?.className).toContain('[--debate-top-right-width:5.75rem]');
     const media = screen.getByTestId('player').closest('[data-debate-card-media]');
     expect(media).toHaveClass('w-full', 'rounded-[20px]', 'overflow-hidden');
     expect(media?.className).not.toContain('--debate-card-media-width');

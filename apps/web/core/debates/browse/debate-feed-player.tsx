@@ -2390,7 +2390,7 @@ function DebaterVideo({
         )}
       />
 
-      {/* With a button at the top right (Moments / Full debate), the top-left controls stop short of
+      {/* With a button at the top right (Moments or Full debate), the top-left controls stop short of
           it and wrap onto a second row instead of running under it: on a ~300px gallery card, Play,
           Mute, Start over and the button do not fit one row (GEO-3833). The host sets the button's
           width in `--debate-top-right-width` when it draws a smaller one. */}
@@ -2398,7 +2398,7 @@ function DebaterVideo({
         <div
           className={cx(
             'absolute top-3 left-3 flex items-center gap-2',
-            Boolean(topRight) && 'max-w-[calc(100%-var(--debate-top-right-width,12rem)-1.75rem)]',
+            Boolean(topRight) && 'max-w-[calc(100%-var(--debate-top-right-width,7rem)-1.75rem)]',
             stamped ? 'z-30' : 'z-10'
           )}
         >

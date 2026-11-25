@@ -280,10 +280,11 @@ describe('DebateExploreFeedCard moments reel gate', () => {
     expect(player).toHaveAttribute('data-seek', '22');
     expect(player).toHaveAttribute('data-hold', 'false');
     expect(player).toHaveAttribute('data-active', 'true');
-    expect(screen.getByRole('button', { name: 'Full debate' })).toHaveAttribute('aria-pressed', 'true');
+    // One button, naming the mode the card is not on.
+    expect(screen.queryByRole('button', { name: 'Full debate' })).toBeNull();
     const moments = screen.getByRole('button', { name: 'Moments' });
-    expect(moments).toHaveAttribute('aria-pressed', 'false');
     expect(moments).toHaveAttribute('data-geo-analytics-label', 'Moments');
+    expect(moments).toHaveAttribute('data-geo-analytics-intent', 'debate_media_mode');
     fireEvent.click(moments);
     expect(screen.queryByTestId('player')).toBeNull();
     expect(screen.getByTestId('reel')).toBeInTheDocument();
@@ -296,9 +297,7 @@ describe('DebateExploreFeedCard moments reel gate', () => {
     intersect(0.7);
     expect(screen.getByTestId('reel')).toHaveAttribute('data-compact', 'true');
     fireEvent.click(screen.getByRole('button', { name: 'Full debate' }));
-    const group = screen.getByRole('group', { name: 'Video' });
-    expect(group).toHaveClass('h-7', 'p-0.5');
-    expect(screen.getByRole('button', { name: 'Moments' })).toHaveClass('h-6', 'px-2', 'text-[11px]');
+    expect(screen.getByRole('button', { name: 'Moments' })).toHaveClass('h-7', 'px-2.5', 'text-[11px]');
   });
 
   it('keeps the full-size button on every other card', () => {
@@ -307,8 +306,7 @@ describe('DebateExploreFeedCard moments reel gate', () => {
     intersect(0.7);
     expect(screen.getByTestId('reel')).toHaveAttribute('data-compact', 'false');
     fireEvent.click(screen.getByRole('button', { name: 'Full debate' }));
-    expect(screen.getByRole('group', { name: 'Video' })).toHaveClass('h-9', 'p-1');
-    expect(screen.getByRole('button', { name: 'Moments' })).toHaveClass('h-7', 'px-3', 'text-[13px]');
+    expect(screen.getByRole('button', { name: 'Moments' })).toHaveClass('h-9', 'px-3.5', 'text-[13px]');
   });
 
   it('starts on the moments again each time the card comes back', () => {

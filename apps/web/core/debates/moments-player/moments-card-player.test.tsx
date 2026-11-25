@@ -288,12 +288,10 @@ describe('MomentsCardPlayer', () => {
       fireEvent.timeUpdate(videoIn(0));
     });
     expect(screen.queryByRole('link', { name: 'Open full debate' })).toBeNull();
-    const moments = screen.getByRole('button', { name: 'Moments' });
+    // One button, naming the mode the card is not on.
+    expect(screen.queryByRole('button', { name: 'Moments' })).toBeNull();
     const full = screen.getByRole('button', { name: 'Full debate' });
-    expect(moments).toHaveAttribute('aria-pressed', 'true');
-    expect(full).toHaveAttribute('aria-pressed', 'false');
     expect(full).toHaveAttribute('data-geo-analytics-intent', 'debate_media_mode');
-    fireEvent.click(moments);
     expect(onShowFullDebate).not.toHaveBeenCalled();
     fireEvent.click(full);
     // 19.75 s + 3 s into the clip, no source times: 22 s on the recordings' clock.

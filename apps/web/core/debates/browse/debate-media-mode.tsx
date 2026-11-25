@@ -83,18 +83,16 @@ export function useDebateMediaMode(
   };
 }
 
-const MODES: { mode: DebateMediaMode; label: string }[] = [
-  { mode: 'moments', label: 'Moments' },
-  { mode: 'full', label: 'Full debate' },
-];
+const LABELS: Record<DebateMediaMode, string> = { moments: 'Moments', full: 'Full debate' };
 
 /**
- * The button at the top right of a debate card's video that switches it between its moments and the
- * full debate. Drawn by whichever player is showing, in the same place and the same style, so it does
- * not move as the video under it changes. The player that draws it moves its own top-right furniture
- * out of its way.
+ * The button at the top right of a debate card's video that switches it to whichever of its moments
+ * or the full debate it is not showing: "Full debate" on the moments, "Moments" on the full debate.
+ * Drawn by whichever player is showing, in the same place and the same style, so it does not move as
+ * the video under it changes. The player that draws it moves its own top-right furniture out of its
+ * way.
  *
- * `compact` is the ~300px gallery card's (a profile's Activity): the same two words, smaller, so the
+ * `compact` is the ~300px gallery card's (a profile's Activity): the same words, smaller, so the
  * button and the player's top-left controls share the row.
  */
 export function DebateMediaModeToggle({
@@ -108,39 +106,22 @@ export function DebateMediaModeToggle({
   compact?: boolean;
   className?: string;
 }) {
+  const next: DebateMediaMode = mode === 'moments' ? 'full' : 'moments';
+  const label = LABELS[next];
   return (
-    <div
-      role="group"
-      aria-label="Video"
+    <button
+      type="button"
       data-debate-media-mode={mode}
+      data-geo-analytics-label={label}
+      data-geo-analytics-intent="debate_media_mode"
+      onClick={() => onChange(next)}
       className={cx(
-        'z-[12] flex items-center gap-0.5 rounded-full bg-[#151515]/60 text-white backdrop-blur-sm',
-        compact ? 'h-7 p-0.5' : 'h-9 p-1',
+        'z-[12] flex cursor-pointer items-center rounded-full bg-[#151515]/60 leading-none font-semibold whitespace-nowrap text-white backdrop-blur-sm transition-colors hover:bg-[#151515]/75 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white',
+        compact ? 'h-7 px-2.5 text-[11px]' : 'h-9 px-3.5 text-[13px]',
         className
       )}
     >
-      {MODES.map(option => {
-        const selected = option.mode === mode;
-        return (
-          <button
-            key={option.mode}
-            type="button"
-            aria-pressed={selected}
-            data-geo-analytics-label={option.label}
-            data-geo-analytics-intent="debate_media_mode"
-            onClick={() => {
-              if (!selected) onChange(option.mode);
-            }}
-            className={cx(
-              'cursor-pointer rounded-full leading-none font-semibold whitespace-nowrap transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-white',
-              compact ? 'h-6 px-2 text-[11px]' : 'h-7 px-3 text-[13px]',
-              selected ? 'bg-white text-[#151515]' : 'text-white hover:bg-white/15'
-            )}
-          >
-            {option.label}
-          </button>
-        );
-      })}
-    </div>
+      {label}
+    </button>
   );
 }

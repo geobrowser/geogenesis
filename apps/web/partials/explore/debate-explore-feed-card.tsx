@@ -434,7 +434,7 @@ export function DebateExploreFeedCard({
           'flex w-full min-w-0 flex-col rounded-[26px] border border-[#e5e5e5] bg-white',
           compactChrome
             ? // The toggle's compact width, so the player's top-left controls stop short of it.
-              'max-w-full p-3 [--debate-top-right-width:9.25rem]'
+              'max-w-full p-3 [--debate-top-right-width:5.75rem]'
             : cx(
                 'p-4 shadow-[0_8px_14px_rgba(0,0,0,0.075)]',
                 '[--debate-card-chrome:240px] md:[--debate-card-chrome:212px]',

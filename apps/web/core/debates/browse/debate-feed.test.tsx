@@ -1807,7 +1807,8 @@ describe('DebatesBrowseFeed — moments or the full debate', () => {
     const player = screen.getByTestId('player-debate-1');
     expect(player).toHaveAttribute('data-seek', '41');
     expect(player).toHaveAttribute('data-hold-full-playback', 'false');
-    expect(within(player).getByRole('button', { name: 'Full debate' })).toHaveAttribute('aria-pressed', 'true');
+    // Only the way back is offered on the full debate.
+    expect(within(player).queryByRole('button', { name: 'Full debate' })).toBeNull();
     fireEvent.click(within(player).getByRole('button', { name: 'Moments' }));
     expect(screen.queryByTestId('player-debate-1')).toBeNull();
     expect(screen.getByTestId('reel-debate-1')).toBeInTheDocument();
@@ -1828,7 +1829,7 @@ describe('DebatesBrowseFeed — moments or the full debate', () => {
     mocks.moments = { 'debate-2': READY };
     render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-2" fallback={<div>Entity page</div>} />);
     const player = screen.getByTestId('player-debate-2');
-    expect(within(player).getByRole('button', { name: 'Full debate' })).toHaveAttribute('aria-pressed', 'true');
+    expect(within(player).queryByRole('button', { name: 'Full debate' })).toBeNull();
     fireEvent.click(within(player).getByRole('button', { name: 'Moments' }));
     expect(screen.getByTestId('reel-debate-2')).toBeInTheDocument();
   });
