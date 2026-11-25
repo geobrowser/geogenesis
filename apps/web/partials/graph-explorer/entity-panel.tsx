@@ -138,7 +138,7 @@ export function EntityPanel({
 
       {/* No description, nothing: an empty-state line here only pushed the relations down. */}
       {centre.description && (
-        <p className="text-[14px] leading-[1.45] whitespace-pre-line text-grey-05">{centre.description}</p>
+        <p className="text-[14px] leading-[1.45] whitespace-pre-line text-mute">{centre.description}</p>
       )}
 
       {!summaryFirst && summary}
@@ -208,7 +208,7 @@ function CentreHeader({ centre, pageSpaceId }: { centre: PanelCentre; pageSpaceI
     <header className="flex items-center gap-3">
       <EntityAvatar entity={centre} />
       <div className="flex min-w-0 flex-col gap-0.5">
-        {eyebrow && <p className="text-[13px] leading-[1.35] text-grey-04">{eyebrow}</p>}
+        {eyebrow && <p className="text-[13px] leading-[1.35] text-mute">{eyebrow}</p>}
         <h2 className="text-[20px] leading-[1.25] font-semibold tracking-[-0.03em] wrap-break-word text-text">
           {pageSpaceId ? (
             <Link

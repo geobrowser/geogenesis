@@ -75,10 +75,10 @@ export function GraphClaimSplit({ total, percent }: { total: number; percent: nu
     <>
       <div className="flex items-baseline justify-between gap-3">
         <p className="flex items-baseline gap-1.5">
-          <span className="text-mediumTitle font-semibold text-text tabular-nums">{percent}%</span>{' '}
-          <span className="text-metadata text-grey-04">{agree}</span>
+          <span className="text-[20px] font-semibold text-text tabular-nums">{percent}%</span>{' '}
+          <span className="text-[14px] text-grey-04">{agree}</span>
         </p>
-        <span className="text-browseSection leading-4 text-grey-04 tabular-nums">{votesLabel(total)}</span>
+        <span className="text-browseSection leading-4 text-mute tabular-nums">{votesLabel(total)}</span>
       </div>
       <ClaimSplitBar percent={percent} tone="mono" className="h-1.5" />
     </>
