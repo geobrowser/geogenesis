@@ -145,7 +145,7 @@ export function RelatedListSection({ section, className }: RelatedListSectionPro
     const measure = () => {
       frame = 0;
       const box = scroller.getBoundingClientRect();
-      const cols = Array.from(scroller.querySelectorAll<HTMLElement>('[data-masonry-col]'));
+      const cols = Array.from(scroller.querySelectorAll<HTMLElement>('[data-rail-card]'));
       const firstBox = cols.at(0)?.getBoundingClientRect();
       const lastBox = cols.at(-1)?.getBoundingClientRect();
       const next = {
@@ -176,7 +176,7 @@ export function RelatedListSection({ section, className }: RelatedListSectionPro
   const scrollRailByColumn = React.useCallback((direction: -1 | 1) => {
     const scroller = railRef.current;
     if (!scroller) return;
-    const firstCol = scroller.querySelector<HTMLElement>('[data-masonry-col]');
+    const firstCol = scroller.querySelector<HTMLElement>('[data-rail-card]');
     const colWidth = firstCol?.getBoundingClientRect().width || 360;
     scroller.scrollBy({ left: direction * (colWidth + 16), behavior: 'smooth' });
   }, []);
@@ -273,7 +273,7 @@ export function RelatedListSection({ section, className }: RelatedListSectionPro
       {allItems.length === 0 ? (
         <TemplateEmptyState>{emptyText}</TemplateEmptyState>
       ) : useCards ? (
-        <HorizontalMasonryRail items={visibleItems} scrollerRef={railRef} />
+        <HorizontalCardRail items={visibleItems} scrollerRef={railRef} />
       ) : (
         <div className={cx('divide-y divide-divider overflow-hidden', TEMPLATE_CARD_SURFACE)}>
           {visibleItems.map(item => (
@@ -296,15 +296,6 @@ export function RelatedListSection({ section, className }: RelatedListSectionPro
   );
 }
 
-function estimateCardWeight(item: EntityLinkRowModel): number {
-  const mediaType = inferMediaType(item);
-  let weight = 1;
-  if (mediaType === 'video' || Boolean(item.thumbnailUrl)) weight += 1.4;
-  if (item.quotes && item.quotes.length > 0) weight += 0.7;
-  if ((item.excerpt?.length ?? 0) > 140) weight += 0.3;
-  return weight;
-}
-
 /**
  * Column widths that fit a whole number of columns in the rail (`100cqw` is the rail's width).
  *
@@ -313,64 +304,39 @@ function estimateCardWeight(item: EntityLinkRowModel): number {
  * starts out of view and the arrows bring it in; on a phone one column takes 84% and the next one
  * peeks on purpose. `scroll-px-2` on the scroller makes each snap point line up with that grid.
  */
-const RAIL_COLUMN_WIDTH_CLASS = 'w-[84cqw] @[540px]:w-[calc((100cqw-1rem)/2)] @[1000px]:w-[calc((100cqw-2rem)/3)]';
+const RAIL_COLUMN_WIDTH_CLASS =
+  'auto-cols-[84cqw] @[540px]:auto-cols-[calc((100cqw-1rem)/2)] @[1000px]:auto-cols-[calc((100cqw-2rem)/3)]';
 
 /**
- * Horizontally scrollable masonry rail:
- * - For 1–3 cards (e.g. News story Sources), renders a single horizontal snap-scroll row with
- *   one card per column (widths from `RAIL_COLUMN_WIDTH_CLASS`).
- * - For 4+ cards (e.g. Topic `Evidence`), packs cards into balanced 2-card vertical
- *   masonry columns inside a horizontal snap-scroll strip so tall media cards never leave awkward
- *   vertical whitespace AND users can smoothly swipe or click `←` `→` horizontally through all cards.
+ * Horizontally scrollable card rail laid out as a grid that fills column by column:
+ * - 1–3 cards (e.g. News story Sources) sit in a single row, one card per column.
+ * - 4+ cards (e.g. Topic Sources) fill two rows, two cards per column, in list order.
+ *
+ * Every row track is `1fr` of an auto-height grid, so all rows take the tallest card's height and
+ * every card in the rail is the same size whatever it holds (a post, an article with or without a
+ * thumbnail, a news story). Cards stretch to their cell and pin their footer to the bottom.
+ * Users swipe or click `←` `→` horizontally through the columns.
  */
-function HorizontalMasonryRail({
+function HorizontalCardRail({
   items,
   scrollerRef,
 }: {
   items: readonly EntityLinkRowModel[];
   scrollerRef: React.RefObject<HTMLDivElement | null>;
 }) {
-  const columns = React.useMemo<EntityLinkRowModel[][]>(() => {
-    if (items.length <= 3) {
-      return items.map(item => [item]);
-    }
-    const colCount = Math.ceil(items.length / 2);
-    const cols: EntityLinkRowModel[][] = Array.from({ length: colCount }, () => []);
-    const weights = new Array<number>(colCount).fill(0);
-
-    // Pack greedily into the lightest column that still has < 2 cards so every column stays balanced
-    for (const item of items) {
-      let bestIdx = 0;
-      let bestWeight = Infinity;
-      for (let i = 0; i < colCount; i++) {
-        if (cols[i]!.length >= 2) continue;
-        if (weights[i]! < bestWeight) {
-          bestWeight = weights[i]!;
-          bestIdx = i;
-        }
-      }
-      cols[bestIdx]!.push(item);
-      weights[bestIdx]! += estimateCardWeight(item);
-    }
-
-    return cols.filter(col => col.length > 0);
-  }, [items]);
-
   return (
     <div className="@container relative">
       <div
         ref={scrollerRef}
-        className="-mx-2 flex snap-x snap-mandatory scroll-px-2 [scrollbar-width:none] items-start gap-4 overflow-x-auto px-2 py-2 [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+        className={cx(
+          '-mx-2 grid snap-x snap-mandatory scroll-px-2 [scrollbar-width:none] grid-flow-col gap-4 overflow-x-auto px-2 py-2 [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden',
+          items.length <= 3 ? 'grid-rows-1' : 'grid-rows-2',
+          RAIL_COLUMN_WIDTH_CLASS
+        )}
       >
-        {columns.map((colItems, colIdx) => (
-          <div
-            key={colItems[0]?.id ?? colIdx}
-            data-masonry-col
-            className={cx('flex shrink-0 snap-start flex-col gap-4', RAIL_COLUMN_WIDTH_CLASS)}
-          >
-            {colItems.map(item => (
-              <RichMediaCard key={item.id} item={item} />
-            ))}
+        {items.map(item => (
+          <div key={item.id} data-rail-card className="flex min-w-0 snap-start">
+            <RichMediaCard item={item} />
           </div>
         ))}
       </div>
@@ -478,7 +444,11 @@ function RichMediaCard({ item }: { item: EntityLinkRowModel }) {
   const mediaType = inferMediaType(item);
   const leadQuote = item.quotes?.[0];
   const resolvedThumb = resolveTemplateImageUrl(item.thumbnailUrl);
-  const cardClasses = cx('flex w-full flex-col gap-3 p-5 text-left text-text', TEMPLATE_INTERACTIVE_CARD_SURFACE);
+  // `h-full` fills the rail's equal-height cell; whatever a card has left over sits below its content.
+  const cardClasses = cx(
+    'flex h-full w-full flex-col gap-3 p-5 text-left text-text',
+    TEMPLATE_INTERACTIVE_CARD_SURFACE
+  );
 
   const overflow = !item.plain ? (
     <EntityOverflowMenu target={{ id: item.id, kind: item.kindLabel || 'Source', title: item.title }} />
@@ -524,7 +494,7 @@ function RichMediaCard({ item }: { item: EntityLinkRowModel }) {
             </div>
 
             <CardClickable item={item}>
-              <h3 className="m-0 text-[18px] leading-[24px] font-semibold text-text transition-colors group-hover/link:text-[#4c1fd4]">
+              <h3 className="m-0 line-clamp-3 text-[18px] leading-[24px] font-semibold text-text transition-colors group-hover/link:text-[#4c1fd4]">
                 {item.title}
               </h3>
               {item.excerpt && (
@@ -606,7 +576,8 @@ function RichMediaCard({ item }: { item: EntityLinkRowModel }) {
             </div>
           </CardClickable>
         )}
-        <div className="flex items-center justify-between gap-2">
+        {/* `min-h-9` matches a post's author row, so titles line up with post text across a row. */}
+        <div className="flex min-h-9 items-center justify-between gap-2">
           <span className="inline-flex min-w-0 items-center gap-2 text-[14px] text-grey-04">
             <MediaIcon type={mediaType} />
             <span className="truncate font-medium">{eyebrow || item.kindLabel}</span>
@@ -623,7 +594,7 @@ function RichMediaCard({ item }: { item: EntityLinkRowModel }) {
         </div>
 
         <CardClickable item={item}>
-          <h3 className="m-0 text-[18px] leading-[24px] font-semibold text-text transition-colors group-hover/link:text-[#4c1fd4]">
+          <h3 className="m-0 line-clamp-3 text-[18px] leading-[24px] font-semibold text-text transition-colors group-hover/link:text-[#4c1fd4]">
             {item.title}
           </h3>
           {item.excerpt && (
@@ -636,7 +607,7 @@ function RichMediaCard({ item }: { item: EntityLinkRowModel }) {
       </div>
 
       {!item.excerpt && !leadQuote && item.meta && item.publisher && (
-        <span className="text-[14px] text-grey-04">{item.meta}</span>
+        <span className="mt-auto text-[14px] text-grey-04">{item.meta}</span>
       )}
     </article>
   );

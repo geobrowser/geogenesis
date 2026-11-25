@@ -576,7 +576,35 @@ describe('RelatedListSection', () => {
     expect(screen.getByText('18:40')).toBeInTheDocument();
     expect(screen.getByText('@official')).toBeInTheDocument();
     expect(screen.getByText('Key quote from the post.')).toBeInTheDocument();
-    expect(document.querySelectorAll('[data-masonry-col]').length).toBeGreaterThan(0);
+    expect(document.querySelectorAll('[data-rail-card]').length).toBe(2);
+  });
+
+  it('lays source cards out in list order on equal-height rows, two per column from four cards up', () => {
+    const items = ['First', 'Second', 'Third', 'Fourth', 'Fifth'].map((title, index) => ({
+      id: `src-${index}`,
+      kind: 'source' as const,
+      kindLabel: index % 2 ? 'Post' : 'Article',
+      mediaType: index % 2 ? ('tweet' as const) : ('article' as const),
+      title,
+      publisher: index % 2 ? 'Some Account' : 'Article',
+      excerpt: index === 2 ? 'A much longer excerpt than the others. '.repeat(10) : undefined,
+      thumbnailUrl: index === 0 ? 'https://example.com/thumb.png' : undefined,
+    }));
+    render(<RelatedListSection section={{ id: 'coverage', title: 'Sources', layout: 'cards', items }} />);
+
+    const cells = Array.from(document.querySelectorAll<HTMLElement>('[data-rail-card]'));
+    expect(cells.map(cell => cell.querySelector('article')?.textContent)).toEqual([
+      expect.stringContaining('First'),
+      expect.stringContaining('Second'),
+      expect.stringContaining('Third'),
+      expect.stringContaining('Fourth'),
+      expect.stringContaining('Fifth'),
+    ]);
+    // One grid with two `1fr` rows: every card takes the tallest card's height.
+    const rail = cells[0]!.parentElement!;
+    expect(rail).toHaveClass('grid', 'grid-flow-col', 'grid-rows-2');
+    expect(cells.every(cell => cell.parentElement === rail)).toBe(true);
+    for (const cell of cells) expect(cell.querySelector('article')).toHaveClass('h-full');
   });
 
   it("puts an X post card's date under the author with the handle, not beside the card actions", () => {

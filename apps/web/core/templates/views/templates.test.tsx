@@ -701,7 +701,7 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     expect(within(disputes).getByText('No disputes')).toBeInTheDocument();
   });
 
-  it('renders NewsStoryTemplate with masonry Sources, Topic image pills, and Context/Disputes at the bottom', () => {
+  it('renders NewsStoryTemplate with card-rail Sources, Topic image pills, and Context/Disputes at the bottom', () => {
     render(
       <NewsStoryTemplate
         model={{
