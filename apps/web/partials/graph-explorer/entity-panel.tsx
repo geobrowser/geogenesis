@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { TOPIC_TYPE_ID } from '~/core/claims/ontology';
 import { type ClaimAbout, nodeClaimSpaceId } from '~/core/graph-explorer/claims-about';
 import { type GraphNode, HOP1_PER_KIND } from '~/core/graph-explorer/fetch-graph-neighbourhood';
 import type { GraphCentre } from '~/core/graph-explorer/graph-entity';
@@ -40,7 +41,8 @@ export type PanelCentre = GraphCentre & Pick<GraphNode, 'kind' | 'date'>;
 /**
  * The line above the centre's title, in the prototype's form: the kind, then its types (best first),
  * then its date, joined with " · " ("Source · Dataset · Nov 15, 2026"). A type a kind is made of
- * alone ("Claim", "News story") is the kind's word already, so it isn't said twice.
+ * alone ("Claim", "News story") is the kind's word already, so it isn't said twice, and only a
+ * topic says Topic.
  */
 export function centreEyebrow(centre: PanelCentre): string | null {
   const kindWord = KIND_EYEBROW[centre.kind];
@@ -48,6 +50,8 @@ export function centreEyebrow(centre: PanelCentre): string | null {
   const sole = kindTypeIds.length === 1 ? kindTypeIds[0] : null;
   const names = centre.types
     .filter(type => normId(type.id) !== sole)
+    // Topic is a tag many people and events also carry; on anything but a topic it isn't what it is.
+    .filter(type => centre.kind === 'topic' || normId(type.id) !== TOPIC_TYPE_ID)
     .map(type => type.name)
     .filter((name): name is string => Boolean(name));
   const best = nodeTypeLabel(centre);

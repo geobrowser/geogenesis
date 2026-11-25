@@ -170,6 +170,13 @@ describe('centreEyebrow', () => {
       }),
       'Person · Politician',
     ],
+    [
+      'a person tagged Topic: not "Topic"',
+      centreOf('ent', {
+        types: [type(NEIGHBOUR_KIND_TYPE_IDS.person[0], 'Person'), type(NEIGHBOUR_KIND_TYPE_IDS.topic[0], 'Topic')],
+      }),
+      'Person',
+    ],
     ['nothing known', centreOf('other'), null],
   ])('%s', (_, centre, expected) => {
     expect(centreEyebrow(centre)).toBe(expected);
