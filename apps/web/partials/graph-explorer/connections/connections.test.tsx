@@ -425,7 +425,7 @@ describe('GraphTopBar chips', () => {
   const bar = (kinds: GraphKind[], kindFilter: GraphKind | 'all' = 'all') => (
     <GraphTopBar
       back={null}
-      trail={['Centre']}
+      trail={[{ name: 'Centre', index: 0 }]}
       search={null}
       kinds={kinds}
       kindFilter={kindFilter}
@@ -516,7 +516,7 @@ describe('GraphTopBar share', () => {
     render(
       <GraphTopBar
         back={null}
-        trail={['Centre']}
+        trail={[{ name: 'Centre', index: 0 }]}
         search={null}
         kinds={[]}
         kindFilter="all"
@@ -574,7 +574,7 @@ describe('the top bar on a phone (GEO-3849)', () => {
     render(
       <GraphTopBar
         back={null}
-        trail={['Israel-Gaza war']}
+        trail={[{ name: 'Israel-Gaza war', index: 0 }]}
         search={<GraphSearch nodes={[person]} onPick={vi.fn()} />}
         kinds={['ent']}
         kindFilter="all"
@@ -704,5 +704,53 @@ describe('nodeScale', () => {
     expect(nodeScale(true, 0, 2, true)).toBe(1);
     expect(nodeScale(false, 2, 1, false)).toBeCloseTo(0.95);
     expect(nodeScale(false, 1, 0.1, true)).toBe(0.3);
+  });
+});
+
+describe('the top bar path (GEO-3852)', () => {
+  afterEach(cleanup);
+  const steps = (...names: string[]) => names.map((name, index) => ({ name, index }));
+  const bar = (trail: ReturnType<typeof steps>, onStep = vi.fn()) => {
+    render(
+      <GraphTopBar
+        back={null}
+        trail={trail}
+        onStep={onStep}
+        search={null}
+        kinds={[]}
+        kindFilter="all"
+        onKindFilter={() => {}}
+        close={null}
+      />
+    );
+    return onStep;
+  };
+  const path = () => screen.getByRole('navigation', { name: 'Your path' });
+
+  it('shows three steps or fewer whole, the centre last and current', () => {
+    bar(steps('Gaza', 'International criminal justice', 'There’s no genocide in Gaza'));
+    expect(path().textContent).toBe('Gaza›International criminal justice›There’s no genocide in Gaza');
+    expect(screen.queryByRole('button', { name: /more step/ })).toBeNull();
+    expect(screen.getByText('There’s no genocide in Gaza').getAttribute('aria-current')).toBe('location');
+  });
+
+  it('folds the middle of a longer path into "…", keeping the first step and the centre', () => {
+    bar(steps('Gaza', 'Justice', 'Simas vs. Scott', 'Kevin Garvey', 'There’s no genocide in Gaza'));
+    expect(path().textContent).toBe('Gaza›…›There’s no genocide in Gaza');
+    // The centre takes the room the earlier steps, each capped, leave it.
+    expect(screen.getByText('There’s no genocide in Gaza').className).toContain('flex-1');
+    expect(screen.getByRole('button', { name: 'Gaza' }).className).toContain('max-w-[min(220px,28%)]');
+  });
+
+  it('lists the folded steps, oldest first, and jumps back to the one picked', () => {
+    const onStep = bar(steps('Gaza', 'Justice', 'Simas vs. Scott', 'Kevin Garvey', 'Centre'));
+    fireEvent.click(screen.getByRole('button', { name: 'Show 3 more steps' }));
+    const items = ['Justice', 'Simas vs. Scott', 'Kevin Garvey'].map(name => screen.getByRole('button', { name }));
+    expect(items.map(item => item.textContent)).toEqual(['Justice', 'Simas vs. Scott', 'Kevin Garvey']);
+    fireEvent.click(items[1]);
+    expect(onStep).toHaveBeenCalledWith(2);
+    expect(screen.queryByRole('button', { name: 'Simas vs. Scott' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Gaza' }));
+    expect(onStep).toHaveBeenLastCalledWith(0);
   });
 });

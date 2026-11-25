@@ -36,6 +36,34 @@ export function goBack(history: GraphHistory): GraphHistory {
   return { centreId: previous, back: history.back.slice(0, -1) };
 }
 
+/**
+ * Re-centre on the trail's `index`th step (an index into `back`), as if Back were pressed until
+ * it was the centre: the steps after it drop off, so Back still walks the trail that is shown.
+ */
+export function jumpBack(history: GraphHistory, index: number): GraphHistory {
+  const target = history.back[index];
+  if (target === undefined) return history;
+  return { centreId: target, back: history.back.slice(0, index) };
+}
+
+/** Trails longer than this fold their middle steps into "…". */
+export const TRAIL_COLLAPSE_AFTER = 3;
+
+export type TrailPart<T> = { kind: 'step'; step: T } | { kind: 'more'; steps: T[] };
+
+/**
+ * The breadcrumb for `steps` (the centre last): up to three show whole; past that the first step
+ * and the centre stay and everything between folds into one "…" part that holds them in order.
+ */
+export function collapseTrail<T>(steps: readonly T[]): TrailPart<T>[] {
+  if (steps.length <= TRAIL_COLLAPSE_AFTER) return steps.map(step => ({ kind: 'step', step }));
+  return [
+    { kind: 'step', step: steps[0] },
+    { kind: 'more', steps: steps.slice(1, -1) },
+    { kind: 'step', step: steps[steps.length - 1] },
+  ];
+}
+
 export function sameHistory(a: GraphHistory, b: GraphHistory): boolean {
   return a.centreId === b.centreId && a.back.join(',') === b.back.join(',');
 }
