@@ -64,6 +64,7 @@ export function SignInCard({
   onChangeEmail,
   onClose,
   closeLabel,
+  onGiveUp,
   labels,
   intent,
   header,
@@ -86,8 +87,14 @@ export function SignInCard({
   /** The address a code went to while the code step is up; null on the email step. */
   codeEmail: string | null;
   onChangeEmail: () => void;
-  onClose: () => void;
-  closeLabel: string;
+  /**
+   * The close button's press. Without it the card has no close button: the save-votes sheet can't be
+   * dismissed (GEO-3846).
+   */
+  onClose?: () => void;
+  closeLabel?: string;
+  /** The code step giving up on a sign-in it can't finish; closes the card by default. */
+  onGiveUp?: () => void;
   labels: SignInCardLabels;
   intent: 'login' | 'signup';
   /** The heading and whatever the host shows under it. */
@@ -130,16 +137,20 @@ export function SignInCard({
         ) : (
           <span aria-hidden className="size-7 mobile:size-11" />
         )}
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label={closeLabel}
-          data-geo-analytics-label={labels.dismiss}
-          data-geo-analytics-intent="dismiss"
-          className={ICON_BUTTON_CLASS}
-        >
-          <CloseSmall />
-        </button>
+        {onClose ? (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={closeLabel}
+            data-geo-analytics-label={labels.dismiss}
+            data-geo-analytics-intent="dismiss"
+            className={ICON_BUTTON_CLASS}
+          >
+            <CloseSmall />
+          </button>
+        ) : (
+          <span aria-hidden className="size-7 mobile:size-11" />
+        )}
       </div>
 
       {codeEmail !== null ? (
@@ -152,7 +163,7 @@ export function SignInCard({
             email={codeEmail}
             analytics={analytics}
             analyticsLabel={labels.verification}
-            onGiveUp={onClose}
+            onGiveUp={() => (onGiveUp ?? onClose)?.()}
             appearance="save-votes"
             classes={codeStepClasses(compact)}
             onChangeEmail={onChangeEmail}
@@ -227,7 +238,11 @@ export function CenteredSignInDialog({
 }: {
   title: string;
   hidden: boolean;
-  onClose: () => void;
+  /**
+   * Escape or a press beside the card. Without it neither closes the dialog: the save-votes sheet
+   * can't be dismissed (GEO-3846).
+   */
+  onClose?: () => void;
   /** Whether closing may hand focus back to what had it; not while Privy's dialog takes over. */
   restoreFocus: () => boolean;
   children: React.ReactNode;
@@ -238,7 +253,7 @@ export function CenteredSignInDialog({
     <Root
       open
       onOpenChange={next => {
-        if (!next) onClose();
+        if (!next) onClose?.();
       }}
     >
       <Portal>
@@ -253,6 +268,9 @@ export function CenteredSignInDialog({
         >
           <Content
             aria-describedby={undefined}
+            // Radix closes on these by itself; cancelled, the only ways out are the card's own.
+            onEscapeKeyDown={onClose ? undefined : event => event.preventDefault()}
+            onInteractOutside={onClose ? undefined : event => event.preventDefault()}
             onOpenAutoFocus={() => {
               openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
             }}

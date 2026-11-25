@@ -2,7 +2,7 @@ import type * as React from 'react';
 
 /** The side panel and the popovers, menus and dialogs layered over the page. A press inside one is not a press on the page. */
 export const ENTITY_SIDE_PANEL_LAYER_SELECTOR =
-  '[data-entity-side-panel], [data-power-tools-entity-panel], [data-radix-popper-content-wrapper], [data-radix-portal], [role="dialog"], [role="menu"], [role="listbox"], .elevated-popover, .side-panel-elevated-popover';
+  '[data-entity-side-panel], [data-power-tools-entity-panel], [data-radix-popper-content-wrapper], [data-radix-portal], [role="dialog"], [role="menu"], [role="listbox"], .elevated-popover, .side-panel-elevated-popover, [data-bottom-sheet-backdrop]';
 
 /**
  * Let tracking run after the room's capture handler chooses the destination. A callback that
