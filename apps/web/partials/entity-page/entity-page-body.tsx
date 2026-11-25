@@ -21,7 +21,7 @@ import {
   LivePodcastShowTemplateView,
   LivePostTemplateView,
   LiveSourceTemplateView,
-  LiveTopicTemplateView,
+  StreamedLiveTopicTemplateView,
 } from '~/core/templates/views';
 import {
   TOPIC_PAGE_CONTENT_INSET_CLASS,
@@ -311,7 +311,7 @@ export function EntityPageBody(props: EntityPageBodyProps) {
         ) : null}
         {routeEditInitializer}
         {enableV2Templates ? (
-          <LiveTopicTemplateView
+          <StreamedLiveTopicTemplateView
             entityId={entityId}
             spaceId={spaceId}
             serverCoverUrl={showTopicMedia && !(props.variant === 'route' && props.coverSlot) ? props.coverUrl : null}

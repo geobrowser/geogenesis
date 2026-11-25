@@ -1,8 +1,9 @@
 import * as React from 'react';
 
-import { QuerySeed, type QuerySeedEntry } from '~/core/query-seed';
+import type { QuerySeedEntry } from '~/core/query-seed';
 import { RouteEditorProvider } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
+import { TopicTemplateSeedProvider } from '~/core/templates/views/streamed-topic-template';
 
 import { EntityPageBody } from '~/partials/entity-page/entity-page-body';
 
@@ -24,7 +25,8 @@ interface Props {
   hideProperties?: boolean;
   /**
    * React Query data read on the server for this page's template (the Topic sections), already
-   * started by the caller so it runs beside this page's own reads rather than after them.
+   * started by the caller so it runs beside this page's own reads. Not awaited here: the page
+   * renders without it and the sections stream in when it answers (`StreamedLiveTopicTemplateView`).
    */
   querySeed?: Promise<QuerySeedEntry[]>;
 }
@@ -42,7 +44,7 @@ export default async function DefaultEntityPage({
   querySeed,
 }: Props) {
   const isEditing = searchParams?.edit === 'true';
-  const [props, seedEntries] = await Promise.all([fetchEntityPageData(params.id, params.entityId), querySeed ?? null]);
+  const props = await fetchEntityPageData(params.id, params.entityId);
 
   const page = (
     <SpaceRedirect
@@ -83,5 +85,12 @@ export default async function DefaultEntityPage({
     </SpaceRedirect>
   );
 
-  return seedEntries && seedEntries.length > 0 ? <QuerySeed entries={seedEntries}>{page}</QuerySeed> : page;
+  if (!querySeed) return page;
+  // A seed that failed only costs the sections their server copy; the hooks then ask for themselves.
+  const entries = querySeed.catch((): QuerySeedEntry[] => []);
+  return (
+    <TopicTemplateSeedProvider entityId={props.id} entries={entries}>
+      {page}
+    </TopicTemplateSeedProvider>
+  );
 }

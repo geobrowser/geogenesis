@@ -195,8 +195,9 @@ export default async function EntityTemplateStrategy(props: Props) {
   }
 
   // A Topic's sections (Claims, Debates, Sources) are read here and handed to the client, so they are
-  // in the HTML rather than drawn seconds after hydration. Started now, awaited beside the page's
-  // own reads. Not in edit mode, which draws the raw entity page instead of the template.
+  // in the HTML rather than drawn seconds after hydration. Started now and never awaited by the page:
+  // the template streams them in when they answer. Not in edit mode, which draws the raw entity page
+  // instead of the template.
   if (result?.entity && searchParams.edit !== 'true' && entityBrowseViewFromTypes(result.entity.types) === 'topic') {
     return (
       <DefaultEntityPage

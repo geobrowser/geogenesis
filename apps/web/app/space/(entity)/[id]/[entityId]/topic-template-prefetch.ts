@@ -36,9 +36,9 @@ import type { Entity } from '~/core/types';
 import { normId } from '~/core/utils/norm-id';
 
 /**
- * How long the page's HTML waits for the Topic sections' reads. They run beside the entity page's
- * own reads, so up to this much they cost nothing; past it, whatever has not landed is left to the
- * client, exactly as before, and the page is not held for it.
+ * How long the page's response stays open for the Topic sections' reads. The page itself does not
+ * wait for them: it is sent with the sections as skeletons, and they stream in when these answer.
+ * Past this, whatever has not landed is left to the client, exactly as before.
  */
 export const TOPIC_PREFETCH_BUDGET_MS = 1_500;
 
