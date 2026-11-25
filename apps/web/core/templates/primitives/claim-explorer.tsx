@@ -27,7 +27,7 @@ import { CheckCircleIcon } from './icons';
 import { ListRankingHeaderControl, ListRankingWorkspace, type RankableListItem, useListRanking } from './list-ranking';
 import { SplitBars } from './split-bars';
 import { ClaimVoteBinding, ClaimVotePills, type TemplateVoteBinding, TemplateVoteRows } from './template-claim-vote';
-import { TEMPLATE_CARD_SURFACE, type TemplateBadgeTone } from './template-shell';
+import { TEMPLATE_CLAIM_LIST_SURFACE, type TemplateBadgeTone } from './template-shell';
 import { PUBLISHING_LABEL, usePendingAdds } from './use-pending-adds';
 
 // Gray for every kind (GEO-3845): the tag says what kind of claim it is without the loud blue/purple.
@@ -173,7 +173,7 @@ export function ClaimExplorer({
         }}
       />
 
-      <div className={cx('flex flex-col overflow-hidden', TEMPLATE_CARD_SURFACE)}>
+      <div className={cx('flex flex-col @[760px]:overflow-hidden', TEMPLATE_CLAIM_LIST_SURFACE)}>
         {/* Every row, so switching page keeps the same lookup and batch. */}
         <TemplateVoteRows targets={voteTargets}>
           <div className="divide-y divide-divider">
@@ -200,7 +200,7 @@ export function ClaimExplorer({
         </TemplateVoteRows>
 
         {totalPages > 1 && (
-          <div className="border-t border-divider px-5 py-2.5">
+          <div className="border-t border-divider py-2.5 @[760px]:px-5">
             <InlinePagination page={safePage} totalPages={totalPages} onPageChange={setPage} label="Claims pages" />
           </div>
         )}
@@ -258,9 +258,9 @@ export function ClaimListRow({ rank, claim, isAgreed = false, hideKindOnPhone = 
   }
 
   const titleNode = (
-    <span className="block max-w-[720px] text-[16px] leading-[22px] font-medium text-pretty text-text transition-colors group-hover/claim:text-[#4c1fd4]">
+    <span className="block max-w-[720px] text-[19px] leading-[26px] font-medium text-pretty text-text transition-colors group-hover/claim:text-[#4c1fd4]">
       {/* Phones: the rank leads the title instead of holding a column, so the row keeps its width. */}
-      <span aria-hidden className="mr-2 text-[15px] font-semibold text-grey-04 tabular-nums @[760px]:hidden">
+      <span aria-hidden className="mr-2 text-[17.5px] font-semibold text-grey-04 tabular-nums @[760px]:hidden">
         {rank}
       </span>
       {claim.title}
@@ -328,7 +328,7 @@ export function ClaimListRow({ rank, claim, isAgreed = false, hideKindOnPhone = 
             {voteButtons && <div className="basis-full @[760px]:basis-auto">{voteButtons}</div>}
 
             {hasWideResult && (
-              <div className="hidden min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[13.5px] leading-[18px] text-grey-04 tabular-nums @[760px]:flex">
+              <div className="hidden min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[15px] leading-[20px] text-grey-04 tabular-nums @[760px]:flex">
                 {primaryRow && <InlineSplit row={primaryRow} />}
                 {wideMeta.map((node, i) => (
                   <React.Fragment key={i}>
@@ -355,8 +355,10 @@ export function ClaimListRow({ rank, claim, isAgreed = false, hideKindOnPhone = 
   };
 
   return (
-    <div className="flex items-start gap-3 px-5 py-4 transition-colors hover:bg-bg @[760px]:gap-4">
-      <span className="hidden w-6 shrink-0 pt-px text-center text-[15px] leading-[22px] font-semibold text-grey-04 tabular-nums @[760px]:block">
+    // Baseline alignment keeps the rank on the title's first line at every size (Preston, GEO-3857).
+    // Phones drop the side padding: the list loses its card there and runs to the page gutter.
+    <div className="flex items-baseline gap-3 py-4 transition-colors @[760px]:gap-4 @[760px]:px-5 @[760px]:hover:bg-bg">
+      <span className="hidden w-6 shrink-0 text-center text-[17.5px] leading-[26px] font-semibold text-grey-04 tabular-nums @[760px]:block">
         {rank}
       </span>
 
@@ -420,7 +422,7 @@ export function ClaimListRow({ rank, claim, isAgreed = false, hideKindOnPhone = 
         // Level with the title's first line. A pending row's id isn't an entity yet; the menu keeps
         // its space but can't be used.
         className={cx(
-          '-my-[5px] shrink-0 @[760px]:-my-[3px] [&>button[aria-haspopup]]:size-8 @[760px]:[&>button[aria-haspopup]]:size-7',
+          '-my-[3px] shrink-0 self-start @[760px]:-my-px [&>button[aria-haspopup]]:size-8 @[760px]:[&>button[aria-haspopup]]:size-7',
           claim.pending && 'invisible'
         )}
       />
@@ -485,7 +487,7 @@ function InlineSplit({ row }: { row: SplitRow }) {
           style={{ width: `${clamped.toFixed(2)}%`, backgroundColor: row.color }}
         />
       </span>
-      <strong className="font-semibold text-text">{formatPercentInt(clamped)}</strong>
+      <strong className="text-[17px] font-semibold text-text">{formatPercentInt(clamped)}</strong>
     </span>
   );
 }

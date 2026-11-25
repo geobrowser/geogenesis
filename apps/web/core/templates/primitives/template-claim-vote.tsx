@@ -325,7 +325,10 @@ export function ClaimVotePills({ title, vote }: { title: string; vote: TemplateV
         titleFor={vote.titleFor}
         onPress={vote.press}
         className="w-full"
-        buttonClassName="flex-1 basis-0 @[760px]:flex-none"
+        buttonClassName="flex-1 basis-0 @[760px]:min-w-[112px] @[760px]:flex-none"
+        // Phones stretch the pair across the row with the app's 4px padding, so "Disagree" fits at 320px;
+        // wide rows give both buttons one width, as the app's pair.
+        buttonPaddingClassName="px-1 @[760px]:px-3.5"
       />
       {vote.error && (
         <span role="alert" className="text-[12.5px] text-red-01">

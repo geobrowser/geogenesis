@@ -23,6 +23,7 @@ import {
   RecentDebatesGallery,
   RelatedListSection,
   TEMPLATE_CARD_SURFACE,
+  TEMPLATE_CLAIM_LIST_SURFACE,
   TemplateBadge,
   TemplateShell,
   TemplateTitleRow,
@@ -197,9 +198,9 @@ export function TopicTemplate({
         <div aria-busy="true" aria-label="Loading topic sections" className="flex flex-col gap-10">
           <div className="flex flex-col gap-3">
             <div className="h-6 w-28 animate-pulse rounded-md bg-grey-01" />
-            <div className={`flex flex-col divide-y divide-divider overflow-hidden ${TEMPLATE_CARD_SURFACE}`}>
+            <div className={`flex flex-col divide-y divide-divider overflow-hidden ${TEMPLATE_CLAIM_LIST_SURFACE}`}>
               {Array.from({ length: 5 }, (_, idx) => (
-                <div key={idx} className="flex items-center justify-between gap-4 px-5 py-4">
+                <div key={idx} className="flex items-center justify-between gap-4 py-4 @[760px]:px-5">
                   <div className="flex min-w-0 flex-1 flex-col gap-2">
                     <div className="h-4 w-3/4 animate-pulse rounded bg-grey-01" />
                     <div className="h-6 w-48 animate-pulse rounded-full bg-grey-01" />
