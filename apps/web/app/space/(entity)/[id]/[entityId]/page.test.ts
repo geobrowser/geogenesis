@@ -118,7 +118,7 @@ describe('Topic page generateMetadata (GEO-3880)', () => {
   it("points og:image and twitter:image at the topic card, at the request's origin", async () => {
     vi.stubEnv('VERCEL_ENV', 'production');
     fetchEntityPage.mockResolvedValue(topic());
-    const card = `https://preview.example/explore/graph/${DEBATE_ID}/card?topic=${DEBATE_ID}&space=${SPACE_ID}&variant=topic&v=1`;
+    const card = `https://preview.example/explore/graph/${DEBATE_ID}/card?topic=${DEBATE_ID}&space=${SPACE_ID}&variant=topic&v=2`;
     const metadata = await generateMetadata(props());
     expect(metadata.openGraph?.images).toEqual([expect.objectContaining({ url: card, width: 1200, height: 630 })]);
     expect(metadata.twitter).toMatchObject({ card: 'summary_large_image', images: [card] });

@@ -16,7 +16,7 @@ export function graphExplorerHref({
 }
 
 /** Bumped when the card's layout changes, so unfurlers fetch the new image. */
-export const GRAPH_CARD_VERSION = 1;
+export const GRAPH_CARD_VERSION = 2;
 
 /** The shareable URL: centre, topic and space only, so filter params never fork a link. */
 export function graphExplorerCanonicalHref(ids: { entityId: string; topicId: string; spaceId?: string | null }) {
@@ -33,7 +33,7 @@ export function graphExplorerCardHref(ids: { entityId: string; topicId: string; 
 }
 
 /** Bumped when the Topic link preview's layout changes. Its own number: the two cards change apart. */
-export const TOPIC_CARD_VERSION = 1;
+export const TOPIC_CARD_VERSION = 2;
 
 /** A Topic page's link preview: the same route drawing the topic card, scoped to the page's space. */
 export function topicCardHref({ topicId, spaceId }: { topicId: string; spaceId: string }) {

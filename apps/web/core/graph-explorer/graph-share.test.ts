@@ -45,7 +45,7 @@ describe('sharing a graph', () => {
         page_type: 'graph_explorer',
       })
     );
-    expect(fetchMock).toHaveBeenCalledWith(`/explore/graph/${CENTRE}/card?topic=${TOPIC}&space=${SPACE}&v=1`, {
+    expect(fetchMock).toHaveBeenCalledWith(`/explore/graph/${CENTRE}/card?topic=${TOPIC}&space=${SPACE}&v=2`, {
       priority: 'low',
     });
   });
@@ -55,7 +55,9 @@ describe('sharing a graph', () => {
     const copied = new URL(vi.mocked(navigator.clipboard.writeText).mock.calls[0][0]);
     expect([...copied.searchParams.keys()]).toEqual(['topic', 'space', 'kinds', 'si']);
     expect(copied.searchParams.get('kinds')).toBe('claim');
-    expect(share.graphShareUrl('https://x', ids, 'all')).toBe(`https://x/explore/graph/${CENTRE}?topic=${TOPIC}&space=${SPACE}`);
+    expect(share.graphShareUrl('https://x', ids, 'all')).toBe(
+      `https://x/explore/graph/${CENTRE}?topic=${TOPIC}&space=${SPACE}`
+    );
   });
 
   it('uses the share sheet on phones and copies when it is missing', async () => {

@@ -364,3 +364,14 @@ describe('NodeCard on a phone (GEO-3864)', () => {
     expect(far.querySelector('[data-far-marker]')).not.toBeNull();
   });
 });
+
+describe('kind labels', () => {
+  it('heads an event or court case card in neutral gray, not the gold accent', () => {
+    for (const kind of ['event', 'case'] as const) {
+      const entry = node(kind, { types: [{ id: GRAPH_KIND_TYPE_IDS[kind][0], name: 'Kind name' }] });
+      const label = [...card(entry, 1).querySelectorAll('span')].find(span => span.textContent === 'Kind name')!;
+      expect(label.className).toContain('text-[#a8a8ae]');
+      expect(label.className).not.toContain('d9b46a');
+    }
+  });
+});

@@ -31,7 +31,7 @@ const page = (types: Array<{ id: string }>) => ({
 const metadata = () =>
   generateMetadata({ params: Promise.resolve({ id: SPACE_ID, entityId: ENTITY_ID }), children: null });
 
-const CARD = `https://preview.example/explore/graph/${ENTITY_ID}/card?topic=${ENTITY_ID}&space=${SPACE_ID}&variant=topic&v=1`;
+const CARD = `https://preview.example/explore/graph/${ENTITY_ID}/card?topic=${ENTITY_ID}&space=${SPACE_ID}&variant=topic&v=2`;
 
 describe('entity layout metadata', () => {
   beforeEach(() => fetchEntityPage.mockReset());

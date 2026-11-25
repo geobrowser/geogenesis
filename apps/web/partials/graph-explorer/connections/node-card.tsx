@@ -392,7 +392,7 @@ function ItemCard({ node, hop, isCentre, phone, centreId }: CardProps & { centre
               ? 'line-clamp-1 font-normal text-[#a8a8a8]'
               : named
                 ? 'line-clamp-1 font-medium text-[#a8a8a8]'
-                : cx('font-medium', node.kind === 'story' ? 'text-[#4b4b4b]' : 'text-[#d9b46a]')
+                : cx('font-medium', node.kind === 'story' ? 'text-[#4b4b4b]' : 'text-[#a8a8ae]')
           )}
         >
           {meta}
