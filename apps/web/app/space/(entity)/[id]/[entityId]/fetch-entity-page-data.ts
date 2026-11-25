@@ -7,6 +7,7 @@ import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collecti
 import type { Tabs } from '~/core/state/editor/editor-provider';
 import type { Entity, Relation, TabEntity } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
+import { entityBrowseViewFromTypes } from '~/core/utils/entity-browse-view';
 import { Spaces } from '~/core/utils/space';
 import { NavUtils, sortRelations } from '~/core/utils/utils';
 
@@ -110,8 +111,16 @@ export async function fetchEntityPageData(spaceId: string, entityId: string): Pr
     ...(blockRelations ?? []),
     ...tabEntities.flatMap(tabEntity => tabEntity.relations.filter(r => r.type.id === SystemIds.BLOCKS)),
   ];
+  // A Topic draws its own template, not its blocks, so its collection items are only ever shown in
+  // edit mode, and `useCollection` reads them itself there (the server copy is only its loading
+  // fallback). Sending them anyway put every item, with all of its relations, into the page's HTML:
+  // 650 KB of the Israel-Palestine conflict topic's 833 KB, and the reads to fetch it held the
+  // first byte.
+  const skipCollectionItems = entity != null && entityBrowseViewFromTypes(entity.types) === 'topic';
   const [initialCollectionItems, shownPropertyEntities] = await Promise.all([
-    fetchCollectionItemsForBlocks(allBlocks, cachedFetchEntitiesBatch, spaceId, allBlockRelations),
+    skipCollectionItems
+      ? Promise.resolve<Record<string, Entity[]>>({})
+      : fetchCollectionItemsForBlocks(allBlocks, cachedFetchEntitiesBatch, spaceId, allBlockRelations),
     fetchShownPropertyEntitiesForBlocks(allBlocks, cachedFetchEntitiesBatch),
   ]);
 
