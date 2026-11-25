@@ -297,6 +297,8 @@ describe('ClaimVotePills: the debates app buttons (GEO-3845)', () => {
       expect(pill).toHaveClass('h-[34px]', 'rounded-full', 'border', 'bg-transparent', 'flex-1', 'basis-0');
       // The app's label type (GEO-3857): 14px system face, 18px thumb.
       expect(pill).toHaveClass('text-[14px]', 'tracking-[-0.3px]');
+      // Phones keep the app's 4px side padding so "Disagree" fits a 320px row.
+      expect(pill).toHaveClass('px-1', '@[760px]:px-3.5', '@[760px]:min-w-[112px]');
       expect(pill.className).toContain('[font-family:-apple-system');
       expect(pill.querySelector('svg')).toHaveClass('size-[18px]');
       expect(pill).not.toHaveTextContent(/\d/);

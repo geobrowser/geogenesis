@@ -27,6 +27,7 @@ export function DebateVoteButton({
   title,
   onPress,
   className,
+  paddingClassName,
 }: {
   choice: Side;
   selected: boolean;
@@ -35,6 +36,8 @@ export function DebateVoteButton({
   title?: string;
   onPress: () => void;
   className?: string;
+  /** Replaces the side padding, for buttons that stretch to share a narrow row. */
+  paddingClassName?: string;
 }) {
   const label = choice === 'agree' ? 'Agree' : 'Disagree';
   return (
@@ -53,7 +56,12 @@ export function DebateVoteButton({
         // Below the app's 44px, which read too tall on the page (Preston, GEO-3845): 34px in claim rows,
         // 36px in the vote box. The label, icon and padding follow the app's, so the buttons read as
         // heavy as the app's (Yaniv, GEO-3857).
-        compact ? 'h-[34px] gap-1 px-3.5 text-[14px]' : 'h-9 gap-1.5 px-4 text-[15px]',
+        compact
+          ? 'h-[34px] gap-1 text-[14px]'
+          : // The vote box's pair on the narrowest phones (its 300px container rule) steps down a size so
+            // "Disagree" fits at 320px.
+            'h-9 gap-1.5 text-[15px] @max-[300px]:gap-1 @max-[300px]:text-[14px]',
+        paddingClassName ?? (compact ? 'px-3.5' : 'px-4'),
         // The app sets no font, so its web build draws labels in the system face (SF on Apple
         // devices), which reads heavier than Calibre at the same size.
         "[font-family:-apple-system,BlinkMacSystemFont,'Segoe_UI',Roboto,Helvetica,Arial,sans-serif] tracking-[-0.3px]",
@@ -61,7 +69,11 @@ export function DebateVoteButton({
         className
       )}
     >
-      <DebateVoteIcon choice={choice} filled={selected} className={compact ? 'size-[18px]' : 'size-5'} />
+      <DebateVoteIcon
+        choice={choice}
+        filled={selected}
+        className={compact ? 'size-[18px]' : 'size-5 @max-[300px]:size-[18px]'}
+      />
       <span className="truncate">{label}</span>
     </button>
   );
@@ -80,6 +92,7 @@ export function DebateVoteButtons({
   onPress,
   className,
   buttonClassName,
+  buttonPaddingClassName,
 }: {
   userVote: VoteChoice;
   disabled?: boolean;
@@ -91,6 +104,8 @@ export function DebateVoteButtons({
   className?: string;
   /** Width rule for each button; defaults to an equal share of the row. */
   buttonClassName?: string;
+  /** Side padding for each button; see {@link DebateVoteButton}'s `paddingClassName`. */
+  buttonPaddingClassName?: string;
 }) {
   return (
     <div role="group" aria-label={label} className={cx('flex items-center gap-1.5', className)}>
@@ -104,6 +119,7 @@ export function DebateVoteButtons({
           title={titleFor?.(choice)}
           onPress={() => onPress(choice)}
           className={buttonClassName ?? 'flex-1 basis-0'}
+          paddingClassName={buttonPaddingClassName}
         />
       ))}
     </div>
