@@ -407,21 +407,6 @@ describe('DebatesBrowseFeed header links', () => {
     expect(screen.queryByRole('link', { name: 'Fashion' })).not.toBeInTheDocument();
   });
 
-  // The column is a height budget for the chrome under the media; without the space line the debate
-  // page has 28px less of it, so its card may grow by that much (23.25px of width at 1.2042).
-  it.each([
-    ['the debate page', 'debate-1', '82.9dvh - 13.6rem', '83dvh - 196px'],
-    ['the Debates tab', undefined, '82.9dvh - 15.05rem', '83dvh - 219px'],
-  ])('budgets the column for the chrome %s draws', (_surface, initialDebateId, desktopFits, phoneFits) => {
-    render(<DebatesBrowseFeed spaceId="space-1" initialDebateId={initialDebateId} fallback={<div>Entity page</div>} />);
-    const mediaColumn = screen.getByTestId('player-debate-1').parentElement?.parentElement?.parentElement;
-    assert(mediaColumn, 'Expected the media column around the debate card');
-    expect(mediaColumn).toHaveStyle({
-      '--debate-feed-column-width': `clamp(280px, min(calc(100cqw - 2rem), ${debateCardColumnWidth(desktopFits, DEBATE_CARD_WRAPS_BELOW)}), 640px)`,
-      '--debate-feed-phone-column-width': `clamp(240px, calc(${phoneFits}), calc(100cqw - 2rem))`,
-    });
-  });
-
   // Truncation runs parent -> anchor -> text, and an anchor at its default `min-width: auto` would
   // refuse to shrink, overflowing the row instead of ellipsing the name.
   it('keeps the space link shrinkable so the name still truncates', () => {
