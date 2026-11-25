@@ -9,8 +9,10 @@ import Link from 'next/link';
 
 import { useIsPhoneLayout } from '~/core/hooks/use-is-phone-layout';
 import { useMediaQuery } from '~/core/hooks/use-media-query';
+import type { DataType } from '~/core/types';
 
 import { BottomSheet } from '~/design-system/bottom-sheet';
+import { DateField, type DateInputValidity } from '~/design-system/editable-fields/date-field';
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
 import { RelationSmall } from '~/design-system/icons/relation-small';
 import { RightArrowLong } from '~/design-system/icons/right-arrow-long';
@@ -679,14 +681,14 @@ export function AddClaimPopover({
   label = 'Add claim',
   placeholder = 'Write a clear, testable statement...',
   onSubmit,
-  canOpen,
+  holdDraft,
   align = 'end',
 }: {
   label?: string;
   placeholder?: string;
   onSubmit: (draft: { title: string; kind: ClaimKind; note?: string }) => void;
-  /** Asked as the form opens; false keeps it shut (see `EntityActionCallbacks.canOpenAddForm`). */
-  canOpen?: () => boolean;
+  /** Told as the form submits, with a way to put the draft back (see `EntityActionCallbacks.holdAddDraft`). */
+  holdDraft?: (restore: () => void) => void;
   align?: 'start' | 'center' | 'end';
 }) {
   const [open, setOpen] = React.useState(false);
@@ -698,6 +700,13 @@ export function AddClaimPopover({
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
     if (title.trim().length < 4) return;
+    const draft = { title, kind, note };
+    holdDraft?.(() => {
+      setTitle(draft.title);
+      setKind(draft.kind);
+      setNote(draft.note);
+      setOpen(true);
+    });
     onSubmit({ title: title.trim(), kind, note: note.trim() || undefined });
     setTitle('');
     setKind('fact');
@@ -712,7 +721,6 @@ export function AddClaimPopover({
       align={align}
       onClose={() => setOpen(false)}
       onOpenChange={next => {
-        if (next && canOpen && !canOpen()) return;
         setOpen(next);
         if (!next) {
           setTitle('');
@@ -803,8 +811,9 @@ export function AddEntityItemPopover({
   tertiaryLabel,
   tertiaryPlaceholder,
   multilinePrimary = false,
+  secondaryDate,
   onSubmit,
-  canOpen,
+  holdDraft,
   align = 'end',
 }: {
   label: string;
@@ -815,9 +824,14 @@ export function AddEntityItemPopover({
   tertiaryLabel?: string;
   tertiaryPlaceholder?: string;
   multilinePrimary?: boolean;
+  /**
+   * Makes the secondary field the app's date property input (`DateField`, as the entity page edits that
+   * property), so `secondary` is submitted as the ISO string it writes, or left out when blank.
+   */
+  secondaryDate?: { propertyId: string; dataType: DataType };
   onSubmit: (draft: { primary: string; secondary?: string; tertiary?: string }) => void;
-  /** Asked as the form opens; false keeps it shut (see `EntityActionCallbacks.canOpenAddForm`). */
-  canOpen?: () => boolean;
+  /** Told as the form submits, with a way to put the draft back (see `EntityActionCallbacks.holdAddDraft`). */
+  holdDraft?: (restore: () => void) => void;
   align?: 'start' | 'center' | 'end';
 }) {
   const [open, setOpen] = React.useState(false);
@@ -825,18 +839,58 @@ export function AddEntityItemPopover({
   const [primary, setPrimary] = React.useState('');
   const [secondary, setSecondary] = React.useState('');
   const [tertiary, setTertiary] = React.useState('');
+  // The date input reports on blur, and a submit can run inside that blur, so its latest word is kept in refs.
+  const dateGroupRef = React.useRef<HTMLDivElement>(null);
+  const dateValueRef = React.useRef('');
+  const dateValidRef = React.useRef(true);
+  const [showDateError, setShowDateError] = React.useState(false);
+
+  const resetDate = () => {
+    dateValueRef.current = '';
+    dateValidRef.current = true;
+    setShowDateError(false);
+  };
+
+  const onDateValidityChange = ({ valid, empty }: DateInputValidity) => {
+    dateValidRef.current = valid;
+    if (empty) {
+      dateValueRef.current = '';
+      setSecondary('');
+    }
+    if (valid) setShowDateError(false);
+  };
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
     if (primary.trim().length < 2) return;
+    if (secondaryDate) {
+      // Enter in a date field submits without a blur; blur it so the date input reads what was typed.
+      const active = document.activeElement;
+      if (active instanceof HTMLElement && dateGroupRef.current?.contains(active)) active.blur();
+      if (!dateValidRef.current) {
+        setShowDateError(true);
+        return;
+      }
+    }
+    // Read after the blur above, so a date typed and submitted with Enter is held too.
+    const draft = { primary, secondary, tertiary, date: dateValueRef.current };
+    holdDraft?.(() => {
+      setPrimary(draft.primary);
+      setSecondary(secondaryDate ? draft.date : draft.secondary);
+      setTertiary(draft.tertiary);
+      dateValueRef.current = draft.date;
+      dateValidRef.current = true;
+      setOpen(true);
+    });
     onSubmit({
       primary: primary.trim(),
-      secondary: secondary.trim() || undefined,
+      secondary: (secondaryDate ? dateValueRef.current : secondary.trim()) || undefined,
       tertiary: tertiary.trim() || undefined,
     });
     setPrimary('');
     setSecondary('');
     setTertiary('');
+    resetDate();
     setOpen(false);
   };
 
@@ -847,12 +901,12 @@ export function AddEntityItemPopover({
       align={align}
       onClose={() => setOpen(false)}
       onOpenChange={next => {
-        if (next && canOpen && !canOpen()) return;
         setOpen(next);
         if (!next) {
           setPrimary('');
           setSecondary('');
           setTertiary('');
+          resetDate();
         }
       }}
     >
@@ -880,7 +934,31 @@ export function AddEntityItemPopover({
           )}
         </label>
 
-        {secondaryLabel && (
+        {secondaryLabel && secondaryDate && (
+          <div ref={dateGroupRef} role="group" aria-label={secondaryLabel} className="flex flex-col gap-1">
+            <span className="text-[12.5px] font-medium text-grey-04">{secondaryLabel}</span>
+            {/* tableCell type is 19px, so iOS doesn't zoom into these fields in the phone sheet. */}
+            <DateField
+              isEditing
+              variant="tableCell"
+              value={secondary}
+              propertyId={secondaryDate.propertyId}
+              dataType={secondaryDate.dataType}
+              onBlur={({ value }) => {
+                dateValueRef.current = value;
+                setSecondary(value);
+              }}
+              onValidityChange={onDateValidityChange}
+            />
+            {showDateError && (
+              <p role="alert" className="m-0 text-smallButton text-red-01">
+                Enter a full date, or leave it blank.
+              </p>
+            )}
+          </div>
+        )}
+
+        {secondaryLabel && !secondaryDate && (
           <label className="flex flex-col gap-1">
             <span className="text-[12.5px] font-medium text-grey-04">{secondaryLabel}</span>
             <input

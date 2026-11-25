@@ -183,10 +183,15 @@ export function buildClaimEdits(owner: TemplateAddOwner, draft: ClaimDraft, spac
 }
 
 /**
- * The form's free-text date as the stored DATETIME form (`YYYY-MM-DDT00:00:00.000Z`), or null when it
- * isn't a date. The calendar day is read in local time, so "18 Nov 2026" stays the 18th everywhere.
+ * The form's date as the stored DATETIME form, or null when it isn't a date. The Add event form's date
+ * input already gives the ISO string the entity page writes (`2026-11-18T00:00:00.000Z`), kept as it is.
+ * Free text (older drafts) is read for its calendar day in local time, so "18 Nov 2026" stays the 18th.
  */
 export function toStoredDate(text: string): string | null {
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/.test(text)) {
+    const instant = new Date(text);
+    return Number.isNaN(instant.getTime()) ? null : instant.toISOString();
+  }
   const isoDay = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
   const date = isoDay ? new Date(Number(isoDay[1]), Number(isoDay[2]) - 1, Number(isoDay[3])) : new Date(text);
   if (Number.isNaN(date.getTime())) return null;

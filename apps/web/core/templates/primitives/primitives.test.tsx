@@ -119,7 +119,10 @@ describe('VoteBox: the debates app Agree / Disagree (GEO-3845)', () => {
     const agree = screen.getByRole('button', { name: 'Agree' });
     const disagree = screen.getByRole('button', { name: 'Disagree' });
     expect(screen.getByRole('group', { name: 'Do you agree?' })).toContainElement(agree);
-    for (const button of [agree, disagree]) expect(button).toHaveClass('h-9', 'rounded-full', 'bg-transparent');
+    for (const button of [agree, disagree]) {
+      expect(button).toHaveClass('h-9', 'rounded-full', 'bg-transparent', 'text-[15px]');
+      expect(button.className).toContain('[font-family:-apple-system');
+    }
     expect(disagree).toHaveAttribute('aria-pressed', 'true');
     expect(disagree).toHaveClass('border-[#151515]', 'font-bold');
     expect(agree).toHaveClass('border-[#8a8a8a]');
@@ -341,6 +344,24 @@ describe('ClaimExplorer row layout (GEO-3845)', () => {
 
     const title = screen.getByText('A judgment claim');
     const agree = screen.getByRole('button', { name: 'Agree' });
+    // Bigger title and numbers than the old 16px title and 13.5px result (Yaniv, Preston, GEO-3857).
+    expect(title).toHaveClass('text-[19px]', 'leading-[26px]');
+    expect(tag.parentElement).toHaveClass('text-[15px]');
+    expect(screen.getAllByText('71%').find(node => node.tagName === 'STRONG')).toHaveClass('text-[17px]');
+    // The rank sits on the title's first baseline, and the row pads itself only on the wide card.
+    const row = title.closest('div.py-4');
+    expect(row).toHaveClass('items-baseline', '@[760px]:px-5');
+    expect(row).not.toHaveClass('px-5');
+    // Phones lose the card for a hairline above only, so no empty divider sits under the list; wide
+    // lists keep the card.
+    const surface = title.closest('.border-t');
+    expect(surface).toHaveClass('border-t', 'border-divider', '@[760px]:rounded-xl', '@[760px]:border');
+    // Only the wide card clips (its rounded corners); phone rows touch the edge, so a clip would cut
+    // the buttons' and the "…" menu's focus rings.
+    expect(surface).toHaveClass('@[760px]:overflow-hidden');
+    expect(surface).not.toHaveClass('overflow-hidden');
+    expect(surface).not.toHaveClass('border-y');
+    expect(surface).not.toHaveClass('rounded-xl');
     // The title comes first, then the buttons, then the result group.
     expect(title.compareDocumentPosition(agree) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(agree.compareDocumentPosition(tag) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -926,7 +947,7 @@ describe('ClaimExplorer one list (GEO-3854)', () => {
 
   it('puts an added claim at the top of the one list', () => {
     const { container } = render(
-      <EntityActionProvider callbacks={{ canOpenAddForm: () => true, onAddClaim: () => new Promise<never>(() => {}) }}>
+      <EntityActionProvider callbacks={{ onAddClaim: () => new Promise<never>(() => {}) }}>
         <ClaimExplorer contestedClaims={contested} agreedClaims={agreed} />
       </EntityActionProvider>
     );
@@ -946,7 +967,7 @@ describe('ClaimExplorer one list (GEO-3854)', () => {
   it('goes back to page 1 when a claim is added from a later page, so the new top row is in view', () => {
     const many = Array.from({ length: 12 }, (_, i) => claim(`m-${i}`, `Many ${i + 1}`, true));
     const { container } = render(
-      <EntityActionProvider callbacks={{ canOpenAddForm: () => true, onAddClaim: () => new Promise<never>(() => {}) }}>
+      <EntityActionProvider callbacks={{ onAddClaim: () => new Promise<never>(() => {}) }}>
         <ClaimExplorer contestedClaims={many} agreedClaims={[]} />
       </EntityActionProvider>
     );
@@ -1078,24 +1099,48 @@ describe('Add claim on a live page (GEO-3836)', () => {
     );
   }
 
-  it('keeps the form shut when the page says no (signed out)', () => {
-    const canOpenAddForm = vi.fn(() => false);
+  it('opens the form for everyone: nothing is asked before the viewer has written their claim', () => {
+    const holdAddDraft = vi.fn();
     render(
-      <EntityActionProvider callbacks={{ canOpenAddForm, onAddClaim: vi.fn() }}>
+      <EntityActionProvider callbacks={{ holdAddDraft, onAddClaim: vi.fn(() => new Promise<never>(() => {})) }}>
         <ClaimExplorer contestedClaims={listed} agreedClaims={[]} />
       </EntityActionProvider>
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Add claim' }));
-    expect(canOpenAddForm).toHaveBeenCalledTimes(1);
+    expect(screen.getByPlaceholderText(/Write a clear, testable statement/)).toBeInTheDocument();
+    expect(holdAddDraft).not.toHaveBeenCalled();
+  });
+
+  it('puts a withdrawn draft back in the reopened form (a dismissed sign-up)', async () => {
+    let restore!: () => void;
+    let settle!: (result: { ok: false; error: string }) => void;
+    const holdAddDraft = vi.fn((put: () => void) => (restore = put));
+    const onAddClaim = vi.fn(() => new Promise<never>(resolve => (settle = resolve as never)));
+    render(
+      <EntityActionProvider callbacks={{ holdAddDraft, onAddClaim }}>
+        <ClaimExplorer contestedClaims={listed} agreedClaims={[]} />
+      </EntityActionProvider>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add claim' }));
+    submitClaim('Aid entered on Monday');
+    expect(holdAddDraft).toHaveBeenCalledTimes(1);
     expect(screen.queryByPlaceholderText(/Write a clear, testable statement/)).toBeNull();
+
+    await React.act(async () => {
+      settle({ ok: false, error: 'Your addition was cancelled.' });
+      restore();
+    });
+    expect(screen.getByPlaceholderText(/Write a clear, testable statement/)).toHaveValue('Aid entered on Monday');
+    expect(screen.queryByText('Publishing…')).toBeNull();
   });
 
   it('shows the claim as publishing, then as the published entity, and drops it on a failed publish', async () => {
     let settle!: (result: { ok: true; id: string; spaceId: string } | { ok: false; error: string }) => void;
     const onAddClaim = vi.fn(() => new Promise<never>(resolve => (settle = resolve as never)));
     render(
-      <EntityActionProvider callbacks={{ canOpenAddForm: () => true, onAddClaim }}>
+      <EntityActionProvider callbacks={{ onAddClaim }}>
         <ClaimExplorer contestedClaims={listed} agreedClaims={[]} />
       </EntityActionProvider>
     );

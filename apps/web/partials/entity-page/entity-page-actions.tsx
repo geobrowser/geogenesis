@@ -9,7 +9,6 @@ import { graphExplorerHref } from '~/core/graph-explorer/href';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useName } from '~/core/state/entity-page-store/entity-store';
-import { useFeatureFlag } from '~/core/state/feature-flags';
 import { NetworkIcon } from '~/core/templates/primitives/icons';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -36,7 +35,7 @@ interface EntityPageActionsProps {
   leading?: React.ReactNode;
   /**
    * `template`: the entity template header (GEO-3837). Version history moves into the "…" menu, and
-   * a graph link takes the history icon's place while the `graphExplorer` flag is on.
+   * a graph link takes the history icon's place.
    */
   variant?: 'page' | 'template';
 }
@@ -53,7 +52,6 @@ export function EntityPageActions({
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
   const editable = useUserIsEditing(spaceId);
   const name = useName(entityId, spaceId);
-  const graphExplorerEnabled = useFeatureFlag('graphExplorer');
 
   const {
     allVersions,
@@ -119,19 +117,17 @@ export function EntityPageActions({
         </Link>
       )}
       {isTemplate ? (
-        graphExplorerEnabled && (
-          <Link
-            href={graphExplorerHref({ entityId, topicId: entityId, spaceId })}
-            onClick={() => markGraphExplorerEntry('topic_page')}
-            aria-label="Explore graph"
-            title="Explore graph"
-            data-geo-analytics-label="Explore graph"
-            data-geo-analytics-intent="open_graph_explorer"
-            className="inline-flex text-grey-04 transition-colors duration-75 hover:text-text"
-          >
-            <NetworkIcon className="size-4" />
-          </Link>
-        )
+        <Link
+          href={graphExplorerHref({ entityId, topicId: entityId, spaceId })}
+          onClick={() => markGraphExplorerEntry('topic_page')}
+          aria-label="Explore graph"
+          title="Explore graph"
+          data-geo-analytics-label="Explore graph"
+          data-geo-analytics-intent="open_graph_explorer"
+          className="inline-flex text-grey-04 transition-colors duration-75 hover:text-text"
+        >
+          <NetworkIcon className="size-4" />
+        </Link>
       ) : (
         <HistoryPanel open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
           {versionList(() => setIsHistoryOpen(false))}

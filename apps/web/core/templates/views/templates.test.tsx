@@ -1014,11 +1014,7 @@ describe('News story Add claim with claim groups (GEO-3836)', () => {
     let settle!: (result: { ok: true; id: string; spaceId: string }) => void;
     const onAddClaim = vi.fn(() => new Promise<never>(resolve => (settle = resolve as never)));
     const view = (reportedClaims: ReturnType<typeof claim>[], key = 'a') => (
-      <NewsStoryTemplate
-        key={key}
-        model={{ ...base, reportedClaims }}
-        actionCallbacks={{ onAddClaim, canOpenAddForm: () => true }}
-      />
+      <NewsStoryTemplate key={key} model={{ ...base, reportedClaims }} actionCallbacks={{ onAddClaim }} />
     );
     const { rerender } = render(view([]));
 
@@ -1228,5 +1224,105 @@ describe('GEO-3837 phone tidy-ups', () => {
     expect(within(sources).getByRole('button', { name: 'Add source' })).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Evidence' })).toBeNull();
     expect(screen.queryByText(/Sources (&|and) evidence/)).toBeNull();
+  });
+});
+
+describe('Phone claim lists without the card (GEO-3857)', () => {
+  const split = (totalVotes: number) => ({
+    rows: [
+      { id: 'wa', label: 'World affairs', color: '#202020', percent: 60, voterCount: totalVotes, isEveryone: true },
+    ],
+    isSplit: true,
+    totalVotes,
+  });
+  const expectPhoneListSurface = (surface: Element | null) => {
+    expect(surface).toHaveClass('border-t', 'border-divider', '@[760px]:rounded-xl', '@[760px]:border');
+    expect(surface).not.toHaveClass('rounded-xl');
+  };
+
+  it('loads Topic and Source claim lists on the same card-less surface they render with', () => {
+    render(
+      <TopicTemplate
+        model={{ id: 'topic-1', title: 'Renewable energy', stats: [], contestedClaims: [] }}
+        isLoadingSections
+      />
+    );
+    const topicList = screen.getByLabelText('Loading topic sections').querySelector('.divide-y');
+    expectPhoneListSurface(topicList);
+    // Skeleton rows pad only on the wide card, as the loaded rows do.
+    expect(topicList?.firstElementChild).toHaveClass('@[760px]:px-5');
+    expect(topicList?.firstElementChild).not.toHaveClass('px-5');
+    cleanup();
+
+    render(
+      <SourceTemplate
+        model={{ id: 'source-1', title: 'A report', metadata: [], supportedClaims: [], sections: [] }}
+        isLoadingSections
+      />
+    );
+    expectPhoneListSurface(screen.getByLabelText('Loading article sections').querySelector('.divide-y'));
+  });
+
+  it("clips the Claim page's sub-claims only on the wide card, so edge focus rings show on phones", () => {
+    render(
+      <ClaimTemplate
+        model={{
+          id: 'claim-1',
+          title: 'There is no genocide in Gaza',
+          kind: 'judgment',
+          split: split(5),
+          voteBox: { userVote: null, countSummary: '5 votes', onVote: vi.fn() },
+          subClaims: [
+            { id: 's-1', title: 'Aid kept entering', kind: 'fact', stance: 'supports', split: split(4), sources: [] },
+          ],
+          sections: [],
+        }}
+      />
+    );
+    const surface = screen.getByText('Aid kept entering').closest('.divide-y');
+    expectPhoneListSurface(surface);
+    expect(surface).toHaveClass('@[760px]:overflow-hidden');
+    expect(surface).not.toHaveClass('overflow-hidden');
+  });
+
+  it("clips a Post's claim list only on the wide card", () => {
+    render(
+      <PostTemplate
+        model={{
+          id: 'post-1',
+          authorName: 'Someone',
+          platform: 'X',
+          body: 'A post.',
+          claims: [{ claim: { id: 'c-1', title: 'Aid kept entering', split: split(4) }, stanceLabel: 'Supports' }],
+          notes: [],
+          sections: [],
+        }}
+      />
+    );
+    const surface = screen.getByText('Aid kept entering').closest('.divide-y');
+    expectPhoneListSurface(surface);
+    expect(surface).toHaveClass('@[760px]:overflow-hidden');
+    expect(surface).not.toHaveClass('overflow-hidden');
+  });
+
+  it('keeps the peek drawer\'s "Disagree" whole beside the count with tighter padding', () => {
+    render(
+      <ContextPeekDrawer
+        item={{
+          id: 'peek-1',
+          kind: 'claim',
+          kindLabel: 'Claim',
+          title: 'Aid kept entering',
+          split: split(1200),
+          voteBox: { userVote: 'disagree', countSummary: '1.2K votes', onVote: vi.fn() },
+        }}
+        onClose={() => {}}
+      />
+    );
+    const group = screen.getByRole('group', { name: 'Do you agree?' });
+    for (const button of within(group).getAllByRole('button')) {
+      expect(button).toHaveClass('px-1.5');
+      expect(button).not.toHaveClass('px-4');
+    }
   });
 });

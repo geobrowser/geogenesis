@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -87,7 +87,7 @@ describe('NodeCard far nodes', () => {
       const visible = [...container.querySelectorAll('span')].filter(
         span => span.textContent && !span.closest('.hidden') && span.children.length === 0
       );
-      expect(visible.map(span => span.textContent)).toEqual(kind === 'ent' || kind === 'other' ? ['A'] : []);
+      expect(visible.map(span => span.textContent)).toEqual([]);
     }
   );
 
@@ -186,6 +186,9 @@ const NAME = 'Federal Reserve System of the United States and its twelve regiona
 
 // The first match is the card's own label; a near entity also carries its far-state name after it.
 const clamps = () => screen.getAllByText(NAME)[0].className.match(/line-clamp-\d/g) ?? [];
+// An entity's two-line label sits under its photo; one with no picture is a name card instead (below).
+const named = (kind: GraphKind) =>
+  node(kind, { name: NAME, ...(kind === 'ent' && { image: 'https://example.com/portrait.png' }) });
 
 // On a phone the centre's card gets four lines: more than its neighbours, but bounded, so a long claim
 // can't fill the middle of the map. The panel under the map leaves the name out on a phone (GEO-3849).
@@ -204,7 +207,7 @@ describe('NodeCard names', () => {
     ['story', 'line-clamp-3'],
     ['claim', 'line-clamp-2'],
   ])('still cuts the %s name of a card around the centre on a phone', (kind, clamp) => {
-    render(<NodeCard node={node(kind, { name: NAME })} hop={1} isCentre={false} phone claimSpaceId="space" />);
+    render(<NodeCard node={named(kind)} hop={1} isCentre={false} phone claimSpaceId="space" />);
     expect(clamps()).toEqual([clamp]);
   });
 
@@ -214,7 +217,118 @@ describe('NodeCard names', () => {
     ['story', 'line-clamp-3'],
     ['claim', 'line-clamp-3'],
   ])('keeps the desktop centre’s %s name to its lines', (kind, clamp) => {
-    render(<NodeCard node={node(kind, { name: NAME })} hop={0} isCentre phone={false} claimSpaceId="space" />);
+    render(<NodeCard node={named(kind)} hop={0} isCentre phone={false} claimSpaceId="space" />);
     expect(clamps()).toEqual([clamp]);
+  });
+});
+
+describe('entities without a picture', () => {
+  const PHOTO = 'https://example.com/portrait.png';
+  const PERSON = GRAPH_KIND_TYPE_IDS.ent[0]!;
+  const person = (extra: Partial<GraphNode> = {}) =>
+    node('ent', { name: 'Talia Levin', types: [{ id: PERSON, name: 'Person' }], ...extra });
+  /** Text in view: any letter circle would show up here as a lone capital. */
+  const visibleText = (container: HTMLElement) =>
+    [...container.querySelectorAll('span')]
+      .filter(span => span.textContent && !span.closest('.hidden') && span.children.length === 0)
+      .map(span => span.textContent);
+
+  it.each([
+    ['a person with no photo', person()],
+    ['an untyped entity', node('other', { name: 'Talia Levin' })],
+  ])('draws %s as a name card, not a letter circle, at the centre and around it', (_, entry) => {
+    for (const [hop, isCentre] of [
+      [0, true],
+      [1, false],
+    ] as const) {
+      const container = card(entry, hop, isCentre);
+      expect(container.querySelector('img')).toBeNull();
+      expect(container.querySelector('[data-anchor]')).toBeNull();
+      const named = container.querySelector('[data-name-card]')!;
+      expect(named).not.toBeNull();
+      expect(named.className).toContain('rounded-xl');
+      expect(named.className.includes(CENTRE_RING)).toBe(isCentre);
+      expect(visibleText(container)).not.toContain('T');
+      expect(visibleText(container)).toContain('Talia Levin');
+    }
+  });
+
+  it.each([
+    [false, false, 'w-[184px] px-4 py-[14px]', 'gap-[10px]'],
+    [false, true, 'w-[240px] px-5 py-[18px]', 'gap-[10px]'],
+    [true, false, 'w-[128px] px-3 py-[10px]', 'gap-[6px]'],
+    [true, true, 'w-[176px] p-[14px]', 'gap-[6px]'],
+  ] as const)(
+    "sizes a name card in the prototype's Geo geometry (phone %s, centre %s)",
+    (phone, isCentre, box, gap) => {
+      const { container } = render(
+        <NodeCard node={person()} hop={isCentre ? 0 : 1} isCentre={isCentre} phone={phone} claimSpaceId={null} />
+      );
+      const named = container.querySelector('[data-name-card]')!;
+      expect(named.className).toContain(box);
+      expect(named.className).toContain(gap);
+      // An event shares the box; a news card keeps the smaller source-like one.
+      const event = render(
+        <NodeCard node={node('event')} hop={1} isCentre={false} phone={false} claimSpaceId={null} />
+      );
+      expect(event.container.querySelector('[data-label]')!.className).toContain('w-[184px]');
+      expect(card(node('story'), 1).querySelector('[data-label]')!.className).toContain('w-[168px]');
+    }
+  );
+
+  it('heads a typed name card with its type, like other cards', () => {
+    expect(visibleText(card(person(), 1))).toEqual(['Person', 'Talia Levin']);
+  });
+
+  it('keeps a photo and name label for an entity with a picture', () => {
+    const container = card(person({ image: PHOTO }), 1);
+    expect(container.querySelector('img')?.getAttribute('src')).toBe(PHOTO);
+    expect(container.querySelector('[data-anchor]')).not.toBeNull();
+    expect(container.querySelector('[data-name-card]')).toBeNull();
+    expect(container.querySelector('[data-label]')?.textContent).toBe('Talia Levin');
+  });
+
+  it.each([0, 1] as const)('falls back to the name card when the picture fails to load (hop %s)', hop => {
+    const container = card(person({ image: PHOTO }), hop);
+    fireEvent.error(container.querySelector('img')!);
+    expect(container.querySelector('img')).toBeNull();
+    expect(container.querySelector('[data-name-card]')?.textContent).toContain('Talia Levin');
+    expect(visibleText(container)).not.toContain('T');
+  });
+
+  it('lets a hop-1 name card swap to its marker while drawn too small (data-far)', () => {
+    const container = card(person(), 1);
+    expect(container.querySelector('.group-data-\\[far\\]\\:hidden [data-name-card]')).not.toBeNull();
+    expect(container.querySelector('.group-data-\\[far\\]\\:contents [data-far-marker]')).not.toBeNull();
+  });
+
+  it('draws a far entity with no picture as a neutral dot, and one with a picture as its small photo', () => {
+    const dot = card(person(), 2).querySelector('[data-far-marker] > [aria-hidden]')!;
+    expect(dot.className).toContain('rounded-full');
+    expect(dot.className).toContain('bg-grey-03');
+    expect(farMarkerClass('other', null)).toBe(farMarkerClass('ent', null));
+    const photo = card(person({ image: PHOTO }), 2);
+    expect(photo.querySelector('img')).not.toBeNull();
+    expect(photo.querySelector('[data-far-marker]')).toBeNull();
+  });
+
+  it('tries a new picture after the old one failed, but not the failed one again when the centre moves', () => {
+    const NEW_PHOTO = 'https://example.com/portrait-2.png';
+    const props = { hop: 1, isCentre: false, phone: false, claimSpaceId: null } as const;
+    const { container, rerender } = render(<NodeCard node={person({ image: PHOTO })} {...props} />);
+    fireEvent.error(container.querySelector('img')!);
+    // The same broken picture, now at the centre: still a name card, wearing the ring.
+    rerender(<NodeCard node={person({ image: PHOTO })} {...props} hop={0} isCentre />);
+    expect(container.querySelector('img')).toBeNull();
+    expect(container.querySelector('[data-name-card]')!.className).toContain(CENTRE_RING);
+    rerender(<NodeCard node={person({ image: NEW_PHOTO })} {...props} hop={0} isCentre />);
+    expect(container.querySelector('img')?.getAttribute('src')).toBe(NEW_PHOTO);
+  });
+
+  it('turns a far photo that fails to load into the dot', () => {
+    const container = card(person({ image: PHOTO }), 2);
+    fireEvent.error(container.querySelector('img')!);
+    expect(container.querySelector('img')).toBeNull();
+    expect(container.querySelector('[data-far-marker]')).not.toBeNull();
   });
 });

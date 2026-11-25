@@ -18,6 +18,7 @@ import {
   EntityOverflowMenu,
   RelatedListSection,
   TEMPLATE_CARD_SURFACE,
+  TEMPLATE_CLAIM_LIST_SURFACE,
   TemplateBadge,
   TemplateEmptyState,
   TemplateShell,
@@ -134,7 +135,7 @@ export function SourceTemplate({
         <div aria-busy="true" aria-label="Loading article sections" className="flex flex-col gap-7">
           <div className="flex flex-col gap-3">
             <div className="h-5 w-28 animate-pulse rounded bg-grey-01" />
-            <div className={`flex flex-col divide-y divide-divider overflow-hidden ${TEMPLATE_CARD_SURFACE}`}>
+            <div className={`flex flex-col divide-y divide-divider overflow-hidden ${TEMPLATE_CLAIM_LIST_SURFACE}`}>
               <div className="h-[76px] animate-pulse bg-white" />
               <div className="h-[76px] animate-pulse bg-white" />
               <div className="h-[76px] animate-pulse bg-white" />
@@ -159,7 +160,7 @@ export function SourceTemplate({
                 <h2 className="m-0 text-mediumTitle font-semibold text-text">Claims</h2>
                 <AddClaimPopover
                   label="Add claim"
-                  canOpen={actionCallbacks?.canOpenAddForm}
+                  holdDraft={actionCallbacks?.holdAddDraft}
                   onSubmit={draft => {
                     addClaim(
                       state => ({
@@ -191,7 +192,7 @@ export function SourceTemplate({
                 tertiaryLabel="Page or section (optional)"
                 tertiaryPlaceholder="e.g. §86(1) or 07:12"
                 multilinePrimary
-                canOpen={actionCallbacks?.canOpenAddForm}
+                holdDraft={actionCallbacks?.holdAddDraft}
                 onSubmit={draft => {
                   addQuote(
                     state => ({

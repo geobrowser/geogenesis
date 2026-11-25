@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { NavUtils } from '~/core/utils/utils';
 
 import type { EntityActionCallbacks, TopicTemplateModel, TopicTimelineHighlightModel } from '../models';
+import { TEMPLATE_ONTOLOGY, formatOntologyDate } from '../ontology';
 import {
   AddEntityItemPopover,
   ArrowRightIcon,
@@ -22,11 +23,19 @@ import {
   RecentDebatesGallery,
   RelatedListSection,
   TEMPLATE_CARD_SURFACE,
+  TEMPLATE_CLAIM_LIST_SURFACE,
   TemplateBadge,
   TemplateShell,
   TemplateTitleRow,
 } from '../primitives';
 import { PUBLISHING_LABEL, usePendingAdds } from '../primitives/use-pending-adds';
+
+/**
+ * The Add event form edits `Event date` with the entity page's date input in its date-only (DATE) mode: no
+ * time fields. That mode writes the same midnight-UTC ISO string (`2026-11-18T00:00:00.000Z`) as a DATETIME
+ * date with no time, and `buildEventEdits` still stages it as DATETIME, so the property type doesn't change.
+ */
+const EVENT_DATE_INPUT = { propertyId: TEMPLATE_ONTOLOGY.EVENT_DATE_PROPERTY_ID, dataType: 'DATE' } as const;
 
 export interface TopicTemplateProps {
   model: TopicTemplateModel;
@@ -189,9 +198,9 @@ export function TopicTemplate({
         <div aria-busy="true" aria-label="Loading topic sections" className="flex flex-col gap-10">
           <div className="flex flex-col gap-3">
             <div className="h-6 w-28 animate-pulse rounded-md bg-grey-01" />
-            <div className={`flex flex-col divide-y divide-divider overflow-hidden ${TEMPLATE_CARD_SURFACE}`}>
+            <div className={`flex flex-col divide-y divide-divider overflow-hidden ${TEMPLATE_CLAIM_LIST_SURFACE}`}>
               {Array.from({ length: 5 }, (_, idx) => (
-                <div key={idx} className="flex items-center justify-between gap-4 px-5 py-4">
+                <div key={idx} className="flex items-center justify-between gap-4 py-4 @[760px]:px-5">
                   <div className="flex min-w-0 flex-1 flex-col gap-2">
                     <div className="h-4 w-3/4 animate-pulse rounded bg-grey-01" />
                     <div className="h-6 w-48 animate-pulse rounded-full bg-grey-01" />
@@ -252,15 +261,18 @@ export function TopicTemplate({
                     primaryLabel="Event"
                     primaryPlaceholder="e.g. UN Security Council adopts resolution"
                     secondaryLabel="Date"
-                    secondaryPlaceholder="e.g. 18 Nov 2026"
+                    secondaryDate={EVENT_DATE_INPUT}
                     tertiaryLabel="Summary (optional)"
                     tertiaryPlaceholder="Brief neutral summary of what happened..."
-                    canOpen={actionCallbacks?.canOpenAddForm}
+                    holdDraft={actionCallbacks?.holdAddDraft}
                     onSubmit={draft => {
                       addedTimelineTurns.add(
                         state => ({
                           pending: state.status === 'pending',
-                          when: state.status === 'pending' ? PUBLISHING_LABEL : (draft.secondary ?? 'Recent'),
+                          when:
+                            state.status === 'pending'
+                              ? PUBLISHING_LABEL
+                              : (formatOntologyDate(draft.secondary) ?? 'Recent'),
                           title: draft.primary,
                           summary: draft.tertiary,
                           href: state.status === 'published' ? NavUtils.toEntity(state.spaceId, state.id) : undefined,

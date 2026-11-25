@@ -216,10 +216,11 @@ export interface EntityActionCallbacks {
   onAddQuote?: (draft: { text: string; speaker?: string; location?: string }) => Promise<TemplateAddResult>;
   onAddEvent?: (draft: { title: string; when?: string; summary?: string }) => Promise<TemplateAddResult>;
   /**
-   * Asked as an Add claim / Add event / Add quote form opens. False keeps it shut: a signed-out viewer is shown
-   * the sign-in prompt instead.
+   * Called by an Add claim / Add event / Add quote form as it submits, with a way to put its draft
+   * back. The forms open for everyone; a signed-out viewer is asked to sign up only at submit
+   * (GEO-3861), and if they dismiss that, the draft is restored into the form rather than lost.
    */
-  canOpenAddForm?: () => boolean;
+  holdAddDraft?: (restore: () => void) => void;
   /** Optional live Geo entity search for `+` relation popovers; falls back to fixture suggestions when omitted. */
   searchEntities?: (query: string) => Promise<readonly { id: string; name: string }[]>;
 }
