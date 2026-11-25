@@ -25,7 +25,7 @@ export const BAND_SWATCHES: Record<ClaimBand, string> = {
 };
 
 /** The node's own type name ("Article", "News event"), for the line above its title. */
-export function nodeTypeLabel(node: GraphNode): string | null {
+export function nodeTypeLabel(node: Pick<GraphNode, 'kind' | 'types'>): string | null {
   const order = GRAPH_KIND_TYPE_IDS[node.kind];
   const ranked = node.types
     .map(type => ({ name: type.name, rank: order.indexOf(normId(type.id)) }))
@@ -41,7 +41,7 @@ const DATE_FORMAT = new Intl.DateTimeFormat('en-US', {
   timeZone: 'UTC',
 });
 
-export function nodeDateLabel(node: GraphNode): string | null {
+export function nodeDateLabel(node: Pick<GraphNode, 'date'>): string | null {
   if (!node.date) return null;
   const date = new Date(node.date);
   return Number.isNaN(date.getTime()) ? null : DATE_FORMAT.format(date);
@@ -49,9 +49,21 @@ export function nodeDateLabel(node: GraphNode): string | null {
 
 type CardProps = { node: GraphNode; hop: 0 | 1 | 2; isCentre: boolean; phone: boolean };
 
-const LABEL = 'line-clamp-2 text-[12px] font-medium leading-[1.3]';
+const LABEL = 'text-[12px] font-medium leading-[1.3]';
 const DARK_CARD =
   'bg-[rgba(28,28,32,.86)] text-[#f2f2f2] shadow-[inset_0_0_0_1px_rgba(255,255,255,.16),0_10px_30px_rgba(0,0,0,.45)]';
+
+/**
+ * How many lines a card's name gets. On a phone the centre gets four, so most names show whole
+ * without a long claim filling the middle of the map. The panel below leaves the name out on a
+ * phone (GEO-3849), so a name past four lines shows whole only on its own page.
+ */
+function labelClamp(
+  { isCentre, phone }: Pick<CardProps, 'isCentre' | 'phone'>,
+  lines: 'line-clamp-2' | 'line-clamp-3'
+) {
+  return isCentre && phone ? 'line-clamp-4' : lines;
+}
 
 /** Label size: the design's 11px on phone and for far nodes, larger for the centre. */
 function labelSize({ isCentre, phone, hop }: Pick<CardProps, 'isCentre' | 'phone' | 'hop'>) {
@@ -76,7 +88,16 @@ function TopicCard({ node, hop, isCentre, phone }: CardProps) {
         isCentre ? (phone ? 'max-w-[200px]' : 'max-w-[260px]') : phone ? 'max-w-[150px]' : 'max-w-[200px]'
       )}
     >
-      <span className={cx(LABEL, 'font-semibold', labelSize({ isCentre, phone, hop }))}>{node.name}</span>
+      <span
+        className={cx(
+          LABEL,
+          labelClamp({ isCentre, phone }, 'line-clamp-2'),
+          'font-semibold',
+          labelSize({ isCentre, phone, hop })
+        )}
+      >
+        {node.name}
+      </span>
     </span>
   );
 }
@@ -114,7 +135,12 @@ function EntityCard({ node, hop, isCentre, phone }: CardProps) {
         )}
       </span>
       <span
-        className={cx(LABEL, 'rounded-md bg-white px-2 py-[2px] text-[#151515]', labelSize({ isCentre, phone, hop }))}
+        className={cx(
+          LABEL,
+          labelClamp({ isCentre, phone }, 'line-clamp-2'),
+          'rounded-md bg-white px-2 py-[2px] text-[#151515]',
+          labelSize({ isCentre, phone, hop })
+        )}
       >
         {node.name}
       </span>
@@ -162,7 +188,9 @@ function ItemCard({ node, hop, isCentre, phone }: CardProps) {
           {meta}
         </span>
       )}
-      <span className={cx(LABEL, 'line-clamp-3', labelSize({ isCentre, phone, hop }))}>{node.name}</span>
+      <span className={cx(LABEL, labelClamp({ isCentre, phone }, 'line-clamp-3'), labelSize({ isCentre, phone, hop }))}>
+        {node.name}
+      </span>
     </span>
   );
 }
@@ -183,7 +211,13 @@ function ClaimCard({ node, hop, isCentre, phone, spaceId }: CardProps & { spaceI
           : cardBox({ isCentre, phone }, ['w-[260px]', 'w-[200px]'])
       )}
     >
-      <span className={cx(LABEL, !compact && !phone && 'line-clamp-3', labelSize({ isCentre, phone, hop }))}>
+      <span
+        className={cx(
+          LABEL,
+          labelClamp({ isCentre, phone }, compact || phone ? 'line-clamp-2' : 'line-clamp-3'),
+          labelSize({ isCentre, phone, hop })
+        )}
+      >
         {node.name}
       </span>
       {!compact &&
