@@ -612,15 +612,36 @@ describe('the top bar on a phone (GEO-3849)', () => {
     expect(onPick).toHaveBeenCalledWith(person);
     expect(box().closest('[data-search-open]')).toBeNull();
   });
+
+  it('hands focus back to the icon when Escape folds an empty field', () => {
+    render(<GraphSearch nodes={[person]} onPick={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Search the map' }));
+    fireEvent.keyDown(box(), { key: 'Escape' });
+    expect(box().closest('[data-search-open]')).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Search the map' }));
+  });
+
+  it('hands focus back to the icon after picking with Enter', () => {
+    const onPick = vi.fn();
+    render(<GraphSearch nodes={[person]} onPick={onPick} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Search the map' }));
+    fireEvent.change(box(), { target: { value: 'Isa' } });
+    fireEvent.keyDown(box(), { key: 'Enter' });
+    expect(onPick).toHaveBeenCalledWith(person);
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Search the map' }));
+  });
 });
 
 describe('BandLegend', () => {
   afterEach(cleanup);
 
-  it('keeps to one line on a phone, the three bands only', () => {
+  it('drops to the three bands on a phone, wrapping only between whole items', () => {
     render(<BandLegend />);
     const legend = screen.getByTestId('band-legend');
-    expect(legend.className).toContain('md:flex-nowrap');
+    // A forced single line overflows under the zoom controls at 320px (GEO-3849 review).
+    expect(legend.className).not.toContain('flex-nowrap');
+    expect(legend.className).toContain('flex-wrap');
+    for (const item of legend.children) expect(item.className).toContain('whitespace-nowrap');
     expect(legend.textContent).toContain('Widely agreed');
     // Desktop keeps the fourth item; a phone drops it.
     const unvoted = screen.getByText('No responses yet');

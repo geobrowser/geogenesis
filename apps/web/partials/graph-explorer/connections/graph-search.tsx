@@ -49,6 +49,7 @@ export function GraphSearch({
   // Phone only: the field is folded into its icon until pressed (on a desktop the icon never shows).
   const [unfolded, setUnfolded] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
+  const iconRef = React.useRef<HTMLButtonElement>(null);
   const results = React.useMemo(() => searchNodes(nodes, query), [nodes, query]);
   const listId = React.useId();
 
@@ -57,11 +58,18 @@ export function GraphSearch({
     typed.current = false;
   };
 
+  // Folding hides the focused field, so focus goes back to the icon rather than dropping to the
+  // page. On a desktop the icon is never shown, focus() does nothing and the field keeps focus.
+  const fold = () => {
+    flushSync(() => setUnfolded(false));
+    iconRef.current?.focus();
+  };
+
   const pick = (node: GraphNode) => {
     report();
     setQuery('');
     setOpen(false);
-    setUnfolded(false);
+    fold();
     onPick(node);
   };
 
@@ -76,6 +84,7 @@ export function GraphSearch({
     >
       {!unfolded && (
         <button
+          ref={iconRef}
           type="button"
           aria-label="Search the map"
           title="Search the map"
@@ -117,7 +126,7 @@ export function GraphSearch({
           else if (event.key === 'Enter' && results[active]) pick(results[active]);
           else if (event.key === 'Escape') {
             setOpen(false);
-            if (!query.trim()) setUnfolded(false);
+            if (!query.trim()) fold();
           } else return;
           event.preventDefault();
         }}
