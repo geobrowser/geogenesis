@@ -75,6 +75,14 @@ describe('GraphExplorerPage', () => {
     expect(screen.getByTestId('graph-explorer-shell')).toBeTruthy();
     expect(screen.getByTestId('graph-skeleton-stage').getAttribute('aria-busy')).toBe('true');
     expect(document.querySelectorAll('[data-skeleton-node]').length).toBeGreaterThan(10);
+    // One stage per side of the map's phone breakpoint, never both (the old 599/600 pair overlapped at 599px).
+    const stages = [...screen.getByTestId('graph-skeleton-stage').children].filter(el =>
+      el.hasAttribute('aria-hidden')
+    );
+    expect(stages.map(el => el.className.split(' ').filter(name => name.endsWith(':hidden')))).toEqual([
+      ['graph-phone:hidden'],
+      ['graph-wide:hidden'],
+    ]);
     expect(screen.queryByTestId('viewer')).toBeNull();
     expect(store.get(graphExplorerUnavailableAtom)).toBe(false);
   });

@@ -254,17 +254,17 @@ describe('GraphViewer', () => {
     expect(screen.queryByRole('button', { name: /^Back to/ })).toBeNull();
   });
 
-  it('keeps only the centre’s whole name in the panel on a phone, at the map’s phone breakpoint', () => {
+  it('leaves the centre’s name block out of the panel on a phone, at the map’s phone breakpoint', () => {
     render(<Viewer start={TOPIC} scope={scope} />);
     // jsdom applies no media queries, so this pins the classes. The breakpoint must be the map's own
-    // `(max-width: 599px)`: with `md:` (767px), a 600-767px window cut the name on the map and had none here.
+    // (`graph-phone:`, pinned to GRAPH_PHONE_QUERY in phone-breakpoint.test.ts): with `md:` (767px), a
+    // 600-767px window cut the name on the map and had none here.
     const header = screen.getByTestId('entity-panel-header');
-    expect(header.className).not.toMatch(/hidden/);
+    const classes = header.className.split(' ');
+    expect(classes.filter(name => name.endsWith(':hidden'))).toEqual(['graph-phone:hidden']);
     expect(
       screen.getByRole('heading', { name: 'Israel-Gaza war' }).closest('[data-testid="entity-panel-header"]')
     ).toBe(header);
-    for (const id of ['entity-panel-avatar', 'entity-panel-types'])
-      expect(screen.getByTestId(id).className.split(' ')).toContain('max-[599px]:hidden');
     expect(screen.getByText('A topic.').closest('[data-testid="entity-panel-header"]')).toBeNull();
   });
 

@@ -17,9 +17,6 @@ import { ConnectionsCanvas } from './connections-canvas';
 import { BAND_SWATCHES, NodeCard } from './node-card';
 import { SkeletonNode } from './skeleton-node';
 
-/** The design switches to its phone numbers below 600px. */
-export const PHONE_QUERY = '(max-width: 599px)';
-
 /** The dark stage: the 3D map, its legend and hint. Claims read their counts per resolved space. */
 export function ConnectionsStage({
   selection,
