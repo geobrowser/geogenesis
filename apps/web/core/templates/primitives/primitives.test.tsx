@@ -173,28 +173,28 @@ describe('VoteBox: the result leads, over a full-width split bar (GEO-3845)', ()
     ).toBeTruthy();
   });
 
-  it('puts the buttons on the result line and the bar across the card, with both shares at its ends', () => {
+  it('puts the result over a bar that stops at the buttons, bottom-aligned with them', () => {
     render(<VoteBox split={lone} control={control} />);
     // jsdom applies no container queries: drop the phone split line to check the wide layout alone.
     screen.getByTestId('vote-box-phone-split').remove();
 
     const result = screen.getByTestId('vote-box-result');
-    const buttons = screen.getByRole('group', { name: 'Do you agree?' });
     const meter = screen.getByRole('meter');
     expect(screen.getAllByRole('meter')).toHaveLength(1);
     expect(meter).toHaveAttribute('aria-valuenow', '71');
     expect(meter).toHaveClass('w-full', 'bg-grey-02');
-    // One line on wide cards (buttons right of the result), the bar on its own line under both.
-    expect(result.parentElement).toContainElement(buttons);
-    expect(screen.getByTestId('vote-box-ask')).toHaveClass('@[680px]:order-2', 'order-3', 'w-full', '@[680px]:w-auto');
-    expect(meter.closest('[class*="basis-full"]')).toHaveClass(
-      'order-2',
-      'hidden',
-      '@[680px]:block',
-      '@[680px]:order-3'
-    );
-    // The headline is wide-only; phones show the claim-row split line instead.
-    expect(result).toHaveClass('hidden', '@[680px]:flex');
+    // Wide: the result and its bar form the left column; the ask and buttons sit to its right, and the
+    // row is bottom-aligned, so the bar ends at the buttons and lines up with their bottom.
+    const left = screen.getByTestId('vote-box-wide-result');
+    const ask = screen.getByTestId('vote-box-ask');
+    expect(left).toContainElement(result);
+    expect(left).toContainElement(meter);
+    expect(left).not.toContainElement(ask);
+    expect(left).toHaveClass('hidden', '@[680px]:flex', 'flex-1');
+    expect(left.parentElement).toHaveClass('@[680px]:flex-row', '@[680px]:items-end');
+    expect(left.parentElement).toContainElement(ask);
+    expect(left.compareDocumentPosition(ask) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(ask).toHaveClass('w-full', '@[680px]:w-auto');
     // No Agree / Disagree share labels under the bar (Preston): the result above already says it.
     expect(screen.queryByTestId('vote-box-bar-ends')).toBeNull();
     expect(screen.queryByText('Disagree 29%')).toBeNull();
@@ -204,10 +204,14 @@ describe('VoteBox: the result leads, over a full-width split bar (GEO-3845)', ()
     render(<VoteBox split={lone} control={control} />);
 
     const phone = screen.getByTestId('vote-box-phone-split');
-    expect(phone).toHaveClass('order-4', '@[680px]:hidden');
+    expect(phone).toHaveClass('@[680px]:hidden');
+    // Phones: the buttons come first, then the split line.
+    expect(
+      screen.getByTestId('vote-box-ask').compareDocumentPosition(phone) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
     expect(phone).toHaveTextContent('71%(7)');
     expect(within(phone).queryByText('World affairs')).toBeNull();
-    expect(screen.getByTestId('vote-box-ask')).toHaveClass('order-3', 'w-full');
+    expect(screen.getByTestId('vote-box-ask')).toHaveClass('w-full');
   });
 
   it('keeps the bar ends to agree votes', () => {

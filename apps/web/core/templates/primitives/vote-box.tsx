@@ -66,16 +66,17 @@ export function VoteBox({ prompt, split, control, className }: VoteBoxProps) {
     >
       {prompt && <p className="m-0 text-smallTitle text-text">{prompt}</p>}
 
-      {/* Wide: the result and the buttons share a line, the bar spans the card under them. Phones: the
-          buttons across the card, then the split line, as in the claim rows. */}
-      <div className="flex flex-col gap-4 @[680px]:flex-row @[680px]:flex-wrap @[680px]:items-end @[680px]:justify-between @[680px]:gap-x-6 @[680px]:gap-y-5">
-        <Headline row={headlineRow} countSummary={countSummary} noVotes={noVotes} />
+      {/* Wide: the result over a bar that stops at the buttons, the bar's bottom level with theirs
+          (Preston), so "Do you agree?" costs no extra height. Phones: the buttons across the card,
+          then the split line, as in the claim rows. */}
+      <div className="flex flex-col gap-4 @[680px]:flex-row @[680px]:items-end @[680px]:gap-8">
+        <div data-testid="vote-box-wide-result" className="hidden min-w-0 flex-1 flex-col gap-3 @[680px]:flex">
+          <Headline row={headlineRow} countSummary={countSummary} noVotes={noVotes} />
+          <ResultBar row={headlineRow} noVotes={noVotes} />
+        </div>
 
         {/* "Do you agree?" over the buttons (Preston); a News story's prompt already asks. */}
-        <div
-          data-testid="vote-box-ask"
-          className="order-3 flex w-full shrink-0 flex-col gap-2 @[680px]:order-2 @[680px]:w-auto"
-        >
+        <div data-testid="vote-box-ask" className="flex w-full shrink-0 flex-col gap-2 @[680px]:w-auto">
           {!prompt && <span className="text-[13.5px] leading-[18px] font-medium text-grey-04">Do you agree?</span>}
           <DebateVoteButtons
             userVote={userVote}
@@ -88,12 +89,8 @@ export function VoteBox({ prompt, split, control, className }: VoteBoxProps) {
           />
         </div>
 
-        <div className="order-2 hidden @[680px]:order-3 @[680px]:block @[680px]:basis-full">
-          <ResultBar row={headlineRow} noVotes={noVotes} />
-        </div>
-
         {phoneRows.length > 0 && (
-          <div data-testid="vote-box-phone-split" className="order-4 w-full @[680px]:hidden">
+          <div data-testid="vote-box-phone-split" className="w-full @[680px]:hidden">
             <SplitBars rows={phoneRows} density="full" />
           </div>
         )}
@@ -128,10 +125,7 @@ function Headline({ row, countSummary, noVotes }: { row?: SplitRow; countSummary
   const quietText = countSummary || (noVotes ? 'No votes yet' : '');
   if (!row && !quietText) return null;
   return (
-    <div
-      data-testid="vote-box-result"
-      className="order-1 hidden min-w-0 flex-wrap items-baseline gap-x-2.5 gap-y-1 tabular-nums @[680px]:flex"
-    >
+    <div data-testid="vote-box-result" className="flex min-w-0 flex-wrap items-baseline gap-x-2.5 gap-y-1 tabular-nums">
       {row ? (
         <>
           <span className="flex items-baseline gap-2">
