@@ -87,6 +87,24 @@ describe('GraphExplorerPage', () => {
     expect(store.get(graphExplorerUnavailableAtom)).toBe(false);
   });
 
+  it('keeps the phone skeleton to one screen: the map below the bar and the closed sheet, no panel', () => {
+    flags.hydrated = false;
+    renderPage();
+    const shell = screen.getByTestId('graph-explorer-shell');
+    const frame = shell.className.split(' ');
+    // jsdom applies no media queries: these undo the stacked md: page under 600px.
+    expect(frame).toEqual(
+      expect.arrayContaining([
+        'graph-phone:supports-[height:100dvh]:h-[100dvh]',
+        'graph-phone:min-h-0',
+        'graph-phone:overflow-hidden',
+      ])
+    );
+    expect(shell.querySelector('aside')?.className.split(' ')).toContain('graph-phone:hidden');
+    const handle = screen.getByTestId('graph-skeleton-stage').parentElement!.querySelector('span[aria-hidden]');
+    expect(handle?.className.split(' ')).toContain('graph-wide:hidden');
+  });
+
   it('is not available without a topic, and gives the app chrome back until it leaves', () => {
     page.topic = false;
     const { unmount } = renderPage();

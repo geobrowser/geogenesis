@@ -3,10 +3,10 @@
 import * as React from 'react';
 
 import { type ClaimAbout, nodeClaimSpaceId } from '~/core/graph-explorer/claims-about';
-import { type GraphNode, HOP1_PER_KIND } from '~/core/graph-explorer/fetch-graph-neighbourhood';
+import type { GraphNode } from '~/core/graph-explorer/fetch-graph-neighbourhood';
 import type { GraphCentre } from '~/core/graph-explorer/graph-entity';
 import { useGraphAnalytics } from '~/core/graph-explorer/graph-explorer-analytics';
-import type { GraphKind } from '~/core/graph-explorer/graph-kinds';
+import { type GraphKind, type RowCentre, graphKindOf } from '~/core/graph-explorer/graph-kinds';
 import { groupByKind } from '~/core/graph-explorer/panel-sections';
 import type { Spoke } from '~/core/graph-explorer/spokes';
 import { normId } from '~/core/utils/norm-id';
@@ -22,6 +22,11 @@ export type EntityPanelEmptyMessages = { relationships: string; claims: string |
 
 export function typeNames(entity: { types: Array<{ name: string | null }> }): string[] {
   return [...new Set(entity.types.map(type => type.name).filter((name): name is string => Boolean(name)))];
+}
+
+/** What the panel's rows hang from: the centre's kind, as the map draws it, and the type names its header shows. */
+export function rowCentreOf(centre: { types: Array<{ id: string; name: string | null }> }): RowCentre {
+  return { kind: graphKindOf(centre.types.map(type => type.id)) ?? 'other', typeNames: typeNames(centre) };
 }
 
 export type ClaimsState = {
@@ -69,6 +74,7 @@ export function EntityPanel({
   showClaims?: boolean;
 }) {
   const groups = React.useMemo(() => groupByKind(spokes, nodes), [spokes, nodes]);
+  const rowCentre = React.useMemo(() => rowCentreOf(centre), [centre]);
   const claims = React.useMemo(
     () => panelClaims(showClaims ? claimPages : [], groups, nodes, topicSpaceId),
     [showClaims, claimPages, groups, nodes, topicSpaceId]
@@ -102,6 +108,8 @@ export function EntityPanel({
 
       <NeighbourGroups
         groups={groups}
+        centre={rowCentre}
+        centreId={centre.id}
         claims={claims}
         claimsState={showClaims ? claimsState : NO_CLAIMS_ASKED}
         moreKinds={moreKinds}
@@ -109,9 +117,6 @@ export function EntityPanel({
         claimsEmptyMessage={showClaims ? emptyMessages.claims : null}
         onOpen={onOpen}
       />
-      {moreKinds.length > 0 && (
-        <p className="text-metadata text-grey-04">Showing the first {HOP1_PER_KIND} of each kind in each direction.</p>
-      )}
     </section>
   );
 }
@@ -143,13 +148,13 @@ export function panelClaims(
     const id = normId(spoke.entity.id);
     const existing = byId.get(id);
     if (existing) {
-      existing.relation = spoke.labels.join(' · ');
+      existing.relations = [...spoke.labels];
       continue;
     }
     const node = nodes.get(id);
     const spaceId = node ? nodeClaimSpaceId(node, topicSpaceId) : spoke.nodeSpaceId;
     if (spaceId && spoke.entity.name)
-      byId.set(id, { id: spoke.entity.id, name: spoke.entity.name, spaceId, relation: spoke.labels.join(' · ') });
+      byId.set(id, { id: spoke.entity.id, name: spoke.entity.name, spaceId, relations: [...spoke.labels] });
   }
   return [...byId.values()];
 }

@@ -86,7 +86,8 @@ vi.mock('~/core/graph-explorer/use-graph-explorer', () => ({
   useTopicClaimsSummary: () => ({ isLoading: false, isError: false, data: topicSummary.data }),
 }));
 vi.mock('~/core/analytics-capture-safely', () => ({ captureSafely: vi.fn() }));
-vi.mock('~/core/hooks/use-media-query', () => ({ useMediaQuery: () => false }));
+const media = vi.hoisted(() => ({ phone: false }));
+vi.mock('~/core/hooks/use-media-query', () => ({ useMediaQuery: () => media.phone }));
 vi.mock('~/core/sync/use-store', () => ({ useQueryEntity: () => ({ entity: null, isLoading: false }) }));
 vi.mock('~/core/hooks/use-is-mobile-layout', () => ({ useIsMobileLayout: () => false }));
 vi.mock('~/design-system/prefetch-link', () => ({
@@ -207,6 +208,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  media.phone = false;
 });
 
 /** The viewer is controlled; this keeps its history the way the page's URL would. */
@@ -417,14 +419,24 @@ describe('GraphViewer', () => {
     expect(screen.getAllByText('A news story').length).toBeGreaterThan(0);
   });
 
-  it('says a cut-short topic summary is a lower bound', () => {
+  it('says a cut-short topic summary only counted its first claims, beside the band counts', () => {
     topicSummary.data = {
       claims: [{ id: 'c', name: 'A claim', spaceId: 's', positive: 3, negative: 0, band: 'agreed' }],
       truncated: true,
     };
     render(<Viewer start={TOPIC} scope={{ ...scope, topicId: TOPIC, topicSpaceId: SPACE }} />);
+    expect(screen.getByText('Only this topic’s first 2,000 claims were counted.')).toBeTruthy();
+    expect(screen.queryByText(/with 3\+ responses/)).toBeNull();
+  });
+
+  it('says a cut-short count is a lower bound while no claim has 3 responses', () => {
+    topicSummary.data = {
+      claims: [{ id: 'c', name: 'A claim', spaceId: 's', positive: 1, negative: 0, band: 'agreed' }],
+      truncated: true,
+    };
+    render(<Viewer start={TOPIC} scope={{ ...scope, topicId: TOPIC, topicSpaceId: SPACE }} />);
     expect(
-      screen.getByText('At least 1 claim with 3+ responses; only its first 2,000 claims were counted.')
+      screen.getByText('At least 1 claim has responses so far; only its first 2,000 claims were counted.')
     ).toBeTruthy();
   });
 
@@ -526,11 +538,11 @@ describe('GraphViewer under a kind chip', () => {
     expect(screen.queryByRole('heading', { name: /^Claims/ })).toBeTruthy();
   });
 
-  it('notes capped kinds only for the groups the chip leaves in the panel', () => {
+  it('marks a capped kind in its own heading, with no "Showing the first N" footer', () => {
     mixedNeighbourhood(['topic']);
     render(<Viewer start={TOPIC} scope={scope} />);
-    expect(screen.queryByText(/Showing the first/)).toBeTruthy();
-    fireEvent.click(chips().getByRole('button', { name: 'News' }));
+    expect(heading('Topics · 1+')).toBeTruthy();
+    expect(heading('People and groups · 1')).toBeTruthy();
     expect(screen.queryByText(/Showing the first/)).toBeNull();
   });
 
@@ -738,5 +750,78 @@ describe('GraphViewer analytics', () => {
         .filter(props => props.interaction === 'filter')
         .map(props => props.value)
     ).toEqual(['ent', 'all']);
+  });
+});
+
+describe('GraphViewer on a phone', () => {
+  const sheet = () => screen.queryByRole('dialog');
+
+  it('gives the map the screen, with the panel closed behind a handle named for the centre', () => {
+    media.phone = true;
+    const { container } = render(<Viewer start={TOPIC} scope={scope} />);
+    // jsdom applies no media queries, so this pins the classes that undo the stacked md: layout.
+    const map = screen.getByTestId('graph-map').className.split(' ');
+    expect(map).toEqual(expect.arrayContaining(['graph-phone:flex-1', 'graph-phone:h-auto', 'graph-phone:min-h-0']));
+    expect(container.querySelector('aside')).toBeNull();
+    const handle = screen.getByRole('button', { name: 'Details for Israel-Gaza war' });
+    expect(handle.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.getByTestId('graph-map').contains(handle)).toBe(true);
+    expect(sheet()).toBeNull();
+    expect(screen.queryByText('A topic.')).toBeNull();
+  });
+
+  it('opens the panel as a sheet titled with the centre, and closes it with Close or Escape', () => {
+    media.phone = true;
+    render(<Viewer start={TOPIC} scope={scope} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Details for Israel-Gaza war' }));
+    const open = screen.getByRole('dialog', { name: 'Israel-Gaza war' });
+    expect(within(open).getByText('A topic.')).toBeTruthy();
+    fireEvent.click(within(open).getByRole('button', { name: 'Close israel-gaza war' }));
+    expect(sheet()).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Details for Israel-Gaza war' }));
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    expect(sheet()).toBeNull();
+  });
+
+  it('keeps the sheet closed on a map tap, closes it on a hop from inside it, and names the new centre', () => {
+    media.phone = true;
+    render(<Viewer start={TOPIC} scope={scope} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Isaac Herzog' }));
+    expect(hooks.useGraphNeighbourhood).toHaveBeenLastCalledWith(expect.objectContaining({ centreId: PERSON }));
+    expect(sheet()).toBeNull();
+    expect(screen.getByRole('button', { name: 'Details for Isaac Herzog' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Israel-Gaza war' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Details for Israel-Gaza war' }));
+    const open = screen.getByRole('dialog', { name: 'Israel-Gaza war' });
+    fireEvent.click(within(open).getAllByRole('button', { name: /Isaac Herzog/ })[0]!);
+    expect(hooks.useGraphNeighbourhood).toHaveBeenLastCalledWith(expect.objectContaining({ centreId: PERSON }));
+    expect(sheet()).toBeNull();
+    expect(screen.getByRole('button', { name: 'Details for Isaac Herzog' })).toBeTruthy();
+  });
+
+  it('reports each opening of the sheet', () => {
+    media.phone = true;
+    const move: React.MutableRefObject<((next: GraphHistory) => void) | null> = { current: null };
+    render(<TrackedViewer move={move} />);
+    for (let i = 0; i < 2; i++) {
+      fireEvent.click(screen.getByRole('button', { name: 'Details for Israel-Gaza war' }));
+      fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    }
+    const opens = vi
+      .mocked(captureSafely)
+      .mock.calls.filter(
+        ([name, props]) =>
+          name === 'graph_explorer_interacted' && (props as { interaction?: string }).interaction === 'panel_sheet'
+      );
+    expect(opens).toHaveLength(2);
+  });
+
+  it('keeps the side panel and no handle off a phone', () => {
+    const { container } = render(<Viewer start={TOPIC} scope={scope} />);
+    expect(container.querySelector('aside')).not.toBeNull();
+    expect(screen.queryByTestId('graph-panel-handle')).toBeNull();
+    expect(screen.getByText('A topic.')).toBeTruthy();
   });
 });

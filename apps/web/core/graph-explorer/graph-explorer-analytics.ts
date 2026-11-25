@@ -24,6 +24,8 @@ type Interaction =
   | { interaction: 'summary_seen' }
   /** The path's "…" opened. Its own integer, as search's count is: `value` is a string elsewhere. */
   | { interaction: 'trail_menu'; step_count: number }
+  // Each open of the phone's panel sheet (GEO-3849).
+  | { interaction: 'panel_sheet' }
   | { interaction: 'open_page'; value: 'claim' | 'entity'; target_id: string };
 
 /** An `open_page` click this soon before leaving is why the viewer left. */

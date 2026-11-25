@@ -30,6 +30,7 @@ import { GraphTopBar } from './connections/graph-top-bar';
 import { claimsEmptyMessage, descriptionEmptyMessage, relationshipsEmptyMessage } from './empty-states';
 import { EntityPanel, NO_CLAIMS_ASKED } from './entity-panel';
 import { TopicOverview } from './panel-sections';
+import { PhonePanelSheet } from './phone-panel-sheet';
 
 /**
  * The Connections view: a top bar, the 3D map of the centre's neighbourhood and a panel about the
@@ -254,18 +255,33 @@ export function GraphViewer({
     stage = <StageNote role="status">This entity isn’t in the knowledge graph.</StageNote>;
   }
 
+  // On a phone the map takes the screen below the top bar and the panel is a sheet over it (GEO-3849).
+  // `graph-phone:` sorts after `md:`, so it undoes the stacked md: layout under 600px only.
   return (
-    <div className="flex h-full min-h-0 flex-col md:h-auto">
+    <div className="flex h-full min-h-0 flex-col md:h-auto graph-phone:h-full">
       {topBar}
-      <div className="flex min-h-0 flex-1 md:flex-none md:flex-col">
-        {/* The 76px the phone's two-row top bar gave up (GEO-3849), so the panel still starts
-            where it did and its top still peeks above the fold for scrolling past the map. */}
-        <div className="relative isolate min-w-0 flex-1 overflow-hidden bg-[#0b0b0c] md:h-[calc(62vh+76px)] md:min-h-[400px] md:flex-none">
+      <div className="flex min-h-0 flex-1 md:flex-none md:flex-col graph-phone:flex-1">
+        {/* Tablet: the 76px the two-row top bar gave up (GEO-3849), so the panel still starts where
+            it did and its top still peeks above the fold for scrolling past the map. */}
+        <div
+          data-testid="graph-map"
+          className="relative isolate min-w-0 flex-1 overflow-hidden bg-[#0b0b0c] md:h-[calc(62vh+76px)] md:min-h-[400px] md:flex-none graph-phone:h-auto graph-phone:min-h-0 graph-phone:flex-1"
+        >
           {stage}
+          {phone ? (
+            <PhonePanelSheet
+              centreId={centreId}
+              centreName={hop1?.centre?.id === centreId ? hop1.centre.name : (names[centreId] ?? null)}
+            >
+              {renderPanel()}
+            </PhonePanelSheet>
+          ) : null}
         </div>
-        <aside className="w-[360px] shrink-0 overflow-y-auto border-l border-[#f0f0f0] bg-white p-6 md:w-auto md:overflow-visible md:border-t md:border-l-0 md:p-4">
-          {renderPanel()}
-        </aside>
+        {phone ? null : (
+          <aside className="w-[360px] shrink-0 overflow-y-auto border-l border-[#f0f0f0] bg-white p-6 md:w-auto md:overflow-visible md:border-t md:border-l-0 md:p-4">
+            {renderPanel()}
+          </aside>
+        )}
       </div>
     </div>
   );

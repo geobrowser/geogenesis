@@ -1,4 +1,4 @@
-import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 
 import { Effect } from 'effect';
@@ -12,7 +12,14 @@ import { mapWithConcurrency } from '~/core/utils/map-with-concurrency';
 import { normId } from '~/core/utils/norm-id';
 
 import { TOPIC_LENS_FILTER, topicLensVariables } from './claims-about';
-import { type GraphCentreText, type GraphEntity, type GraphHop, type RawEntity, decodeEntity } from './graph-entity';
+import {
+  type GraphCentreText,
+  type GraphEntity,
+  type GraphHop,
+  type RawEntity,
+  decodeEntity,
+  imageOf,
+} from './graph-entity';
 import type { GraphFilter } from './graph-filter';
 import {
   DATE_PROPERTY_IDS,
@@ -50,10 +57,17 @@ export type GraphNode = GraphEntity & {
   placedSpaceIds: string[];
   /** Event date or publish date, ISO. */
   date: string | null;
+  /** A source's or story's publisher, through its Publisher relation; absent where not asked. */
+  publisher?: GraphPublisher | null;
   /** Cross-space stance counts. For picking claims only; never shown, as they are not space-scoped. */
   agrees: number;
   disagrees: number;
 };
+
+/** Who published a source or story: its name and avatar, for the panel's favicon. */
+export type GraphPublisher = { id: string; name: string; image: string | null };
+
+export const PUBLISHER_PROPERTY_ID = normId(ContentIds.PUBLISHER_PROPERTY);
 
 export type GraphEdge = {
   id: string;
@@ -95,6 +109,20 @@ const NODE_FIELDS = /* GraphQL */ `
   relationsList(filter: { typeId: { in: [$avatarPropertyId, $coverPropertyId] } }) {
     typeId
     toEntity { valuesList(filter: { propertyId: { is: $imageUrlPropertyId } }) { text } }
+  }
+`;
+
+/** A source's or story's publisher: only they show one, and they are never claims, so only `others` ask. */
+const PUBLISHER_FIELD = /* GraphQL */ `
+  publishers: relationsList(filter: { typeId: { is: $publisherPropertyId } }) {
+    toEntity {
+      id
+      name
+      relationsList(filter: { typeId: { is: $avatarPropertyId } }) {
+        typeId
+        toEntity { valuesList(filter: { propertyId: { is: $imageUrlPropertyId } }) { text } }
+      }
+    }
   }
 `;
 
@@ -196,6 +224,7 @@ const VARIABLE_TYPES: Record<string, string> = {
   avatarPropertyId: 'UUID!',
   coverPropertyId: 'UUID!',
   imageUrlPropertyId: 'UUID!',
+  publisherPropertyId: 'UUID!',
 };
 
 /** A query declaring exactly the variables its selection uses, since GraphQL rejects unused ones. */
@@ -262,7 +291,7 @@ export const nodesDocument = queryDocument(
     nodes { ${NODE_FIELDS} ${PLACED_FIELD} }
   }
   others: entitiesConnection(first: $first, filter: { id: { in: $ids }, not: { typeIds: { overlaps: $claimTypeIds } } }) {
-    nodes { ${NODE_FIELDS} }
+    nodes { ${NODE_FIELDS} ${PUBLISHER_FIELD} }
   }`
 ) as TypedDocumentNode<
   { claims: { nodes: RawNode[] } | null; others: { nodes: RawNode[] } | null },
@@ -329,6 +358,7 @@ type RawNode = RawEntity & {
   disagrees?: string | number | null;
   placed?: Array<{ spaceId: string }> | null;
   dates?: Array<{ datetime: string | null; date: string | null }> | null;
+  publishers?: Array<{ toEntity: Pick<RawEntity, 'id' | 'name' | 'relationsList'> | null }> | null;
   /** Hidden values in every space: a node's link and vote space can be outside the explorer's. */
   hidden?: Array<{ text: string | null; boolean: boolean | null }> | null;
 };
@@ -385,9 +415,24 @@ export function decodeNode(raw: RawNode, isCentre = false): GraphNode | null {
     typeRank: graphTypeRank(kind, typeIds),
     placedSpaceIds: [...new Set((raw.placed ?? []).map(value => normId(value.spaceId)))],
     date,
+    publisher: publisherOf(raw),
     agrees: Number(raw.agrees ?? 0) || 0,
     disagrees: Number(raw.disagrees ?? 0) || 0,
   };
+}
+
+/** The first named publisher, with its avatar; null when the graph names none. */
+export function publisherOf(raw: Pick<RawNode, 'publishers'>): GraphPublisher | null {
+  for (const { toEntity } of raw.publishers ?? []) {
+    const name = toEntity?.name?.trim();
+    if (toEntity && name)
+      return {
+        id: normId(toEntity.id),
+        name,
+        image: imageOf({ ...toEntity, spaceIds: null, types: null }),
+      };
+  }
+  return null;
 }
 
 /** Links in order, each with its far end's node; hidden, unnamed, unknown and self links drop. */
@@ -430,6 +475,7 @@ export async function fetchNodes(
         first: unique.length,
         claimTypeIds: GRAPH_KIND_TYPE_IDS.claim,
         unplacingPropertyIds: UNPLACING_PROPERTY_IDS,
+        publisherPropertyId: PUBLISHER_PROPERTY_ID,
         ...nodeVariables(),
       }),
       signal,

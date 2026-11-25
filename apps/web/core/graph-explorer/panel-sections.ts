@@ -2,8 +2,14 @@ import { ARTICLE_TYPE_ID } from '~/core/topics/ontology';
 import { normId } from '~/core/utils/norm-id';
 
 import { type ClaimBand, MIN_RESPONSES_FOR_BAND, agreePercent, claimBand } from './claim-band';
-import type { GraphNode } from './fetch-graph-neighbourhood';
-import type { GraphKind } from './graph-kinds';
+import type { GraphNode, GraphPublisher } from './fetch-graph-neighbourhood';
+import {
+  GRAPH_KIND_REDUNDANT_LABELS,
+  type GraphKind,
+  type RowCentre,
+  isGenericRelationLabel,
+  labelKey,
+} from './graph-kinds';
 import type { GraphKindFilter, GraphSelection } from './select-graph';
 import type { Spoke } from './spokes';
 import type { SummarisedClaim } from './topic-claims-summary';
@@ -53,6 +59,17 @@ export function agreementLine(counts: Counts | undefined): string | null {
   const { total, percent } = shownAgreement(counts);
   if (total === 0) return 'No votes yet';
   return percent === null ? votesLabel(total) : `${percent}% agree · ${votesLabel(total)}`;
+}
+
+/**
+ * A panel claim row's line, as the prototype words it: "63% agree" once a claim has
+ * MIN_RESPONSES_FOR_BAND votes, the vote count below that, "No votes yet" at none.
+ */
+export function claimRowLine(counts: Counts | undefined): string | null {
+  if (!counts) return null;
+  const { total, percent } = shownAgreement(counts);
+  if (total === 0) return 'No votes yet';
+  return percent === null ? votesLabel(total) : `${percent}% agree`;
 }
 
 /** The topic's most-voted claims in one band, from the summary's space-scoped counts. */
@@ -127,6 +144,62 @@ export function groupByKind(spokes: readonly Spoke[], nodes: ReadonlyMap<string,
     const list = groups.get(kind);
     return list ? [{ kind, spokes: list }] : [];
   });
+}
+
+const INCOMING_FALLBACK = /^(.+) \(incoming\)$/i;
+
+/** Kinds whose rows name their publisher. */
+export const PUBLISHED_KINDS: readonly GraphKind[] = ['src', 'story'];
+
+/**
+ * The publisher a source or news row names, unless the panel is about that publisher, where every
+ * row would repeat the heading's own name.
+ */
+export function rowPublisher(node: GraphNode | undefined, centreId: string | null): GraphPublisher | null {
+  if (!node?.publisher || !PUBLISHED_KINDS.includes(node.kind)) return null;
+  return centreId && normId(centreId) === node.publisher.id ? null : node.publisher;
+}
+
+/**
+ * A row's line above (its relations) and below (its type, publisher and date). The line above keeps only
+ * relations that say how the row connects. A label goes when it only says "related", only repeats
+ * the group's heading, or only names an end of the relation: a label that is one of the row's type
+ * names ("Person" on a person), or a fallback "<noun> (incoming)" whose noun is the centre's kind or
+ * one of its type names ("Skills (incoming)" around a skill). Nouns match by labelKey.
+ */
+export function rowLabels({
+  kind,
+  relations,
+  centre,
+  typeLabel = null,
+  typeNames = [],
+  publisher = null,
+  date = null,
+}: {
+  kind: GraphKind;
+  relations: readonly string[];
+  centre: RowCentre;
+  /** The row's type shown below. */
+  typeLabel?: string | null;
+  /** All of the row's type names. */
+  typeNames?: readonly string[];
+  /** A source's or story's publisher, between its type and its date. */
+  publisher?: string | null;
+  date?: string | null;
+}): { relation: string | null; sub: string | null } {
+  const redundant = new Set(GRAPH_KIND_REDUNDANT_LABELS[kind].map(labelKey));
+  const rowTypes = new Set([...typeNames, ...(typeLabel ? [typeLabel] : [])].map(labelKey));
+  const centreNouns = new Set([...GRAPH_KIND_REDUNDANT_LABELS[centre.kind], ...centre.typeNames].map(labelKey));
+  const type = typeLabel && !redundant.has(labelKey(typeLabel)) ? typeLabel : null;
+  const shown = relations.filter(label => {
+    if (isGenericRelationLabel(label) || redundant.has(labelKey(label))) return false;
+    const incoming = INCOMING_FALLBACK.exec(label.trim());
+    return incoming ? !centreNouns.has(labelKey(incoming[1])) : !rowTypes.has(labelKey(label));
+  });
+  return {
+    relation: shown.join(' · ') || null,
+    sub: [type, publisher, date].filter(Boolean).join(' · ') || null,
+  };
 }
 
 /** Banded claims per band, for the Claims group's bar: only claims past the threshold count. */
