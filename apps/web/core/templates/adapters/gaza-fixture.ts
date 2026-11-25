@@ -2084,7 +2084,6 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
       claimDetailsById,
       recentDebates: SEED_DEBATES.map(debate => {
         const claim = CLAIM_BY_ID[debate.claimId] ?? SEED_CLAIMS[0];
-        const summary = toSummary(claim);
         return {
           id: debate.id,
           claimId: claim.id,
@@ -2096,10 +2095,6 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
             { name: debate.ppDebater, position: debate.ppPosition, communityColor: '#6833ff' },
             { name: debate.piDebater, position: debate.piPosition, communityColor: '#3963fe' },
           ] as const,
-          split: summary.split,
-          userVote: summary.userVote,
-          onVote: summary.onVote,
-          onClearVote: summary.onClearVote,
           onSelect: () => openDebate(debate.id),
         };
       }),

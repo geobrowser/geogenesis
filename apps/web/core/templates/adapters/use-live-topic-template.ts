@@ -704,13 +704,6 @@ export function useLiveTopicTemplate({
         date: dateStr,
         duration: '',
         votesLabel,
-        agreeCount: claimSplit.agreeCount,
-        disagreeCount: claimSplit.disagreeCount,
-        userVote: claimSplit.userVote,
-        // Only a debate with a claim votes; without one `claimId` is the debate itself.
-        voteTarget: item.debateClaim?.entityId
-          ? voteTargetFor(item.debateClaim.entityId, item.spaceId || spaceId, item.debateClaim.name ?? claimTitle)
-          : undefined,
         participants: [
           {
             name: livePair?.slot1?.name ?? speakers[0],
@@ -727,10 +720,6 @@ export function useLiveTopicTemplate({
             profileAvatarUrl: livePair?.slot2?.avatarUrl ?? null,
           },
         ],
-        split:
-          claimSplit.rows.length > 0
-            ? { rows: claimSplit.rows, isSplit: !claimSplit.isAccepted, totalVotes: claimSplit.total }
-            : undefined,
         href: NavUtils.toEntity(item.spaceId || spaceId, item.entityId),
       };
     });
