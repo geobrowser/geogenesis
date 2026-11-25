@@ -11,11 +11,13 @@ const BAR = 'rounded-full bg-grey-02/45';
 export function SkeletonNode({
   kind,
   isCentre,
+  hop,
   phone,
   pulse,
 }: {
   kind: 'ent' | 'claim';
   isCentre: boolean;
+  hop: 0 | 1 | 2;
   phone: boolean;
   pulse: string | false;
 }) {
@@ -24,11 +26,12 @@ export function SkeletonNode({
       <span className={cx('block rounded-full', SHAPE, pulse, phone ? 'h-[40px] w-[150px]' : 'h-[46px] w-[190px]')} />
     );
   // A phone pin's shape (GEO-3864): a dot the map scales with depth over a name bar at a fixed size.
+  // Hop 2 is the bare dot, as real hop-2 nodes are bare markers.
   if (phone)
     return (
       <span className={cx('flex flex-col items-center gap-1', pulse)}>
         <span data-anchor className={cx('block h-[18px] w-[18px] [scale:var(--pin-scale,1)] rounded-full', SHAPE)} />
-        <span className={cx('block h-[18px] w-[76px] rounded-md', SHAPE)} />
+        {hop !== 2 && <span className={cx('block h-[18px] w-[76px] rounded-md', SHAPE)} />}
       </span>
     );
   if (kind === 'claim')

@@ -49,6 +49,7 @@ export function StaticSkeletonStage() {
               <SkeletonNode
                 kind={node.kind}
                 isCentre={node.hop === 0}
+                hop={node.hop}
                 phone={phone}
                 pulse="motion-safe:animate-pulse"
               />

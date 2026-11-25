@@ -9,7 +9,7 @@ import { type ClaimBand, claimBand } from '~/core/graph-explorer/claim-band';
 import type { GraphNode } from '~/core/graph-explorer/fetch-graph-neighbourhood';
 import { GRAPH_KIND_TYPE_IDS } from '~/core/graph-explorer/graph-kinds';
 import { rowPublisher } from '~/core/graph-explorer/panel-sections';
-import { isPhonePin } from '~/core/graph-explorer/phone-breakpoint';
+import { isPhonePin } from '~/core/graph-explorer/pin-name';
 import { normId } from '~/core/utils/norm-id';
 
 import { entityImageSrc } from '../entity-avatar';

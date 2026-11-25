@@ -24,6 +24,7 @@ import {
 import { BandLegend } from './connections-view';
 import { GraphSearch, searchNodes } from './graph-search';
 import { GraphTopBar } from './graph-top-bar';
+import { SkeletonNode } from './skeleton-node';
 
 const motion = vi.hoisted(() => ({ reduce: false }));
 /** IntersectionObserver callbacks, so a test can scroll the stage off-screen. */
@@ -544,6 +545,17 @@ describe('ConnectionsCanvas', () => {
     } finally {
       sizes.forEach(restore => restore());
     }
+  });
+});
+
+describe('SkeletonNode on a phone', () => {
+  it('draws a hop-1 placeholder as a dot over a name bar, and hop 2 as the bare dot', () => {
+    const shapes = (hop: 1 | 2) =>
+      render(<SkeletonNode kind="ent" isCentre={false} hop={hop} phone pulse={false} />).container.firstElementChild!
+        .children.length;
+    expect(shapes(1)).toBe(2);
+    cleanup();
+    expect(shapes(2)).toBe(1);
   });
 });
 

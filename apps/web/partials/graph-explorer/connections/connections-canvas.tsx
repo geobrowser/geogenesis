@@ -19,8 +19,7 @@ import {
   simulateLayout,
   starfield,
 } from '~/core/graph-explorer/layout-3d';
-import { isPhonePin, pinMarkerScale } from '~/core/graph-explorer/phone-breakpoint';
-import { type NamePlace, type Rect, placeName } from '~/core/graph-explorer/pin-name';
+import { type NamePlace, type Rect, isPhonePin, pinMarkerScale, placeName } from '~/core/graph-explorer/pin-name';
 import type { GraphSelection, SelectedNode } from '~/core/graph-explorer/select-graph';
 import { INITIAL_VIEW, isSkeletonNode, isSkeletonSelection } from '~/core/graph-explorer/skeleton-graph';
 
@@ -454,8 +453,7 @@ export function ConnectionsCanvas({
         /** A phone pin: drawn at scale 1, its marker scaled by `markerScale` (GEO-3864). */
         pin: boolean;
         markerScale: number;
-        /** A pin's name slid in from a stage edge, px; its rect below moves with it. */
-        /** A pin's name: its offset from below the marker, rect, and whether a place clear of overlays exists. */
+        /** A pin's name: offset from its laid-out place, screen rect, and whether that place is clear of overlays. */
         name: { dx: number; dy: number; rect: Rect; clear: boolean } | null;
       }> = [];
       for (const node of state.views.values()) {
@@ -502,7 +500,7 @@ export function ConnectionsCanvas({
 
       // A labelled card a nearer one touches fades, so no two labels overlap; far markers carry no label.
       const labelled = drawn.filter(entry => !entry.isCentre && entry.node.alive && entry.node.hop < 2 && !entry.far);
-      // A pin's label is its name: the part below its marker, which ends at twice the anchor.
+      // A pin's label is its name's rect, wherever placeName put it.
       const labelRect = (entry: (typeof drawn)[number]) =>
         entry.name?.rect ?? rectAt(entry.point.x, entry.point.y, entry.box, entry.scale);
       const hidden = coveredLabels(

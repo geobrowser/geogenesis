@@ -1,6 +1,6 @@
 import type { GraphNode } from './fetch-graph-neighbourhood';
 import { DESKTOP_LAYOUT, PHONE_LAYOUT, fitDistance, hash01, project, simulateLayout } from './layout-3d';
-import { isPhonePin, pinMarkerScale } from './phone-breakpoint';
+import { isPhonePin, pinMarkerScale } from './pin-name';
 import type { GraphSelection, SelectedNode } from './select-graph';
 
 const SKELETON_PREFIX = 'skeleton:';
