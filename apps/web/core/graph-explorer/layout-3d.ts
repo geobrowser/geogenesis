@@ -125,7 +125,15 @@ export function simulateLayout({
 /** Projection focal length: a point at depth 0 with the camera `distance` away draws at FOCAL_LENGTH / distance. */
 export const FOCAL_LENGTH = 900;
 
-export type View = { yaw: number; pitch: number; distance: number; width: number; height: number };
+export type View = {
+  yaw: number;
+  pitch: number;
+  distance: number;
+  width: number;
+  height: number;
+  /** Screen-y stretch; defaults to `verticalStretch` for the screen. Phone fits its own (`fitView`). */
+  stretch?: number;
+};
 
 /** Portrait screens stretch the vertical axis, as the design does, to use the height. */
 export function verticalStretch(width: number, height: number) {
@@ -145,7 +153,7 @@ export function project(point: Vec3, view: View): { x: number; y: number; scale:
   const scale = FOCAL_LENGTH / Math.max(120, view.distance + z2);
   return {
     x: view.width / 2 + x1 * scale,
-    y: view.height / 2 + y2 * scale * verticalStretch(view.width, view.height),
+    y: view.height / 2 + y2 * scale * (view.stretch ?? verticalStretch(view.width, view.height)),
     scale,
     depth: z2,
   };
@@ -158,22 +166,63 @@ export function project(point: Vec3, view: View): { x: number; y: number; scale:
  */
 export const PHONE_CARD_HALF_WIDTH = 64;
 
+/** Half a phone card's height, in screen pixels, kept clear of the stage's top and bottom. */
+const PHONE_CARD_HALF_HEIGHT = 40;
+/** How far a portrait phone may stretch the map's height to use the screen (the design's is 1.45). */
+const PHONE_MAX_STRETCH = 2.2;
+
 /** Camera distance that fits the 85th-percentile spread of the centre and hop-1 nodes. */
 export function fitDistance(points: readonly Vec3[], width: number, height: number, phone: boolean): number {
+  return fitView(points, width, height, phone).distance;
+}
+
+/**
+ * Camera distance and screen-y stretch that fit the 85th-percentile spread of the centre and hop-1
+ * nodes. Desktop and tablet keep the design's fit and stretch. A portrait phone fits the width with
+ * a full card's margin, then stretches the height, up to `PHONE_MAX_STRETCH`, into the room the
+ * width leaves, so its few readable cards spread over the tall screen instead of a band across it.
+ */
+export function fitView(
+  points: readonly Vec3[],
+  width: number,
+  height: number,
+  phone: boolean
+): { distance: number; stretch: number } {
   const percentile = (values: number[], fallback: number) =>
     values.sort((a, b) => a - b)[Math.floor(values.length * 0.85)] ?? fallback;
-  const stretch = verticalStretch(width, height);
+  const base = verticalStretch(width, height);
+  const clampDistance = (fit: number) => Math.max(700, Math.min(2600, fit));
+  if (!phone) {
+    const fx = percentile(
+      points.map(p => Math.hypot(p[0], p[2]) + 100),
+      300
+    );
+    const fy = percentile(
+      points.map(p => Math.hypot(p[1], p[2]) * base + 50),
+      300
+    );
+    const fit = Math.max(
+      (fx * FOCAL_LENGTH) / Math.max(140, width / 2 - 8),
+      (fy * FOCAL_LENGTH) / Math.max(140, height / 2 - 16)
+    );
+    return { distance: clampDistance(fit), stretch: base };
+  }
   const fx = percentile(
-    points.map(p => Math.hypot(p[0], p[2]) + (phone ? 0 : 100)),
+    points.map(p => Math.hypot(p[0], p[2])),
     300
   );
   const fy = percentile(
-    points.map(p => Math.hypot(p[1], p[2]) * stretch + 50),
+    points.map(p => Math.hypot(p[1], p[2])),
     300
   );
-  const halfWidth = phone ? Math.max(80, width / 2 - 8 - PHONE_CARD_HALF_WIDTH) : Math.max(140, width / 2 - 8);
-  const fit = Math.max((fx * FOCAL_LENGTH) / halfWidth, (fy * FOCAL_LENGTH) / Math.max(140, height / 2 - 16));
-  return Math.max(700, Math.min(2600, fit));
+  const roomX = Math.max(80, width / 2 - 8 - PHONE_CARD_HALF_WIDTH);
+  const roomY = Math.max(80, height / 2 - 16 - PHONE_CARD_HALF_HEIGHT);
+  const byWidth = (fx * FOCAL_LENGTH) / roomX;
+  // The stretch that takes the height's spread to its room at the width's fit, kept in bounds.
+  const stretch =
+    base > 1 ? Math.max(base, Math.min(PHONE_MAX_STRETCH, (roomY * byWidth) / (Math.max(1, fy) * FOCAL_LENGTH))) : base;
+  const byHeight = (fy * stretch * FOCAL_LENGTH) / roomY;
+  return { distance: clampDistance(Math.max(byWidth, byHeight)), stretch };
 }
 
 export function easeInOutCubic(t: number) {

@@ -8,6 +8,7 @@ import {
   type Vec3,
   easeInOutCubic,
   fitDistance,
+  fitView,
   hash01,
   project,
   simulateLayout,
@@ -125,6 +126,41 @@ describe('helpers', () => {
       );
       expect(fitDistance(points, w, h, false)).toBeCloseTo(expected);
     }
+  });
+
+  it('stretches a portrait phone map into the height the width leaves, within bounds', () => {
+    // A flat band: wide in x, shallow in y.
+    const band: Vec3[] = [
+      [0, 0, 0],
+      [250, 20, 0],
+      [-240, -30, 0],
+      [200, 40, 60],
+      [-180, -50, -40],
+    ];
+    const { distance, stretch } = fitView(band, 390, 844, true);
+    expect(stretch).toBe(2.2);
+    expect(distance).toBe(fitDistance(band, 390, 844, true));
+    // A tall spread needs no extra stretch, and the height still fits with a card's margin.
+    const tall: Vec3[] = [
+      [0, 0, 0],
+      [60, 300, 0],
+      [-50, -320, 0],
+      [40, 280, 20],
+      [-30, -260, 10],
+    ];
+    const fitted = fitView(tall, 390, 844, true);
+    expect(fitted.stretch).toBe(1.45);
+    expect(844 / 2 + ((300 * 900) / fitted.distance) * fitted.stretch + 40).toBeLessThanOrEqual(844);
+    // Landscape phone and desktop keep the screen's stretch.
+    expect(fitView(band, 599, 400, true).stretch).toBe(1);
+    expect(fitView(band, 1440, 900, false).stretch).toBe(1);
+    expect(fitView(band, 768, 1024, false).stretch).toBe(1.45);
+  });
+
+  it('projects with a given stretch, or the screen stretch when none is given', () => {
+    const view = { yaw: 0, pitch: 0, distance: 900, width: 390, height: 844 };
+    expect(project([0, 100, 0], view).y).toBeCloseTo(422 + 145);
+    expect(project([0, 100, 0], { ...view, stretch: 2 }).y).toBeCloseTo(422 + 200);
   });
 
   it('on phone, keeps a full card on screen beside the 85th-percentile neighbour at the fit zoom', () => {

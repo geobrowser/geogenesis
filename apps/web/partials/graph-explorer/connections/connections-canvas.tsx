@@ -13,7 +13,7 @@ import {
   PHONE_LAYOUT,
   type Vec3,
   easeInOutCubic,
-  fitDistance,
+  fitView,
   hash01,
   lerp3,
   project,
@@ -67,6 +67,9 @@ type Engine = {
   /** Distance at the start of a move, eased towards `fit`. */
   distanceFrom: number;
   fit: number;
+  /** Phone's screen-y stretch, eased towards `fitStretch` (see `fitView`); 0 until the first frame. */
+  stretch: number;
+  fitStretch: number;
   /** The centre and hop-1 targets the fit frames; refitted when the stage resizes. */
   near: Vec3[];
   userZoom: boolean;
@@ -144,6 +147,8 @@ export function ConnectionsCanvas({
     distance: 1000,
     distanceFrom: 1000,
     fit: 1000,
+    stretch: 0,
+    fitStretch: 1,
     near: [],
     userZoom: false,
     vy: 0,
@@ -252,7 +257,9 @@ export function ConnectionsCanvas({
 
     state.near = selection.nodes.filter(entry => entry.hop < 2).map(entry => target.get(entry.node.id)!);
     // Before the stage is measured this is a guess; the sizing effect refits once it knows the size.
-    state.fit = fitDistance(state.near, state.width || 1280, state.height || 860, phone);
+    const fitted = fitView(state.near, state.width || 1280, state.height || 860, phone);
+    state.fit = fitted.distance;
+    state.fitStretch = fitted.stretch;
     state.distanceFrom = state.distance;
     state.anim = { t0: now, duration: reduceMotion ? 0 : MOVE_MS };
     // Each selection, the first included, restarts the idle clock so the spin follows it. A skeleton
@@ -307,7 +314,10 @@ export function ConnectionsCanvas({
       canvas.style.width = `${rect.width}px`;
       canvas.style.height = `${rect.height}px`;
       if (rect.width > 0 && rect.height > 0) {
-        state.fit = fitDistance(state.near, rect.width, rect.height, phone);
+        const fitted = fitView(state.near, rect.width, rect.height, phone);
+        state.fit = fitted.distance;
+        state.fitStretch = fitted.stretch;
+        if (!state.anim) state.stretch = fitted.stretch;
         // A running move eases to the new fit itself; a manual zoom is left alone.
         if (!state.userZoom && !state.anim) state.distance = state.fit;
       }
@@ -352,12 +362,18 @@ export function ConnectionsCanvas({
         if (t >= 1) state.anim = null;
       }
 
+      if (phone && state.stretch && Math.abs(state.fitStretch - state.stretch) > 0.002) {
+        state.stretch += (state.fitStretch - state.stretch) * (reduceMotion ? 1 : 0.12);
+        moving = true;
+      } else state.stretch = state.fitStretch;
       const view = {
         yaw: state.yaw,
         pitch: state.pitch,
         distance: state.distance,
         width: state.width,
         height: state.height,
+        // Desktop and tablet keep the design's stretch for the screen's shape.
+        stretch: phone ? state.stretch : undefined,
       };
       const projected = new Map<string, ReturnType<typeof project>>();
       for (const node of state.views.values()) projected.set(node.id, project(node.p, view));
