@@ -354,8 +354,12 @@ describe('ClaimExplorer row layout (GEO-3845)', () => {
     expect(row).not.toHaveClass('px-5');
     // Phones lose the card for a hairline above only, so no empty divider sits under the list; wide
     // lists keep the card.
-    const surface = screen.getByRole('region', { name: 'Claims' }).querySelector('.overflow-hidden');
+    const surface = title.closest('.border-t');
     expect(surface).toHaveClass('border-t', 'border-divider', '@[760px]:rounded-xl', '@[760px]:border');
+    // Only the wide card clips (its rounded corners); phone rows touch the edge, so a clip would cut
+    // the buttons' and the "…" menu's focus rings.
+    expect(surface).toHaveClass('@[760px]:overflow-hidden');
+    expect(surface).not.toHaveClass('overflow-hidden');
     expect(surface).not.toHaveClass('border-y');
     expect(surface).not.toHaveClass('rounded-xl');
     // The title comes first, then the buttons, then the result group.

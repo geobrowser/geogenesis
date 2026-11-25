@@ -316,6 +316,8 @@ export function ContextPeekDrawer({ item, canGoBack, backLabel, onBack, onClose 
                         else box.onVote(choice);
                       }}
                       className="min-w-0 flex-1"
+                      // The pair shares its row with the count; the app's tighter padding keeps "Disagree" whole at 390px.
+                      buttonPaddingClassName="px-1.5"
                     />
                     {item.voteBox.countSummary && (
                       <span className="ml-auto text-[13.5px] whitespace-nowrap text-grey-04 tabular-nums">

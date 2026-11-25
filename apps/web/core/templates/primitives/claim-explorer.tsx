@@ -173,7 +173,7 @@ export function ClaimExplorer({
         }}
       />
 
-      <div className={cx('flex flex-col overflow-hidden', TEMPLATE_CLAIM_LIST_SURFACE)}>
+      <div className={cx('flex flex-col @[760px]:overflow-hidden', TEMPLATE_CLAIM_LIST_SURFACE)}>
         {/* Every row, so switching page keeps the same lookup and batch. */}
         <TemplateVoteRows targets={voteTargets}>
           <div className="divide-y divide-divider">

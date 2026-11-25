@@ -374,7 +374,7 @@ function SubClaimGroupSection({
         }}
       />
 
-      <div className={`divide-y divide-divider overflow-hidden ${TEMPLATE_CLAIM_LIST_SURFACE}`}>
+      <div className={`divide-y divide-divider @[760px]:overflow-hidden ${TEMPLATE_CLAIM_LIST_SURFACE}`}>
         {/* Every page's sub-claims, so paging keeps the same lookup and batch. */}
         <TemplateVoteRows targets={orderedItems.map(subClaim => subClaim.voteTarget)}>
           {visibleItems.map((subClaim, idx) => (
