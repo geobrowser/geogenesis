@@ -17,6 +17,7 @@ import { getRelations, getValues, useRelations, useValues } from '~/core/sync/us
 import { AddTo } from '~/design-system/icons/add-to';
 import { Context } from '~/design-system/icons/context';
 import { Copy } from '~/design-system/icons/copy';
+import { History } from '~/design-system/icons/history';
 import { MoveSpace } from '~/design-system/icons/move-space';
 import { Switch } from '~/design-system/icons/switch';
 import { Trash } from '~/design-system/icons/trash';
@@ -32,9 +33,23 @@ type Props = {
   entityId: string;
   entityName: string;
   spaceId: string;
+  /**
+   * The entity's version list, shown in place of the menu items after `Version history` is picked.
+   * Templates put history here rather than beside the menu (GEO-3837); without it there is no item.
+   * `close` closes the whole menu, for a version pick that opens its diff.
+   */
+  versionHistory?: (close: () => void) => React.ReactNode;
+  /** Told when the version list opens and closes, so the caller fetches versions only while shown. */
+  onVersionHistoryOpenChange?: (open: boolean) => void;
 };
 
-export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) {
+export function EntityPageContextMenu({
+  entityId,
+  entityName,
+  spaceId,
+  versionHistory,
+  onVersionHistoryOpenChange,
+}: Props) {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const { storage } = useMutate();
   const { isMember, isEditor } = useAccessControl(spaceId);
@@ -120,17 +135,33 @@ export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) 
   const [isMovingEntity, setIsMovingEntity] = useState<boolean>(false);
   const [duplicateToSpaceOpen, setDuplicateToSpaceOpen] = useState(false);
 
-  const isSubMenu = isCreatingNewVersion || isMovingEntity;
+  const [isShowingHistory, setIsShowingHistory] = useState(false);
+
+  const isSubMenu = isCreatingNewVersion || isMovingEntity || isShowingHistory;
+
+  const showHistory = (show: boolean) => {
+    setIsShowingHistory(show);
+    onVersionHistoryOpenChange?.(show);
+  };
+
+  const closeMenu = () => {
+    setIsMenuOpen(false);
+    setIsCreatingNewVersion(false);
+    setIsMovingEntity(false);
+    if (isShowingHistory) showHistory(false);
+  };
 
   return (
     <>
       <Menu
-        className={cx(!isSubMenu ? 'max-w-[240px]' : 'max-w-[320px]')}
+        className={cx(isShowingHistory ? 'max-w-[360px]' : !isSubMenu ? 'max-w-[240px]' : 'max-w-[320px]')}
         open={isMenuOpen}
         onOpenChange={() => {
-          setIsMenuOpen(!isMenuOpen);
-          setIsCreatingNewVersion(false);
-          setIsMovingEntity(false);
+          if (isMenuOpen) {
+            closeMenu();
+            return;
+          }
+          setIsMenuOpen(true);
         }}
         trigger={<Context color="grey-04" />}
       >
@@ -156,8 +187,21 @@ export function EntityPageContextMenu({ entityId, entityName, spaceId }: Props) 
             }}
           />
         )}
+        {isShowingHistory && versionHistory?.(closeMenu)}
         {!isSubMenu && (
           <>
+            {versionHistory && (
+              <EntityPageContextMenuItem>
+                <button
+                  className="flex h-full w-full items-center gap-2 px-2 py-2"
+                  onClick={() => showHistory(true)}
+                  data-geo-analytics-label="Version history"
+                >
+                  <History color="grey-04" />
+                  Version history
+                </button>
+              </EntityPageContextMenuItem>
+            )}
             <EntityPageContextMenuItem>
               <button className="flex h-full w-full items-center gap-2 px-2 py-2" onClick={onCopyEntityId}>
                 <Copy color="grey-04" />

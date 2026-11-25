@@ -99,6 +99,8 @@
      sets the iteration count and times the auto-dismiss — keep the two in sync. */
   --animate-debate-scroll-hint: debateScrollHint 700ms ease-in-out;
   --animate-fade-in: fadeIn 0.15s ease-in-out;
+  /* The graph explorer's centre node (GEO-3851): the prototype's Geo glow, a white ring that pulses. */
+  --animate-graph-centre-glow: graphCentreGlow 3s ease-in-out infinite;
   --animate-pulse-strong: pulseStrong 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   /* Fade in while rising 5px into place. `both` holds the first frame before it starts, so the
      element never flashes at full opacity. Used by the Explore email capture popup. */
@@ -501,6 +503,21 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes graphCentreGlow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 2px rgba(255, 255, 255, 0.85),
+      0 0 30px rgba(255, 255, 255, 0.14);
+  }
+  50% {
+    box-shadow:
+      0 0 0 2px #fff,
+      0 0 0 10px rgba(255, 255, 255, 0.05),
+      0 0 56px rgba(255, 255, 255, 0.26);
   }
 }
 
