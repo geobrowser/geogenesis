@@ -8,29 +8,35 @@ import { limitTopicFeedSpaceIds } from '~/core/topics/browse/topic-feed-params';
 import { useTopicSpaceScope } from '~/core/topics/use-topic-space-scope';
 import type { Entity, Relation } from '~/core/types';
 import { normId } from '~/core/utils/norm-id';
-import { getSpaceRank } from '~/core/utils/space/space-ranking';
+import { RANKED_SPACE_IDS, getSpaceRank } from '~/core/utils/space/space-ranking';
 
 /**
  * The spaces a template page lists content from: the canonical spaces, not only the space in the URL.
  *
- * "Canonical" is the scope the Topic pages used before the templates (`useTopicSpaceScope`): the
- * Featured spaces, the viewer's own member, editor and personal spaces, and the route's space. A
- * claim tagged with a topic only in US Politics therefore shows on that topic's page in World
- * Affairs too.
+ * "Canonical" is the union of two lists that each miss spaces the other has:
+ * - the ranked spaces (`RANKED_SPACE_IDS`: Root, Geo Education, Crypto, AI, Health, Software,
+ *   Technology, Industries, Podcasts, World Affairs), which are hard-coded and so known at once;
+ * - the scope the Topic pages used before the templates (`useTopicSpaceScope`): the Featured spaces,
+ *   the viewer's own member, editor and personal spaces, and the route's space.
+ * Featured alone left out Podcasts (and Root, Geo Education, Software, Technology, Industries), so an
+ * episode tagged with a topic only in Podcasts never reached that topic's Sources; ranked alone
+ * leaves out US Politics, where a claim tagged only there must still show in World Affairs.
  *
- * Route space first, then the rest sorted, capped the way the Topic feed caps it, so the list keeps
- * one query key while the underlying lists reorder. While the scope is still resolving (or if it
- * never resolves) it is the route space alone: lists start with what they showed before and only
- * grow, never flash content that is then taken away.
+ * Route space first, then the ranked spaces in rank order, then the rest sorted, capped the way the
+ * Topic feed caps it, so the list keeps one query key while the underlying lists reorder. While the
+ * Featured and viewer lists are still resolving (or if they never resolve) it is the route space
+ * plus the ranked spaces: lists start with what those hold and only grow, never flash content that
+ * is then taken away.
  */
 export function useTemplateSpaceScope(spaceId: string): { spaceIds: string[]; isResolving: boolean } {
   const scope = useTopicSpaceScope(spaceId);
   return React.useMemo(() => {
     const route = normId(spaceId);
-    if (!scope) return { spaceIds: [route], isResolving: true };
-    const rest = scope.map(normId).filter(id => id !== route);
-    const ordered = limitTopicFeedSpaceIds([route, ...[...new Set(rest)].sort()], route) ?? [route];
-    return { spaceIds: ordered.map(normId), isResolving: false };
+    const ranked = RANKED_SPACE_IDS.map(normId).filter(id => id !== route);
+    const taken = new Set([route, ...ranked]);
+    const rest = (scope ?? []).map(normId).filter(id => !taken.has(id));
+    const ordered = limitTopicFeedSpaceIds([route, ...ranked, ...[...new Set(rest)].sort()], route) ?? [route];
+    return { spaceIds: ordered.map(normId), isResolving: !scope };
   }, [scope, spaceId]);
 }
 

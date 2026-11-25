@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { EntityQuery, type WhereCondition } from '~/core/sync/experimental_query-layer';
 import type { Entity, Relation } from '~/core/types';
+import { RANKED_SPACE_IDS } from '~/core/utils/space/space-ranking';
 
 import { TEMPLATE_ONTOLOGY } from '../ontology';
 import { CLAIM_STANCE_VOTE_KIND, activeStanceVotes, aggregateClaimVotes } from './topic-claim-votes';
@@ -24,8 +25,14 @@ import { useLiveTopicTemplate } from './use-live-topic-template';
 // so a query missing its space clause lists the stray space's entities too.
 
 const SPACE = '89bd89bf28ff8a0963faf92a8c905e20';
-/** Another canonical space. */
-const OTHER = 'b5a31f8182b042437ede0f84ee02f104';
+/** Another canonical space, Featured (US Politics): it comes from `useTopicSpaceScope`. */
+const OTHER = '4582fbbee28a16589154f7e36f1ee3c5';
+/** A ranked space that is not Featured (Podcasts): only `RANKED_SPACE_IDS` brings it in. */
+const RANKED = 'b5a31f8182b042437ede0f84ee02f104';
+/** The ranked spaces after the route space, in rank order. */
+const RANKED_REST = RANKED_SPACE_IDS.filter(id => id !== SPACE);
+/** The whole canonical scope with `state.scope = [OTHER, SPACE]`: route, ranked, then the rest. */
+const SCOPE = [SPACE, ...RANKED_REST, OTHER];
 /** A space outside the canonical set: nothing from it may show. */
 const STRAY = 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
 const VIEWER = 'dddddddddddddddddddddddddddddddd';
@@ -390,7 +397,7 @@ describe('Claim template', () => {
     );
   });
 
-  it('lists the route space alone while the canonical spaces are still resolving', () => {
+  it('lists the route and ranked spaces alone while the Featured and viewer spaces are still resolving', () => {
     state.scope = undefined;
     state.page = pageEntity(CLAIM_TYPE_ID, [
       relation(TEMPLATE_ONTOLOGY.SUPPORTED_BY_PROPERTY_ID, 's2', OTHER, 'Supported elsewhere'),
@@ -398,12 +405,15 @@ describe('Claim template', () => {
     state.corpus = [
       linked('a1', 'Supports, here', SPACE, [CLAIM_TYPE_ID], TEMPLATE_ONTOLOGY.CLAIM_SUPPORTS_PROPERTY_ID),
       linked('a2', 'Supports, elsewhere', OTHER, [CLAIM_TYPE_ID], TEMPLATE_ONTOLOGY.CLAIM_SUPPORTS_PROPERTY_ID),
+      linked('a3', 'Supports, ranked', RANKED, [CLAIM_TYPE_ID], TEMPLATE_ONTOLOGY.CLAIM_SUPPORTS_PROPERTY_ID),
     ];
 
     const { result } = renderHook(() => useLiveClaimTemplate({ entityId: PAGE, spaceId: SPACE }));
 
-    expect(result.current.data!.subClaims?.map(claim => claim.title)).toEqual(['Supports, here']);
-    expect(mocks.useClaimRecord).toHaveBeenLastCalledWith(expect.objectContaining({ spaceIds: [SPACE] }));
+    expect(result.current.data!.subClaims?.map(claim => claim.title)).toEqual(['Supports, here', 'Supports, ranked']);
+    expect(mocks.useClaimRecord).toHaveBeenLastCalledWith(
+      expect.objectContaining({ spaceIds: [SPACE, ...RANKED_REST] })
+    );
   });
 
   it('splits supporting and opposing quotes into their own sections', () => {
@@ -453,7 +463,7 @@ describe('Claim template', () => {
     expect(mocks.useClaimRecord).toHaveBeenCalledWith({
       claimId: PAGE,
       spaceId: SPACE,
-      spaceIds: [SPACE, OTHER],
+      spaceIds: SCOPE,
       topicIds: ['topic'],
     });
   });
@@ -535,7 +545,7 @@ describe('Podcast show template', () => {
     const episodes = state.infiniteQueries.at(-1)!;
     expect(episodes.queryKey).toContain(SPACE);
     await episodes.queryFn({ pageParam: null });
-    expect(state.graphqlVariables.at(-1)).toMatchObject({ showId: PAGE, spaceIds: [SPACE, OTHER] });
+    expect(state.graphqlVariables.at(-1)).toMatchObject({ showId: PAGE, spaceIds: SCOPE });
   });
 });
 
@@ -583,6 +593,8 @@ describe('Topic template', () => {
     state.coverage = [
       { entityId: 'r1', spaceId: SPACE, title: 'Source here' },
       { entityId: 'r2', spaceId: OTHER, title: 'Source elsewhere' },
+      // An episode tagged with this topic only in a ranked, non-Featured space (Podcasts).
+      { entityId: 'r6', spaceId: RANKED, title: 'Episode in a ranked space' },
       { entityId: 'r3', spaceId: VIEWER, title: 'Source the viewer added' },
       { entityId: 'r5', spaceId: STRAY, title: 'Source stray' },
       // In the viewed space, but tagged with this topic only in a space outside the canonical set.
@@ -600,8 +612,12 @@ describe('Topic template', () => {
     // Each row links to the space it lives in.
     expect(model.claims?.[1]?.href).toContain(OTHER);
     expect(model.timelineHighlights?.map(item => item.title)).toEqual(['Event here', 'Event elsewhere']);
-    expect(model.sections?.[0]?.items.map(item => item.title)).toEqual(['Source here', 'Source elsewhere']);
-    expect(mocks.useTopicConnectionCounts).toHaveBeenCalledWith([PAGE], { spaceIds: [SPACE, OTHER] });
+    expect(model.sections?.[0]?.items.map(item => item.title)).toEqual([
+      'Source here',
+      'Source elsewhere',
+      'Episode in a ranked space',
+    ]);
+    expect(mocks.useTopicConnectionCounts).toHaveBeenCalledWith([PAGE], { spaceIds: SCOPE });
   });
 
   it('asks the topic feed for every canonical space in one request, and keeps what any of them tagged', async () => {
@@ -615,8 +631,8 @@ describe('Topic template', () => {
       const url = new URL(String((fetchMock.mock.calls[0] as unknown[])[0]), 'https://geo.test');
       expect(url.pathname).toBe('/api/topics/feed');
       expect(url.searchParams.get('spaceId')).toBe(SPACE);
-      expect(url.searchParams.get('spaceIds')).toBe(`${SPACE},${OTHER}`);
-      expect(state.taggedReads.at(-1)).toEqual({ spaceIds: [SPACE, OTHER] });
+      expect(url.searchParams.get('spaceIds')).toBe(SCOPE.join(','));
+      expect(state.taggedReads.at(-1)).toEqual({ spaceIds: SCOPE });
     } finally {
       vi.unstubAllGlobals();
     }
@@ -795,7 +811,7 @@ describe('Topic template', () => {
     renderHook(() => useLiveTopicTemplate({ entityId: PAGE, spaceId: SPACE }));
 
     const [pageRead, viewerRead] = mocks.useTopicCoverage.mock.calls.slice(-2).map(call => call[0]);
-    expect(pageRead).toMatchObject({ spaceIds: [SPACE, OTHER], scopeRelationToSpaces: true });
+    expect(pageRead).toMatchObject({ spaceIds: SCOPE, scopeRelationToSpaces: true });
     expect(viewerRead).toMatchObject({ spaceIds: [VIEWER], scopeRelationToSpaces: true, enabled: true });
   });
 
@@ -808,6 +824,7 @@ describe('Topic template', () => {
     expect(result.current.data!.sections?.[0]?.items.map(item => item.title)).toEqual([
       'Source here',
       'Source elsewhere',
+      'Episode in a ranked space',
       'Source the viewer added',
     ]);
   });
@@ -826,6 +843,7 @@ describe('Topic template', () => {
     expect(result.current.data!.sections?.[0]?.items.map(item => item.title)).toEqual([
       'Source here',
       'Source elsewhere',
+      'Episode in a ranked space',
     ]);
   });
 
