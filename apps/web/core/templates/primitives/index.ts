@@ -63,6 +63,7 @@ export { SourceChipList, type SourceChipListProps } from './source-chip-list';
 export { SplitBars, type SplitBarsProps } from './split-bars';
 export {
   TEMPLATE_CARD_SURFACE,
+  TEMPLATE_CLAIM_LIST_SURFACE,
   TEMPLATE_INTERACTIVE_CARD_SURFACE,
   TemplateBadge,
   TemplateBreadcrumb,
