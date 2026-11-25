@@ -5,7 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { useGraphAnalytics } from '~/core/graph-explorer/graph-explorer-analytics';
-import { GRAPH_KIND_LABELS } from '~/core/graph-explorer/graph-kinds';
+import { GRAPH_KINDS, GRAPH_KIND_LABELS } from '~/core/graph-explorer/graph-kinds';
 import type { GraphShareResult } from '~/core/graph-explorer/graph-share';
 import type { GraphKindFilter } from '~/core/graph-explorer/select-graph';
 
@@ -31,7 +31,7 @@ export function GraphTopBar({
   /** Names from the start of the walk to the centre, which is last. */
   trail: string[];
   search: React.ReactNode;
-  /** Chips beside Everything; topics have none, they always stay on the map. */
+  /** Kinds around the centre, for the chips beside Everything; topics have none (only Everything shows them). */
   kinds: readonly GraphKindFilter[];
   kindFilter: GraphKindFilter;
   onKindFilter: (kind: GraphKindFilter) => void;
@@ -40,7 +40,21 @@ export function GraphTopBar({
   close: { href: string; label: string } | null;
 }) {
   const analytics = useGraphAnalytics();
-  const chips: GraphKindFilter[] = ['all', ...kinds.filter(kind => kind !== 'all' && kind !== 'topic')];
+  // The chip in force keeps its place even with none of its kind around this centre (a shared
+  // link, or a same-kind hop), so the row always says what the map is filtered to.
+  const chips: GraphKindFilter[] = [
+    'all',
+    ...GRAPH_KINDS.filter(kind => kind !== 'topic' && (kind === kindFilter || kinds.includes(kind))),
+  ];
+  const chipKey = chips.join(',');
+  const rowRef = React.useRef<HTMLDivElement>(null);
+  // On a phone the row scrolls: a link that opens on a chip, or a chip set for the viewer, would
+  // otherwise leave the pressed chip past the edge.
+  React.useEffect(() => {
+    const row = rowRef.current;
+    const pressed = row?.querySelector<HTMLElement>('[aria-pressed="true"]');
+    if (row && pressed) revealInRow(row, pressed);
+  }, [kindFilter, chipKey]);
   return (
     <div className="relative z-[2] flex shrink-0 items-center gap-3 border-b border-[#f0f0f0] bg-white px-4 py-3 md:gap-2 lg:flex-wrap">
       {back ? (
@@ -76,7 +90,12 @@ export function GraphTopBar({
       </nav>
       {search}
       {chips.length > 1 && (
-        <div role="group" aria-label="Show" className="flex gap-2 lg:order-6 lg:basis-full lg:overflow-x-auto">
+        <div
+          ref={rowRef}
+          role="group"
+          aria-label="Show"
+          className="flex gap-2 lg:order-6 lg:basis-full lg:overflow-x-auto"
+        >
           {chips.map(kind => (
             <button
               key={kind}
@@ -107,6 +126,14 @@ export function GraphTopBar({
       )}
     </div>
   );
+}
+
+/** Scrolls the row just far enough to show `chip` whole; the page itself never moves. */
+function revealInRow(row: HTMLElement, chip: HTMLElement) {
+  const box = row.getBoundingClientRect();
+  const { left, right } = chip.getBoundingClientRect();
+  if (left < box.left) row.scrollLeft += left - box.left;
+  else if (right > box.right) row.scrollLeft += right - box.right;
 }
 
 function ShareButton({ native, onShare }: { native: boolean; onShare: () => Promise<GraphShareResult> }) {

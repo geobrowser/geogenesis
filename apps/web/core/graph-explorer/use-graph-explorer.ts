@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  type Query,
   type QueryKey,
   hashKey,
   keepPreviousData,
@@ -16,12 +17,23 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useTopicSpaceScope } from '~/core/topics/use-topic-space-scope';
 
 import { type ClaimsAboutPage, fetchClaimsAbout } from './claims-about';
-import { fetchCrossLinks, fetchHop1, fetchHop2 } from './fetch-graph-neighbourhood';
+import {
+  type GraphHop1,
+  type GraphHop2Result,
+  fetchCrossLinks,
+  fetchHop1,
+  fetchHop2,
+} from './fetch-graph-neighbourhood';
 import { type GraphFilter, type GraphScope, graphFilterKey } from './graph-filter';
 import { type GraphCaps, type GraphKindFilter, presentKinds, selectGraph, selectHop1 } from './select-graph';
 import { claimCountsKey, fetchTopicClaims, summariseTopicClaims } from './topic-claims-summary';
 
 const STALE_MS = 60_000;
+
+/** A hop missing a failed kind is stale at once, so the next mount or focus asks again. */
+const hop1StaleTime = (query: Query<GraphHop1>) => (query.state.data?.failedKinds?.length ? 0 : STALE_MS);
+/** Likewise for a ring missing a failed side. */
+const hop2StaleTime = (query: Query<GraphHop2Result>) => (query.state.data?.failedSides ? 0 : STALE_MS);
 
 /**
  * The topic view's scope: the same spaces the topic page draws from. Null while the allowlist is
@@ -67,7 +79,8 @@ export function usePrefetchHop1(filter: GraphFilter | null) {
         void queryClient.prefetchQuery({
           queryKey: [...neighbourhoodKey('hop1', filter), entityId],
           queryFn: ({ signal }) => fetchHop1(entityId, filter, signal),
-          staleTime: STALE_MS,
+          staleTime: hop1StaleTime,
+          retry: false,
         });
       }, GRAPH_HOP_PREFETCH_DELAY_MS);
     },
@@ -123,7 +136,9 @@ export function useGraphNeighbourhood({
     queryKey: filter ? [...neighbourhoodKey('hop1', filter), centreId] : ['graph-explorer', 'neighbourhood', 'pending'],
     queryFn: ({ signal }) => fetchHop1(centreId, filter!, signal),
     enabled: filter !== null,
-    staleTime: STALE_MS,
+    staleTime: hop1StaleTime,
+    // The fetches carry their own deadline; a query that missed it would miss it again.
+    retry: false,
     // The previous graph stays on screen until the next centre's lands, then eases into it.
     placeholderData: keepPreviousData,
   });
@@ -146,8 +161,10 @@ export function useGraphNeighbourhood({
       ? [...neighbourhoodKey('hop2', filter), expandIds.join(',')]
       : ['graph-explorer', 'hop2', 'pending'],
     queryFn: ({ signal }) => fetchHop2(expandIds, filter!, signal),
+    select: result => result.hop2,
     enabled: filter !== null && expandIds.length > 0,
-    staleTime: STALE_MS,
+    staleTime: hop2StaleTime,
+    retry: false,
     // Keyed by parent, so a previous ring only fills nodes the new hop 1 shares, until its own lands.
     placeholderData: (previous, previousQuery) =>
       underFilter(previousQuery?.queryKey, filter && neighbourhoodKey('hop2', filter)) ? previous : undefined,
@@ -180,6 +197,7 @@ export function useGraphNeighbourhood({
     queryFn: ({ signal }) => fetchCrossLinks(shownIds, filter!, signal),
     enabled: filter !== null && shownIds.length > 1,
     staleTime: STALE_MS,
+    retry: false,
     // Cross-links are drawn only between shown nodes, so the previous set's are safe until these land.
     placeholderData: (previous, previousQuery) =>
       underFilter(previousQuery?.queryKey, filter && neighbourhoodKey('cross', filter)) ? previous : undefined,
