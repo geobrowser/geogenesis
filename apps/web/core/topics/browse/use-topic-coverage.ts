@@ -1,5 +1,3 @@
-'use client';
-
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
@@ -140,14 +138,7 @@ function decodeCoverage(response: CoverageResponse): TopicCoveragePage {
   };
 }
 
-export function useTopicCoverage({
-  topicId,
-  first,
-  after,
-  spaceIds,
-  scopeRelationToSpaces = false,
-  enabled = true,
-}: {
+type TopicCoverageArgs = {
   topicId: string;
   first: number;
   after?: string;
@@ -158,36 +149,64 @@ export function useTopicCoverage({
    * topic only in another space is left out. Ignored without `spaceIds`.
    */
   scopeRelationToSpaces?: boolean;
-  enabled?: boolean;
-}) {
+};
+
+/** Shared with the Topic page's server prefetch, which must land on the hook's exact key. */
+export function topicCoverageQueryKey({
+  topicId,
+  first,
+  after,
+  spaceIds,
+  scopeRelationToSpaces = false,
+}: TopicCoverageArgs) {
   const scopeRelation = scopeRelationToSpaces && spaceIds !== undefined;
+  return [
+    'topic',
+    'coverage',
+    ID.uuidToHex(topicId),
+    first,
+    after ?? null,
+    spaceIds ?? null,
+    ...(scopeRelation ? ['relation-scoped'] : []),
+  ] as const;
+}
+
+/** One page of a topic's coverage. */
+export function fetchTopicCoverage(
+  { topicId, first, after, spaceIds, scopeRelationToSpaces = false }: TopicCoverageArgs,
+  signal?: AbortSignal
+): Promise<TopicCoveragePage> {
+  const scopeRelation = scopeRelationToSpaces && spaceIds !== undefined;
+  return Effect.runPromise(
+    graphql({
+      query: scopeRelation ? relationScopedTopicCoverageDocument : topicCoverageDocument,
+      decoder: decodeCoverage,
+      variables: {
+        topicsPropertyId: ID.uuidToHex(TOPICS_PROPERTY_ID),
+        topicId: ID.uuidToHex(topicId),
+        typeIds: COVERAGE_TYPE_IDS.map(ID.uuidToHex),
+        spaceIds: spaceIds?.map(ID.uuidToHex),
+        first,
+        after,
+      },
+      signal,
+    })
+  );
+}
+
+export function useTopicCoverage({
+  topicId,
+  first,
+  after,
+  spaceIds,
+  scopeRelationToSpaces = false,
+  enabled = true,
+}: TopicCoverageArgs & { enabled?: boolean }) {
+  const args = { topicId, first, after, spaceIds, scopeRelationToSpaces };
   const { data, isLoading, isPlaceholderData } = useQuery({
     enabled,
-    queryKey: [
-      'topic',
-      'coverage',
-      ID.uuidToHex(topicId),
-      first,
-      after ?? null,
-      spaceIds ?? null,
-      ...(scopeRelation ? ['relation-scoped'] : []),
-    ],
-    queryFn: ({ signal }) =>
-      Effect.runPromise(
-        graphql({
-          query: scopeRelation ? relationScopedTopicCoverageDocument : topicCoverageDocument,
-          decoder: decodeCoverage,
-          variables: {
-            topicsPropertyId: ID.uuidToHex(TOPICS_PROPERTY_ID),
-            topicId: ID.uuidToHex(topicId),
-            typeIds: COVERAGE_TYPE_IDS.map(ID.uuidToHex),
-            spaceIds: spaceIds?.map(ID.uuidToHex),
-            first,
-            after,
-          },
-          signal,
-        })
-      ),
+    queryKey: topicCoverageQueryKey(args),
+    queryFn: ({ signal }) => fetchTopicCoverage(args, signal),
     // Holds the page being read while the next loads, so stepping doesn't collapse the section.
     placeholderData: keepPreviousData,
     staleTime: 30_000,

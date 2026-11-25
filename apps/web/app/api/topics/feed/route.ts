@@ -2,13 +2,8 @@ import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 
 import { NextResponse } from 'next/server';
 
-import { parseExploreSort } from '~/core/explore/explore-feed-params';
 import { feedUnavailableResponse } from '~/core/explore/feed-route-response';
-import { fetchExploreFeed } from '~/core/explore/fetch-explore-feed';
-import { resolveExploreFeedRequestContext } from '~/core/explore/resolve-explore-feed-request-context';
-import { topicFeedFilter } from '~/core/topics/browse/topic-feed-filter';
-import { parseTopicFeedSelectedIds, parseTopicFeedSpaceIds } from '~/core/topics/browse/topic-feed-params';
-import { parseTopicFeedTypeIds } from '~/core/topics/browse/topic-feed-types';
+import { readTopicFeed } from '~/core/topics/browse/read-topic-feed';
 
 /** Mixed Topic feed: every entity is matched by its own Topics relations. */
 export async function GET(request: Request) {
@@ -19,27 +14,15 @@ export async function GET(request: Request) {
     return NextResponse.json({ items: [], nextCursor: null }, { status: 400 });
   }
 
-  const typeIds = parseTopicFeedTypeIds(searchParams.get('typeIds'));
-  if (typeIds.length === 0) return NextResponse.json({ items: [], nextCursor: null });
-
-  const selectedTopicIds = parseTopicFeedSelectedIds(searchParams.get('topicIds'), { pageTopicId: topicId });
-  const requestedSpaceIds = parseTopicFeedSpaceIds(searchParams.get('spaceIds'), routeSpaceId);
-  const { browse, memberOrEditorSpaceIds, walletAddress } = await resolveExploreFeedRequestContext(routeSpaceId);
-
   try {
-    const result = await fetchExploreFeed({
-      browse,
-      sort: parseExploreSort(searchParams.get('sort')),
-      time: 'all',
-      spaceFilterIds: requestedSpaceIds.length > 0 ? requestedSpaceIds : null,
+    const result = await readTopicFeed({
+      topicId,
+      routeSpaceId,
+      typeIds: searchParams.get('typeIds'),
+      sort: searchParams.get('sort'),
+      topicIds: searchParams.get('topicIds'),
+      spaceIds: searchParams.get('spaceIds'),
       cursor: searchParams.get('cursor'),
-      walletAddress,
-      memberOrEditorSpaceIds,
-      typeIds,
-      requireName: true,
-      // Best and New page through gaia's topic ranking table (GEO-3092); Top still uses the filter.
-      rankedTopicIds: [topicId, ...selectedTopicIds],
-      entityFilter: topicFeedFilter(topicId, selectedTopicIds),
     });
     return NextResponse.json(result);
   } catch (error) {

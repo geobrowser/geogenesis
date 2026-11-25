@@ -1,12 +1,8 @@
 'use client';
 
-import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
-
-import { Effect } from 'effect';
-import { parse } from 'graphql';
 
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { CURATED_TOPIC_TAG_ID, NEWS_STORY_TYPE_ID, TAG_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/constants';
@@ -14,7 +10,6 @@ import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
 import type { ExploreFeedItem } from '~/core/explore/explore-card-item';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { ID } from '~/core/id';
-import { graphql } from '~/core/io/graphql-client';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import { useTopicAncestors } from '~/core/topics/browse/use-topic-ancestors';
 import { useTopicConnectionCounts } from '~/core/topics/browse/use-topic-connection-counts';
@@ -64,14 +59,25 @@ import {
   orderClaimsByVotes,
 } from './claim-vote-order';
 import { debateParticipantsKey, formatUnixSecDate, toDebateGalleryModel } from './debate-gallery-model';
-import { agendaClaimsForTopic, pinAgendaClaims, useRecentAgendaClaims } from './recent-agenda-claims';
+import { agendaClaimsForTopic, useRecentAgendaClaims } from './recent-agenda-claims';
 import { topicCoverageIngestionLink } from './source-ingestion-links';
+import { aggregateClaimVotes, baselineVoteFor } from './topic-claim-votes';
 import {
-  activeStanceVotes,
-  aggregateClaimVotes,
-  baselineVoteFor,
-  fetchMultiSpaceClaimVoteRows,
-} from './topic-claim-votes';
+  LIVE_CLAIMS_LIMIT,
+  LIVE_COVERAGE_LIMIT,
+  TOPIC_CLAIM_VOTES_QUERY_PREFIX,
+  TOPIC_FEED_STALE_MS,
+  type TopicBestDebates,
+  buildOrderedClaimSeeds,
+  fetchTopicClaimVotes,
+  keepTaggedItems,
+  topicBestDebatesQueryKey,
+  topicClaimVotesQueryKey,
+  topicFeedDebates as topicFeedDebatesOf,
+  topicFeedEntityIds,
+  topicFeedSliceQueryKey,
+  topicVoteClaimIds,
+} from './topic-template-queries';
 import { useDebateParticipantsBatch } from './use-debate-participants-batch';
 import { fetchPostAuthorMetadata } from './use-hydrated-source-cards';
 import { useInitialHydrationGate } from './use-initial-hydration-gate';
@@ -79,12 +85,9 @@ import { useLiveEntityActions } from './use-live-entity-actions';
 import { useTopicTaggedInSpace } from './use-topic-tagged-in-space';
 import { useViewerSpaceId, useViewerTopicSources } from './use-viewer-sources';
 
-const LIVE_CLAIMS_LIMIT = 40;
 /** How long the sections wait, from first render, for the claim vote counts that order the Claims list. */
 const CLAIM_VOTES_MAX_WAIT_MS = 4000;
-const LIVE_COVERAGE_LIMIT = 12;
 const NO_COVERAGE_ROWS: TopicCoveragePage['rows'] = [];
-const NO_FEED_ITEMS: ExploreFeedItem[] = [];
 const NO_ENTITIES: Entity[] = [];
 /** How many of the viewer's own personal-space claims or events a Topic reads. */
 const VIEWER_ADDED_LIMIT = 8;
@@ -206,22 +209,22 @@ export function useLiveTopicTemplate({
 
   // 1. Top-voted AND Best-ranked Claims and Debates from Geo's topic/space ranking feed
   const topClaimsQuery = useQuery({
-    queryKey: ['live-topic-template', 'top-claims', ID.uuidToHex(entityId), ID.uuidToHex(spaceId)],
+    queryKey: topicFeedSliceQueryKey('top-claims', entityId, spaceId),
     queryFn: ({ signal }) =>
       fetchTopicFeedSlice({ topicId: entityId, spaceId, typeId: CLAIM_TYPE_ID, sort: 'top', signal }),
-    staleTime: 60_000,
+    staleTime: TOPIC_FEED_STALE_MS,
   });
 
   const bestClaimsQuery = useQuery({
-    queryKey: ['live-topic-template', 'best-claims', ID.uuidToHex(entityId), ID.uuidToHex(spaceId)],
+    queryKey: topicFeedSliceQueryKey('best-claims', entityId, spaceId),
     queryFn: ({ signal }) =>
       fetchTopicFeedSlice({ topicId: entityId, spaceId, typeId: CLAIM_TYPE_ID, sort: 'best', signal }),
-    staleTime: 60_000,
+    staleTime: TOPIC_FEED_STALE_MS,
   });
 
   const bestDebatesQuery = useQuery({
-    queryKey: ['live-topic-template', 'best-debates', ID.uuidToHex(entityId), ID.uuidToHex(spaceId), isSpaceHome],
-    queryFn: async ({ signal }) => {
+    queryKey: topicBestDebatesQueryKey(entityId, spaceId, isSpaceHome),
+    queryFn: async ({ signal }): Promise<TopicBestDebates> => {
       if (isSpaceHome) {
         const spaceDebates = await fetchTopicFeedSlice({
           topicId: entityId,
@@ -237,17 +240,14 @@ export function useLiveTopicTemplate({
         fromSpaceFeed: false,
       };
     },
-    staleTime: 60_000,
+    staleTime: TOPIC_FEED_STALE_MS,
   });
 
   // The topic feed checks only that an entity lives in the space; keep what the space itself tagged.
   // The space feed lists the space's own items by space, not by tag, so its rows are not checked.
-  const topicFeedDebates = bestDebatesQuery.data?.fromSpaceFeed ? undefined : bestDebatesQuery.data?.items;
+  const topicFeedDebates = topicFeedDebatesOf(bestDebatesQuery.data);
   const feedEntityIds = React.useMemo(
-    () =>
-      [topClaimsQuery.data, bestClaimsQuery.data, topicFeedDebates].flatMap(
-        items => items?.map(item => item.entityId) ?? []
-      ),
+    () => topicFeedEntityIds([topClaimsQuery.data, bestClaimsQuery.data, topicFeedDebates]),
     [bestClaimsQuery.data, topClaimsQuery.data, topicFeedDebates]
   );
   const { tagged: taggedInSpace, isLoading: isTaggedLoading } = useTopicTaggedInSpace({
@@ -258,12 +258,7 @@ export function useLiveTopicTemplate({
     enabled: !topClaimsQuery.isLoading && !bestClaimsQuery.isLoading && !bestDebatesQuery.isLoading,
   });
   const keepTagged = React.useCallback(
-    (items: ExploreFeedItem[] | undefined): ExploreFeedItem[] => {
-      if (!items) return NO_FEED_ITEMS;
-      if (taggedInSpace) return items.filter(item => taggedInSpace.has(ID.uuidToHex(item.entityId)));
-      // Held back while the check loads; shown unfiltered if it failed.
-      return isTaggedLoading ? NO_FEED_ITEMS : items;
-    },
+    (items: ExploreFeedItem[] | undefined): ExploreFeedItem[] => keepTaggedItems(items, taggedInSpace, isTaggedLoading),
     [isTaggedLoading, taggedInSpace]
   );
   const topClaims = React.useMemo(() => keepTagged(topClaimsQuery.data), [keepTagged, topClaimsQuery.data]);
@@ -386,93 +381,21 @@ export function useLiveTopicTemplate({
     [entity]
   );
 
-  // The Claims list is the topic's Best order (GEO-3868): Best claims first, in Best's order. Only when
-  // Best has fewer than the cap do the other sources fill the rest, after it and in this order: Top,
-  // the best debates' claims, linked claims, then the topic's own claim relations. Claims from a
-  // recent Debate agenda go before all of it, even when Best leaves them out (GEO-3873).
-  const orderedClaimSeeds = React.useMemo(() => {
-    const seen = new Set<string>();
-    const seeds: {
-      id: string;
-      title: string;
-      spaceId: string;
-      kind?: ClaimKind;
-      debateCount?: number;
-    }[] = [];
-
-    const add = (item: (typeof seeds)[number]) => {
-      const hex = ID.uuidToHex(item.id);
-      if (seen.has(hex) || !item.title.trim()) return;
-      seen.add(hex);
-      seeds.push(item);
-    };
-
-    for (const item of bestClaims) {
-      add({
-        id: item.entityId,
-        title: item.title,
-        spaceId: item.spaceId || spaceId,
-      });
-    }
-    for (const item of topClaims) {
-      add({
-        id: item.entityId,
-        title: item.title,
-        spaceId: item.spaceId || spaceId,
-      });
-    }
-    for (const debateItem of bestDebates) {
-      if (!debateItem.debateClaim?.entityId || !debateItem.debateClaim?.name) continue;
-      add({
-        id: debateItem.debateClaim.entityId,
-        title: debateItem.debateClaim.name,
-        spaceId: debateItem.spaceId || spaceId,
-      });
-    }
-    for (const claim of linkedClaims) {
-      if (!claim.name) continue;
-      add({
-        id: claim.id,
-        title: claim.name,
-        spaceId: resolveEntitySpaceId(claim, spaceId),
-        kind: readClaimKind(claim.values),
-      });
-    }
-    for (const rel of directClaimRels) {
-      if (!rel.toEntity.name) continue;
-      add({
-        id: rel.toEntity.id,
-        title: rel.toEntity.name,
-        spaceId: rel.toSpaceId ?? spaceId,
-      });
-    }
-    const pinned = pinAgendaClaims<(typeof seeds)[number]>({
-      seeds,
-      agendaClaims,
-      bestIds: bestClaims.map(item => item.entityId),
-      makeSeed: claim => ({
-        id: claim.id,
-        title: claim.name,
-        spaceId: claim.spaceIds.includes(ID.uuidToHex(spaceId)) ? spaceId : (claim.spaceIds[0] ?? spaceId),
+  // Best order, agenda claims first (GEO-3868, GEO-3873): see `buildOrderedClaimSeeds`.
+  const orderedClaimSeeds = React.useMemo(
+    () =>
+      buildOrderedClaimSeeds({
+        spaceId,
+        bestClaims,
+        topClaims,
+        bestDebates,
+        linkedClaims,
+        directClaimRels,
+        agendaClaims,
+        viewerLinkedClaims,
       }),
-    });
-    // Every agenda claim stays, even past the cap. After the cap, so the page's own claims never
-    // crowd out the viewer's additions.
-    const capped = pinned.slice(0, Math.max(LIVE_CLAIMS_LIMIT, agendaClaims.length));
-    for (const seed of pinned) seen.add(ID.uuidToHex(seed.id));
-    for (const claim of viewerLinkedClaims) {
-      const hex = ID.uuidToHex(claim.id);
-      if (!claim.name?.trim() || seen.has(hex)) continue;
-      seen.add(hex);
-      capped.push({
-        id: claim.id,
-        title: claim.name,
-        spaceId: resolveEntitySpaceId(claim, spaceId),
-        kind: readClaimKind(claim.values),
-      });
-    }
-    return capped;
-  }, [agendaClaims, bestClaims, bestDebates, directClaimRels, linkedClaims, spaceId, topClaims, viewerLinkedClaims]);
+    [agendaClaims, bestClaims, bestDebates, directClaimRels, linkedClaims, spaceId, topClaims, viewerLinkedClaims]
+  );
 
   // Batch-hydrate claim entities that came from `/api/topics/feed` so we read their real `Is factual` value
   const claimIdsToHydrate = React.useMemo(
@@ -495,35 +418,25 @@ export function useLiveTopicTemplate({
   }, [hydratedClaimEntities]);
 
   // Collect all claim IDs (topic claims + debated claims) for ONE cross-space vote summary query
-  const allVoteClaimIds = React.useMemo(() => {
-    const seen = new Set<string>();
-    const ids: string[] = [];
-    const push = (id: string | undefined) => {
-      if (!id) return;
-      const hex = ID.uuidToHex(id);
-      if (seen.has(hex)) return;
-      seen.add(hex);
-      ids.push(hex);
-    };
-    for (const c of orderedClaimSeeds) push(c.id);
-    for (const d of bestDebates) push(d.debateClaim?.entityId);
-    return ids;
-  }, [bestDebates, orderedClaimSeeds]);
+  const allVoteClaimIds = React.useMemo(
+    () => topicVoteClaimIds(orderedClaimSeeds, bestDebates),
+    [bestDebates, orderedClaimSeeds]
+  );
 
   const votesQuery = useQuery({
-    queryKey: ['live-topic-template', 'multi-space-votes', personalSpaceId ?? null, allVoteClaimIds],
+    queryKey: topicClaimVotesQueryKey(allVoteClaimIds),
     enabled: allVoteClaimIds.length > 0,
     staleTime: 30_000,
     // A new claim set keeps the counts already drawn while its own counts load.
     placeholderData: keepPreviousData,
-    queryFn: async ({ signal }) => {
-      const response = await fetchMultiSpaceClaimVoteRows({ objectIds: allVoteClaimIds, signal });
-
-      // Agree / Disagree only, once per (claim, space, voter): the counts the Claim page draws.
-      const activeVotes = activeStanceVotes(response);
-      return { byClaim: aggregateClaimVotes(activeVotes, personalSpaceId) };
-    },
+    queryFn: ({ signal }) => fetchTopicClaimVotes(allVoteClaimIds, signal),
   });
+  // The viewer's own vote is picked out here rather than in the query, so the key does not depend on
+  // who is reading and the server can hand the counts over (it does not know the personal space).
+  const votesByClaim = React.useMemo(
+    () => (votesQuery.data ? aggregateClaimVotes(votesQuery.data, personalSpaceId) : undefined),
+    [personalSpaceId, votesQuery.data]
+  );
 
   // Rows go most votes first (GEO-3876), agenda claims among themselves and then the rest; ties and
   // claims with no votes keep Best order. The order is made once the reads that pick the claims have
@@ -538,7 +451,7 @@ export function useLiveTopicTemplate({
     () => claimOrderKey(orderedClaimSeeds, agendaLeadCount),
     [agendaLeadCount, orderedClaimSeeds]
   );
-  const votesForOrder = votesQuery.isPlaceholderData ? undefined : votesQuery.data?.byClaim;
+  const votesForOrder = votesQuery.isPlaceholderData ? undefined : votesByClaim;
   const [frozenClaimOrder, setFrozenClaimOrder] = React.useState<FrozenClaimOrder | null>(null);
   // Every read that adds claims or moves them into the agenda group. Frozen before these settle, the
   // order would be made again, and the rows reshuffled, when the agenda claims land on top.
@@ -627,7 +540,7 @@ export function useLiveTopicTemplate({
       isAccepted: boolean;
     } => {
       const hex = ID.uuidToHex(claimId);
-      const raw = votesQuery.data?.byClaim.get(hex);
+      const raw = votesByClaim?.get(hex);
       const userVote: VoteChoice = raw?.viewerVote ?? null;
 
       const pos = raw?.totalPositive ?? 0;
@@ -648,13 +561,12 @@ export function useLiveTopicTemplate({
     // The row votes in `voteSpaceId` — the space its link opens, so the vote also shows on that
     // claim's own page. Counts here are totals across spaces, so the row is told the viewer's vote
     // in that space from the same query, and swaps only that one (GEO-3819).
-    const refreshVotes = () =>
-      void queryClient.invalidateQueries({ queryKey: ['live-topic-template', 'multi-space-votes'] });
+    const refreshVotes = () => void queryClient.invalidateQueries({ queryKey: TOPIC_CLAIM_VOTES_QUERY_PREFIX });
     const voteTargetFor = (claimId: string, voteSpaceId: string, title: string): ClaimVoteTarget => ({
       claimId,
       spaceId: voteSpaceId,
       title,
-      baselineVote: baselineVoteFor(votesQuery.data?.byClaim, claimId, voteSpaceId),
+      baselineVote: baselineVoteFor(votesByClaim, claimId, voteSpaceId),
       onSettled: refreshVotes,
     });
 
@@ -895,7 +807,7 @@ export function useLiveTopicTemplate({
     serverCoverUrl,
     spaceId,
     tweetAuthorsQuery.data,
-    votesQuery.data,
+    votesByClaim,
   ]);
 
   const sectionsGateKey = `${ID.uuidToHex(entityId)}:${ID.uuidToHex(spaceId)}:${isSpaceHome ? 'home' : 'entity'}`;
@@ -908,14 +820,18 @@ export function useLiveTopicTemplate({
       coverage.isLoading ||
       (orderedClaimSeeds.length > 0 && votesQuery.isLoading),
     sectionsGateKey,
-    1100
+    1100,
+    // Everything above reads the queries the Topic page's server prefetch hands over, or the entity
+    // the server seeds the store with, so the server and the first client render agree on it.
+    { revealSettledBeforeMount: true }
   );
   // The Claims list is ordered by its vote counts, so it waits a little longer than the other
   // sections, for its claims and their counts: drawn before, it would reshuffle when they land (GEO-3876).
   const isWaitingForClaimVotes = useInitialHydrationGate(
     isBaseSectionsLoading || claimOrderPending,
     sectionsGateKey,
-    CLAIM_VOTES_MAX_WAIT_MS
+    CLAIM_VOTES_MAX_WAIT_MS,
+    { revealSettledBeforeMount: true }
   );
   const isSectionsLoading = isBaseSectionsLoading || isWaitingForClaimVotes;
   if (orderedClaimSeeds.length > 0 && frozenClaimOrder?.key !== currentClaimOrderKey) {

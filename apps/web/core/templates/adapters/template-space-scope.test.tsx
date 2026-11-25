@@ -9,7 +9,7 @@ import { EntityQuery, type WhereCondition } from '~/core/sync/experimental_query
 import type { Entity, Relation } from '~/core/types';
 
 import { TEMPLATE_ONTOLOGY } from '../ontology';
-import { CLAIM_STANCE_VOTE_KIND, activeStanceVotes, aggregateClaimVotes } from './topic-claim-votes';
+import { CLAIM_STANCE_VOTE_KIND, activeStanceVotes } from './topic-claim-votes';
 import { useLiveClaimTemplate } from './use-live-claim-template';
 import { useLiveEventTemplate } from './use-live-event-template';
 import { useLiveNewsStoryTemplate } from './use-live-news-story-template';
@@ -554,16 +554,11 @@ describe('Topic template', () => {
       voteType,
       voteKind: CLAIM_STANCE_VOTE_KIND,
     });
-    state.votes = {
-      byClaim: aggregateClaimVotes(
-        activeStanceVotes([
-          vote('u1', 'b1', 0),
-          vote('u2', 'b1', 0),
-          ...['u1', 'u2', 'u3', 'u4', 'u5', 'u6'].map((u, i) => vote(u, 't1', i % 2)),
-        ]),
-        null
-      ),
-    };
+    state.votes = activeStanceVotes([
+      vote('u1', 'b1', 0),
+      vote('u2', 'b1', 0),
+      ...['u1', 'u2', 'u3', 'u4', 'u5', 'u6'].map((u, i) => vote(u, 't1', i % 2)),
+    ]);
     const { result } = renderHook(() => useLiveTopicTemplate({ entityId: PAGE, spaceId: SPACE }));
 
     await waitFor(() => expect(result.current.data?.claims).toBeDefined());
@@ -593,7 +588,7 @@ describe('Topic template', () => {
       // The other sections' wait (1.1 s) is over, but the Claims order needs its counts.
       expect(result.current.isSectionsLoading).toBe(true);
 
-      state.votes = { byClaim: new Map() };
+      state.votes = [];
       rerender();
       await act(async () => {
         vi.advanceTimersByTime(0);
@@ -621,9 +616,7 @@ describe('Topic template', () => {
         voteType: 0,
         voteKind: CLAIM_STANCE_VOTE_KIND,
       });
-      state.votes = {
-        byClaim: aggregateClaimVotes(activeStanceVotes([vote('u1', 'b2'), vote('u2', 'b2'), vote('u1', 'b1')]), null),
-      };
+      state.votes = activeStanceVotes([vote('u1', 'b2'), vote('u2', 'b2'), vote('u1', 'b1')]);
       state.agendaLoading = true;
       const { result, rerender } = renderHook(() => useLiveTopicTemplate({ entityId: PAGE, spaceId: SPACE }));
       await act(async () => {
@@ -672,14 +665,9 @@ describe('Topic template', () => {
       expect(result.current.data!.claims!.map(c => c.title)).toEqual(['Best 1', 'Best 2']);
 
       // The counts land and would put Best 2 first: the rows already drawn stay put.
-      state.votes = {
-        byClaim: aggregateClaimVotes(
-          activeStanceVotes([
-            { userId: 'u1', objectId: 'b2', spaceId: SPACE, voteType: 0, voteKind: CLAIM_STANCE_VOTE_KIND },
-          ]),
-          null
-        ),
-      };
+      state.votes = activeStanceVotes([
+        { userId: 'u1', objectId: 'b2', spaceId: SPACE, voteType: 0, voteKind: CLAIM_STANCE_VOTE_KIND },
+      ]);
       rerender();
       await act(async () => {
         vi.advanceTimersByTime(0);
@@ -708,9 +696,7 @@ describe('Topic template', () => {
       voteType: 0,
       voteKind: CLAIM_STANCE_VOTE_KIND,
     });
-    const votesFor = (votes: [string, string][]) => ({
-      byClaim: aggregateClaimVotes(activeStanceVotes(votes.map(([u, c]) => vote(u, c))), null),
-    });
+    const votesFor = (votes: [string, string][]) => activeStanceVotes(votes.map(([u, c]) => vote(u, c)));
     state.votes = votesFor([['u1', 'b2']]);
     const { result, rerender } = renderHook(() => useLiveTopicTemplate({ entityId: PAGE, spaceId: SPACE }));
     await waitFor(() => expect(result.current.data?.claims?.map(c => c.title)).toEqual(['Best 2', 'Best 1']));
@@ -869,12 +855,7 @@ describe('Topic template', () => {
       voteType,
       voteKind: CLAIM_STANCE_VOTE_KIND,
     });
-    state.votes = {
-      byClaim: aggregateClaimVotes(
-        activeStanceVotes([vote('u1', SPACE, 0), vote('u2', OTHER, 0), vote('u3', OTHER, 1)]),
-        null
-      ),
-    };
+    state.votes = activeStanceVotes([vote('u1', SPACE, 0), vote('u2', OTHER, 0), vote('u3', OTHER, 1)]);
     const { result } = renderHook(() => useLiveTopicTemplate({ entityId: PAGE, spaceId: SPACE }));
 
     await waitFor(() => expect(result.current.data?.claims).toBeDefined());
