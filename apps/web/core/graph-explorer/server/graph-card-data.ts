@@ -130,6 +130,7 @@ export async function loadGraphCardData(
     deps.fetchHop1(meta.centre.id, filter),
     meta.centre.kind === 'topic' ? deps.fetchAllClaimsAbout(meta.centre.id, filter, spaceId) : null,
   ]);
+  if (hop1.failedKinds?.length) degraded = true;
 
   // Counts in each claim's own space: hop 1's agrees/disagrees are cross-space and never shown.
   const claimSpace = new Map<string, string>();

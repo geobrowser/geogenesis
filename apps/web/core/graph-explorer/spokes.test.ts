@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { CLAIM_SUPPORTS_PROPERTY_ID } from '~/core/debates/ontology';
+
 import type { GraphEntity, GraphHop, GraphRelation } from './graph-entity';
 import { resolveGraphFilter } from './graph-filter';
 import {
@@ -69,6 +71,15 @@ describe('relationLabel', () => {
     expect(relationLabel({ propertyId: 'f'.repeat(32), propertyName: 'Members', direction: 'in' })).toBe(
       'Members (incoming)'
     );
+  });
+
+  it("reads the debate publisher's Supports and the duplicate Opposes like the mapped ones", () => {
+    expect(relationLabel({ propertyId: CLAIM_SUPPORTS_PROPERTY_ID, propertyName: 'Supports', direction: 'in' })).toBe(
+      'Supported by'
+    );
+    expect(
+      relationLabel({ propertyId: '818f2f7b85c687853d884ff96401dbaa', propertyName: 'Opposes', direction: 'in' })
+    ).toBe('Opposed by');
   });
 });
 

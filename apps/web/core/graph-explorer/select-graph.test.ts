@@ -90,9 +90,10 @@ describe('pickNeighbours', () => {
     expect(picked.map(p => p.node.id)).toEqual([id(2), id(4), id(1)]);
   });
 
-  it('keeps only the chip’s kind, plus topics', () => {
-    const picked = pickNeighbours(around([node(1, 'src'), node(2, 'claim'), node(3, 'topic')]), 10, new Set(), 'claim');
-    expect(picked.map(p => p.node.kind)).toEqual(['topic', 'claim']);
+  it('keeps only the chip’s kind, dropping topics too', () => {
+    const candidates = around([node(1, 'src'), node(2, 'claim'), node(3, 'topic')]);
+    expect(pickNeighbours(candidates, 10, new Set(), 'claim').map(p => p.node.kind)).toEqual(['claim']);
+    expect(pickNeighbours(candidates, 10, new Set(), 'all').map(p => p.node.kind)).toEqual(['topic', 'claim', 'src']);
   });
 });
 
@@ -188,6 +189,48 @@ describe('selectGraph', () => {
       kindFilter: 'all',
     });
     expect(selection.nodes.filter(n => n.hop === 2).map(n => n.node.id)).toEqual([id(65), id(64)]);
+  });
+});
+
+describe('selectGraph under a chip', () => {
+  const centre = node(0, 'topic');
+  const topic = node(1, 'topic');
+  const claim = node(2, 'claim');
+  const story = node(3, 'story');
+  // Only the dropped topic reaches 10; 11 is reached through the topic and through the kept claim.
+  const onlyViaTopic = node(10, 'claim');
+  const alsoViaClaim = node(11, 'claim');
+  const args = {
+    centre,
+    neighbours: around([topic, claim, story]),
+    hop2: {
+      [topic.id]: around([onlyViaTopic, alsoViaClaim, node(12, 'topic')], topic.id),
+      [claim.id]: around([alsoViaClaim, node(13, 'topic')], claim.id),
+      [story.id]: around([node(14, 'topic')], story.id),
+    },
+    crossLinks: [edge(claim.id, topic.id, 1), edge(alsoViaClaim.id, topic.id, 2), edge(claim.id, story.id, 3)],
+    caps: DESKTOP_GRAPH_CAPS,
+  };
+  const ids = (selection: ReturnType<typeof selectGraph>) => selection.nodes.map(entry => entry.node.id);
+
+  it('shows no topics but the centre, and no lines to topics', () => {
+    const selection = selectGraph({ ...args, kindFilter: 'claim' });
+    expect(selection.nodes[0]).toEqual({ node: centre, hop: 0, parentId: null });
+    expect(selection.nodes.slice(1).some(entry => entry.node.kind === 'topic')).toBe(false);
+    const shown = new Set(ids(selection));
+    expect(selection.links.every(({ edge }) => shown.has(edge.fromId) && shown.has(edge.toId))).toBe(true);
+  });
+
+  it('keeps a dropped topic’s second ring off the map unless a kept node reaches it', () => {
+    const selection = selectGraph({ ...args, kindFilter: 'claim' });
+    expect(ids(selection)).toEqual([centre.id, claim.id, alsoViaClaim.id]);
+    expect(selection.nodes.find(entry => entry.node.id === alsoViaClaim.id)?.parentId).toBe(claim.id);
+  });
+
+  it('brings topics back under Everything', () => {
+    const selection = selectGraph({ ...args, kindFilter: 'all' });
+    expect(ids(selection)).toEqual(expect.arrayContaining([topic.id, onlyViaTopic.id]));
+    expect(selection.links.some(({ edge }) => edge.toId === topic.id)).toBe(true);
   });
 });
 

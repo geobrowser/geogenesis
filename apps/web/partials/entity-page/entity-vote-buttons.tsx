@@ -92,6 +92,8 @@ type EntityVoteButtonsProps = {
    * still open the list of who responded.
    */
   hideClaimShare?: boolean;
+  /** Drop a claim's responder faces too, for list rows that keep only the thumbs (GEO-3850). */
+  hideResponderAvatars?: boolean;
 };
 
 /**
@@ -124,6 +126,7 @@ function EntityResponseButtons({
   nearViewport = true,
   hideEmptyClaimShare = false,
   hideClaimShare = false,
+  hideResponderAvatars = false,
 }: EntityVoteButtonsProps) {
   const getContext = useActionContext('entity_vote_buttons', 'entity', entityId);
   const responseBatch = useClaimResponseBatchState();
@@ -428,17 +431,18 @@ function EntityResponseButtons({
   // chevron, which had no filled form and so needed colour to say it was held; there are no
   // chevrons here any more, so this is no longer a choice and `VOTE_BUTTON_CLASS` is used directly.
 
-  const claimResponderAvatars = isClaimResponse ? (
-    <ClaimResponderAvatars
-      entityId={entityId}
-      spaceId={spaceId}
-      objectType={ENTITY_RESPONSE_OBJECT_TYPE}
-      responseKind={queryResponseKind}
-      totalResponders={effectiveTotal}
-      viewerSpaceId={personalSpaceId}
-      optimisticViewerResponse={effectiveOptimistic}
-    />
-  ) : null;
+  const claimResponderAvatars =
+    isClaimResponse && !hideResponderAvatars ? (
+      <ClaimResponderAvatars
+        entityId={entityId}
+        spaceId={spaceId}
+        objectType={ENTITY_RESPONSE_OBJECT_TYPE}
+        responseKind={queryResponseKind}
+        totalResponders={effectiveTotal}
+        viewerSpaceId={personalSpaceId}
+        optimisticViewerResponse={effectiveOptimistic}
+      />
+    ) : null;
 
   const claimResponderAvatarsClassName = 'inline-flex h-5 shrink-0 items-center';
 
