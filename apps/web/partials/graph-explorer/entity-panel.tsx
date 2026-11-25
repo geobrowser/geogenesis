@@ -82,7 +82,9 @@ export function EntityPanel({
 
   return (
     <section aria-label={`About ${centre.name ?? centre.id}`} className="flex min-h-0 flex-col gap-5">
-      <div className="flex items-start gap-3">
+      {/* On a phone the map right above already names the centre, so its space goes to the map. The
+          switch is the map's own phone breakpoint (`graph-phone:`, GRAPH_PHONE_QUERY). */}
+      <div data-testid="entity-panel-header" className="flex items-start gap-3 graph-phone:hidden">
         <EntityAvatar entity={centre} size={48} />
         <div className="flex min-w-0 flex-col gap-1">
           <h2 className="text-mediumTitle wrap-break-word text-text">{centre.name ?? centre.id}</h2>
