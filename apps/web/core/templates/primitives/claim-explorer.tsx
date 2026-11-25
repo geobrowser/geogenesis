@@ -44,7 +44,7 @@ export interface ClaimExplorerProps {
   claims: readonly ClaimSummaryModel[];
   title?: string;
   /**
-   * Below 760px the Factual / Judgment tag is dropped to keep each row short (GEO-3819). On for
+   * Below 640px the Factual / Judgment tag is dropped to keep each row short (GEO-3819). On for
    * every template claim list (GEO-3837); pass `false` for a list where the kind matters on phones.
    */
   hideKindOnPhone?: boolean;
@@ -170,7 +170,7 @@ export function ClaimExplorer({ claims, title = 'Claims', hideKindOnPhone = true
         }}
       />
 
-      <div className={cx('flex flex-col @[760px]:overflow-hidden', TEMPLATE_CLAIM_LIST_SURFACE)}>
+      <div className={cx('flex flex-col @[640px]:overflow-hidden', TEMPLATE_CLAIM_LIST_SURFACE)}>
         {/* Every row, so switching page keeps the same lookup and batch. */}
         <TemplateVoteRows targets={voteTargets}>
           <div className="divide-y divide-divider">
@@ -192,7 +192,7 @@ export function ClaimExplorer({ claims, title = 'Claims', hideKindOnPhone = true
         </TemplateVoteRows>
 
         {totalPages > 1 && (
-          <div className="border-t border-divider py-2.5 @[760px]:px-5">
+          <div className="border-t border-divider py-2.5 @[640px]:px-5">
             <InlinePagination page={safePage} totalPages={totalPages} onPageChange={setPage} label="Claims pages" />
           </div>
         )}
@@ -218,6 +218,12 @@ export interface ClaimListRowProps {
  * One column at every width (GEO-3845): the title across the row, then Agree / Disagree with the
  * result beside them on wide rows ("bar 71% · 7 votes · Judgment"), so nothing floats at the far
  * right. Phones keep the split as its own line under the buttons, as the Claim page's vote box draws it.
+ *
+ * Wide starts at a 640px template (GEO-3870): with the short bar the wide row needs about 650px
+ * (rank gutter, two 112px buttons, the bar, "71% · 7 votes · Judgment", the "…" menu), so the Space
+ * home's 680-750px column gets it, while phones and the 600px side panel keep the phone row. Every
+ * part of the row, the list card and its pager switch at the same width, so no width mixes the two
+ * layouts.
  */
 export function ClaimListRow({ rank, claim, hideKindOnPhone = true, details }: ClaimListRowProps) {
   const voteMetaIndex = claim.meta?.findIndex(part => /\bvotes?\b/i.test(part)) ?? -1;
@@ -250,7 +256,7 @@ export function ClaimListRow({ rank, claim, hideKindOnPhone = true, details }: C
   const titleNode = (
     <span className="block max-w-[720px] text-[19px] leading-[26px] font-normal text-pretty text-text transition-colors group-hover/claim:text-[#4c1fd4]">
       {/* Phones: the rank leads the title instead of holding a column, so the row keeps its width. */}
-      <span aria-hidden className="mr-2 text-[17.5px] font-semibold text-grey-04 tabular-nums @[760px]:hidden">
+      <span aria-hidden className="mr-2 text-[17.5px] font-semibold text-grey-04 tabular-nums @[640px]:hidden">
         {rank}
       </span>
       {claim.title}
@@ -309,15 +315,15 @@ export function ClaimListRow({ rank, claim, hideKindOnPhone = true, details }: C
         {(voteButtons || hasWideResult) && (
           <div
             className={cx(
-              'flex-wrap items-center gap-x-4 gap-y-2 @[760px]:mt-2.5 @[760px]:flex',
+              'flex-wrap items-center gap-x-4 gap-y-2 @[640px]:mt-2.5 @[640px]:flex',
               voteButtons ? 'mt-2.5 flex' : 'hidden'
             )}
           >
             {/* The debates app's Agree / Disagree (GEO-3845), across the row on phones. */}
-            {voteButtons && <div className="basis-full @[760px]:basis-auto">{voteButtons}</div>}
+            {voteButtons && <div className="basis-full @[640px]:basis-auto">{voteButtons}</div>}
 
             {hasWideResult && (
-              <div className="hidden min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[15px] leading-[20px] text-grey-04 tabular-nums @[760px]:flex">
+              <div className="hidden min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[15px] leading-[20px] text-grey-04 tabular-nums @[640px]:flex">
                 {primaryRow && <InlineSplit row={primaryRow} />}
                 {wideMeta.map((node, i) => (
                   <React.Fragment key={i}>
@@ -331,13 +337,13 @@ export function ClaimListRow({ rank, claim, hideKindOnPhone = true, details }: C
         )}
 
         {extraRows.length > 0 && (
-          <span className="hidden @[760px]:contents">
+          <span className="hidden @[640px]:contents">
             <SplitBars rows={extraRows} density="compact" className="mt-2.5 w-full max-w-[420px]" />
           </span>
         )}
 
         {phoneSplitRows.length > 0 && (
-          <SplitBars rows={phoneSplitRows} density="full" className="mt-3 @[760px]:hidden" />
+          <SplitBars rows={phoneSplitRows} density="full" className="mt-3 @[640px]:hidden" />
         )}
       </>
     );
@@ -346,8 +352,8 @@ export function ClaimListRow({ rank, claim, hideKindOnPhone = true, details }: C
   return (
     // Baseline alignment keeps the rank on the title's first line at every size (Preston, GEO-3857).
     // Phones drop the side padding: the list loses its card there and runs to the page gutter.
-    <div className="flex items-baseline gap-3 py-4 transition-colors @[760px]:gap-4 @[760px]:px-5 @[760px]:hover:bg-bg">
-      <span className="hidden w-6 shrink-0 text-center text-[17.5px] leading-[26px] font-semibold text-grey-04 tabular-nums @[760px]:block">
+    <div className="flex items-baseline gap-3 py-4 transition-colors @[640px]:gap-4 @[640px]:px-5 @[640px]:hover:bg-bg">
+      <span className="hidden w-6 shrink-0 text-center text-[17.5px] leading-[26px] font-semibold text-grey-04 tabular-nums @[640px]:block">
         {rank}
       </span>
 
@@ -371,7 +377,7 @@ export function ClaimListRow({ rank, claim, hideKindOnPhone = true, details }: C
         </div>
 
         {phoneMeta.length > 0 && (
-          <div className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[13px] text-grey-04 @[760px]:hidden">
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[13px] text-grey-04 @[640px]:hidden">
             {phoneMeta.map((node, i) => (
               <React.Fragment key={i}>
                 {i > 0 && <span aria-hidden>·</span>}
@@ -402,7 +408,7 @@ export function ClaimListRow({ rank, claim, hideKindOnPhone = true, details }: C
           targetId={claim.id}
           targetTitle={claim.title}
           targetKind="Claim"
-          className="mt-3 @[760px]:mt-2"
+          className="mt-3 @[640px]:mt-2"
         />
       </div>
 
@@ -411,7 +417,7 @@ export function ClaimListRow({ rank, claim, hideKindOnPhone = true, details }: C
         // Level with the title's first line. A pending row's id isn't an entity yet; the menu keeps
         // its space but can't be used.
         className={cx(
-          '-my-[3px] shrink-0 self-start @[760px]:-my-px [&>button[aria-haspopup]]:size-8 @[760px]:[&>button[aria-haspopup]]:size-7',
+          '-my-[3px] shrink-0 self-start @[640px]:-my-px [&>button[aria-haspopup]]:size-8 @[640px]:[&>button[aria-haspopup]]:size-7',
           claim.pending && 'invisible'
         )}
       />
@@ -458,7 +464,12 @@ export function claimRowResult(
   return { splitRows: totalVotes !== 0 ? claim.split.rows : [], totalVotes };
 }
 
-/** The overall split drawn inline beside the vote buttons on a wide row: a short bar and its percentage. */
+/**
+ * The overall split drawn inline beside the vote buttons on a wide row: a short bar and its percentage.
+ * The bar is shorter below a 760px template so a row in the Space home's 680-750px column (beside its
+ * sidebar, GEO-3870) keeps its buttons and result on one line. Full pages pad the list 24px a side, so
+ * a 640-700px page still wraps the result under the buttons.
+ */
 function InlineSplit({ row }: { row: SplitRow }) {
   const clamped = Math.max(0, Math.min(100, row.percent));
   return (
@@ -469,7 +480,7 @@ function InlineSplit({ row }: { row: SplitRow }) {
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={Math.round(clamped)}
-        className="block h-2 w-[140px] overflow-hidden rounded-full bg-grey-01"
+        className="block h-2 w-[96px] overflow-hidden rounded-full bg-grey-01 @[760px]:w-[140px]"
       >
         <span
           className="block h-full rounded-full transition-[width] duration-200"
