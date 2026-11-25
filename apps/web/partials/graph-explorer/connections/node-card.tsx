@@ -80,6 +80,9 @@ const FAR_MARKERS: Partial<Record<GraphNode['kind'], string>> = {
   event: 'h-3 w-3 rounded-[3px] bg-[#d9b46a]',
   case: 'h-3 w-3 rounded-[3px] bg-[#4c8dff]',
   src: 'h-3 w-[10px] rounded-[2px] border-[1.5px] border-dashed border-white/70',
+  // A far entity with no picture: a neutral dot, round like the photo it stands in for.
+  ent: 'h-3 w-3 rounded-full bg-grey-03',
+  other: 'h-3 w-3 rounded-full bg-grey-03',
 };
 
 /**
@@ -108,7 +111,7 @@ export function NodeCard({
 }: CardProps & { claimSpaceId: string | null; centreId?: string | null }) {
   const far = isFarNode(props.hop, props.isCentre);
   if (props.node.kind === 'claim' && claimSpaceId) return <ClaimCard {...props} spaceId={claimSpaceId} />;
-  if (props.node.kind === 'ent' || props.node.kind === 'other') return <EntityCard {...props} />;
+  if (props.node.kind === 'ent' || props.node.kind === 'other') return <EntityCard {...props} centreId={centreId} />;
   if (far) return <FarMarker node={props.node} band={null} />;
   const card = props.node.kind === 'topic' ? <TopicCard {...props} /> : <ItemCard {...props} centreId={centreId} />;
   return props.isCentre ? (
@@ -178,9 +181,26 @@ function TopicCard({ node, hop, isCentre, phone }: CardProps) {
   );
 }
 
-function EntityCard({ node, hop, isCentre, phone }: CardProps) {
+/**
+ * An entity with a picture is its photo plus a name label. With none, or once the picture fails to
+ * load, it is a name card like the map's other cards: a letter in a gray circle says nothing.
+ */
+function EntityCard({ centreId, ...props }: CardProps & { centreId: string | null }) {
+  const { node, hop, isCentre } = props;
   const src = entityImageSrc(node);
-  const [failed, setFailed] = React.useState(false);
+  // Keyed by URL, so a node whose picture changes tries the new one.
+  const [failedSrc, setFailedSrc] = React.useState<string | null>(null);
+  if (src && failedSrc !== src) return <EntityPhotoCard {...props} src={src} onError={() => setFailedSrc(src)} />;
+  if (isFarNode(hop, isCentre)) return <FarMarker node={node} band={null} />;
+  const card = <ItemCard {...props} centreId={centreId} />;
+  return isCentre ? (
+    card
+  ) : (
+    <ShrinksToMarker marker={<FarMarker node={node} band={null} />}>{card}</ShrinksToMarker>
+  );
+}
+
+function EntityPhotoCard({ node, hop, isCentre, phone, src, onError }: CardProps & { src: string; onError: () => void }) {
   const far = isFarNode(hop, isCentre);
   const size = isCentre ? (phone ? 64 : 84) : far ? 24 : phone ? 40 : 52;
   const width = isCentre ? (phone ? 'w-[110px]' : 'w-[150px]') : far ? null : phone ? 'w-[84px]' : 'w-[112px]';
@@ -189,22 +209,12 @@ function EntityCard({ node, hop, isCentre, phone }: CardProps) {
       <span
         data-anchor
         className={cx(
-          'flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#333] text-[#ddd]',
+          'flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#333]',
           isCentre ? CENTRE_RING : 'shadow-[0_0_0_1px_rgba(255,255,255,.18),0_10px_30px_rgba(0,0,0,.5)]'
         )}
-        style={{ width: size, height: size, fontSize: Math.round(size * 0.4) }}
+        style={{ width: size, height: size }}
       >
-        {src && !failed ? (
-          <img
-            src={src}
-            alt=""
-            draggable={false}
-            className="h-full w-full object-cover"
-            onError={() => setFailed(true)}
-          />
-        ) : (
-          node.name?.charAt(0).toUpperCase()
-        )}
+        <img src={src} alt="" draggable={false} className="h-full w-full object-cover" onError={onError} />
       </span>
       {far ? (
         <FarName name={node.name} />
@@ -245,6 +255,7 @@ function cardBox({ isCentre, phone }: Pick<CardProps, 'isCentre' | 'phone'>, des
 
 function ItemCard({ node, hop, isCentre, phone, centreId }: CardProps & { centreId: string | null }) {
   const source = node.kind === 'src';
+  const named = node.kind === 'ent' || node.kind === 'other';
   const meta = source
     ? sourceEyebrow(node, centreId)
     : [nodeTypeLabel(node), nodeDateLabel(node)].filter(Boolean).join(' · ');
@@ -252,6 +263,7 @@ function ItemCard({ node, hop, isCentre, phone, centreId }: CardProps & { centre
     <span
       data-label
       data-source-card={source || undefined}
+      data-name-card={named || undefined}
       className={cx(
         // Blur behind every card is too much for low-end phones.
         'flex flex-col items-start gap-1 rounded-xl text-left',
@@ -265,7 +277,7 @@ function ItemCard({ node, hop, isCentre, phone, centreId }: CardProps & { centre
         <span
           className={cx(
             'text-[11px] font-medium',
-            source ? 'line-clamp-1 text-[#a8a8a8]' : node.kind === 'story' ? 'text-[#4b4b4b]' : 'text-[#d9b46a]'
+            source || named ? 'line-clamp-1 text-[#a8a8a8]' : node.kind === 'story' ? 'text-[#4b4b4b]' : 'text-[#d9b46a]'
           )}
         >
           {meta}

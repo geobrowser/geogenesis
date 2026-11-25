@@ -1,4 +1,4 @@
-import { cleanup, render } from '@testing-library/react';
+import { cleanup, fireEvent, render } from '@testing-library/react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -75,7 +75,7 @@ describe('NodeCard far nodes', () => {
       const visible = [...container.querySelectorAll('span')].filter(
         span => span.textContent && !span.closest('.hidden') && span.children.length === 0
       );
-      expect(visible.map(span => span.textContent)).toEqual(kind === 'ent' || kind === 'other' ? ['A'] : []);
+      expect(visible.map(span => span.textContent)).toEqual([]);
     }
   );
 
@@ -145,5 +145,80 @@ describe('source cards', () => {
     expect(source.textContent).toContain('Report · BBC Verify · Mar 2025');
     expect(card(node('claim'), 1).querySelector('[data-label]')!.className).not.toContain('border-dashed');
     expect(card(node('story'), 1).querySelector('[data-label]')!.className).not.toContain('border-dashed');
+  });
+});
+
+describe('entities without a picture', () => {
+  const PHOTO = 'https://example.com/portrait.png';
+  const PERSON = GRAPH_KIND_TYPE_IDS.ent[0]!;
+  const person = (extra: Partial<GraphNode> = {}) =>
+    node('ent', { name: 'Talia Levin', types: [{ id: PERSON, name: 'Person' }], ...extra });
+  /** Text in view: any letter circle would show up here as a lone capital. */
+  const visibleText = (container: HTMLElement) =>
+    [...container.querySelectorAll('span')]
+      .filter(span => span.textContent && !span.closest('.hidden') && span.children.length === 0)
+      .map(span => span.textContent);
+
+  it.each([
+    ['a person with no photo', person()],
+    ['an untyped entity', node('other', { name: 'Talia Levin' })],
+  ])('draws %s as a name card, not a letter circle, at the centre and around it', (_, entry) => {
+    for (const [hop, isCentre] of [
+      [0, true],
+      [1, false],
+    ] as const) {
+      const container = card(entry, hop, isCentre);
+      expect(container.querySelector('img')).toBeNull();
+      expect(container.querySelector('[data-anchor]')).toBeNull();
+      const named = container.querySelector('[data-name-card]')!;
+      expect(named).not.toBeNull();
+      expect(named.className).toContain('rounded-xl');
+      expect(named.className.includes(CENTRE_RING)).toBe(isCentre);
+      expect(visibleText(container)).not.toContain('T');
+      expect(visibleText(container)).toContain('Talia Levin');
+    }
+  });
+
+  it('heads a typed name card with its type, like other cards', () => {
+    expect(visibleText(card(person(), 1))).toEqual(['Person', 'Talia Levin']);
+  });
+
+  it('keeps a photo and name label for an entity with a picture', () => {
+    const container = card(person({ image: PHOTO }), 1);
+    expect(container.querySelector('img')?.getAttribute('src')).toBe(PHOTO);
+    expect(container.querySelector('[data-anchor]')).not.toBeNull();
+    expect(container.querySelector('[data-name-card]')).toBeNull();
+    expect(container.querySelector('[data-label]')?.textContent).toBe('Talia Levin');
+  });
+
+  it.each([0, 1] as const)('falls back to the name card when the picture fails to load (hop %s)', hop => {
+    const container = card(person({ image: PHOTO }), hop);
+    fireEvent.error(container.querySelector('img')!);
+    expect(container.querySelector('img')).toBeNull();
+    expect(container.querySelector('[data-name-card]')?.textContent).toContain('Talia Levin');
+    expect(visibleText(container)).not.toContain('T');
+  });
+
+  it('lets a hop-1 name card swap to its marker while drawn too small (data-far)', () => {
+    const container = card(person(), 1);
+    expect(container.querySelector('.group-data-\\[far\\]\\:hidden [data-name-card]')).not.toBeNull();
+    expect(container.querySelector('.group-data-\\[far\\]\\:contents [data-far-marker]')).not.toBeNull();
+  });
+
+  it('draws a far entity with no picture as a neutral dot, and one with a picture as its small photo', () => {
+    const dot = card(person(), 2).querySelector('[data-far-marker] > [aria-hidden]')!;
+    expect(dot.className).toContain('rounded-full');
+    expect(dot.className).toContain('bg-grey-03');
+    expect(farMarkerClass('other', null)).toBe(farMarkerClass('ent', null));
+    const photo = card(person({ image: PHOTO }), 2);
+    expect(photo.querySelector('img')).not.toBeNull();
+    expect(photo.querySelector('[data-far-marker]')).toBeNull();
+  });
+
+  it('turns a far photo that fails to load into the dot', () => {
+    const container = card(person({ image: PHOTO }), 2);
+    fireEvent.error(container.querySelector('img')!);
+    expect(container.querySelector('img')).toBeNull();
+    expect(container.querySelector('[data-far-marker]')).not.toBeNull();
   });
 });
