@@ -25,7 +25,7 @@ export const BAND_SWATCHES: Record<ClaimBand, string> = {
 };
 
 /** The node's own type name ("Article", "News event"), for the line above its title. */
-export function nodeTypeLabel(node: GraphNode): string | null {
+export function nodeTypeLabel(node: Pick<GraphNode, 'kind' | 'types'>): string | null {
   const order = GRAPH_KIND_TYPE_IDS[node.kind];
   const ranked = node.types
     .map(type => ({ name: type.name, rank: order.indexOf(normId(type.id)) }))
@@ -41,7 +41,7 @@ const DATE_FORMAT = new Intl.DateTimeFormat('en-US', {
   timeZone: 'UTC',
 });
 
-export function nodeDateLabel(node: GraphNode): string | null {
+export function nodeDateLabel(node: Pick<GraphNode, 'date'>): string | null {
   if (!node.date) return null;
   const date = new Date(node.date);
   return Number.isNaN(date.getTime()) ? null : DATE_FORMAT.format(date);

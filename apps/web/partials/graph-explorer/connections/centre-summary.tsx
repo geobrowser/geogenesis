@@ -10,9 +10,7 @@ import { useGraphAnalytics } from '~/core/graph-explorer/graph-explorer-analytic
 import type { GraphFilter } from '~/core/graph-explorer/graph-filter';
 import { MAX_TOPIC_CLAIMS, claimsHeadline, summaryPercent } from '~/core/graph-explorer/topic-claims-summary';
 import { useTopicClaimsSummary } from '~/core/graph-explorer/use-graph-explorer';
-import { NavUtils } from '~/core/utils/utils';
 
-import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
 import { GraphClaimPosition } from './graph-claim-position';
@@ -87,9 +85,11 @@ export function TopicClaimsSummary({
   );
 }
 
-/** Responding to a claim from the map, in the claim's own space. */
+/**
+ * Responding to a claim from the map, in the claim's own space. The way to the claim's page is the
+ * panel's title, as for every other kind.
+ */
 export function ClaimActions({ claimId, spaceId }: { claimId: string; spaceId: string }) {
-  const analytics = useGraphAnalytics();
   return (
     // On the panel's white rather than in a grey box, as in the prototype's map panel: the bar's grey
     // track and the held pill's fill are the only greys in the block.
@@ -97,13 +97,6 @@ export function ClaimActions({ claimId, spaceId }: { claimId: string; spaceId: s
       <ActionContextProvider value={{ list_id: 'graph_explorer_centre' }}>
         <GraphClaimPosition claimId={claimId} spaceId={spaceId} />
       </ActionContextProvider>
-      <Link
-        href={NavUtils.toEntity(spaceId, claimId)}
-        onClick={() => analytics?.interacted({ interaction: 'open_page', value: 'claim', target_id: claimId })}
-        className="self-start text-metadataMedium text-text underline-offset-2 hover:underline"
-      >
-        Open the claim →
-      </Link>
     </section>
   );
 }

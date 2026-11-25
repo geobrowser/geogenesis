@@ -131,7 +131,8 @@ describe('the open claim’s Agree and Disagree', () => {
       expect(pill).not.toHaveClass('border-dashed');
       expect(pill.querySelector('img')).toBeNull();
     }
-    expect(screen.getByRole('link', { name: 'Open the claim →' })).toBeInTheDocument();
+    // The claim's page is the panel's title link now, not a link under the vote block.
+    expect(screen.queryByRole('link')).toBeNull();
   });
 
   it('says "No votes yet" and draws no share or bar before anyone has voted', () => {
