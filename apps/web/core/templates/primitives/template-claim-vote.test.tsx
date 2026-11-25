@@ -289,12 +289,16 @@ describe('TemplateClaimVote', () => {
 });
 
 describe('ClaimVotePills: the debates app buttons (GEO-3845)', () => {
-  it('draws two equal 28px outlined pills that share the row, with no counts on them', () => {
+  it('draws two equal 34px outlined pills that share the row, with no counts on them', () => {
     renderVote(TARGET, { agree: 12, disagree: 3 });
     const group = screen.getByRole('group', { name: `Vote on ${TARGET.title}` });
     expect(group).toHaveClass('w-full');
     for (const pill of [agreePill(), disagreePill()]) {
-      expect(pill).toHaveClass('h-7', 'rounded-full', 'border', 'bg-transparent', 'flex-1', 'basis-0');
+      expect(pill).toHaveClass('h-[34px]', 'rounded-full', 'border', 'bg-transparent', 'flex-1', 'basis-0');
+      // The app's label type (GEO-3857): 14px system face, 18px thumb.
+      expect(pill).toHaveClass('text-[14px]', 'tracking-[-0.3px]');
+      expect(pill.className).toContain('[font-family:-apple-system');
+      expect(pill.querySelector('svg')).toHaveClass('size-[18px]');
       expect(pill).not.toHaveTextContent(/\d/);
     }
     expect(agreePill()).toHaveAccessibleName('Agree');

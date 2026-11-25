@@ -258,9 +258,9 @@ export function ClaimListRow({ rank, claim, isAgreed = false, hideKindOnPhone = 
   }
 
   const titleNode = (
-    <span className="block max-w-[720px] text-[16px] leading-[22px] font-medium text-pretty text-text transition-colors group-hover/claim:text-[#4c1fd4]">
+    <span className="block max-w-[720px] text-[17.5px] leading-[24px] font-medium text-pretty text-text transition-colors group-hover/claim:text-[#4c1fd4]">
       {/* Phones: the rank leads the title instead of holding a column, so the row keeps its width. */}
-      <span aria-hidden className="mr-2 text-[15px] font-semibold text-grey-04 tabular-nums @[760px]:hidden">
+      <span aria-hidden className="mr-2 text-[16px] font-semibold text-grey-04 tabular-nums @[760px]:hidden">
         {rank}
       </span>
       {claim.title}
@@ -328,7 +328,7 @@ export function ClaimListRow({ rank, claim, isAgreed = false, hideKindOnPhone = 
             {voteButtons && <div className="basis-full @[760px]:basis-auto">{voteButtons}</div>}
 
             {hasWideResult && (
-              <div className="hidden min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[13.5px] leading-[18px] text-grey-04 tabular-nums @[760px]:flex">
+              <div className="hidden min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[14.5px] leading-[20px] text-grey-04 tabular-nums @[760px]:flex">
                 {primaryRow && <InlineSplit row={primaryRow} />}
                 {wideMeta.map((node, i) => (
                   <React.Fragment key={i}>
@@ -356,7 +356,7 @@ export function ClaimListRow({ rank, claim, isAgreed = false, hideKindOnPhone = 
 
   return (
     <div className="flex items-start gap-3 px-5 py-4 transition-colors hover:bg-bg @[760px]:gap-4">
-      <span className="hidden w-6 shrink-0 pt-px text-center text-[15px] leading-[22px] font-semibold text-grey-04 tabular-nums @[760px]:block">
+      <span className="hidden w-6 shrink-0 pt-px text-center text-[16px] leading-[24px] font-semibold text-grey-04 tabular-nums @[760px]:block">
         {rank}
       </span>
 
@@ -420,7 +420,7 @@ export function ClaimListRow({ rank, claim, isAgreed = false, hideKindOnPhone = 
         // Level with the title's first line. A pending row's id isn't an entity yet; the menu keeps
         // its space but can't be used.
         className={cx(
-          '-my-[5px] shrink-0 @[760px]:-my-[3px] [&>button[aria-haspopup]]:size-8 @[760px]:[&>button[aria-haspopup]]:size-7',
+          '-my-1 shrink-0 @[760px]:-my-0.5 [&>button[aria-haspopup]]:size-8 @[760px]:[&>button[aria-haspopup]]:size-7',
           claim.pending && 'invisible'
         )}
       />
@@ -485,7 +485,7 @@ function InlineSplit({ row }: { row: SplitRow }) {
           style={{ width: `${clamped.toFixed(2)}%`, backgroundColor: row.color }}
         />
       </span>
-      <strong className="font-semibold text-text">{formatPercentInt(clamped)}</strong>
+      <strong className="text-[15.5px] font-semibold text-text">{formatPercentInt(clamped)}</strong>
     </span>
   );
 }

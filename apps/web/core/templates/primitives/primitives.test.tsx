@@ -119,7 +119,10 @@ describe('VoteBox: the debates app Agree / Disagree (GEO-3845)', () => {
     const agree = screen.getByRole('button', { name: 'Agree' });
     const disagree = screen.getByRole('button', { name: 'Disagree' });
     expect(screen.getByRole('group', { name: 'Do you agree?' })).toContainElement(agree);
-    for (const button of [agree, disagree]) expect(button).toHaveClass('h-9', 'rounded-full', 'bg-transparent');
+    for (const button of [agree, disagree]) {
+      expect(button).toHaveClass('h-9', 'rounded-full', 'bg-transparent', 'text-[15px]');
+      expect(button.className).toContain('[font-family:-apple-system');
+    }
     expect(disagree).toHaveAttribute('aria-pressed', 'true');
     expect(disagree).toHaveClass('border-[#151515]', 'font-bold');
     expect(agree).toHaveClass('border-[#8a8a8a]');
@@ -198,6 +201,9 @@ describe('ClaimExplorer row layout (GEO-3845)', () => {
 
     const title = screen.getByText('A judgment claim');
     const agree = screen.getByRole('button', { name: 'Agree' });
+    // A size up from 16px title and 13.5px result (Yaniv, GEO-3857).
+    expect(title).toHaveClass('text-[17.5px]', 'leading-[24px]');
+    expect(tag.parentElement).toHaveClass('text-[14.5px]');
     // The title comes first, then the buttons, then the result group.
     expect(title.compareDocumentPosition(agree) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(agree.compareDocumentPosition(tag) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
