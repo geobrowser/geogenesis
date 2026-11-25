@@ -1357,3 +1357,60 @@ describe('Phone claim lists without the card (GEO-3857)', () => {
     }
   });
 });
+
+describe('ClaimTemplate from its Supporting claims, below a debate (GEO-3869)', () => {
+  const model = {
+    id: 'claim-ai-slowdown',
+    title: 'We should slow down AI development',
+    kind: 'judgment' as const,
+    split: {
+      rows: [{ id: 'all', label: 'All spaces', color: '#202020', percent: 57, isEveryone: true }],
+      isSplit: true,
+      totalVotes: 28,
+    },
+    voteBox: { userVote: null, countSummary: '28 votes on the claim', onVote: vi.fn() },
+    agreedBasis: { summary: 'Everyone accepts the basis.', settlingSources: [] },
+    subClaims: [
+      {
+        id: 'sub-support-1',
+        title: 'Safety evaluations lag behind frontier model capabilities.',
+        kind: 'fact' as const,
+        stance: 'supports' as const,
+        agreeCount: 14,
+        disagreeCount: 3,
+        split: {
+          rows: [{ id: 'all', label: 'All spaces', color: '#202020', percent: 82, isEveryone: true }],
+          isSplit: false,
+          totalVotes: 17,
+        },
+        sources: [],
+      },
+    ],
+    graphConnections: [],
+    sections: [{ id: 'sources', title: 'Sources', items: [], emptyText: 'No sources' }],
+    breadcrumbs: [{ id: 'ai', label: 'AI', href: '/space/s/ai' }],
+  };
+
+  it('starts at Supporting claims, without the title, vote box or Accepted panel, and shows the intro', () => {
+    render(<ClaimTemplate model={model} startAtSubClaims intro={<p>From the claim intro</p>} />);
+
+    expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument();
+    expect(screen.queryByText('28 votes on the claim')).not.toBeInTheDocument();
+    expect(screen.queryByText('Everyone accepts the basis.')).not.toBeInTheDocument();
+    expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
+
+    const intro = screen.getByText('From the claim intro');
+    const supporting = screen.getByRole('region', { name: 'Supporting claims' });
+    expect(intro.compareDocumentPosition(supporting) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(
+      within(supporting).getByText('Safety evaluations lag behind frontier model capabilities.')
+    ).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Sources' })).toBeInTheDocument();
+  });
+
+  it('keeps the whole page on the Claim page', () => {
+    render(<ClaimTemplate model={model} />);
+    expect(screen.getByRole('heading', { level: 1, name: model.title })).toBeInTheDocument();
+    expect(screen.getByText('Everyone accepts the basis.')).toBeInTheDocument();
+  });
+});
