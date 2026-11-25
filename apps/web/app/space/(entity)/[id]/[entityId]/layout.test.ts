@@ -21,6 +21,8 @@ vi.mock('./cached-fetch-entity', () => ({
   cachedFetchEntity: vi.fn(),
 }));
 
+vi.mock('next/headers', () => ({ headers: async () => new Headers({ host: 'preview.example' }) }));
+
 const page = (types: Array<{ id: string }>) => ({
   entity: { id: ENTITY_ID, name: 'Israel-Palestine Conflict', types, values: [], relations: [] },
   relations: [],
@@ -29,7 +31,7 @@ const page = (types: Array<{ id: string }>) => ({
 const metadata = () =>
   generateMetadata({ params: Promise.resolve({ id: SPACE_ID, entityId: ENTITY_ID }), children: null });
 
-const CARD = `/explore/graph/${ENTITY_ID}/card?topic=${ENTITY_ID}&space=${SPACE_ID}&variant=topic&v=1`;
+const CARD = `https://preview.example/explore/graph/${ENTITY_ID}/card?topic=${ENTITY_ID}&space=${SPACE_ID}&variant=topic&v=1`;
 
 describe('entity layout metadata', () => {
   beforeEach(() => fetchEntityPage.mockReset());
