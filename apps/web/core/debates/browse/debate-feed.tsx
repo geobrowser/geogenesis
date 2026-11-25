@@ -594,7 +594,7 @@ export function DebatesBrowseFeed({
             activateVisibleDebate(debate.id);
           }}
           onScrolledAway={linkedOnly ? () => setLinkedInView(false) : undefined}
-          fitsContent={linkedOnly}
+          firstScreen={linkedOnly}
           // Pressing a debate's own control makes it the active one rather than
           // waiting for the scroll observer: its bar is reachable from 0%
           // visibility but activation needs 60%, so mid-scroll the panel would
@@ -677,7 +677,7 @@ function DebateFeedItem({
   onPlaybackState,
   onStillShown,
   onScrolledAway,
-  fitsContent = false,
+  firstScreen = false,
 }: {
   debate: Debate;
   spaceId: string;
@@ -703,10 +703,10 @@ function DebateFeedItem({
   /** The card has left the screen bar a sliver: on the Debate page, scrolled into the claim below. */
   onScrolledAway?: () => void;
   /**
-   * As tall as the debate rather than the screen: on the Debate page the claim's content follows
-   * straight on, and peeks in below, instead of starting after a screen's worth of white.
+   * The Debate page's opening screen: the debate fills it, unsnapped, and the claim's content
+   * starts just below the fold (GEO-3869).
    */
-  fitsContent?: boolean;
+  firstScreen?: boolean;
 }) {
   const itemRef = React.useRef<HTMLElement | null>(null);
   useStillFrameShown(itemRef, onStillShown);
@@ -749,8 +749,12 @@ function DebateFeedItem({
       // mobile: Tailwind emits variant utilities after unprefixed ones, so no `md:pt-3` needed.
       className={cx(
         'flex items-start justify-center px-4 pt-5',
-        // A section's gap below the debate, the room the out-of-flow scroll nudge hangs in.
-        fitsContent ? 'pb-10 md:pt-3' : 'h-full snap-start md:h-auto md:min-h-full md:py-3'
+        // On the Debate page the debate fills the first screen and no more, so what follows it starts
+        // just below the fold: the scroller is the viewport less the navbar, in `dvh`, so a phone's
+        // browser bars don't move the fold. `min-h` rather than `h` lets a debate taller than the
+        // screen push it down; the padding (inside the height) keeps a section's gap below the debate
+        // there, and is the room the out-of-flow scroll nudge hangs in.
+        firstScreen ? 'min-h-full pb-10 md:pt-3' : 'h-full snap-start md:h-auto md:min-h-full md:py-3'
       )}
     >
       {/* The whole debate lifts with the nudge — media, claim and controls together — so the
