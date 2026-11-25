@@ -121,7 +121,7 @@ vi.mock('~/partials/explore/email-capture-account-step', () => ({
 
 /** The approved copy, word for word (GEO-3846). */
 const HEADING = 'Your vote didn’t count';
-const SUBTEXT = 'Add your email to make your vote count';
+const SUBTEXT = 'Add your email to save your vote';
 
 const vote = (entityId: string, title = entityId) =>
   toggleLocalVote({ entityId, spaceId: 'space-1', responseKind: 'stance', direction: 'positive', title });

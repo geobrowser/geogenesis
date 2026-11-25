@@ -16,7 +16,7 @@ export const saveVotesNavLabel = (count: number) => `Save ${votes(count)}`;
  * the sheet can no longer be closed.
  */
 export const SAVE_VOTES_HEADING = 'Your vote didn’t count';
-export const SAVE_VOTES_SUBTEXT = 'Add your email to make your vote count';
+export const SAVE_VOTES_SUBTEXT = 'Add your email to save your vote';
 
 /** Under the email step's button: what happens next, and that there is no password to make. */
 export const SAVE_VOTES_FINE_PRINT = 'We’ll email you a 6-digit code. No password.';
