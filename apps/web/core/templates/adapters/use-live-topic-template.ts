@@ -57,6 +57,7 @@ import {
   resolveTemplateImageUrl,
 } from '../ontology';
 import { debateParticipantsKey, formatUnixSecDate, toDebateGalleryModel } from './debate-gallery-model';
+import { agendaClaimsForTopic, pinAgendaClaims, useRecentAgendaClaims } from './recent-agenda-claims';
 import { topicCoverageIngestionLink } from './source-ingestion-links';
 import {
   activeStanceVotes,
@@ -379,6 +380,13 @@ export function useLiveTopicTemplate({
     queryFn: () => fetchPostAuthorMetadata(tweetCoverageIds),
   });
 
+  // Claims from any Debate agenda in the last 21 days lead the list (GEO-3873), read once for every Topic.
+  const recentAgendaClaimsQuery = useRecentAgendaClaims();
+  const agendaClaims = React.useMemo(
+    () => agendaClaimsForTopic(recentAgendaClaimsQuery.data ?? [], entityId, spaceId),
+    [entityId, recentAgendaClaimsQuery.data, spaceId]
+  );
+
   const directClaimRels = React.useMemo(
     () => readEntityRelations(entity, TEMPLATE_ONTOLOGY.TOPIC_CLAIMS_PROPERTY_ID),
     [entity]
@@ -386,7 +394,8 @@ export function useLiveTopicTemplate({
 
   // The Claims list is the topic's Best order (GEO-3868): Best claims first, in Best's order. Only when
   // Best has fewer than the cap do the other sources fill the rest, after it and in this order: Top,
-  // the best debates' claims, linked claims, then the topic's own claim relations.
+  // the best debates' claims, linked claims, then the topic's own claim relations. Claims from a
+  // recent Debate agenda go before all of it, even when Best leaves them out (GEO-3873).
   const orderedClaimSeeds = React.useMemo(() => {
     const seen = new Set<string>();
     const seeds: {
@@ -443,8 +452,20 @@ export function useLiveTopicTemplate({
         spaceId: rel.toSpaceId ?? spaceId,
       });
     }
-    // After the cap, so the page's own claims never crowd out the viewer's additions.
-    const capped = seeds.slice(0, LIVE_CLAIMS_LIMIT);
+    const pinned = pinAgendaClaims<(typeof seeds)[number]>({
+      seeds,
+      agendaClaims,
+      bestIds: bestClaims.map(item => item.entityId),
+      makeSeed: claim => ({
+        id: claim.id,
+        title: claim.name,
+        spaceId: claim.spaceIds.includes(ID.uuidToHex(spaceId)) ? spaceId : (claim.spaceIds[0] ?? spaceId),
+      }),
+    });
+    // Every agenda claim stays, even past the cap. After the cap, so the page's own claims never
+    // crowd out the viewer's additions.
+    const capped = pinned.slice(0, Math.max(LIVE_CLAIMS_LIMIT, agendaClaims.length));
+    for (const seed of pinned) seen.add(ID.uuidToHex(seed.id));
     for (const claim of viewerLinkedClaims) {
       const hex = ID.uuidToHex(claim.id);
       if (!claim.name?.trim() || seen.has(hex)) continue;
@@ -457,7 +478,7 @@ export function useLiveTopicTemplate({
       });
     }
     return capped;
-  }, [bestClaims, bestDebates, directClaimRels, linkedClaims, spaceId, topClaims, viewerLinkedClaims]);
+  }, [agendaClaims, bestClaims, bestDebates, directClaimRels, linkedClaims, spaceId, topClaims, viewerLinkedClaims]);
 
   // Batch-hydrate claim entities that came from `/api/topics/feed` so we read their real `Is factual` value
   const claimIdsToHydrate = React.useMemo(
@@ -848,6 +869,7 @@ export function useLiveTopicTemplate({
     topClaimsQuery.isLoading ||
       bestClaimsQuery.isLoading ||
       bestDebatesQuery.isLoading ||
+      recentAgendaClaimsQuery.isLoading ||
       isTaggedLoading ||
       coverage.isLoading ||
       (orderedClaimSeeds.length > 0 && votesQuery.isLoading),
