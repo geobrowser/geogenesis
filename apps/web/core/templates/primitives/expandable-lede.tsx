@@ -50,6 +50,8 @@ export function ExpandableLede({ text, className }: { text: string; className?: 
               type="button"
               aria-expanded
               onClick={() => setExpanded(false)}
+              data-geo-analytics-label="Template lede show less"
+              data-geo-analytics-intent="collapse_text"
               className={cx(toggleClassName, 'inline bg-transparent')}
             >
               Show less
@@ -66,6 +68,8 @@ export function ExpandableLede({ text, className }: { text: string; className?: 
             type="button"
             aria-expanded={false}
             onClick={() => setExpanded(true)}
+            data-geo-analytics-label="Template lede show more"
+            data-geo-analytics-intent="expand_text"
             className={cx(toggleClassName, 'bg-white')}
           >
             Show more

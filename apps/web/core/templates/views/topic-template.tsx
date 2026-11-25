@@ -105,6 +105,8 @@ export function TopicTemplate({
             <Link
               key={sub.id}
               href={sub.href}
+              data-geo-analytics-label="Template subtopic"
+              data-geo-analytics-intent="open_subtopic"
               className="inline-flex h-7 items-center rounded-md border border-divider bg-white px-2.5 text-[13.5px] font-medium text-text no-underline transition-colors hover:border-text hover:text-[#4c1fd4]"
             >
               {sub.label}
@@ -114,6 +116,8 @@ export function TopicTemplate({
               key={sub.id}
               type="button"
               onClick={sub.onSelect}
+              data-geo-analytics-label="Template subtopic"
+              data-geo-analytics-intent="open_subtopic"
               className="inline-flex h-7 cursor-pointer items-center rounded-md border border-divider bg-white px-2.5 text-[13.5px] font-medium text-text transition-colors hover:border-text hover:text-[#4c1fd4]"
             >
               {sub.label}
@@ -128,6 +132,8 @@ export function TopicTemplate({
           <button
             type="button"
             onClick={() => setSubtopicsExpanded(prev => !prev)}
+            data-geo-analytics-label={subtopicsExpanded ? 'Template subtopics show less' : 'Template subtopics more'}
+            data-geo-analytics-intent={subtopicsExpanded ? 'collapse_subtopics' : 'expand_subtopics'}
             className="inline-flex h-7 cursor-pointer items-center rounded-md border border-divider bg-grey-01 px-2.5 text-[13px] font-medium text-grey-04 transition-colors hover:border-text hover:text-text"
           >
             {subtopicsExpanded ? 'Show less' : `+${hiddenSubtopicsCount} more`}
@@ -189,6 +195,8 @@ export function TopicTemplate({
               aria-expanded={subtopicsOpen}
               aria-controls={subtopicsNavId}
               onClick={() => setSubtopicsOpen(open => !open)}
+              data-geo-analytics-label="Template subtopics toggle"
+              data-geo-analytics-intent={subtopicsOpen ? 'hide_subtopics' : 'show_subtopics'}
               className="inline-flex cursor-pointer items-center gap-1 self-start border-0 bg-transparent p-0 text-[14px] font-medium text-grey-04 transition-colors hover:text-text"
             >
               {subtopicsOpen ? 'Hide subtopics' : 'Show subtopics'}
@@ -243,6 +251,8 @@ export function TopicTemplate({
                   {model.timelineHref ? (
                     <Link
                       href={model.timelineHref}
+                      data-geo-analytics-label="Template full timeline"
+                      data-geo-analytics-intent="open_timeline"
                       className="inline-flex items-center gap-1.5 text-[15px] font-medium text-ctaPrimary no-underline hover:text-ctaHover"
                     >
                       <span>Full timeline</span>
@@ -252,6 +262,8 @@ export function TopicTemplate({
                     <button
                       type="button"
                       onClick={model.onOpenTimeline}
+                      data-geo-analytics-label="Template full timeline"
+                      data-geo-analytics-intent="open_timeline"
                       className="inline-flex cursor-pointer items-center gap-1.5 border-0 bg-transparent p-0 text-[15px] font-medium text-ctaPrimary hover:text-ctaHover"
                     >
                       <span>Full timeline</span>
@@ -415,13 +427,20 @@ function TimelineHighlightRow({
       >
         <div className="flex min-w-0 items-start justify-between gap-3">
           {turn.href ? (
-            <Link href={turn.href} className="group flex min-w-0 flex-1 text-left text-text no-underline">
+            <Link
+              href={turn.href}
+              className="group flex min-w-0 flex-1 text-left text-text no-underline"
+              data-geo-analytics-label="Template timeline item"
+              data-geo-analytics-intent="open_timeline_item"
+            >
               {body}
             </Link>
           ) : turn.onSelect ? (
             <button
               type="button"
               onClick={turn.onSelect}
+              data-geo-analytics-label="Template timeline item"
+              data-geo-analytics-intent="open_timeline_item"
               className="group flex min-w-0 flex-1 cursor-pointer border-0 bg-transparent p-0 text-left text-text"
             >
               {body}

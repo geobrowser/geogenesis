@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ENTITY_SIDE_PANEL_LAYER_SELECTOR } from '~/core/utils/entity-side-panel-link';
 
-import { AddClaimPopover, AddEntityItemPopover } from './entity-overflow-menu';
+import { AddClaimPopover, AddEntityItemPopover, addFormAnalytics } from './entity-overflow-menu';
 
 const PHONE = '(max-width: 767px)';
 const TOUCH = '(hover: none), (pointer: coarse)';
@@ -225,5 +225,59 @@ describe('BottomSheet avoidKeyboard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Close add claim' }));
 
     expect(scrollTo).toHaveBeenCalledWith(0, 1200);
+  });
+});
+
+describe('template add form analytics', () => {
+  it('names each add form from its label', () => {
+    expect(addFormAnalytics('Add supporting claim')).toEqual({
+      surface: 'add_supporting_claim',
+      label: 'Template add supporting claim',
+    });
+  });
+
+  it('labels the +, the form and its buttons, and tells the publish which + it was', () => {
+    const holdDraft = vi.fn();
+    render(<AddClaimPopover label="Add opposing claim" onSubmit={vi.fn()} holdDraft={holdDraft} />);
+    const trigger = screen.getByRole('button', { name: 'Add opposing claim' });
+    expect(trigger).toHaveAttribute('data-geo-analytics-label', 'Template add opposing claim');
+    expect(trigger).toHaveAttribute('data-geo-analytics-intent', 'open_add_form');
+    fireEvent.click(trigger);
+
+    const claimField = screen.getByPlaceholderText('Write a clear, testable statement...');
+    const form = claimField.closest('form')!;
+    // The runtime reads this as the submission's `form_name`.
+    expect(form).toHaveAttribute('data-geo-analytics-label', 'Template add opposing claim');
+    expect(screen.getByRole('button', { name: 'Cancel' })).toHaveAttribute(
+      'data-geo-analytics-label',
+      'Template add opposing claim cancel'
+    );
+    const submit = screen
+      .getAllByRole('button', { name: 'Add opposing claim' })
+      .find(b => b.getAttribute('type') === 'submit')!;
+    expect(submit).toHaveAttribute('data-geo-analytics-intent', 'submit_add');
+
+    fireEvent.change(claimField, { target: { value: 'Aid entered on Monday' } });
+    fireEvent.submit(form);
+    expect(holdDraft).toHaveBeenCalledWith(expect.any(Function), 'add_opposing_claim');
+  });
+
+  it('does the same for an Add event form', () => {
+    const holdDraft = vi.fn();
+    render(
+      <AddEntityItemPopover
+        label="Add event"
+        primaryLabel="Event"
+        primaryPlaceholder="What happened"
+        onSubmit={vi.fn()}
+        holdDraft={holdDraft}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Add event' }));
+    const form = screen.getByRole('textbox').closest('form')!;
+    expect(form).toHaveAttribute('data-geo-analytics-label', 'Template add event');
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Ceasefire signed' } });
+    fireEvent.submit(form);
+    expect(holdDraft).toHaveBeenCalledWith(expect.any(Function), 'add_event');
   });
 });

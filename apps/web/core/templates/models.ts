@@ -219,8 +219,9 @@ export interface EntityActionCallbacks {
    * Called by an Add claim / Add event / Add quote form as it submits, with a way to put its draft
    * back. The forms open for everyone; a signed-out viewer is asked to sign up only at submit
    * (GEO-3861), and if they dismiss that, the draft is restored into the form rather than lost.
+   * `surface` names the "+" for analytics (`add_surface`, see `addFormAnalytics`).
    */
-  holdAddDraft?: (restore: () => void) => void;
+  holdAddDraft?: (restore: () => void, surface?: string) => void;
   /** Optional live Geo entity search for `+` relation popovers; falls back to fixture suggestions when omitted. */
   searchEntities?: (query: string) => Promise<readonly { id: string; name: string }[]>;
 }

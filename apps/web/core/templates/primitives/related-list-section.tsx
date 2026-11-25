@@ -388,6 +388,11 @@ function SourceQuoteBlock({ quote }: { quote: SourceQuoteModel }) {
   );
 }
 
+/** `open_source`, `outbound_source`, `open_news_story`…: what pressing a related item does, by its kind. */
+function relatedItemIntent(item: EntityLinkRowModel, outbound = false): string {
+  return `${outbound ? 'outbound' : 'open'}_${item.kind.replace(/-/g, '_')}`;
+}
+
 function CardClickable({
   item,
   className,
@@ -399,7 +404,12 @@ function CardClickable({
 }) {
   if (!item.plain && item.href) {
     return (
-      <Link href={item.href} className={cx('group/link block text-left text-text no-underline', className)}>
+      <Link
+        href={item.href}
+        className={cx('group/link block text-left text-text no-underline', className)}
+        data-geo-analytics-label="Template related card"
+        data-geo-analytics-intent={relatedItemIntent(item)}
+      >
         {children}
       </Link>
     );
@@ -409,6 +419,8 @@ function CardClickable({
       <button
         type="button"
         onClick={item.onSelect}
+        data-geo-analytics-label="Template related card"
+        data-geo-analytics-intent={relatedItemIntent(item)}
         className={cx(
           'group/link block w-full cursor-pointer border-0 bg-transparent p-0 text-left text-text',
           className
@@ -424,6 +436,8 @@ function CardClickable({
         href={item.externalUrl}
         target="_blank"
         rel="noopener noreferrer"
+        data-geo-analytics-label="Template related card"
+        data-geo-analytics-intent={relatedItemIntent(item, true)}
         className={cx('group/link block text-left text-text no-underline', className)}
       >
         {children}
@@ -715,13 +729,20 @@ function RelatedListRow({ item, showKindBadge }: { item: EntityLinkRowModel; sho
   return (
     <div className={rowClasses}>
       {!item.plain && item.href ? (
-        <Link href={item.href} className="group/row flex min-w-0 flex-1 items-center gap-3.5 text-text no-underline">
+        <Link
+          href={item.href}
+          className="group/row flex min-w-0 flex-1 items-center gap-3.5 text-text no-underline"
+          data-geo-analytics-label="Template related row"
+          data-geo-analytics-intent={relatedItemIntent(item)}
+        >
           {mainContent}
         </Link>
       ) : !item.plain && item.onSelect ? (
         <button
           type="button"
           onClick={item.onSelect}
+          data-geo-analytics-label="Template related row"
+          data-geo-analytics-intent={relatedItemIntent(item)}
           className="group/row flex min-w-0 flex-1 cursor-pointer items-center gap-3.5 border-0 bg-transparent p-0 text-left text-text"
         >
           {mainContent}

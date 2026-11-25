@@ -360,7 +360,12 @@ export function ClaimListRow({ rank, claim, hideKindOnPhone = true, details }: C
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="min-w-0">
           {claim.href ? (
-            <Link href={claim.href} className="group/claim text-left text-text no-underline">
+            <Link
+              href={claim.href}
+              className="group/claim text-left text-text no-underline"
+              data-geo-analytics-label="Template claim row"
+              data-geo-analytics-intent="open_claim"
+            >
               {titleNode}
             </Link>
           ) : claim.onSelect ? (
@@ -368,6 +373,8 @@ export function ClaimListRow({ rank, claim, hideKindOnPhone = true, details }: C
               type="button"
               onClick={claim.onSelect}
               className="group/claim cursor-pointer border-0 bg-transparent p-0 text-left text-text"
+              data-geo-analytics-label="Template claim row"
+              data-geo-analytics-intent="open_claim"
             >
               {titleNode}
             </button>

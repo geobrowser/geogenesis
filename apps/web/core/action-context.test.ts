@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { enterActionContext, pageContext, snapshotActionContext, withActionContext } from './action-context';
+import {
+  enterActionContext,
+  pageContext,
+  registerPageTemplate,
+  snapshotActionContext,
+  withActionContext,
+} from './action-context';
 
 afterEach(() => new Promise<void>(resolve => setTimeout(resolve, 0)));
 
@@ -23,6 +29,28 @@ describe('action context', () => {
       page_entity_id: space,
       page_type: 'space_activity',
     });
+  });
+  it("names the template only on that entity's own page, and only while it is registered", () => {
+    const unregister = registerPageTemplate({ entityId: claim, template: 'claim', renderer: 'legacy' });
+    const template = { page_template: 'claim', page_template_renderer: 'legacy' };
+    expect(pageContext(`/space/${space}/${claim}`)).toMatchObject(template);
+    // Either id spelling of the same entity.
+    expect(pageContext(`/space/${space}/22222222-2222-2222-2222-222222222222`)).toMatchObject(template);
+    // A record tab, another entity, or a space page is not the page the template drew.
+    expect(pageContext(`/space/${space}/${claim}/debates`)).not.toHaveProperty('page_template');
+    expect(pageContext(`/space/${space}/${debate}`)).not.toHaveProperty('page_template');
+    expect(pageContext(`/space/${space}`)).not.toHaveProperty('page_template');
+
+    window.history.replaceState({}, '', `/space/${space}/${claim}`);
+    expect(snapshotActionContext('entity_vote_buttons', 'claim', claim)).toMatchObject(template);
+
+    // A later registration (the next page) is not undone by the earlier page's cleanup.
+    const next = registerPageTemplate({ entityId: debate, template: 'topic', renderer: 'template' });
+    unregister();
+    expect(pageContext(`/space/${space}/${debate}`)).toMatchObject({ page_template: 'topic' });
+    next();
+    expect(pageContext(`/space/${space}/${debate}`)).not.toHaveProperty('page_template');
+    window.history.replaceState({}, '', '/');
   });
   it('reads the graph explorer as its own page, not the Explore feed', () => {
     expect(pageContext(`/explore/graph/${claim}`)).toMatchObject({

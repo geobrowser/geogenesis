@@ -1323,3 +1323,75 @@ describe('Context drawer dispute votes (GEO-3845)', () => {
     expect(agree).toHaveAttribute('aria-pressed', 'false');
   });
 });
+
+describe('template click labels (autocaptured element_clicked)', () => {
+  const label = (el: Element) => [
+    el.getAttribute('data-geo-analytics-label'),
+    el.getAttribute('data-geo-analytics-intent'),
+  ];
+
+  it('labels a claim row title as opening the claim', () => {
+    const claims: ClaimSummaryModel[] = [
+      {
+        id: 'c-1',
+        title: 'Aid entered on Monday',
+        href: '/space/s/c-1',
+        split: { rows: [], isSplit: false, totalVotes: 0 },
+      },
+    ];
+    render(
+      <EntityActionProvider>
+        <ClaimExplorer claims={claims} />
+      </EntityActionProvider>
+    );
+    expect(label(screen.getByRole('link', { name: /Aid entered on Monday/ }))).toEqual([
+      'Template claim row',
+      'open_claim',
+    ]);
+  });
+
+  it('tells an outbound source chip from one that opens the source page', () => {
+    render(
+      <SourceChipList
+        sources={[
+          { id: 's-1', index: 1, title: 'UNOSAT damage survey', href: 'https://unosat.org/report' },
+          { id: 's-2', index: 2, title: 'IPC Famine Review', href: '/space/s/s-2' },
+        ]}
+      />
+    );
+    expect(label(screen.getByRole('link', { name: /UNOSAT/ }))).toEqual(['Template source chip', 'outbound_source']);
+    expect(label(screen.getByRole('link', { name: /IPC/ }))).toEqual(['Template source chip', 'open_source']);
+  });
+
+  it('labels related items by kind, outbound links apart', () => {
+    render(
+      <RelatedListSection
+        section={{
+          id: 'sources',
+          title: 'Sources',
+          items: [
+            { id: 's1', kind: 'source', kindLabel: 'Source', title: 'Primary report A', href: '/space/s/s1' },
+            { id: 'n1', kind: 'news-story', kindLabel: 'News', title: 'Coverage', href: '/space/s/n1' },
+          ],
+        }}
+      />
+    );
+    expect(label(screen.getByRole('link', { name: /Primary report A/ }))[1]).toBe('open_source');
+    expect(label(screen.getByRole('link', { name: /Coverage/ }))[1]).toBe('open_news_story');
+  });
+
+  it('labels breadcrumb ancestors', () => {
+    render(
+      <TemplateBreadcrumb
+        items={[
+          { id: 'topic', label: 'Topic root', href: '/space/s/topic' },
+          { id: 'claim', label: 'Current claim' },
+        ]}
+      />
+    );
+    expect(screen.getByRole('link', { name: 'Topic root' })).toHaveAttribute(
+      'data-geo-analytics-label',
+      'Template breadcrumb'
+    );
+  });
+});
