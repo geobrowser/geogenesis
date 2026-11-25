@@ -118,17 +118,10 @@ export default function RootLayout({
     <html lang="en" className={cx(calibre.variable, geistMedium.variable, geistBold.variable)} suppressHydrationWarning>
       <head>
         {/*
-          Both scripts are async so neither waits on the head stylesheets: a parser-inserted inline
-          script does, which delayed gtm.js until after first CSS. React hoists them to the top of
-          the head so the preload scanner fetches gtm.js immediately. Order between them is free:
-          gtm.js processes whatever is already queued in dataLayer.
+          Async, so it never waits on the head stylesheets. It queues the GTM start event at once and
+          requests gtm.js itself after the page has loaded and gone idle; see gtm-init.js.
         */}
-        {loadTagManager ? (
-          <>
-            <script async src="/gtm-init.js" />
-            <script id="google-tag-manager" async src="https://www.googletagmanager.com/gtm.js?id=GTM-KJQ3T7W9" />
-          </>
-        ) : null}
+        {loadTagManager ? <script async src="/gtm-init.js" /> : null}
       </head>
       <body>
         {loadTagManager ? (
