@@ -75,6 +75,23 @@ describe('graph history in the URL', () => {
     );
   });
 
+  it('leaves a shared link’s chip behind on a hop, but keeps a kinds filter', () => {
+    const chip = new URL(
+      graphHistoryHref(
+        recentre(startGraphHistory(id(1)), id(2)),
+        new URLSearchParams({ topic: id(9), kinds: 'claim' })
+      ),
+      'https://geo.test'
+    );
+    expect(chip.searchParams.get('kinds')).toBeNull();
+    expect(chip.searchParams.get('topic')).toBe(id(9));
+    const narrowed = new URL(
+      graphHistoryHref(startGraphHistory(id(2)), new URLSearchParams({ topic: id(9), kinds: 'ent,claim' })),
+      'https://geo.test'
+    );
+    expect(narrowed.searchParams.get('kinds')).toBe('ent,claim');
+  });
+
   it('round-trips through the URL', () => {
     const history = recentre(recentre(startGraphHistory(id(1)), id(2)), id(3));
     const url = new URL(graphHistoryHref(history, new URLSearchParams()), 'https://geo.test');

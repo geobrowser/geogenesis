@@ -269,8 +269,8 @@ export function useGraphAnalytics() {
 }
 
 /**
- * Starts a session on mount; it leaves on unmount or `pagehide`, whichever comes first, and a page
- * restored from the back/forward cache starts a new one.
+ * Starts a session on mount; it leaves on unmount, `beforeunload` or `pagehide`, whichever comes
+ * first, and a page restored from the back/forward cache starts a new one.
  */
 export function useGraphExplorerSession(init: GraphSessionInit) {
   const latest = React.useRef(init);
@@ -288,9 +288,14 @@ export function useGraphExplorerSession(init: GraphSessionInit) {
       current = startGraphExplorerSession(latest.current, Date.now, true);
       setSession(current);
     };
+    // An event captured at `beforeunload` reaches the runtime's stored outbox before the page goes,
+    // and is sent later; one captured at `pagehide` is lost. `pagehide` stays for browsers that
+    // skip `beforeunload` (iOS Safari).
+    window.addEventListener('beforeunload', hide);
     window.addEventListener('pagehide', hide);
     window.addEventListener('pageshow', show);
     return () => {
+      window.removeEventListener('beforeunload', hide);
       window.removeEventListener('pagehide', hide);
       window.removeEventListener('pageshow', show);
       current.left('unmount');

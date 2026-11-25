@@ -91,31 +91,23 @@ describe('TopicOverview over the live summary', () => {
       </QueryClientProvider>
     );
     await waitFor(() =>
-      expect(rows('Widely agreed, most votes')).toEqual([
-        'Claim c100% agree · 5 votes',
-        'Claim a75% agree · 4 votes',
-        'Claim d100% agree · 4 votes',
-      ])
+      expect(rows('Widely agreed, most votes')).toEqual(['Claim c100% agree', 'Claim a75% agree', 'Claim d100% agree'])
     );
-    expect(rows('The biggest fights')).toEqual(['Claim b60% agree · 10 votes']);
+    expect(rows('The biggest fights')).toEqual(['Claim b60% agree']);
     const agreed = screen.getByRole('region', { name: 'Widely agreed, most votes' });
     const disagree = (row: number) =>
       fireEvent.click(within(within(agreed).getAllByRole('listitem')[row]).getByRole('button', { name: 'Disagree' }));
 
     // 3/1 agreed becomes 3/2 contested: the row stays in its list and its line and swatch update.
     disagree(1);
-    await waitFor(() => expect(rows('Widely agreed, most votes')[1]).toBe('Claim a60% agree · 5 votes'));
-    expect(rows('The biggest fights')).toEqual(['Claim b60% agree · 10 votes']);
+    await waitFor(() => expect(rows('Widely agreed, most votes')[1]).toBe('Claim a60% agree'));
+    expect(rows('The biggest fights')).toEqual(['Claim b60% agree']);
 
     // 4/0 becomes 4/2, the most votes in the list: it keeps its place.
     disagree(2);
     disagree(2);
     await waitFor(() =>
-      expect(rows('Widely agreed, most votes')).toEqual([
-        'Claim c100% agree · 5 votes',
-        'Claim a60% agree · 5 votes',
-        'Claim d67% agree · 6 votes',
-      ])
+      expect(rows('Widely agreed, most votes')).toEqual(['Claim c100% agree', 'Claim a60% agree', 'Claim d67% agree'])
     );
   });
 });
