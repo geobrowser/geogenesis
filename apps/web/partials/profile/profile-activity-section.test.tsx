@@ -7,17 +7,22 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import type { ExploreFeedRow } from '~/core/explore/explore-card-item';
+import { DEBATE_GALLERY_CARD_WIDTH_CLASS } from '~/core/templates/primitives/debate-gallery-card';
 
 import { ProfileActivitySection } from './profile-activity-section';
 
 // The gallery is local to the file under test, so its dependencies are mocked
 // rather than the gallery itself.
-vi.mock('~/partials/explore/explore-feed-card', () => ({
-  ExploreFeedCard: ({ item }: { item: { entityId: string } }) => (
+vi.mock('./gallery-debate-card', () => ({
+  GalleryDebateCard: ({ item }: { item: { entityId: string } }) => (
     <button type="button" data-testid="card">
       {item.entityId}
     </button>
   ),
+}));
+
+vi.mock('~/core/templates/adapters/use-debate-participants-batch', () => ({
+  useDebateParticipantsBatch: () => ({ data: undefined }),
 }));
 
 vi.mock('./gallery-claim-card', () => ({
@@ -494,8 +499,9 @@ describe('ProfileActivitySection', () => {
 
     const cards = screen.getAllByTestId('card');
     expect(cards).toHaveLength(2);
-    expect(cards[0]?.parentElement).toHaveClass('w-[min(300px,84cqw)]');
-    // The playable card owns its frame and its 12px inset. A second frame squeezed the pills.
+    // The Topic page gallery's widths (GEO-3871), so a debate reads at the same size there and here.
+    expect(cards[0]?.parentElement).toHaveClass(...DEBATE_GALLERY_CARD_WIDTH_CLASS.split(' '));
+    // The card owns its frame. A second frame around it would spend the row's room twice.
     expect(cards[0]?.parentElement).not.toHaveClass('border');
     expect(cards[0]?.parentElement).not.toHaveClass('px-3');
   });

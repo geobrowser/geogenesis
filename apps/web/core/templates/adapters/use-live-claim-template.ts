@@ -40,46 +40,15 @@ import {
   readClaimKind,
   readEntityRelations,
 } from '../ontology';
+import { debateParticipantsKey, toDebateGalleryModel } from './debate-gallery-model';
 import { sourcesIngestionLink } from './source-ingestion-links';
-import { resolveDebateStillSrc, useDebateParticipantsBatch } from './use-debate-participants-batch';
+import { useDebateParticipantsBatch } from './use-debate-participants-batch';
 import { useHydratedSourceCards } from './use-hydrated-source-cards';
 import { useInitialHydrationGate } from './use-initial-hydration-gate';
 import { useLiveEntityActions } from './use-live-entity-actions';
 import { useTemplateClaimVoteCounts } from './use-template-claim-vote-counts';
 import { useTopicMediaBatch } from './use-topic-media-batch';
 import { useEntityWithViewerSources, useViewerSpaceId } from './use-viewer-sources';
-
-function parseDebateTitle(rawTitle: string, fallbackClaim: string): { claimTitle: string; speakers: [string, string] } {
-  const clean = rawTitle.trim();
-  const pipeMatch = clean.match(/^(.+?)\s*\|\s*(.+?)\s+vs\.?\s+(.+)$/i);
-  if (pipeMatch) {
-    return {
-      claimTitle: fallbackClaim || pipeMatch[1]!.trim(),
-      speakers: [pipeMatch[2]!.trim(), pipeMatch[3]!.trim()],
-    };
-  }
-  const onMatch = clean.match(/^(.+?)\s+vs\.?\s+(.+?)\s+on\s+(.+)$/i);
-  if (onMatch) {
-    return {
-      claimTitle: fallbackClaim || onMatch[3]!.trim(),
-      speakers: [onMatch[1]!.trim(), onMatch[2]!.trim()],
-    };
-  }
-  return {
-    claimTitle: fallbackClaim || clean,
-    speakers: ['For', 'Against'],
-  };
-}
-
-function formatUnixSecDate(sec: number | undefined): string | undefined {
-  if (!sec || !Number.isFinite(sec)) return undefined;
-  return new Date(sec * 1000).toLocaleDateString('en-US', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'UTC',
-  });
-}
 
 /**
  * Live Geo adapter for `ClaimTemplate`.
@@ -488,44 +457,18 @@ export function useLiveClaimTemplate({
 
     // Debates gallery cards (with speaker stills and profile avatars)
     const debateParticipantsByHex = debateParticipantsQuery.data;
-    const debates: TopicRecentDebateModel[] = record.debateRows.slice(0, 8).map(item => {
-      const { claimTitle, speakers } = parseDebateTitle(item.title || title, title);
-      const normDebateId = ID.uuidToHex(item.entityId).toLowerCase();
-      const slot1Avatar = resolveDebateStillSrc(item.debatePosters?.slot1, normDebateId, 1);
-      const slot2Avatar = resolveDebateStillSrc(item.debatePosters?.slot2, normDebateId, 2);
-      const livePair = debateParticipantsByHex?.[normDebateId];
-      const dateStr = formatUnixSecDate(item.createdAtSec) ?? 'Debate';
-      const votesLabel =
-        summary.total > 0
-          ? `${formatCompactCount(summary.total)} ${summary.total === 1 ? 'vote' : 'votes'}`
-          : spaceLabel;
-
-      return {
-        id: item.entityId,
-        claimId: entity.id,
-        claimTitle,
-        date: dateStr,
-        duration: '',
-        votesLabel,
-        participants: [
-          {
-            name: livePair?.slot1?.name ?? speakers[0],
-            position: livePair?.slot1?.position ?? 'Agree',
-            communityColor: '#3963fe',
-            avatarUrl: slot1Avatar,
-            profileAvatarUrl: livePair?.slot1?.avatarUrl ?? null,
-          },
-          {
-            name: livePair?.slot2?.name ?? speakers[1],
-            position: livePair?.slot2?.position ?? 'Disagree',
-            communityColor: '#6833ff',
-            avatarUrl: slot2Avatar,
-            profileAvatarUrl: livePair?.slot2?.avatarUrl ?? null,
-          },
-        ],
-        href: NavUtils.toEntity(item.spaceId || spaceId, item.entityId),
-      };
-    });
+    const votesLabel =
+      summary.total > 0 ? `${formatCompactCount(summary.total)} ${summary.total === 1 ? 'vote' : 'votes'}` : spaceLabel;
+    // Every debate here argued this claim, so the card names it by this page's title.
+    const debates: TopicRecentDebateModel[] = record.debateRows
+      .slice(0, 8)
+      .map(item =>
+        toDebateGalleryModel(
+          { ...item, title: item.title || title, debateClaim: { entityId: entity.id, name: title } },
+          debateParticipantsByHex?.[debateParticipantsKey(item.entityId)],
+          { fallbackSpaceId: spaceId, votesLabel }
+        )
+      );
 
     // Topic pills with circular images
     const topicMediaByHex = topicMediaQuery.data;
