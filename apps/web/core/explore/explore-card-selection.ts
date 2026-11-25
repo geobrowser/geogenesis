@@ -146,6 +146,7 @@ export function exploreCardNodeFields(fragmentName: string, options: ExploreCard
         id
         name
       }
+      toEntityId
       toEntity {
         id
         name
