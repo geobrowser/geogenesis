@@ -109,7 +109,7 @@ describe('SplitBars without an "Everyone" label (GEO-3845)', () => {
 });
 
 describe('VoteBox: the debates app Agree / Disagree (GEO-3845)', () => {
-  it('draws the two 44px outlined buttons and switches or retracts by press', () => {
+  it('draws the two 36px outlined buttons and switches or retracts by press', () => {
     const onVote = vi.fn();
     const onClear = vi.fn();
     render(
@@ -141,6 +141,70 @@ describe('VoteBox: the debates app Agree / Disagree (GEO-3845)', () => {
     );
     expect(screen.getByRole('button', { name: 'Agree' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Disagree' })).toBeDisabled();
+  });
+});
+
+describe('VoteBox: one column in the claim-row style (GEO-3845)', () => {
+  const control = { userVote: null, countSummary: '7 votes', onVote: vi.fn() } as const;
+
+  it('groups a lone split beside the buttons as "bar 71% · 7 votes", with no space label', () => {
+    render(
+      <VoteBox
+        split={{
+          isSplit: false,
+          totalVotes: 7,
+          rows: [{ id: 'wa', label: 'World affairs', color: '#202020', percent: 71, voterCount: 7, isEveryone: true }],
+        }}
+        control={control}
+      />
+    );
+
+    const result = screen.getByTestId('vote-box-result');
+    expect(result).toHaveTextContent('71%·7 votes');
+    expect(within(result).getByRole('meter')).toHaveAttribute('aria-valuenow', '71');
+    expect(screen.getAllByRole('meter')).toHaveLength(1);
+    expect(screen.queryByText('World affairs')).toBeNull();
+    // One line: the buttons and the result share a row, with no divider between halves.
+    expect(result.parentElement).toContainElement(screen.getByRole('group', { name: 'Do you agree?' }));
+    expect(screen.getByRole('region').querySelector('.border-l')).toBeNull();
+    expect(screen.queryByText('Do you agree?')).toBeNull();
+  });
+
+  it('leads with the overall row and lists the spaces under the button line', () => {
+    render(<VoteBox split={CONTESTED_SPLIT} control={{ ...control, countSummary: '2,418 votes' }} />);
+
+    const result = screen.getByTestId('vote-box-result');
+    expect(result).toHaveTextContent('52%·2,418 votes');
+    expect(within(result).getByRole('meter', { name: 'Everyone agree' })).toBeInTheDocument();
+    expect(within(result).queryByText('Community A')).toBeNull();
+    expect(screen.getByText('Community A')).toBeInTheDocument();
+    expect(screen.getByText('Community B')).toBeInTheDocument();
+    expect(screen.getAllByRole('meter')).toHaveLength(3);
+  });
+
+  it('lists every space when no row is the overall one, and shows only the count beside the buttons', () => {
+    render(
+      <VoteBox
+        split={{ ...CONTESTED_SPLIT, rows: CONTESTED_SPLIT.rows.filter(row => !row.isEveryone) }}
+        control={control}
+      />
+    );
+
+    const result = screen.getByTestId('vote-box-result');
+    expect(within(result).queryByRole('meter')).toBeNull();
+    expect(result).toHaveTextContent('7 votes');
+    expect(screen.getAllByRole('meter')).toHaveLength(2);
+  });
+
+  it('says "No votes yet" beside the buttons with no split', () => {
+    render(
+      <VoteBox
+        split={{ rows: [], isSplit: false, totalVotes: 0 }}
+        control={{ ...control, countSummary: 'No votes yet' }}
+      />
+    );
+    expect(screen.getByTestId('vote-box-result')).toHaveTextContent('No votes yet');
+    expect(screen.queryByRole('meter')).toBeNull();
   });
 });
 
