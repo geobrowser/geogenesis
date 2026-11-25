@@ -52,8 +52,6 @@ type NodeView = {
   push: [number, number];
   /** Opacity factor while a nearer card covers its label, eased frame to frame. */
   dim: number;
-  /** Drawn too small to read, so shown as its marker (`data-far` on its button). */
-  far: boolean;
 };
 
 type DrawnLink = { a: string; b: string; hop: 1 | 2 | 3; edge: GraphEdge };
@@ -235,7 +233,6 @@ export function ConnectionsCanvas({
           entry,
           push: [0, 0],
           dim: 1,
-          far: false,
         });
       }
     }
@@ -398,6 +395,8 @@ export function ConnectionsCanvas({
         scale: number;
         opacity: number;
         isCentre: boolean;
+        /** Shown as its marker; `data-far` on its button is the only copy kept across frames. */
+        far: boolean;
       }> = [];
       for (const node of state.views.values()) {
         const element = elements.current.get(node.id);
@@ -411,7 +410,6 @@ export function ConnectionsCanvas({
         // its button (and its `data-far`) but gets a fresh view.
         const wasFar = element.dataset.far !== undefined;
         const far = !isCentre && node.hop === 1 && tooSmallToRead(scale, wasFar, phone);
-        node.far = far;
         if (far !== wasFar) {
           if (far) element.dataset.far = '';
           else delete element.dataset.far;
@@ -438,13 +436,11 @@ export function ConnectionsCanvas({
         } else if (isCentre) node.push = [0, 0];
         point.x += node.push[0];
         point.y += node.push[1];
-        drawn.push({ node, element, point, box, scale, opacity, isCentre });
+        drawn.push({ node, element, point, box, scale, opacity, isCentre, far });
       }
 
       // A labelled card a nearer one touches fades, so no two labels overlap; far markers carry no label.
-      const labelled = drawn.filter(
-        entry => !entry.isCentre && entry.node.alive && entry.node.hop < 2 && !entry.node.far
-      );
+      const labelled = drawn.filter(entry => !entry.isCentre && entry.node.alive && entry.node.hop < 2 && !entry.far);
       const hidden = coveredLabels(
         labelled.map(entry => ({
           rect: rectAt(entry.point.x, entry.point.y, entry.box, entry.scale),

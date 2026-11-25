@@ -120,12 +120,23 @@ describe('source cards', () => {
 
   it('reads type · outlet · month, each only when known', () => {
     expect(GRAPH_KIND_TYPE_IDS.src).toContain(REPORT);
-    expect(sourceEyebrow(report)).toBe('Report · BBC Verify · Mar 2025');
-    expect(sourceEyebrow({ ...report, publisher: null })).toBe('Report · Mar 2025');
-    expect(sourceEyebrow({ ...report, date: 'not a date' })).toBe('Report · BBC Verify');
+    expect(sourceEyebrow(report, null)).toBe('Report · BBC Verify · Mar 2025');
+    expect(sourceEyebrow({ ...report, publisher: null }, null)).toBe('Report · Mar 2025');
+    expect(sourceEyebrow({ ...report, date: 'not a date' }, null)).toBe('Report · BBC Verify');
     // An outlet that is the source's own name says nothing new.
-    expect(sourceEyebrow({ ...report, publisher: { id: 'c'.repeat(32), name: report.name!, image: null } })).toBe('Report · Mar 2025');
-    expect(sourceEyebrow({ ...report, types: [], publisher: null, date: null })).toBeNull();
+    expect(sourceEyebrow({ ...report, publisher: { id: 'c'.repeat(32), name: report.name!, image: null } }, null)).toBe(
+      'Report · Mar 2025'
+    );
+    expect(sourceEyebrow({ ...report, types: [], publisher: null, date: null }, null)).toBeNull();
+  });
+
+  it("drops the outlet around its own publisher, where every card would repeat the centre's name", () => {
+    expect(sourceEyebrow(report, 'c'.repeat(32))).toBe('Report · Mar 2025');
+    expect(sourceEyebrow(report, 'd'.repeat(32))).toBe('Report · BBC Verify · Mar 2025');
+    const around = render(
+      <NodeCard node={report} hop={1} isCentre={false} phone={false} claimSpaceId={null} centreId={'c'.repeat(32)} />
+    ).container;
+    expect(around.querySelector('[data-source-card]')!.textContent).not.toContain('BBC Verify');
   });
 
   it('draws a source with a dashed edge and its eyebrow, unlike a claim', () => {

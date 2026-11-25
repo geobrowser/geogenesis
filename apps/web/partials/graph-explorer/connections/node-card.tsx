@@ -8,6 +8,7 @@ import { useClaimResponseSummary } from '~/core/claims/browse/claim-response-sum
 import { type ClaimBand, claimBand } from '~/core/graph-explorer/claim-band';
 import type { GraphNode } from '~/core/graph-explorer/fetch-graph-neighbourhood';
 import { GRAPH_KIND_TYPE_IDS } from '~/core/graph-explorer/graph-kinds';
+import { rowPublisher } from '~/core/graph-explorer/panel-sections';
 import { normId } from '~/core/utils/norm-id';
 
 import { entityImageSrc } from '../entity-avatar';
@@ -49,11 +50,14 @@ export function nodeDateLabel(node: GraphNode): string | null {
 
 const MONTH_FORMAT = new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
 
-/** A source's line above its title: type · outlet · month, each only when known ("Report · BBC Verify · Mar 2025"). */
-export function sourceEyebrow(node: GraphNode): string | null {
+/**
+ * A source's line above its title: type · outlet · month, each only when known ("Report · BBC Verify · Mar 2025").
+ * Around its own publisher the outlet is dropped, as the panel's rows drop it, or every card would repeat the centre.
+ */
+export function sourceEyebrow(node: GraphNode, centreId: string | null): string | null {
   const date = node.date ? new Date(node.date) : null;
   const month = date && !Number.isNaN(date.getTime()) ? MONTH_FORMAT.format(date) : null;
-  const name = node.publisher?.name;
+  const name = rowPublisher(node, centreId)?.name;
   const outlet = name && name !== node.name ? name : null;
   return [nodeTypeLabel(node), outlet, month].filter(Boolean).join(' · ') || null;
 }
@@ -97,12 +101,16 @@ function labelSize({ isCentre, phone, hop }: Pick<CardProps, 'isCentre' | 'phone
 }
 
 /** What a node looks like, by kind. Claims read their space-scoped counts (`claimSpaceId`). */
-export function NodeCard({ claimSpaceId, ...props }: CardProps & { claimSpaceId: string | null }) {
+export function NodeCard({
+  claimSpaceId,
+  centreId = null,
+  ...props
+}: CardProps & { claimSpaceId: string | null; centreId?: string | null }) {
   const far = isFarNode(props.hop, props.isCentre);
   if (props.node.kind === 'claim' && claimSpaceId) return <ClaimCard {...props} spaceId={claimSpaceId} />;
   if (props.node.kind === 'ent' || props.node.kind === 'other') return <EntityCard {...props} />;
   if (far) return <FarMarker node={props.node} band={null} />;
-  const card = props.node.kind === 'topic' ? <TopicCard {...props} /> : <ItemCard {...props} />;
+  const card = props.node.kind === 'topic' ? <TopicCard {...props} /> : <ItemCard {...props} centreId={centreId} />;
   return props.isCentre ? (
     card
   ) : (
@@ -235,9 +243,11 @@ function cardBox({ isCentre, phone }: Pick<CardProps, 'isCentre' | 'phone'>, des
   return cx('px-3 py-[10px]', isCentre ? desktop[0] : desktop[1]);
 }
 
-function ItemCard({ node, hop, isCentre, phone }: CardProps) {
+function ItemCard({ node, hop, isCentre, phone, centreId }: CardProps & { centreId: string | null }) {
   const source = node.kind === 'src';
-  const meta = source ? sourceEyebrow(node) : [nodeTypeLabel(node), nodeDateLabel(node)].filter(Boolean).join(' · ');
+  const meta = source
+    ? sourceEyebrow(node, centreId)
+    : [nodeTypeLabel(node), nodeDateLabel(node)].filter(Boolean).join(' · ');
   return (
     <span
       data-label
