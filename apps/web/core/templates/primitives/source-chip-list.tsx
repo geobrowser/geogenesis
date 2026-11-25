@@ -55,7 +55,13 @@ export function SourceChipList({ sources, className }: SourceChipListProps) {
 
         if (source.href) {
           return (
-            <Link key={source.id} href={source.href} className={chipClasses}>
+            <Link
+              key={source.id}
+              href={source.href}
+              className={chipClasses}
+              data-geo-analytics-label="Template source chip"
+              data-geo-analytics-intent={/^https?:\/\//i.test(source.href) ? 'outbound_source' : 'open_source'}
+            >
               {inner}
             </Link>
           );
@@ -68,6 +74,8 @@ export function SourceChipList({ sources, className }: SourceChipListProps) {
               type="button"
               onClick={source.onSelect}
               className={cx(chipClasses, 'cursor-pointer')}
+              data-geo-analytics-label="Template source chip"
+              data-geo-analytics-intent="open_source"
             >
               {inner}
             </button>

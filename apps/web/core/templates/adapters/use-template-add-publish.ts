@@ -5,6 +5,8 @@ import { type QueryClient, useQueryClient } from '@tanstack/react-query';
 import * as React from 'react';
 
 import { type PageSpaceWriters, pickWriteSpace } from '~/core/access/pick-write-space';
+import { useActionContext } from '~/core/action-context-provider';
+import { type OperationFailureCode, runObservedAction } from '~/core/analytics-operations';
 import { readAccountAddress, readRegisteredPersonalSpaceId } from '~/core/hooks/cached-write-identity';
 import { publishOnce } from '~/core/hooks/publish-once';
 import { useAuthResolving } from '~/core/hooks/use-auth-resolving';
@@ -39,14 +41,25 @@ function refetchPageLists(queryClient: QueryClient, entityId: string) {
   return queryClient.invalidateQueries({ predicate: query => queryKeyMentionsEntity(query.queryKey, entityId) });
 }
 
-export function parseTemplateAddIntent(intent: string | undefined): TemplateAddAction | null {
+/** A queued add, with the "+" it came from for analytics (`add_surface`), carried across sign-up. */
+export type QueuedTemplateAdd = TemplateAddAction & { surface?: string };
+
+/** An analytics surface id: the snake_case name of a "+" form, never anything the viewer typed. */
+const SURFACE_PATTERN = /^[a-z][a-z0-9_]{0,63}$/;
+
+export function parseTemplateAddIntent(intent: string | undefined): QueuedTemplateAdd | null {
   if (!intent) return null;
   try {
-    const parsed = JSON.parse(intent) as TemplateAddAction;
-    if (parsed?.kind === 'quote') return typeof parsed.draft?.text === 'string' ? parsed : null;
-    if ((parsed?.kind === 'claim' || parsed?.kind === 'event') && typeof parsed.draft?.title === 'string') {
-      return parsed;
+    const parsed = JSON.parse(intent) as QueuedTemplateAdd;
+    const valid =
+      parsed?.kind === 'quote'
+        ? typeof parsed.draft?.text === 'string'
+        : (parsed?.kind === 'claim' || parsed?.kind === 'event') && typeof parsed.draft?.title === 'string';
+    if (!valid) return null;
+    if (parsed.surface !== undefined && !(typeof parsed.surface === 'string' && SURFACE_PATTERN.test(parsed.surface))) {
+      delete parsed.surface;
     }
+    return parsed;
   } catch {
     // A malformed intent is dropped below.
   }
@@ -87,42 +100,75 @@ export function useTemplateAddPublish({ owner, pageSpaceId }: { owner: TemplateA
     [dispatch]
   );
 
+  // The page the add is for. A queued add replays inside the press's own context (`withActionContext`),
+  // so its page view and template are the press's, not wherever the viewer is when it publishes.
+  const actionContext = useActionContext('template_add_form', 'entity', owner.entityId);
+
   const publishNow = React.useCallback(
-    async (
-      action: TemplateAddAction,
+    (
+      action: QueuedTemplateAdd,
       viewerSpaceId: string,
-      isCurrent: () => boolean = () => true
+      isCurrent: () => boolean = () => true,
+      replayed = false
     ): Promise<TemplateAddResult> => {
-      const noun = NOUN[action.kind];
-      const writeSpace = await pickWriteSpace({
-        pageSpaceId,
-        personalSpaceId: viewerSpaceId,
-        writers: TEMPLATE_ADD_WRITERS,
-        tx,
-        queryClient,
-      });
-      if (!isCurrent()) return { ok: false, error: `Your ${noun} was cancelled.` };
+      // Taken before any await: a replay's context only lasts for the synchronous call.
+      const context = {
+        ...actionContext(),
+        add_kind: action.kind,
+        ...(action.surface ? { add_surface: action.surface } : {}),
+        replayed,
+      };
+      let failure: OperationFailureCode | null = null;
+      const run = async (): Promise<TemplateAddResult> => {
+        const noun = NOUN[action.kind];
+        const writeSpace = await pickWriteSpace({
+          pageSpaceId,
+          personalSpaceId: viewerSpaceId,
+          writers: TEMPLATE_ADD_WRITERS,
+          tx,
+          queryClient,
+        });
+        if (!isCurrent()) {
+          // Withdrawn before it wrote anything (the queue dropped it). `action_failed` takes only the
+          // registered failure codes, and this is the one that says it never ran.
+          failure = 'unavailable';
+          return { ok: false, error: `Your ${noun} was cancelled.` };
+        }
 
-      const edits = buildTemplateAddEdits(owner, action, writeSpace.spaceId);
-      if (!edits) return fail(`Your ${noun} is empty.`);
+        const edits = buildTemplateAddEdits(owner, action, writeSpace.spaceId);
+        if (!edits) {
+          failure = 'invalid_input';
+          return fail(`Your ${noun} is empty.`);
+        }
 
-      // The page shows the addition through its pending row until the refetched lists have it.
-      const ok = await publishOnce(makeProposal, {
-        values: edits.values,
-        relations: edits.relations,
-        spaceId: writeSpace.spaceId,
-        name: `Add ${noun}: ${edits.name}`,
-      });
-      // `usePublish` has already shown why (or the viewer dismissed the signature).
-      if (!ok) return fail(`Your ${noun} could not be published.`, { show: false });
+        // The page shows the addition through its pending row until the refetched lists have it.
+        const ok = await publishOnce(makeProposal, {
+          values: edits.values,
+          relations: edits.relations,
+          spaceId: writeSpace.spaceId,
+          name: `Add ${noun}: ${edits.name}`,
+        });
+        // `usePublish` has already shown why (or the viewer dismissed the signature).
+        if (!ok) {
+          failure = 'publish_failed';
+          return fail(`Your ${noun} could not be published.`, { show: false });
+        }
 
-      void refetchPageLists(queryClient, owner.entityId);
-      for (const delay of INDEXER_REFETCH_DELAYS_MS) {
-        window.setTimeout(() => void refetchPageLists(queryClient, owner.entityId), delay);
-      }
-      return { ok: true, id: edits.entityId, spaceId: writeSpace.spaceId };
+        void refetchPageLists(queryClient, owner.entityId);
+        for (const delay of INDEXER_REFETCH_DELAYS_MS) {
+          window.setTimeout(() => void refetchPageLists(queryClient, owner.entityId), delay);
+        }
+        return { ok: true, id: edits.entityId, spaceId: writeSpace.spaceId };
+      };
+      return runObservedAction(
+        'publish',
+        context,
+        run,
+        () => failure,
+        result => (result.ok ? { entity_id: result.id, space_id: result.spaceId } : {})
+      );
     },
-    [fail, makeProposal, owner, pageSpaceId, queryClient, tx]
+    [actionContext, fail, makeProposal, owner, pageSpaceId, queryClient, tx]
   );
 
   // The press waiting on a queued draft, settled when the queue replays it.
@@ -138,7 +184,7 @@ export function useTemplateAddPublish({ owner, pageSpaceId }: { owner: TemplateA
   const replayingRef = React.useRef(false);
   const { isQueued, queue, cancel } = useQueuedAction({
     id: `template-add:${ID.uuidToHex(owner.entityId)}:${ID.uuidToHex(pageSpaceId)}`,
-    component: 'entity_editor',
+    component: 'template_add_form',
     label: 'your addition',
     // A Google sign-in leaves the page and comes back; the draft goes with it.
     survivesRedirect: true,
@@ -157,7 +203,7 @@ export function useTemplateAddPublish({ owner, pageSpaceId }: { owner: TemplateA
       if (!freshPersonalSpaceId) {
         return settleWaiting(fail(`Finish setting up your account to add a ${NOUN[action.kind]}.`));
       }
-      settleWaiting(await publishNow(action, freshPersonalSpaceId, isCurrent));
+      settleWaiting(await publishNow(action, freshPersonalSpaceId, isCurrent, true));
     },
   });
 
@@ -195,15 +241,20 @@ export function useTemplateAddPublish({ owner, pageSpaceId }: { owner: TemplateA
   // The submitting form's way to get its draft back (see `EntityActionCallbacks.holdAddDraft`),
   // taken by the `add` that follows it.
   const heldRestoreRef = React.useRef<(() => void) | null>(null);
-  const holdAddDraft = React.useCallback((restore: () => void) => {
+  const heldSurfaceRef = React.useRef<string | undefined>(undefined);
+  const holdAddDraft = React.useCallback((restore: () => void, surface?: string) => {
     heldRestoreRef.current = restore;
+    heldSurfaceRef.current = surface && SURFACE_PATTERN.test(surface) ? surface : undefined;
   }, []);
 
   const add = React.useCallback(
-    async (action: TemplateAddAction): Promise<TemplateAddResult> => {
-      const noun = NOUN[action.kind];
+    async (added: TemplateAddAction): Promise<TemplateAddResult> => {
+      const noun = NOUN[added.kind];
       const restore = heldRestoreRef.current;
       heldRestoreRef.current = null;
+      const surface = heldSurfaceRef.current;
+      heldSurfaceRef.current = undefined;
+      const action: QueuedTemplateAdd = surface ? { ...added, surface } : added;
       if (authenticated && isRegistered && personalSpaceId) return publishNow(action, personalSpaceId);
 
       // A draft turned away here goes back into its form, which cleared itself as it submitted. After

@@ -143,6 +143,8 @@ export function RecentDebatesGallery({
           {seeAllHref ? (
             <Link
               href={seeAllHref}
+              data-geo-analytics-label="Template debates see all"
+              data-geo-analytics-intent="see_all_debates"
               className="inline-flex h-8 items-center rounded-full border border-grey-02 bg-white px-3.5 text-[13.5px] font-medium text-text no-underline transition-colors hover:border-text"
             >
               See all
@@ -151,6 +153,8 @@ export function RecentDebatesGallery({
             <button
               type="button"
               onClick={onSeeAll}
+              data-geo-analytics-label="Template debates see all"
+              data-geo-analytics-intent="see_all_debates"
               className="inline-flex h-8 cursor-pointer items-center rounded-full border border-grey-02 bg-white px-3.5 text-[13.5px] font-medium text-text transition-colors hover:border-text"
             >
               See all
@@ -174,7 +178,7 @@ export function RecentDebatesGallery({
           className="-mx-2 flex snap-x snap-mandatory scroll-px-2 [scrollbar-width:none] items-stretch gap-4 overflow-x-auto px-2 py-2 [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
         >
           {displayDebates.map(debate => (
-            <DebateGalleryCard key={debate.id} debate={debate} />
+            <DebateGalleryCard key={debate.id} debate={debate} analyticsLabel="Template debate card" />
           ))}
         </div>
       </div>

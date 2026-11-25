@@ -28,6 +28,8 @@ export interface DebateGalleryCardProps {
    * opens the debate.
    */
   action?: React.ReactNode;
+  /** The open link's `data-geo-analytics-label`, for a surface that names its cards. */
+  analyticsLabel?: string;
 }
 
 function initialsFrom(name: string): string {
@@ -51,6 +53,7 @@ export function DebateGalleryCard({
   className = DEBATE_GALLERY_CARD_WIDTH_CLASS,
   onOpen,
   action,
+  analyticsLabel,
 }: DebateGalleryCardProps) {
   const [slot1, slot2] = debate.participants;
 
@@ -102,6 +105,8 @@ export function DebateGalleryCard({
           href={debate.href}
           onClick={onOpen}
           aria-label={`Watch debate: ${debate.claimTitle}`}
+          data-geo-analytics-label={analyticsLabel}
+          data-geo-analytics-intent={analyticsLabel ? 'play_debate' : undefined}
           className="group/media block no-underline"
         >
           {mediaContent}
@@ -114,6 +119,8 @@ export function DebateGalleryCard({
             debate.onSelect?.();
           }}
           aria-label={`Watch debate: ${debate.claimTitle}`}
+          data-geo-analytics-label={analyticsLabel}
+          data-geo-analytics-intent={analyticsLabel ? 'play_debate' : undefined}
           className="group/media block w-full cursor-pointer border-0 bg-transparent p-0 text-left"
         >
           {mediaContent}

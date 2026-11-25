@@ -94,6 +94,7 @@ vi.mock('~/partials/entity-page/entity-sticky-header', () => ({
   },
 }));
 
+vi.mock('~/core/templates/page-template-analytics', () => ({ PageTemplateAnalytics: () => null }));
 vi.mock('~/partials/entity-page/entity-page-cover', () => ({ EntityPageCover: () => null }));
 vi.mock('~/partials/entity-page/entity-page-content-container', () => ({
   EntityPageContentContainer: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,

@@ -45,6 +45,32 @@ describe('analytics', () => {
     window.history.replaceState({}, '', '/');
   });
 
+  it('page views, captures and auth attempts on a template page carry the template that drew it', async () => {
+    const runtime = { capture: vi.fn(), pageViewed: vi.fn() };
+    window.lytics = runtime as never;
+    const { registerPageTemplate } = await import('./action-context');
+    const { capture, pageViewed } = await import('./analytics');
+    const { authProperties } = await import('./auth-attempt');
+    const space = '11111111111111111111111111111111';
+    const topic = '22222222222222222222222222222222';
+    window.history.replaceState({}, '', `/space/${space}/${topic}`);
+    const unregister = registerPageTemplate({ entityId: topic, template: 'topic', renderer: 'template' });
+
+    pageViewed();
+    capture('mode_toggled', { mode: 'edit' });
+    const template = { page_template: 'topic', page_template_renderer: 'template' };
+    expect(runtime.pageViewed).toHaveBeenCalledWith(expect.objectContaining({ page_entity_id: topic, ...template }));
+    expect(runtime.capture).toHaveBeenCalledWith('mode_toggled', expect.objectContaining(template));
+    expect(authProperties({ auth_control: 'navbar' })).toMatchObject(template);
+
+    // Once the page is gone, nothing claims to be drawn by it.
+    unregister();
+    window.history.replaceState({}, '', `/space/${space}/${topic}?x=1`);
+    pageViewed();
+    expect(runtime.pageViewed.mock.calls.at(-1)?.[0]).not.toHaveProperty('page_template');
+    window.history.replaceState({}, '', '/');
+  });
+
   // A blocked runtime script never drains the queue, so it must not grow for the life of the tab
   // (GEO-3067); identity calls still get through when it does load.
   it('bounds the queue while the runtime is missing but keeps identity calls', async () => {

@@ -37,6 +37,8 @@ export const ACTION_COMPONENTS = [
   'person_follow_button',
   'debate_claim_card',
   'best_debates_watch',
+  // A template page's "+" Add claim / event / quote form (GEO-3861 sign-in, its publish).
+  'template_add_form',
 ] as const;
 export type ActionComponent = (typeof ACTION_COMPONENTS)[number];
 export type ActionKind =
@@ -161,7 +163,21 @@ export type ActionContext = {
   rematch_session_id?: string;
   /** GEO-3495. On a `filter_claims` toggle: whether the space or topic was picked or let go. */
   filter_selected?: boolean;
+  /**
+   * The entity template the page's entity maps to (`topic`, `claim`, `event`, `news-story`, `source`,
+   * `post`, `podcast`, `episode`), and whether that template drew the page (`template`) or the legacy
+   * entity page did (`legacy`: the `entityTemplatesV2` flag off, or edit mode). Set by `pageContext()`
+   * from {@link registerPageTemplate}, so page views, auth events and actions all carry it.
+   */
+  page_template?: string;
+  page_template_renderer?: PageTemplateRenderer;
+  /** A template "+" add: what it adds, and which "+" it was (its form, e.g. `add_supporting_claim`). */
+  add_kind?: 'claim' | 'event' | 'quote';
+  add_surface?: string;
+  /** The action ran from the pending-actions queue after sign-in, not at the press. */
+  replayed?: boolean;
 };
+export type PageTemplateRenderer = 'template' | 'legacy';
 export const ACTION_CONTEXT_FIELDS = [
   'component',
   'page_path',
@@ -200,6 +216,11 @@ export const ACTION_CONTEXT_FIELDS = [
   'list_searched',
   'rematch_session_id',
   'filter_selected',
+  'page_template',
+  'page_template_renderer',
+  'add_kind',
+  'add_surface',
+  'replayed',
   'auth_attempt_id',
   'action_session_id',
   'action_anonymous_id',
@@ -238,6 +259,22 @@ export function notifyActionPageView() {
 let replayContext: ActionContext | undefined;
 let eventContext: { context: ActionContext; depth: number } | undefined;
 
+type PageTemplate = { entityId: string; template: string; renderer: PageTemplateRenderer };
+let pageTemplate: PageTemplate | undefined;
+
+/**
+ * Says which template the entity page at `/space/<space>/<entityId>` was drawn with, until the returned
+ * cleanup runs. Read by `pageContext()` for that exact path only: a record tab
+ * (`/space/<space>/<entityId>/claims`) or any other page never inherits it.
+ */
+export function registerPageTemplate(value: PageTemplate) {
+  const entry = { ...value };
+  pageTemplate = entry;
+  return () => {
+    if (pageTemplate === entry) pageTemplate = undefined;
+  };
+}
+
 export function pageContext(
   path = typeof window === 'undefined' ? '/' : window.location.pathname,
   search = typeof window === 'undefined' ? '' : window.location.search
@@ -271,12 +308,17 @@ export function pageContext(
       entityType = 'space';
     }
   }
+  const template =
+    pageType === 'entity' && segments.length === 3 && pageTemplate && equals(pageTemplate.entityId, segments[2])
+      ? { page_template: pageTemplate.template, page_template_renderer: pageTemplate.renderer }
+      : {};
   return {
     page_path: path,
     page_type: pageType,
     page_view_id: page.id,
     page_entity_id: entityId,
     page_entity_type: entityType,
+    ...template,
   };
 }
 

@@ -193,6 +193,8 @@ export function TemplateBreadcrumb({ items, className }: { items: readonly Bread
               <Link
                 href={item.href}
                 title={item.label}
+                data-geo-analytics-label="Template breadcrumb"
+                data-geo-analytics-intent={isParent ? 'breadcrumb_parent' : 'breadcrumb_ancestor'}
                 className={cx(
                   BREADCRUMB_ANCESTOR,
                   visibility,
@@ -206,6 +208,8 @@ export function TemplateBreadcrumb({ items, className }: { items: readonly Bread
                 type="button"
                 onClick={item.onSelect}
                 title={item.label}
+                data-geo-analytics-label="Template breadcrumb"
+                data-geo-analytics-intent={isParent ? 'breadcrumb_parent' : 'breadcrumb_ancestor'}
                 className={cx(
                   BREADCRUMB_ANCESTOR,
                   visibility,
