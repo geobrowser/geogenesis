@@ -2,10 +2,14 @@
 
 import * as React from 'react';
 
+import { useSetAtom } from 'jotai';
+
 import { useGraphAnalytics } from '~/core/graph-explorer/graph-explorer-analytics';
 
 import { BottomSheet } from '~/design-system/bottom-sheet';
 import { ChevronUp } from '~/design-system/icons/chevron-up';
+
+import { slideUpPopoverContainersAtom } from '~/atoms';
 
 /**
  * On a phone the map has the screen (GEO-3849): the panel is a bottom sheet behind a pill at the
@@ -28,6 +32,21 @@ export function PhonePanelSheet({
   React.useEffect(() => {
     setOpen(false);
   }, [centreId]);
+
+  // Popovers opened from the panel (a claim's voters, for one) portal to the sheet on top's container,
+  // or to the body under this sheet's z-index and scroll lock. A host inside the sheet, registered
+  // like a slide-up's (slide-up.tsx), keeps them over it. It unmounts with the sheet's content.
+  const [popoverHost, setPopoverHost] = React.useState<HTMLElement | null>(null);
+  const setPopoverContainers = useSetAtom(slideUpPopoverContainersAtom);
+  const token = React.useMemo(() => Symbol('graph-panel-sheet'), []);
+  React.useEffect(() => {
+    if (!popoverHost) return;
+    setPopoverContainers(current => [
+      ...current.filter(entry => entry.token !== token),
+      { token, container: popoverHost },
+    ]);
+    return () => setPopoverContainers(current => current.filter(entry => entry.token !== token));
+  }, [popoverHost, setPopoverContainers, token]);
 
   const onOpenChange = React.useCallback(
     (next: boolean) => {
@@ -59,6 +78,7 @@ export function PhonePanelSheet({
       }
     >
       {children}
+      <div ref={setPopoverHost} data-testid="graph-panel-popovers" />
     </BottomSheet>
   );
 }
