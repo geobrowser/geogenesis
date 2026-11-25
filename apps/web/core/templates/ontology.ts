@@ -88,6 +88,8 @@ export const TEMPLATE_ONTOLOGY = {
   QUOTES_THAT_SUPPORT_CLAIMS_PROPERTY_ID: ContentIds.QUOTES_THAT_SUPPORT_CLAIMS_PROPERTY,
   /** Verified active Claim schema property (`Quotes that support claims`). */
   QUOTES_THAT_SUPPORT_CLAIMS_LIVE_PROPERTY_ID: 'f9eeaf9d9eb741b1ac5d257c6e82e526',
+  /** Verified active Claim schema property (`Quotes that oppose claims`). Not in the SDK. */
+  QUOTES_THAT_OPPOSE_CLAIMS_PROPERTY_ID: 'fce6dc60f4dc3c07c54b3e8362ff21e6',
 
   // Community notes / flags
   /** Verified on live Tweet & Post schemas (`Community notes` -> `Community note`). */
