@@ -268,6 +268,9 @@ describe('NeighbourGroups', () => {
     expect(within(region).getAllByRole('button')).toHaveLength(7);
     expect(region.textContent).toContain('Mentioned in');
     expect(region.textContent).toContain('Person');
+    // Geo look: the relation line is 12px #4b4b4b.
+    const relation = within(region).getAllByText('Mentioned in')[0];
+    expect(relation.className.split(' ')).toEqual(expect.arrayContaining(['text-[12px]', 'text-[#4b4b4b]']));
     fireEvent.click(within(region).getByRole('button', { name: 'Show all 8' }));
     expect(within(region).getAllByRole('button')).toHaveLength(8);
     // The button is gone, so focus lands on the first row it revealed.
@@ -414,7 +417,11 @@ describe('NeighbourGroups', () => {
     groups({ groups: [spokeGroup('ent', 2)] });
     const region = screen.getByRole('region', { name: 'People and groups · 2' });
     const title = within(region).getByRole('heading');
-    expect(title.className).toContain('text-smallTitle');
+    // The prototype's Geo look: 16px/1.3 semibold with 12px under it, in the app's font.
+    expect(title.className.split(' ')).toEqual(
+      expect.arrayContaining(['text-[16px]', 'leading-[1.3]', 'font-semibold', 'mb-3'])
+    );
+    expect(title.className).not.toContain('text-smallTitle');
     expect(title.className).not.toContain('uppercase');
     // The band spans the panel: an 8px top border with the panel's padding pulled back out.
     expect(region.className).toContain('border-t-8');
@@ -435,6 +442,13 @@ describe('NeighbourGroups', () => {
     await waitFor(() => expect(rows(region)).toEqual(['Agreed90% agree', 'UnvotedNo votes yet']));
     const [agreed, unvoted] = within(region).getAllByRole('listitem');
     expect(agreed.querySelector('[data-band]')?.getAttribute('data-band')).toBe('agreed');
+    // Geo look: a 14px regular title in #151515, and a 12px #4b4b4b agreement line under it.
+    const title = agreed.querySelector('[data-band]')!.parentElement!;
+    expect(title.className.split(' ')).toEqual(
+      expect.arrayContaining(['text-[14px]', 'leading-[1.35]', 'font-normal', 'text-[#151515]'])
+    );
+    const agreement = within(agreed).getByText('90% agree');
+    expect(agreement.className.split(' ')).toEqual(expect.arrayContaining(['text-[12px]', 'text-[#4b4b4b]']));
     expect(unvoted.querySelector('[data-band]')?.getAttribute('data-band')).toBe('none');
     // No face pile and no share label: the thumbs alone, faded until hover or focus on desktop and
     // always shown at phone width (md:) and on touch screens.
@@ -481,6 +495,9 @@ describe('NeighbourGroups', () => {
     const region = screen.getByRole('region', { name: 'Sources · 1' });
     expect(region.textContent).toContain('Report · BBC Verify · Mar 1, 2025');
     expect(region.querySelector('[data-publisher-icon] img')).toBeTruthy();
+    // Geo look: the publisher line is 12px in the link gray.
+    const source = region.querySelector('[data-publisher-icon]')!.parentElement!;
+    expect(source.className.split(' ')).toEqual(expect.arrayContaining(['text-[12px]', 'text-link']));
     unmount();
 
     groups({ groups: [report], centreId: id(9) });

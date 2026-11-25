@@ -60,7 +60,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       data-panel-section
       className="-mx-6 flex flex-col border-t-8 border-grey-01 px-6 pt-6 md:-mx-4 md:px-4 md:pt-5"
     >
-      <h3 id={id} className="mb-2 text-smallTitle text-text">
+      <h3 id={id} className={SECTION_HEADING}>
         {title}
       </h3>
       {children}
@@ -69,9 +69,19 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 /** A list row: rows are split by a hairline, and the title underlines on hover as the prototype's do. */
+/*
+ * The prototype's Geo look (Preston's pick over "Original"), in the app's font. No type-scale token
+ * matches these sizes, and #4b4b4b has no color token yet, so they are arbitrary values here.
+ */
+const SECTION_HEADING = 'mb-3 text-[16px] leading-[1.3] font-semibold text-text';
+/** The relation above a row's title and the "% agree" line under a claim. */
+const ROW_META = 'text-[12px] leading-4 text-[#4b4b4b]';
+/** The line under a row's title: its publisher, or its kind and count. */
+const ROW_SOURCE = 'text-[12px] leading-4 text-link';
+
 const ROW_ITEM = 'border-b border-grey-01 last:border-b-0';
 const ROW_TITLE =
-  'text-metadataMedium wrap-break-word text-text decoration-grey-02 underline-offset-[3px] group-hover/row:underline group-focus-visible/row:underline';
+  'text-[14px] leading-[1.35] font-normal wrap-break-word text-[#151515] decoration-grey-02 underline-offset-[3px] group-hover/row:underline group-focus-visible/row:underline';
 
 function Row({
   title,
@@ -99,10 +109,10 @@ function Row({
         onClick={onClick}
         className="group/row flex w-full min-w-0 flex-col gap-0.5 py-2 text-left focus-visible:outline-none"
       >
-        {relation && <span className="truncate text-footnote text-grey-04">{relation}</span>}
+        {relation && <span className={cx('truncate', ROW_META)}>{relation}</span>}
         <span className={ROW_TITLE}>{title}</span>
         {sub && (
-          <span className="flex min-w-0 items-center gap-1.5 text-footnote text-grey-04 tabular-nums">
+          <span className={cx('flex min-w-0 items-center gap-1.5 tabular-nums', ROW_SOURCE)}>
             {publisher && (
               <span data-publisher-icon className="contents">
                 <EntityAvatar entity={publisher} size={16} />
@@ -450,7 +460,7 @@ function ClaimRowContent({ claim, centre, onOpen }: { claim: PanelClaim; centre:
         onClick={() => onOpen(claim.id, claim.name)}
         className="group/row flex min-w-0 flex-col gap-0.5 text-left focus-visible:outline-none"
       >
-        {relation && <span className="truncate text-footnote text-grey-04">{relation}</span>}
+        {relation && <span className={cx('truncate', ROW_META)}>{relation}</span>}
         <span className={ROW_TITLE}>
           <i
             aria-hidden
@@ -464,7 +474,7 @@ function ClaimRowContent({ claim, centre, onOpen }: { claim: PanelClaim; centre:
         </span>
       </button>
       <div className="flex min-h-5 items-center justify-between gap-3">
-        <span className="text-footnote text-grey-04 tabular-nums">
+        <span className={cx('tabular-nums', ROW_META)}>
           {summary.isLoading && !counts ? '…' : (claimRowLine(counts) ?? 'Votes unavailable')}
         </span>
         <div data-row-thumbs className={ROW_THUMBS_CLASS}>
