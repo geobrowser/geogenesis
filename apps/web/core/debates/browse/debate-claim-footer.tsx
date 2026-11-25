@@ -59,7 +59,7 @@ export function DebateClaimFooter({
 }) {
   if (look === 'app') {
     return (
-      <div className={className}>
+      <div className={className ? `${APP_FONT_CLASS_NAME} ${className}` : APP_FONT_CLASS_NAME}>
         <div className="mt-4">{meta}</div>
         <div className={APP_TITLE_CLASS_NAME}>{title}</div>
         {claim ? (
@@ -131,7 +131,15 @@ const IGNORE_RESPONSE = () => {};
  * hosts' classes carry `!`, and these out-rank them by specificity.
  */
 const APP_TITLE_CLASS_NAME =
-  'mt-5 mb-5 [&_h2]:text-[23px]! [&_h2]:leading-[27px]! [&_h2]:font-medium! [&_h2]:tracking-[-0.65px]! [&_h2]:text-[#151515]!';
+  "mt-5 mb-5 [&_h2]:[font-family:'Helvetica_Neue',Arial,sans-serif]! [&_h2]:text-[23px]! [&_h2]:leading-[27px]! [&_h2]:font-medium! [&_h2]:tracking-[-0.65px]! [&_h2]:text-[#151515]!";
+
+/**
+ * The debates app on the web has no font of its own: its text is React Native Web's system stack, and
+ * its claim title is Helvetica Neue (`claimTitleLayout.web.ts`). The app look takes the same, over
+ * Geo's Calibre, so the meta row, the vote pills and the results read as they do there.
+ */
+const APP_FONT_CLASS_NAME =
+  "[font-family:-apple-system,BlinkMacSystemFont,'Segoe_UI',Roboto,Helvetica,Arial,sans-serif]";
 
 function ClaimPositions({
   claim,
