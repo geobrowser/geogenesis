@@ -56,7 +56,8 @@ export function GraphTopBar({
     if (row && pressed) revealInRow(row, pressed);
   }, [kindFilter, chipKey]);
   return (
-    <div className="relative z-[2] flex shrink-0 items-center gap-3 border-b border-[#f0f0f0] bg-white px-4 py-3 md:gap-2 lg:flex-wrap">
+    // A phone gets two rows: the path (or the search, while open), Share and close; then the chips.
+    <div className="group/bar relative z-[2] flex shrink-0 items-center gap-3 border-b border-[#f0f0f0] bg-white px-4 py-3 md:gap-2 md:px-3 md:py-2 lg:flex-wrap">
       {back ? (
         <button type="button" aria-label={back.label} title={back.label} onClick={back.onClick} className={ROUND}>
           <ArrowLeft />
@@ -64,7 +65,7 @@ export function GraphTopBar({
       ) : null}
       <nav
         aria-label="Your path"
-        className="flex min-w-0 flex-1 items-center gap-[6px] overflow-hidden whitespace-nowrap md:order-3 md:basis-full"
+        className="flex min-w-0 flex-1 items-center gap-[6px] overflow-hidden whitespace-nowrap md:group-has-[[data-search-open]]/bar:hidden"
       >
         {trail.slice(-4).map((name, index, shown) => {
           const current = index === shown.length - 1;
