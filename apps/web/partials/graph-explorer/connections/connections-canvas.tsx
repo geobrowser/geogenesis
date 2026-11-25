@@ -80,6 +80,8 @@ type Engine = {
   dpr: number;
   /** Placeholders only: links are faint and carry no moving dots. */
   skeleton: boolean;
+  /** The zoom buttons' box in stage coordinates, measured on resize; phone names keep clear of it. */
+  controls: { left: number; top: number; bottom: number } | null;
 };
 
 export type ConnectionsCanvasProps = {
@@ -118,6 +120,7 @@ export function ConnectionsCanvas({
     analyticsRef.current = analytics;
   }, [analytics]);
   const stageRef = React.useRef<HTMLDivElement>(null);
+  const controlsRef = React.useRef<HTMLDivElement>(null);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const elements = React.useRef(new Map<string, HTMLElement>());
   const moved = React.useRef(false);
@@ -155,6 +158,7 @@ export function ConnectionsCanvas({
     height: 0,
     dpr: 1,
     skeleton: false,
+    controls: null,
   });
   const [leaving, setLeaving] = React.useState<SelectedNode[]>([]);
   const [layoutMs, setLayoutMs] = React.useState<number | null>(null);
@@ -302,6 +306,10 @@ export function ConnectionsCanvas({
       state.width = rect.width;
       state.height = rect.height;
       state.dpr = Math.min(phone ? 1.5 : 2, window.devicePixelRatio || 1);
+      const controls = controlsRef.current?.getBoundingClientRect();
+      state.controls = controls
+        ? { left: controls.left - rect.left, top: controls.top - rect.top, bottom: controls.bottom - rect.top }
+        : null;
       canvas.width = rect.width * state.dpr;
       canvas.height = rect.height * state.dpr;
       canvas.style.width = `${rect.width}px`;
@@ -445,7 +453,7 @@ export function ConnectionsCanvas({
           far,
           pin,
           markerScale: pin ? pinMarkerScale(point.scale) : 1,
-          shift: pin ? pinShift(point.x, box.width / 2, state.width) : 0,
+          shift: pin ? pinShift(point.x, box.width / 2, pinRightEdge(state, point.y, box)) : 0,
         });
       }
 
@@ -807,6 +815,7 @@ export function ConnectionsCanvas({
         })}
       </div>
       <div
+        ref={controlsRef}
         data-stage-control
         className="absolute right-4 bottom-4 z-[10000] flex flex-col gap-2 graph-phone:bottom-[calc(max(16px,env(safe-area-inset-bottom))+52px)]"
       >
@@ -870,6 +879,13 @@ function rectAt(x: number, y: number, box: Box, scale: number): Rect {
 export function nodeScale(isCentre: boolean, hop: number, depthScale: number, phone: boolean) {
   if (isCentre) return phone ? 1 : Math.max(1, Math.min(1.5, depthScale * 1.12));
   return Math.max(0.3, Math.min(1.2, depthScale * (hop === 2 ? 0.95 : 1)));
+}
+
+/** Where a pin's name must end on the right: the zoom buttons when level with them, else the stage edge. */
+function pinRightEdge(state: Pick<Engine, 'width' | 'controls'>, y: number, box: Box) {
+  const { controls } = state;
+  const [top, bottom] = [y + box.anchor, y + box.height - box.anchor];
+  return controls && bottom > controls.top && top < controls.bottom ? controls.left : state.width;
 }
 
 /** The hovered card draws over everything, the centre included. */
