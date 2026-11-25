@@ -56,6 +56,15 @@ export function GraphTopBar({
   ];
   const chipKey = chips.join(',');
   const rowRef = React.useRef<HTMLDivElement>(null);
+  const pathRef = React.useRef<HTMLElement>(null);
+  // The step pressed usually leaves the path (it becomes the centre, or "…" folds away), which would
+  // drop keyboard focus to the page; the path itself stays, so focus lands there.
+  const step = onStep
+    ? (index: number) => {
+        onStep(index);
+        pathRef.current?.focus();
+      }
+    : undefined;
   // On a phone the row scrolls: a link that opens on a chip, or a chip set for the viewer, would
   // otherwise leave the pressed chip past the edge.
   React.useEffect(() => {
@@ -72,8 +81,10 @@ export function GraphTopBar({
         </button>
       ) : null}
       <nav
+        ref={pathRef}
+        tabIndex={-1}
         aria-label="Your path"
-        className="flex min-w-0 flex-1 items-center gap-[6px] overflow-hidden whitespace-nowrap md:group-has-[[data-search-open]]/bar:hidden"
+        className="flex min-w-0 flex-1 items-center gap-[6px] overflow-hidden whitespace-nowrap outline-none md:group-has-[[data-search-open]]/bar:hidden"
       >
         {collapseTrail(trail).map((part, position) => (
           <React.Fragment key={part.kind === 'step' ? part.step.index : 'more'}>
@@ -83,7 +94,7 @@ export function GraphTopBar({
               </span>
             )}
             {part.kind === 'more' ? (
-              <HiddenSteps steps={part.steps} onStep={onStep} />
+              <HiddenSteps steps={part.steps} onStep={step} />
             ) : part.step === trail.at(-1) ? (
               // The centre takes whatever the earlier steps leave, and they are capped below a third
               // each, so it is never cut shorter than any of them.
@@ -91,7 +102,7 @@ export function GraphTopBar({
                 {part.step.name}
               </span>
             ) : (
-              <EarlierStep step={part.step} onStep={onStep} />
+              <EarlierStep step={part.step} onStep={step} />
             )}
           </React.Fragment>
         ))}
@@ -162,7 +173,7 @@ function HiddenSteps({ steps, onStep }: { steps: GraphTrailStep[]; onStep?: (ind
       open={open}
       onOpenChange={next => {
         setOpen(next);
-        if (next) analytics?.interacted({ interaction: 'trail_menu', value: steps.length });
+        if (next) analytics?.interacted({ interaction: 'trail_menu', step_count: steps.length });
       }}
       align="start"
       asChild

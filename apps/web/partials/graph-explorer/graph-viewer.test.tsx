@@ -693,6 +693,23 @@ describe('GraphViewer analytics', () => {
     ]);
   });
 
+  it('re-centres on a step picked from the path, dropping the steps after it, and reports it as a trail hop', () => {
+    const move: React.MutableRefObject<((next: GraphHistory) => void) | null> = { current: null };
+    render(<TrackedViewer move={move} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Isaac Herzog' }));
+    const path = () => within(screen.getByRole('navigation', { name: 'Your path' }));
+    expect(path().getByText('Isaac Herzog').getAttribute('aria-current')).toBe('location');
+
+    fireEvent.click(path().getByRole('button', { name: 'Israel-Gaza war' }));
+    expect(hooks.useGraphNeighbourhood).toHaveBeenLastCalledWith(expect.objectContaining({ centreId: TOPIC }));
+    expect(path().queryByText('Isaac Herzog')).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Back to/ })).toBeNull();
+    expect(events('graph_explorer_recentred').map(props => [props.method, props.entity_id])).toEqual([
+      ['node', PERSON],
+      ['trail', TOPIC],
+    ]);
+  });
+
   it('opens a new session with entry history when the page is restored from the back/forward cache', () => {
     const move: React.MutableRefObject<((next: GraphHistory) => void) | null> = { current: null };
     render(<TrackedViewer move={move} />);

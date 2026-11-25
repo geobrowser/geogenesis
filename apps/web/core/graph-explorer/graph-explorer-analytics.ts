@@ -22,8 +22,8 @@ type Interaction =
   | { interaction: 'filter'; value: string }
   | { interaction: 'search'; result_count: number }
   | { interaction: 'summary_seen' }
-  /** The path's "…" opened; `value` is how many steps it holds. */
-  | { interaction: 'trail_menu'; value: number }
+  /** The path's "…" opened. Its own integer, as search's count is: `value` is a string elsewhere. */
+  | { interaction: 'trail_menu'; step_count: number }
   | { interaction: 'open_page'; value: 'claim' | 'entity'; target_id: string };
 
 /** An `open_page` click this soon before leaving is why the viewer left. */

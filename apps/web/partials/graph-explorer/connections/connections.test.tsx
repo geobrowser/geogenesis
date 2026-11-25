@@ -753,4 +753,55 @@ describe('the top bar path (GEO-3852)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Gaza' }));
     expect(onStep).toHaveBeenLastCalledWith(0);
   });
+
+  /** A path that walks back the way the viewer does: the step picked becomes the centre. */
+  function Walk({ names }: { names: string[] }) {
+    const [count, setCount] = React.useState(names.length);
+    return (
+      <GraphTopBar
+        back={null}
+        trail={steps(...names.slice(0, count))}
+        onStep={index => setCount(index + 1)}
+        search={null}
+        kinds={[]}
+        kindFilter="all"
+        onKindFilter={() => {}}
+        close={null}
+      />
+    );
+  }
+
+  it('keeps keyboard focus on the path when the step pressed turns into the centre', () => {
+    render(<Walk names={['Gaza', 'Justice', 'Centre']} />);
+    const justice = screen.getByRole('button', { name: 'Justice' });
+    justice.focus();
+    fireEvent.click(justice);
+    expect(screen.queryByRole('button', { name: 'Justice' })).toBeNull();
+    expect(document.activeElement).toBe(path());
+  });
+
+  it('keeps keyboard focus on the path when a pick from "…" folds the "…" away', () => {
+    render(<Walk names={['Gaza', 'Justice', 'Simas vs. Scott', 'Kevin Garvey', 'Centre']} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Show 3 more steps' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Justice' }));
+    expect(path().textContent).toBe('Gaza›Justice');
+    expect(document.activeElement).toBe(path());
+  });
+
+  it('reports the "…" opening with how many steps it holds, as a count of its own', () => {
+    const session = startGraphExplorerSession({ entityId: 'c', topicId: 't', spaceId: null, trailDepth: 4 });
+    session.opened('ready', { layout: 'desktop', trailDepth: 4 });
+    render(
+      <GraphAnalyticsProvider value={session}>
+        <Walk names={['Gaza', 'Justice', 'Simas vs. Scott', 'Kevin Garvey', 'Centre']} />
+      </GraphAnalyticsProvider>
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Show 3 more steps' }));
+    const opened = vi
+      .mocked(captureSafely)
+      .mock.calls.filter(([name, props]) => name === 'graph_explorer_interacted' && props?.interaction === 'trail_menu')
+      .map(([, props]) => props);
+    expect(opened).toEqual([expect.objectContaining({ step_count: 3 })]);
+    expect(opened[0]).not.toHaveProperty('value');
+  });
 });
