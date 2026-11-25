@@ -9,13 +9,13 @@ import { flushSync } from 'react-dom';
 import { ActionSurface } from '~/core/action-context-provider';
 import type { Debate, DebateParticipant } from '~/core/debates/api';
 import type { ClaimMarker } from '~/core/debates/claim-ticker';
+import { compositeTopSlot } from '~/core/debates/composite-top-slot';
 import type { DebatePagePlayerState } from '~/core/debates/debate-page-outcome';
 import {
   forgetDebatePosition,
   useDebateResume,
   useRememberDebatePosition,
 } from '~/core/debates/debate-resume-positions';
-import { DebatePositionChip } from '~/core/debates/debate-video-tile';
 import { isOpenRoundsDebate } from '~/core/debates/open-rounds';
 import { usePairReadiness } from '~/core/debates/pair-readiness';
 import { useParticipantBylines } from '~/core/debates/participant-bylines';
@@ -1375,6 +1375,145 @@ function PairedDebateFeedPlayer({
     togglePlayback();
   };
 
+  // The Agree speaker on top, as the debates app draws a debate (GEO-3833). The tiles keep their DOM
+  // order — moving a playing <video> in the document can pause it — and swap with flex `order`
+  // instead. Everything that belongs to a *position* rather than a speaker goes with the position:
+  // the play, mute and Start over controls ride the top tile, the scrubber and the taller scrim the
+  // bottom one, and only the top identity row yields to the round card that crosses it.
+  const topSlot = compositeTopSlot(debate.participants);
+  const tilePositionProps = (slot: 1 | 2) =>
+    slot === topSlot
+      ? { className: topSlot === 2 ? 'order-1' : undefined }
+      : {
+          className: topSlot === 2 ? 'order-2' : undefined,
+          // This is the half the scrubber sits in, so its claim corner is the one that has to lift
+          // clear of the bar.
+          clearScrubber: scrubberShown ? ('always' as const) : ('on-hover' as const),
+          // Taller than the top tile's, per the frame.
+          scrimClassName: 'h-[4.625rem]',
+        };
+  // Not on a held card: there is nothing to pause, and an unmute there would have no element to make
+  // audible inside the tap.
+  const topControls =
+    ready && !playbackEnded && !held && !editorMode ? (
+      <div className="flex items-center gap-2">
+        {/* Desktop: a persistent play/pause beside the mute control. Mobile keeps the
+                  centred paused glyph and tap-to-toggle instead. */}
+        {!refusedPrompt && (
+          <ControlCircle
+            ariaLabel={playing ? 'Pause debate' : 'Play debate'}
+            onClick={() => togglePlayback()}
+            className="md:hidden"
+          >
+            {playing ? <Pause /> : <Play />}
+          </ControlCircle>
+        )}
+        {/* Feed debates autoplay muted, so the unmute control stays visible during
+                  playback — otherwise there's no way to hear audio. Once unmuted it recedes
+                  to hover-only on desktop; touch has no hover, so on mobile it stays visible
+                  or there'd be no way to find it again.
+
+                  `no-hover:` as well as `md:`, because the two ask different questions. A tablet
+                  held in landscape is wider than the `md` breakpoint and still has no hover, so
+                  width alone left the control faded out but tappable there — a tap aimed at
+                  play/pause muted the debate instead, with nothing able to bring the control back. */}
+        <ControlCircle
+          ariaLabel={mutedByUser ? 'Unmute' : 'Mute'}
+          onClick={() => {
+            measurement.control(mutedByUser ? 'unmute' : 'mute');
+            // On a refused card, Unmute starts it with sound.
+            if (mutedByUser && autoplayBlocked && !playing) {
+              togglePlayback('explicit');
+              return;
+            }
+            if (mutedByUser && playing) unmuteInGesture('explicit');
+            else setMutedByUser(current => !current);
+          }}
+          className={
+            mutedByUser
+              ? undefined
+              : cx(
+                  'opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 md:opacity-100 no-hover:opacity-100',
+                  stamped && 'duration-150 ease-out motion-reduce:transition-none'
+                )
+          }
+        >
+          {mutedByUser ? <SpeakerMuted /> : <Speaker />}
+        </ControlCircle>
+        {startOverOffered && !refusedPrompt && (
+          <button
+            type="button"
+            onClick={event => {
+              event.stopPropagation();
+              restartWhenActive('start_over');
+            }}
+            className={cx(
+              'flex h-10.5 items-center gap-1 rounded-full bg-white text-smallButton text-text shadow-light',
+              reducedOverlays
+                ? 'w-10.5 justify-center [&>svg]:scale-[1.3]'
+                : 'px-3 @max-md:w-10.5 @max-md:justify-center @max-md:px-0 @max-md:[&>svg]:scale-[1.3]'
+            )}
+          >
+            <RetrySmall />
+            <span className={reducedOverlays ? 'sr-only' : '@max-md:sr-only'}>Start over</span>
+          </button>
+        )}
+        {/* Not a button, so a tap on it is a page tap and gives sound; Unmute is the control
+                  a screen reader gets. */}
+        {soundHint && (
+          <span
+            aria-hidden
+            data-debate-sound-hint
+            className={cx(
+              'flex h-8 items-center rounded-full bg-white px-3 text-[0.8125rem] leading-none text-text shadow-light',
+              startOverOffered && !refusedPrompt && '@max-md:hidden'
+            )}
+          >
+            Tap for sound
+          </span>
+        )}
+      </div>
+    ) : null;
+  const scrubberControl =
+    ready && !held && !refusedPrompt && !editorMode ? (
+      // Always available so the viewer can seek. During playback it recedes to
+      // hover-only and drops pointer-events so it can't swallow play/pause taps.
+      // `pointer-events-none` does not stop keyboard focus reaching the range input, which
+      // is what brings it back up for a viewer who never touches the pointer.
+      <div
+        onFocus={() => setTimelineFocused(true)}
+        onBlur={event => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setTimelineFocused(false);
+        }}
+        className={cx(
+          'transition-opacity',
+          stamped && 'duration-150 ease-out motion-reduce:transition-none',
+          scrubberShown
+            ? 'opacity-100'
+            : // `[&_button]:` as well as the wrapper itself, because the claim markers inside
+              // set `pointer-events-auto` on themselves — they have to, so a drag can pass
+              // between them to the range input underneath. An explicit value beats an
+              // inherited one, so `pointer-events-none` here never reached them and a fully
+              // transparent marker stayed clickable: a click meant to pause the video seeked
+              // it instead. The descendant selector outranks the marker's own class.
+              //
+              // Focusability is deliberately untouched. Tabbing to a marker sets
+              // `timelineFocused`, which is what brings the scrubber back into view, so the
+              // keyboard route in depends on them staying in the tab order while hidden.
+              'pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 [&_button]:pointer-events-none group-hover:[&_button]:pointer-events-auto'
+        )}
+      >
+        <FeedScrubber
+          currentTime={playheadSeconds}
+          timeline={scrubberTimeline}
+          markers={reducedOverlays ? [] : ticker.markers}
+          onSeek={seekBoth}
+          onScrubStart={beginScrub}
+          onScrubEnd={endScrub}
+        />
+      </div>
+    ) : null;
+
   return (
     <ActionSurface
       className="contents"
@@ -1453,7 +1592,7 @@ function PairedDebateFeedPlayer({
           roundBadge={displayedTurn?.slot === 1 ? displayedRoundBadge : null}
           // Fixed formats retain the top row's crossfade. Open rounds hides both identity rows
           // and claim corners together, including lists that reach into the announcement's space.
-          cardYield={stamped ? 0 : (roundCard?.opacity ?? 0)}
+          cardYield={stamped || topSlot !== 1 ? 0 : (roundCard?.opacity ?? 0)}
           hideForAnnouncement={announcementShown}
           stamped={stamped}
           mutedByUser={mutedByUser}
@@ -1467,89 +1606,9 @@ function PairedDebateFeedPlayer({
           claims={claimsFor(1)}
           claimsOpen={claimsOpenFor(1)}
           onClaimsHoverChange={onTileHover(1)}
-          // Not on a held card: there is nothing to pause, and an unmute there would have no element
-          // to make audible inside the tap.
-          topLeft={
-            ready && !playbackEnded && !held && !editorMode ? (
-              <div className="flex items-center gap-2">
-                {/* Desktop: a persistent play/pause beside the mute control. Mobile keeps the
-                  centred paused glyph and tap-to-toggle instead. */}
-                {!refusedPrompt && (
-                  <ControlCircle
-                    ariaLabel={playing ? 'Pause debate' : 'Play debate'}
-                    onClick={() => togglePlayback()}
-                    className="md:hidden"
-                  >
-                    {playing ? <Pause /> : <Play />}
-                  </ControlCircle>
-                )}
-                {/* Feed debates autoplay muted, so the unmute control stays visible during
-                  playback — otherwise there's no way to hear audio. Once unmuted it recedes
-                  to hover-only on desktop; touch has no hover, so on mobile it stays visible
-                  or there'd be no way to find it again.
-
-                  `no-hover:` as well as `md:`, because the two ask different questions. A tablet
-                  held in landscape is wider than the `md` breakpoint and still has no hover, so
-                  width alone left the control faded out but tappable there — a tap aimed at
-                  play/pause muted the debate instead, with nothing able to bring the control back. */}
-                <ControlCircle
-                  ariaLabel={mutedByUser ? 'Unmute' : 'Mute'}
-                  onClick={() => {
-                    measurement.control(mutedByUser ? 'unmute' : 'mute');
-                    // On a refused card, Unmute starts it with sound.
-                    if (mutedByUser && autoplayBlocked && !playing) {
-                      togglePlayback('explicit');
-                      return;
-                    }
-                    if (mutedByUser && playing) unmuteInGesture('explicit');
-                    else setMutedByUser(current => !current);
-                  }}
-                  className={
-                    mutedByUser
-                      ? undefined
-                      : cx(
-                          'opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 md:opacity-100 no-hover:opacity-100',
-                          stamped && 'duration-150 ease-out motion-reduce:transition-none'
-                        )
-                  }
-                >
-                  {mutedByUser ? <SpeakerMuted /> : <Speaker />}
-                </ControlCircle>
-                {startOverOffered && !refusedPrompt && (
-                  <button
-                    type="button"
-                    onClick={event => {
-                      event.stopPropagation();
-                      restartWhenActive('start_over');
-                    }}
-                    className={cx(
-                      'flex h-10.5 items-center gap-1 rounded-full bg-white text-smallButton text-text shadow-light',
-                      reducedOverlays
-                        ? 'w-10.5 justify-center [&>svg]:scale-[1.3]'
-                        : 'px-3 @max-md:w-10.5 @max-md:justify-center @max-md:px-0 @max-md:[&>svg]:scale-[1.3]'
-                    )}
-                  >
-                    <RetrySmall />
-                    <span className={reducedOverlays ? 'sr-only' : '@max-md:sr-only'}>Start over</span>
-                  </button>
-                )}
-                {/* Not a button, so a tap on it is a page tap and gives sound; Unmute is the control
-                  a screen reader gets. */}
-                {soundHint && (
-                  <span
-                    aria-hidden
-                    data-debate-sound-hint
-                    className={cx(
-                      'flex h-8 items-center rounded-full bg-white px-3 text-[0.8125rem] leading-none text-text shadow-light',
-                      startOverOffered && !refusedPrompt && '@max-md:hidden'
-                    )}
-                  >
-                    Tap for sound
-                  </span>
-                )}
-              </div>
-            ) : null
-          }
+          topLeft={topSlot === 1 ? topControls : undefined}
+          scrubber={topSlot === 1 ? undefined : scrubberControl}
+          {...tilePositionProps(1)}
         />
         <DebaterVideo
           inert={endCardShown}
@@ -1577,6 +1636,7 @@ function PairedDebateFeedPlayer({
           countdown={playing && !announcementShown && displayedTurn?.slot === 2 ? displayedTurn : null}
           roundBadge={displayedTurn?.slot === 2 ? displayedRoundBadge : null}
           hideForAnnouncement={announcementShown}
+          cardYield={stamped || topSlot !== 2 ? 0 : (roundCard?.opacity ?? 0)}
           mutedByUser={mutedByUser}
           isResuming={isResuming}
           onPlaybackTick={onPlaybackTick}
@@ -1589,51 +1649,9 @@ function PairedDebateFeedPlayer({
           claimsOpen={claimsOpenFor(2)}
           stamped={stamped}
           onClaimsHoverChange={onTileHover(2)}
-          // This is the half the scrubber sits in, so its claim corner is the one that has to lift
-          // clear of the bar.
-          clearScrubber={scrubberShown ? 'always' : 'on-hover'}
-          // Taller than the top tile's, per the frame.
-          scrimClassName="h-[4.625rem]"
-          scrubber={
-            ready && !held && !refusedPrompt && !editorMode ? (
-              // Always available so the viewer can seek. During playback it recedes to
-              // hover-only and drops pointer-events so it can't swallow play/pause taps.
-              // `pointer-events-none` does not stop keyboard focus reaching the range input, which
-              // is what brings it back up for a viewer who never touches the pointer.
-              <div
-                onFocus={() => setTimelineFocused(true)}
-                onBlur={event => {
-                  if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setTimelineFocused(false);
-                }}
-                className={cx(
-                  'transition-opacity',
-                  stamped && 'duration-150 ease-out motion-reduce:transition-none',
-                  scrubberShown
-                    ? 'opacity-100'
-                    : // `[&_button]:` as well as the wrapper itself, because the claim markers inside
-                      // set `pointer-events-auto` on themselves — they have to, so a drag can pass
-                      // between them to the range input underneath. An explicit value beats an
-                      // inherited one, so `pointer-events-none` here never reached them and a fully
-                      // transparent marker stayed clickable: a click meant to pause the video seeked
-                      // it instead. The descendant selector outranks the marker's own class.
-                      //
-                      // Focusability is deliberately untouched. Tabbing to a marker sets
-                      // `timelineFocused`, which is what brings the scrubber back into view, so the
-                      // keyboard route in depends on them staying in the tab order while hidden.
-                      'pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 [&_button]:pointer-events-none group-hover:[&_button]:pointer-events-auto'
-                )}
-              >
-                <FeedScrubber
-                  currentTime={playheadSeconds}
-                  timeline={scrubberTimeline}
-                  markers={reducedOverlays ? [] : ticker.markers}
-                  onSeek={seekBoth}
-                  onScrubStart={beginScrub}
-                  onScrubEnd={endScrub}
-                />
-              </div>
-            ) : null
-          }
+          {...tilePositionProps(2)}
+          topLeft={topSlot === 2 ? topControls : undefined}
+          scrubber={topSlot === 1 ? scrubberControl : undefined}
         />
 
         {/* Straddling the seam between the tiles, which is the one strip of the player that is never
@@ -1703,6 +1721,7 @@ function PairedDebateFeedPlayer({
             <DebateEarlyEndLabels
               cue={earlyEndCue}
               names={breakNames}
+              topSlot={topSlot}
               playing={playing}
               clock={{
                 positionMs: livePositionMs,
@@ -1865,6 +1884,7 @@ function DebaterVideo({
   toggleHidden = false,
   stamped = false,
   hideForAnnouncement = false,
+  className,
 }: {
   participant: DebateParticipant | null;
   byline: string | null;
@@ -1923,6 +1943,8 @@ function DebaterVideo({
   stamped?: boolean;
   /** Hide identity and claims in the same frame as the other announcement furniture. */
   hideForAnnouncement?: boolean;
+  /** On the tile's root: its flex `order`, which puts the Agree speaker on top (GEO-3833). */
+  className?: string;
   /**
    * How much of this tile's bottom band the round card or the break's banner has taken, 0–1.
    *
@@ -2223,7 +2245,7 @@ function DebaterVideo({
       // tile" is otherwise only checkable by counting DOM order.
       data-debate-slot={participant?.participant_slot}
       inert={inert}
-      className="relative aspect-480/289 w-full overflow-hidden bg-grey-01"
+      className={cx('relative aspect-480/289 w-full overflow-hidden bg-grey-01', className)}
     >
       {/* Clicking anywhere on the video toggles pause/play. */}
       <button
@@ -2553,9 +2575,9 @@ function DebaterVideo({
             aria-hidden
             data-debater-avatar
             onClick={openProfile}
-            className="block size-7 cursor-pointer overflow-hidden rounded-full bg-white"
+            className="block size-8 cursor-pointer overflow-hidden rounded-full bg-white"
           >
-            <Avatar avatarUrl={participant?.avatar_cid} value={participant?.profile_space_id} size={28} />
+            <Avatar avatarUrl={participant?.avatar_cid} value={participant?.profile_space_id} size={32} />
           </span>
           {participant && validateSpaceId(participant.profile_space_id) ? (
             <FollowButton
@@ -2568,22 +2590,27 @@ function DebaterVideo({
         <button
           type="button"
           onClick={onIdentityClick}
-          className="pointer-events-auto flex max-w-[55%] min-w-0 items-center text-left"
+          // The app's text shadow, so the white identity reads on a bright frame with no chip under it.
+          className="pointer-events-auto flex max-w-[55%] min-w-0 items-center text-left [text-shadow:0_2px_5px_#000000ee]"
         >
           <span className="flex min-w-0 flex-col">
             <span className="flex min-w-0 items-center gap-2">
-              <span className="truncate text-[1rem] leading-5 tracking-[-0.35px] text-white">{name}</span>
+              {/* The debates app's identity metrics (GEO-3833): a 14px name and the stance as
+                  plain 11px text beside it rather than a chip. */}
+              <span className="truncate text-[14px] leading-[18px] font-semibold text-white">{name}</span>
               {/* Named from the side rather than read off `position_label`, for the same reason
                   the room tile is: geo-chat still calls a factual claim's sides "Verify" and
                   "Dispute", which is a word this app no longer has a way to publish. `position`
                   is a non-null boolean, so the label is always a real one and the participant is
                   the only thing left to guard. */}
               {participant && (
-                <DebatePositionChip data-debate-position-chip label={responsePositionLabel(participant.position)} />
+                <span data-debate-position-chip className="shrink-0 text-[11px] leading-4 font-medium text-white">
+                  {responsePositionLabel(participant.position)}
+                </span>
               )}
             </span>
             {byline && (
-              <span data-debate-byline title={byline} className="truncate text-[0.75rem] leading-4 text-white/80">
+              <span data-debate-byline title={byline} className="mt-0.5 truncate text-[11px] leading-[15px] text-white">
                 {byline}
               </span>
             )}
