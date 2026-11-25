@@ -130,9 +130,7 @@ export function EntityPanel({
     <section aria-label={`About ${centre.name ?? centre.id}`} className="flex min-h-0 flex-col gap-5">
       {/* On a phone the map right above already names the centre, so its space goes to the map. The
           switch is the map's own phone breakpoint (`graph-phone:`, GRAPH_PHONE_QUERY). */}
-      <div data-testid="entity-panel-header" className="graph-phone:hidden">
-        <CentreHeader centre={centre} pageSpaceId={pageSpaceId} />
-      </div>
+      <CentreHeader centre={centre} pageSpaceId={pageSpaceId} />
 
       {/* A claim's vote block comes before its description, so Agree and Disagree are on screen
           without scrolling however long the description runs (GEO-3841). Its own prop rather than
@@ -209,7 +207,7 @@ function CentreHeader({ centre, pageSpaceId }: { centre: PanelCentre; pageSpaceI
   const eyebrow = centreEyebrow(centre);
   const name = centre.name ?? centre.id;
   return (
-    <header className="flex items-center gap-3">
+    <header data-testid="entity-panel-header" className="flex items-center gap-3 graph-phone:hidden">
       <EntityAvatar entity={centre} />
       <div className="flex min-w-0 flex-col gap-0.5">
         {eyebrow && <p className="text-[13px] leading-[1.35] text-grey-04">{eyebrow}</p>}
