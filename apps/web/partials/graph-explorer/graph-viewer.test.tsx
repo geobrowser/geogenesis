@@ -419,14 +419,24 @@ describe('GraphViewer', () => {
     expect(screen.getAllByText('A news story').length).toBeGreaterThan(0);
   });
 
-  it('says a cut-short topic summary is a lower bound', () => {
+  it('says a cut-short topic summary only counted its first claims, beside the band counts', () => {
     topicSummary.data = {
       claims: [{ id: 'c', name: 'A claim', spaceId: 's', positive: 3, negative: 0, band: 'agreed' }],
       truncated: true,
     };
     render(<Viewer start={TOPIC} scope={{ ...scope, topicId: TOPIC, topicSpaceId: SPACE }} />);
+    expect(screen.getByText('Only this topic’s first 2,000 claims were counted.')).toBeTruthy();
+    expect(screen.queryByText(/with 3\+ responses/)).toBeNull();
+  });
+
+  it('says a cut-short count is a lower bound while no claim has 3 responses', () => {
+    topicSummary.data = {
+      claims: [{ id: 'c', name: 'A claim', spaceId: 's', positive: 1, negative: 0, band: 'agreed' }],
+      truncated: true,
+    };
+    render(<Viewer start={TOPIC} scope={{ ...scope, topicId: TOPIC, topicSpaceId: SPACE }} />);
     expect(
-      screen.getByText('At least 1 claim with 3+ responses; only its first 2,000 claims were counted.')
+      screen.getByText('At least 1 claim has responses so far; only its first 2,000 claims were counted.')
     ).toBeTruthy();
   });
 
@@ -528,11 +538,11 @@ describe('GraphViewer under a kind chip', () => {
     expect(screen.queryByRole('heading', { name: /^Claims/ })).toBeTruthy();
   });
 
-  it('notes capped kinds only for the groups the chip leaves in the panel', () => {
+  it('marks a capped kind in its own heading, with no "Showing the first N" footer', () => {
     mixedNeighbourhood(['topic']);
     render(<Viewer start={TOPIC} scope={scope} />);
-    expect(screen.queryByText(/Showing the first/)).toBeTruthy();
-    fireEvent.click(chips().getByRole('button', { name: 'News' }));
+    expect(heading('Topics · 1+')).toBeTruthy();
+    expect(heading('People and groups · 1')).toBeTruthy();
     expect(screen.queryByText(/Showing the first/)).toBeNull();
   });
 

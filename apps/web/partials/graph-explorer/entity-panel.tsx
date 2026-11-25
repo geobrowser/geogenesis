@@ -3,7 +3,7 @@
 import * as React from 'react';
 
 import { type ClaimAbout, nodeClaimSpaceId } from '~/core/graph-explorer/claims-about';
-import { type GraphNode, HOP1_PER_KIND } from '~/core/graph-explorer/fetch-graph-neighbourhood';
+import type { GraphNode } from '~/core/graph-explorer/fetch-graph-neighbourhood';
 import type { GraphCentre } from '~/core/graph-explorer/graph-entity';
 import { useGraphAnalytics } from '~/core/graph-explorer/graph-explorer-analytics';
 import { type GraphKind, type RowCentre, graphKindOf } from '~/core/graph-explorer/graph-kinds';
@@ -109,6 +109,7 @@ export function EntityPanel({
       <NeighbourGroups
         groups={groups}
         centre={rowCentre}
+        centreId={centre.id}
         claims={claims}
         claimsState={showClaims ? claimsState : NO_CLAIMS_ASKED}
         moreKinds={moreKinds}
@@ -116,9 +117,6 @@ export function EntityPanel({
         claimsEmptyMessage={showClaims ? emptyMessages.claims : null}
         onOpen={onOpen}
       />
-      {moreKinds.length > 0 && (
-        <p className="text-metadata text-grey-04">Showing the first {HOP1_PER_KIND} of each kind in each direction.</p>
-      )}
     </section>
   );
 }
