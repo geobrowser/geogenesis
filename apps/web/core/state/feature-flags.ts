@@ -90,13 +90,6 @@ export const featureFlagDefinitions = [
     enabledByDefault: false,
   },
   {
-    id: 'graphExplorer',
-    label: 'Graph explorer',
-    description:
-      'Shows the entry points to the graph explorer, such as the "Explore graph" link on topic pages. Graph pages themselves open for anyone with a link, like an unlisted video.',
-    enabledByDefault: false,
-  },
-  {
     id: 'bountiesTab',
     label: 'Bounties',
     description: 'Bounty board, space bounty tabs, and bounty detail surfaces. On by default; testnet only.',
@@ -132,7 +125,8 @@ export type FeatureFlags = Record<FeatureFlagId, boolean>;
 // `lobbyJoining`, since finding and joining lobbies did (GEO-3306), nor `debateVideo`, since video in
 // the claim picker and lobbies did (GEO-3414), nor `ourSignInBox`, since every sign-in opens the box
 // (GEO-3569), nor `googleCalendar` and `microsoftCalendar`, since connecting a calendar did
-// (GEO-3598), nor `debateRankings`, since ranking on the Best debates block did (GEO-3591). All of them are still sitting in browsers' stored flag objects; normalizing drops
+// (GEO-3598), nor `debateRankings`, since ranking on the Best debates block did (GEO-3591), nor
+// `graphExplorer`, since the graph explorer's entry points did (GEO-3865). All of them are still sitting in browsers' stored flag objects; normalizing drops
 // them on the next write rather than reading them back.
 export type StoredFeatureFlags = Partial<
   Record<
@@ -145,7 +139,8 @@ export type StoredFeatureFlags = Partial<
     | 'ourSignInBox'
     | 'googleCalendar'
     | 'microsoftCalendar'
-    | 'debateRankings',
+    | 'debateRankings'
+    | 'graphExplorer',
     boolean
   >
 >;
