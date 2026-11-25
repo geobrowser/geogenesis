@@ -618,6 +618,117 @@ describe('RelatedListSection', () => {
     const dateOnly = screen.getByText('4 Nov 2026');
     expect(dateOnly.parentElement).toHaveTextContent('Plain Account');
   });
+
+  it('gives every Source card kind the same title, description and meta text (GEO-3874)', () => {
+    const excerpt = 'A long excerpt that runs on for a while.';
+    render(
+      <RelatedListSection
+        section={{
+          id: 'mixed-sources',
+          title: 'Sources',
+          layout: 'cards',
+          items: [
+            {
+              id: 'a',
+              kind: 'source',
+              kindLabel: 'Article',
+              mediaType: 'article',
+              title: 'Article title',
+              publisher: 'Reuters',
+              date: '1 Nov 2026',
+              excerpt,
+              thumbnailUrl: 'https://example.com/a.jpg',
+            },
+            {
+              id: 'v',
+              kind: 'source',
+              kindLabel: 'Video',
+              mediaType: 'video',
+              title: 'Video title',
+              publisher: 'ICJ',
+              date: '2 Nov 2026',
+              excerpt,
+            },
+            {
+              id: 't',
+              kind: 'post',
+              kindLabel: 'Post',
+              mediaType: 'tweet',
+              title: 'Post',
+              publisher: 'Stella',
+              authorHandle: '@stella',
+              date: '3 Nov 2026',
+              excerpt,
+            },
+            {
+              id: 'p',
+              kind: 'episode',
+              kindLabel: 'Episode',
+              title: 'Episode title',
+              publisher: 'The Daily',
+              date: '4 Nov 2026',
+              excerpt,
+            },
+            {
+              id: 'n',
+              kind: 'news-story',
+              kindLabel: 'News story',
+              title: 'Story title',
+              publisher: 'Geo',
+              date: '5 Nov 2026',
+              excerpt,
+            },
+            {
+              id: 'd',
+              kind: 'source',
+              kindLabel: 'Dataset',
+              mediaType: 'dataset',
+              title: 'Dataset title',
+              publisher: 'UN',
+              date: '6 Nov 2026',
+              excerpt,
+            },
+            {
+              id: 'r',
+              kind: 'source',
+              kindLabel: 'Report',
+              title: 'Report title',
+              publisher: 'UN',
+              date: '7 Nov 2026',
+              meta: 'A report meta line long enough to wrap on a phone column',
+            },
+          ],
+        }}
+      />
+    );
+
+    const classesOf = (els: Element[]) => new Set(els.map(el => el.className));
+
+    const titles = screen.getAllByRole('heading', { level: 3 });
+    expect(titles).toHaveLength(6); // a post has no title; its body is its description
+    expect(classesOf(titles).size).toBe(1);
+    expect(titles[0]!.className).toContain('line-clamp-3');
+
+    const descriptions = [...document.querySelectorAll('[data-card-description]')];
+    expect(descriptions).toHaveLength(6);
+    expect(descriptions.every(el => el.textContent === excerpt)).toBe(true);
+    expect(classesOf(descriptions).size).toBe(1);
+    expect(descriptions[0]!.className).toContain('line-clamp-3');
+
+    const metas = [...document.querySelectorAll('[data-card-meta]')];
+    expect(metas).toHaveLength(8); // the report card shows its eyebrow and its trailing meta line
+    expect(metas.every(el => el.className.includes('truncate'))).toBe(true);
+    // The meta text style sits on the line itself or on the row wrapping the card's kind icon.
+    const metaStyle = (el: Element) => (el.className.includes('text-[') ? el.className : el.parentElement!.className);
+    const styles = new Set(
+      metas.map(el =>
+        metaStyle(el)
+          .match(/text-\[\S+\]|leading-\[\S+\]|font-\S+|text-grey-\d+/g)!
+          .join(' ')
+      )
+    );
+    expect(styles.size).toBe(1);
+  });
 });
 
 describe('TemplateBreadcrumb', () => {
