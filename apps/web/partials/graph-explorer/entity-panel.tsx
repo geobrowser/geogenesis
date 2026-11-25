@@ -24,6 +24,11 @@ export function typeNames(entity: { types: Array<{ name: string | null }> }): st
   return [...new Set(entity.types.map(type => type.name).filter((name): name is string => Boolean(name)))];
 }
 
+/** What the panel's rows hang from: the centre's kind, as the map draws it, and the type names its header shows. */
+export function rowCentreOf(centre: { types: Array<{ id: string; name: string | null }> }): RowCentre {
+  return { kind: graphKindOf(centre.types.map(type => type.id)) ?? 'other', typeNames: typeNames(centre) };
+}
+
 export type ClaimsState = {
   isLoading: boolean;
   isError: boolean;
@@ -69,10 +74,7 @@ export function EntityPanel({
   showClaims?: boolean;
 }) {
   const groups = React.useMemo(() => groupByKind(spokes, nodes), [spokes, nodes]);
-  const rowCentre = React.useMemo<RowCentre>(
-    () => ({ kind: graphKindOf(centre.types.map(type => type.id)) ?? 'other', typeNames: typeNames(centre) }),
-    [centre]
-  );
+  const rowCentre = React.useMemo(() => rowCentreOf(centre), [centre]);
   const claims = React.useMemo(
     () => panelClaims(showClaims ? claimPages : [], groups, nodes, topicSpaceId),
     [showClaims, claimPages, groups, nodes, topicSpaceId]

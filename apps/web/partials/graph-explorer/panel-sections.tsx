@@ -45,9 +45,6 @@ export type PanelClaim = { id: string; name: string; spaceId: string; relations?
 
 type Open = (id: string, name: string | null) => void;
 
-/** The topic overview's claims hang from a topic. */
-const TOPIC_CENTRE: RowCentre = { kind: 'topic', typeNames: [] };
-
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   const id = React.useId();
   return (
@@ -139,7 +136,8 @@ export function TopicOverview({
                 claim={claim}
                 listId="graph_explorer_fights"
                 position={index + 1}
-                centre={TOPIC_CENTRE}
+                // The overview's claims come from the topic summary, with no relations to label.
+                centre={null}
                 onOpen={onOpen}
               />
             ))}
@@ -155,7 +153,8 @@ export function TopicOverview({
                 claim={claim}
                 listId="graph_explorer_agreed"
                 position={index + 1}
-                centre={TOPIC_CENTRE}
+                // The overview's claims come from the topic summary, with no relations to label.
+                centre={null}
                 onOpen={onOpen}
               />
             ))}
@@ -356,7 +355,8 @@ function ClaimRow({
   claim: PanelClaim;
   listId: string;
   position: number;
-  centre: RowCentre;
+  /** What the row's relation labels hang from; null for a list whose claims carry no relations. */
+  centre: RowCentre | null;
   /** The claim space's batch, when the list loads one; without it the row reads its own counts. */
   batch?: ClaimBatchStatus;
   onOpen: Open;
@@ -380,11 +380,11 @@ export function ClaimAgreementLine({ claimId, spaceId }: { claimId: string; spac
   );
 }
 
-function ClaimRowContent({ claim, centre, onOpen }: { claim: PanelClaim; centre: RowCentre; onOpen: Open }) {
+function ClaimRowContent({ claim, centre, onOpen }: { claim: PanelClaim; centre: RowCentre | null; onOpen: Open }) {
   const summary = useClaimResponseSummary(claim.id, claim.spaceId, 'stance');
   const counts = summary.hasCounts ? { positive: summary.positive, negative: summary.negative } : undefined;
   const band = shownAgreement(counts).band;
-  const { relation } = rowLabels({ kind: 'claim', relations: claim.relations ?? [], centre });
+  const relation = centre ? rowLabels({ kind: 'claim', relations: claim.relations ?? [], centre }).relation : null;
   return (
     <div className="flex flex-col gap-1 rounded-md px-1 py-1.5 transition-colors hover:bg-grey-01">
       <button

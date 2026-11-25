@@ -296,6 +296,37 @@ describe('NeighbourGroups', () => {
     expect(rows(screen.getByRole('region', { name: 'Other · 1' }))).toEqual(['MentionsA memoMemo']);
   });
 
+  it('hides a fallback that only names the centre, on neighbour and claim rows, and keeps it elsewhere', async () => {
+    const skill = node(30, 'other', { name: 'Rust', types: [{ id: 'x', name: 'Language' }] });
+    const neighbours: NeighbourGroup = {
+      kind: 'other',
+      spokes: [
+        {
+          spoke: {
+            entity: skill,
+            labels: ['Skills (incoming)'],
+            edgeSpaceIds: [],
+            nodeSpaceId: null,
+            hasOutgoing: false,
+          },
+          node: skill,
+        },
+      ],
+    };
+    const claims: PanelClaim[] = [{ id: id(31), name: 'Rust is safe', spaceId: 'a', relations: ['Skills (incoming)'] }];
+    seed(31, 'a', 1, 0);
+    const labelsUnder = async (centre: React.ComponentProps<typeof NeighbourGroups>['centre']) => {
+      const view = groups({ groups: [neighbours], claims, centre });
+      const other = rows(screen.getByRole('region', { name: 'Other · 1' }));
+      await waitFor(() => expect(rows(screen.getByRole('region', { name: /^Claims/ }))[0]).toContain('Rust is safe'));
+      const claim = rows(screen.getByRole('region', { name: /^Claims/ }));
+      view.unmount();
+      return [...other, ...claim].map(text => text?.includes('Skills (incoming)'));
+    };
+    expect(await labelsUnder({ kind: 'other', typeNames: ['Skill'] })).toEqual([false, false]);
+    expect(await labelsUnder({ kind: 'ent', typeNames: ['Person'] })).toEqual([true, true]);
+  });
+
   it('moves focus to the first revealed claim after Show all and Show more claims', async () => {
     const claims: PanelClaim[] = Array.from({ length: 7 }, (_, i) => ({
       id: id(i + 1),

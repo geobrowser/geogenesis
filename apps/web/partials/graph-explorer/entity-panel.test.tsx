@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import type { GraphNode } from '~/core/graph-explorer/fetch-graph-neighbourhood';
+import { NEIGHBOUR_KIND_TYPE_IDS } from '~/core/graph-explorer/ontology';
 import type { NeighbourGroup } from '~/core/graph-explorer/panel-sections';
 
-import { panelClaims } from './entity-panel';
+import { panelClaims, rowCentreOf } from './entity-panel';
 
 const id = (n: number) => String(n).padStart(32, '0');
 const claimNode = (n: number, spaceId: string): GraphNode => ({
@@ -46,5 +47,22 @@ describe('panelClaims', () => {
     expect(panelClaims([], linked(nodes, 'Opposing argument'), new Map(nodes.map(n => [n.id, n])))).toEqual([
       { id: id(3), name: 'Claim 3', spaceId: 'c', relations: ['Opposing argument'] },
     ]);
+  });
+});
+
+describe('rowCentreOf', () => {
+  it("takes the centre's kind from its type ids and the type names its header shows", () => {
+    const centre = {
+      types: [
+        { id: NEIGHBOUR_KIND_TYPE_IDS.person[0], name: 'Person' },
+        { id: 'aaaabbbbccccddddeeeeffff00001111', name: 'Investor' },
+        { id: 'aaaabbbbccccddddeeeeffff00002222', name: null },
+      ],
+    };
+    expect(rowCentreOf(centre)).toEqual({ kind: 'ent', typeNames: ['Person', 'Investor'] });
+    expect(rowCentreOf({ types: [{ id: 'aaaabbbbccccddddeeeeffff00003333', name: 'Skill' }] })).toEqual({
+      kind: 'other',
+      typeNames: ['Skill'],
+    });
   });
 });
