@@ -303,11 +303,17 @@ describe('SaveVotesSheet', () => {
     expect(dialog).toHaveTextContent('You’ll stay in Onboarding with Adam, and your audio keeps playing.');
     expect(dialog).toHaveTextContent('Saved for after sign-up');
     expect(screen.getByRole('list', { name: 'Your votes' })).toHaveTextContent('Couples should keep separate finances');
+    // Lobbies are exempt from the no-dismiss rule for now: "Not now" closes it, and the vote stays.
+    fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
+    expect(screen.queryByRole('dialog', { name: 'Join the discussion' })).not.toBeInTheDocument();
+    expect(readLocalVotes().votes).toHaveLength(1);
 
+    act(() => openSaveVotesPrompt('single_claim', { lobbyName: 'Onboarding with Adam' }));
     act(() => closeSaveVotesPrompt());
     act(() => openSaveVotesPrompt('single_claim'));
     expect(screen.getByRole('dialog', { name: HEADING })).not.toHaveTextContent('Join the discussion');
     expect(screen.getByRole('dialog', { name: HEADING })).toHaveTextContent(SUBTEXT);
+    expect(screen.queryByRole('button', { name: 'Not now' })).not.toBeInTheDocument();
   });
 
   it('counts an automatic ask toward the next one', () => {

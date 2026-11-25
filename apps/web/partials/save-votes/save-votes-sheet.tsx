@@ -76,7 +76,8 @@ const AUTOMATIC_REASONS: ReadonlySet<SaveVotesPromptReason> = new Set([
  * see `opensSaveVotesCentered`.
  *
  * It can't be dismissed (GEO-3846): no close button, and neither Escape nor a press beside it closes
- * it. It goes once the visitor signs in, once every vote is taken back, or while Privy's own dialog
+ * it. A lobby guest's "Join the discussion" is exempt for now and closes as before. It goes once the
+ * visitor signs in, once every vote is taken back, or while Privy's own dialog
  * takes over the sign-in.
  */
 export function SaveVotesSheet() {
@@ -192,6 +193,18 @@ export function SaveVotesSheet() {
     setAttempt(null);
   }, []);
 
+  /**
+   * Lobbies are exempt (Preston, GEO-3846): a lobby guest's "Join the discussion" can still be closed.
+   * Withdraw an email sign-in, including one left mid-edit; a Google redirect cannot be aborted, and
+   * its save attempt must survive closing. The votes stay on the device.
+   */
+  const close = React.useCallback(() => {
+    if (midSignIn && !isGoogleSignInStarting()) cancelPrivyAuth();
+    setAttempt(null);
+    closeSaveVotesPrompt();
+  }, [midSignIn]);
+  const dismissible = Boolean(lobbyName);
+
   /** Privy never loaded, so no code went out: back to the address, to try again. */
   const [unavailable, setUnavailable] = React.useState(false);
   const signInUnavailable = React.useCallback(() => {
@@ -243,6 +256,8 @@ export function SaveVotesSheet() {
       codeEmail={codeEmail}
       onChangeEmail={changeEmail}
       onGiveUp={giveUp}
+      onClose={dismissible ? close : undefined}
+      closeLabel={dismissible ? 'Not now' : undefined}
       labels={SAVE_VOTES_LABELS}
       intent={logIn ? 'login' : 'signup'}
       header={
@@ -294,14 +309,27 @@ export function SaveVotesSheet() {
   if (centered) {
     return (
       // Not while Privy's dialog is taking over, which owns focus then.
-      <CenteredSignInDialog title={label} hidden={overlayOpen} restoreFocus={() => !isModalOpenRef.current}>
+      <CenteredSignInDialog
+        title={label}
+        hidden={overlayOpen}
+        onClose={dismissible ? close : undefined}
+        restoreFocus={() => !isModalOpenRef.current}
+      >
         {content}
       </CenteredSignInDialog>
     );
   }
 
   return (
-    <div hidden={overlayOpen} role="region" aria-label={label} className={CORNER_CARD_CLASS}>
+    <div
+      hidden={overlayOpen}
+      role="region"
+      aria-label={label}
+      onKeyDown={event => {
+        if (dismissible && event.key === 'Escape') close();
+      }}
+      className={CORNER_CARD_CLASS}
+    >
       {content}
     </div>
   );
