@@ -248,6 +248,19 @@ export class EntityQuery {
   private matchesCondition(entity: Entity, condition: WhereCondition): boolean {
     // @TODO: We can just filter _all_ fields individually then return entities rather than M*N filtering we're currently
     // doing where we filter entities and their relations one at a time
+    // Plain fields first: they are cheap, and a logical branch can be a backlink scan over every
+    // entity in the store (`NOT: LISTED_BY_NEWS_STORY`), which only entities that already passed
+    // `types`/`relations` should pay for.
+    for (const [field, value] of Object.entries(condition)) {
+      if (field === 'OR' || field === 'AND' || field === 'NOT') {
+        continue; // Checked below
+      }
+
+      if (!this.matchesField(entity, field, value)) {
+        return false;
+      }
+    }
+
     // Logical keys AND with the fields beside them, as `convertWhereConditionToEntityFilter` sends
     // them to the server: `{ types, NOT }` is "of this type and not that", not just "not that".
     if (condition.OR && !condition.OR.some(subCondition => this.matchesCondition(entity, subCondition))) {
@@ -260,17 +273,6 @@ export class EntityQuery {
 
     if (condition.NOT && this.matchesCondition(entity, condition.NOT)) {
       return false;
-    }
-
-    // Check individual field conditions
-    for (const [field, value] of Object.entries(condition)) {
-      if (field === 'OR' || field === 'AND' || field === 'NOT') {
-        continue; // Already handled above
-      }
-
-      if (!this.matchesField(entity, field, value)) {
-        return false;
-      }
     }
 
     return true;
