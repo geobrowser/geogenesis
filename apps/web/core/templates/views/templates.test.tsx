@@ -1113,7 +1113,7 @@ describe('GEO-3837 phone tidy-ups', () => {
     const supporting = screen.getByRole('region', { name: 'Supporting claims' });
     // The shared row draws the split twice: compact beside the row on desktop, full under it on phones.
     expect(within(supporting).getAllByRole('meter')).toHaveLength(2);
-    // And keeps the Factual chip to desktop.
+    // And keeps the Factual tag to wide rows, as quiet text in the result group.
     expect(within(supporting).getByText('Factual').closest('.hidden')).not.toBeNull();
   });
 

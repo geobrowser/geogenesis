@@ -168,14 +168,18 @@ describe('ClaimExplorer rows carry no debate count', () => {
   });
 });
 
-describe('ClaimExplorer row kind tag (GEO-3845)', () => {
-  it('is gray and leads the row, before the title', () => {
+describe('ClaimExplorer row layout (GEO-3845)', () => {
+  it('puts the kind in the quiet result text beside the vote buttons, after the title', () => {
     const claims: ClaimSummaryModel[] = [
       {
         id: 'kind-1',
         title: 'A judgment claim',
         kind: 'judgment',
-        split: { rows: [], isSplit: true, totalVotes: 0 },
+        split: {
+          rows: [{ id: 'everyone', label: 'Everyone', color: '#000', percent: 71, isEveryone: true }],
+          isSplit: true,
+          totalVotes: 7,
+        },
         onVote: vi.fn(),
       },
     ];
@@ -186,18 +190,46 @@ describe('ClaimExplorer row kind tag (GEO-3845)', () => {
     );
 
     const tag = screen.getByTestId('claim-kind-tag');
+    // Plain text, not a chip, and only on wide rows.
     expect(tag).toHaveTextContent('Judgment');
-    // Gray (neutral) tone, not the purple judgment one; still hidden below 760px.
-    expect(tag.firstElementChild).toHaveClass('bg-grey-01', 'text-grey-04');
-    expect(tag.firstElementChild).not.toHaveClass('text-purple');
-    expect(tag).toHaveClass('hidden', '@[760px]:inline-flex');
+    expect(tag.tagName).toBe('SPAN');
+    expect(tag).not.toHaveClass('bg-grey-01');
 
     const title = screen.getByText('A judgment claim');
-    // The tag comes before the title in the row, and before the vote buttons.
-    expect(tag.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     const agree = screen.getByRole('button', { name: 'Agree' });
-    expect(tag.compareDocumentPosition(agree) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(tag.parentElement).toContainElement(title);
+    // The title comes first, then the buttons, then the result group.
+    expect(title.compareDocumentPosition(agree) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(agree.compareDocumentPosition(tag) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(title.parentElement).not.toContainElement(tag);
+
+    // The result group holds the short bar, its percentage, the vote count and the kind together,
+    // on the same line as the buttons, and is hidden on phones.
+    const group = tag.parentElement!;
+    expect(group).toHaveClass('hidden', '@[760px]:flex');
+    expect(within(group).getByRole('meter')).toHaveAttribute('aria-valuenow', '71');
+    expect(group).toHaveTextContent('71%·7 votes·Judgment');
+    expect(group.parentElement).toContainElement(agree);
+  });
+
+  it('says "No votes yet" beside the buttons when nobody has voted', () => {
+    render(
+      <EntityActionProvider>
+        <ClaimExplorer
+          contestedClaims={[
+            {
+              id: 'kind-2',
+              title: 'A fresh claim',
+              kind: 'fact',
+              split: { rows: [], isSplit: true, totalVotes: 0 },
+              onVote: vi.fn(),
+            },
+          ]}
+          agreedClaims={[]}
+        />
+      </EntityActionProvider>
+    );
+    expect(screen.queryByRole('meter')).toBeNull();
+    expect(screen.getByTestId('claim-kind-tag').parentElement).toHaveTextContent('No votes yet·Factual');
   });
 });
 
