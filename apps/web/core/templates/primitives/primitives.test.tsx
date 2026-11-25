@@ -352,9 +352,11 @@ describe('ClaimExplorer row layout (GEO-3845)', () => {
     const row = title.closest('div.py-4');
     expect(row).toHaveClass('items-baseline', '@[760px]:px-5');
     expect(row).not.toHaveClass('px-5');
-    // Phones lose the card for hairlines; wide lists keep it.
+    // Phones lose the card for a hairline above only, so no empty divider sits under the list; wide
+    // lists keep the card.
     const surface = screen.getByRole('region', { name: 'Claims' }).querySelector('.overflow-hidden');
-    expect(surface).toHaveClass('border-y', 'border-divider', '@[760px]:rounded-xl');
+    expect(surface).toHaveClass('border-t', 'border-divider', '@[760px]:rounded-xl', '@[760px]:border');
+    expect(surface).not.toHaveClass('border-y');
     expect(surface).not.toHaveClass('rounded-xl');
     // The title comes first, then the buttons, then the result group.
     expect(title.compareDocumentPosition(agree) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
