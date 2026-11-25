@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { NavUtils } from '~/core/utils/utils';
 
 import type { EntityActionCallbacks, TopicTemplateModel, TopicTimelineHighlightModel } from '../models';
+import { TEMPLATE_ONTOLOGY, formatOntologyDate } from '../ontology';
 import {
   AddEntityItemPopover,
   ArrowRightIcon,
@@ -27,6 +28,9 @@ import {
   TemplateTitleRow,
 } from '../primitives';
 import { PUBLISHING_LABEL, usePendingAdds } from '../primitives/use-pending-adds';
+
+/** `Event date` is a DATETIME property; the Add event form edits it with the entity page's date input. */
+const EVENT_DATE_INPUT = { propertyId: TEMPLATE_ONTOLOGY.EVENT_DATE_PROPERTY_ID, dataType: 'DATETIME' } as const;
 
 export interface TopicTemplateProps {
   model: TopicTemplateModel;
@@ -252,7 +256,7 @@ export function TopicTemplate({
                     primaryLabel="Event"
                     primaryPlaceholder="e.g. UN Security Council adopts resolution"
                     secondaryLabel="Date"
-                    secondaryPlaceholder="e.g. 18 Nov 2026"
+                    secondaryDate={EVENT_DATE_INPUT}
                     tertiaryLabel="Summary (optional)"
                     tertiaryPlaceholder="Brief neutral summary of what happened..."
                     canOpen={actionCallbacks?.canOpenAddForm}
@@ -260,7 +264,10 @@ export function TopicTemplate({
                       addedTimelineTurns.add(
                         state => ({
                           pending: state.status === 'pending',
-                          when: state.status === 'pending' ? PUBLISHING_LABEL : (draft.secondary ?? 'Recent'),
+                          when:
+                            state.status === 'pending'
+                              ? PUBLISHING_LABEL
+                              : (formatOntologyDate(draft.secondary) ?? 'Recent'),
                           title: draft.primary,
                           summary: draft.tertiary,
                           href: state.status === 'published' ? NavUtils.toEntity(state.spaceId, state.id) : undefined,
