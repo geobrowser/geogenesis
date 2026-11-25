@@ -1,7 +1,12 @@
 export { ClaimTemplate, type ClaimTemplateProps } from './claim-template';
 export { DebateTemplate, type DebateTemplateProps } from './debate-template';
 export { EventTemplate, type EventTemplateProps } from './event-template';
-export { LiveClaimTemplateView, type LiveClaimTemplateViewProps } from './live-claim-template-view';
+export {
+  LiveClaimSectionsView,
+  type LiveClaimSectionsViewProps,
+  LiveClaimTemplateView,
+  type LiveClaimTemplateViewProps,
+} from './live-claim-template-view';
 export {
   LiveEventTemplateView,
   LiveNewsStoryTemplateView,

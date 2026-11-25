@@ -1357,3 +1357,70 @@ describe('Phone claim lists without the card (GEO-3857)', () => {
     }
   });
 });
+
+describe('ClaimTemplate from its Supporting claims, below a debate (GEO-3869)', () => {
+  const model = {
+    id: 'claim-ai-slowdown',
+    title: 'We should slow down AI development',
+    kind: 'judgment' as const,
+    split: {
+      rows: [{ id: 'all', label: 'All spaces', color: '#202020', percent: 57, isEveryone: true }],
+      isSplit: true,
+      totalVotes: 28,
+    },
+    voteBox: { userVote: null, countSummary: '28 votes on the claim', onVote: vi.fn() },
+    agreedBasis: { summary: 'Everyone accepts the basis.', settlingSources: [] },
+    subClaims: [
+      {
+        id: 'sub-support-1',
+        title: 'Safety evaluations lag behind frontier model capabilities.',
+        kind: 'fact' as const,
+        stance: 'supports' as const,
+        agreeCount: 14,
+        disagreeCount: 3,
+        split: {
+          rows: [{ id: 'all', label: 'All spaces', color: '#202020', percent: 82, isEveryone: true }],
+          isSplit: false,
+          totalVotes: 17,
+        },
+        sources: [],
+      },
+    ],
+    graphConnections: [],
+    sections: [{ id: 'sources', title: 'Sources', items: [], emptyText: 'No sources' }],
+    breadcrumbs: [{ id: 'ai', label: 'AI', href: '/space/s/ai' }],
+  };
+
+  // The shell's direct child of the `@container` wrapper is the padded page column.
+  const pageColumn = (container: HTMLElement) => container.querySelector('.\\@container > div') as HTMLElement;
+
+  it('starts at Supporting claims, without the title, vote box, Accepted panel or any line above it', () => {
+    const { container } = render(<ClaimTemplate model={model} startAtSubClaims />);
+
+    expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument();
+    expect(screen.queryByText('28 votes on the claim')).not.toBeInTheDocument();
+    expect(screen.queryByText('Everyone accepts the basis.')).not.toBeInTheDocument();
+    expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
+
+    expect(screen.queryByText(/From the claim/)).not.toBeInTheDocument();
+
+    const supporting = screen.getByRole('region', { name: 'Supporting claims' });
+    // Supporting claims is the first thing on the page.
+    const column = pageColumn(container);
+    expect(column.querySelector('section')).toBe(supporting);
+    // No top padding: the debate above already leaves a section's gap.
+    expect(column.className).toMatch(/\bpt-0\b/);
+    expect(column.className).not.toMatch(/\bpy-8\b|@\[600px\]:py-10/);
+    expect(
+      within(supporting).getByText('Safety evaluations lag behind frontier model capabilities.')
+    ).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Sources' })).toBeInTheDocument();
+  });
+
+  it('keeps the whole page, and its padding, on the Claim page', () => {
+    const { container } = render(<ClaimTemplate model={model} />);
+    expect(pageColumn(container).className).toMatch(/\bpy-8\b/);
+    expect(screen.getByRole('heading', { level: 1, name: model.title })).toBeInTheDocument();
+    expect(screen.getByText('Everyone accepts the basis.')).toBeInTheDocument();
+  });
+});
