@@ -46,6 +46,9 @@ const state = vi.hoisted(() => ({
   infiniteQueries: [] as { queryKey: unknown[]; queryFn: (ctx: { pageParam: string | null }) => Promise<unknown> }[],
   graphqlVariables: [] as Record<string, unknown>[],
   votes: undefined as unknown,
+  /** Recent Debate agenda claims (GEO-3873), and whether that read is still loading. */
+  agendaClaims: undefined as unknown,
+  agendaLoading: false,
   /** Topic feed claims, and which of them the viewed space tagged (null: still checking). */
   feedClaims: undefined as { entityId: string; title: string; spaceId: string }[] | undefined,
   /** Best-ranked topic feed claims and best debates (GEO-3868). */
@@ -93,20 +96,22 @@ vi.mock('@tanstack/react-query', async importOriginal => ({
   ...(await importOriginal<typeof import('@tanstack/react-query')>()),
   useQuery: ({ queryKey }: { queryKey: unknown[] }) => ({
     data:
-      queryKey[1] === 'multi-space-votes'
-        ? state.votes
-        : queryKey[1] === 'tweet-authors'
-          ? state.tweetAuthors
-          : queryKey[1] === 'top-claims'
-            ? state.feedClaims
-            : queryKey[1] === 'best-claims'
-              ? state.bestClaims
-              : queryKey[1] === 'best-debates'
-                ? state.bestDebates
-                : queryKey[1] === 'best-news'
-                  ? state.feedNews
-                  : undefined,
-    isLoading: false,
+      queryKey[0] === 'recent-agenda-claims'
+        ? state.agendaClaims
+        : queryKey[1] === 'multi-space-votes'
+          ? state.votes
+          : queryKey[1] === 'tweet-authors'
+            ? state.tweetAuthors
+            : queryKey[1] === 'top-claims'
+              ? state.feedClaims
+              : queryKey[1] === 'best-claims'
+                ? state.bestClaims
+                : queryKey[1] === 'best-debates'
+                  ? state.bestDebates
+                  : queryKey[1] === 'best-news'
+                    ? state.feedNews
+                    : undefined,
+    isLoading: queryKey[0] === 'recent-agenda-claims' && state.agendaLoading,
   }),
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),
   useInfiniteQuery: (options: (typeof state.infiniteQueries)[number]) => {
@@ -227,6 +232,8 @@ beforeEach(() => {
   state.infiniteQueries = [];
   state.graphqlVariables = [];
   state.votes = undefined;
+  state.agendaClaims = undefined;
+  state.agendaLoading = false;
   state.tweetAuthors = undefined;
   state.feedClaims = undefined;
   state.bestClaims = undefined;
@@ -568,6 +575,55 @@ describe('Topic template', () => {
         vi.advanceTimersByTime(0);
       });
       expect(result.current.isSectionsLoading).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('waits for the agenda claims before drawing the vote order, then puts them first (GEO-3876)', async () => {
+    vi.useFakeTimers();
+    try {
+      topicCorpus();
+      state.corpus = [];
+      state.bestClaims = [
+        { entityId: 'b1', title: 'Best 1', spaceId: SPACE },
+        { entityId: 'b2', title: 'Best 2', spaceId: SPACE },
+      ];
+      state.taggedInSpace = new Set(['b1', 'b2']);
+      const vote = (userId: string, objectId: string) => ({
+        userId,
+        objectId,
+        spaceId: SPACE,
+        voteType: 0,
+        voteKind: CLAIM_STANCE_VOTE_KIND,
+      });
+      state.votes = {
+        byClaim: aggregateClaimVotes(activeStanceVotes([vote('u1', 'b2'), vote('u2', 'b2'), vote('u1', 'b1')]), null),
+      };
+      state.agendaLoading = true;
+      const { result, rerender } = renderHook(() => useLiveTopicTemplate({ entityId: PAGE, spaceId: SPACE }));
+      await act(async () => {
+        vi.advanceTimersByTime(2000);
+      });
+      // Counts are in, but the agenda read that moves Best 1 to the top is not.
+      expect(result.current.isSectionsLoading).toBe(true);
+
+      state.agendaLoading = false;
+      state.agendaClaims = [
+        {
+          id: 'b1',
+          name: 'Best 1',
+          spaceIds: [SPACE],
+          topicSpaces: new Map([[PAGE, new Set([SPACE])]]),
+          listedAt: 1,
+        },
+      ];
+      rerender();
+      await act(async () => {
+        vi.advanceTimersByTime(0);
+      });
+      expect(result.current.isSectionsLoading).toBe(false);
+      expect(result.current.data!.claims!.map(c => c.title)).toEqual(['Best 1', 'Best 2']);
     } finally {
       vi.useRealTimers();
     }

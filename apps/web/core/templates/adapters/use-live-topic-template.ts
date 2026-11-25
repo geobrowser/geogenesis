@@ -541,8 +541,9 @@ export function useLiveTopicTemplate({
   });
 
   // Rows go most votes first (GEO-3876), agenda claims among themselves and then the rest; ties and
-  // claims with no votes keep Best order. The order is made once the counts for this set of claims
-  // are in and then held, so a refetch (say after the viewer votes) never moves a row.
+  // claims with no votes keep Best order. The order is made once the reads that pick the claims have
+  // settled and the counts for those claims are in, and then held, so a refetch (say after the viewer
+  // votes) never moves a row.
   const agendaLeadCount = React.useMemo(
     () => new Set(agendaClaims.map(claim => ID.uuidToHex(claim.id))).size,
     [agendaClaims]
@@ -553,25 +554,44 @@ export function useLiveTopicTemplate({
   );
   const votesForOrder = votesQuery.isPlaceholderData ? undefined : votesQuery.data?.byClaim;
   const [frozenClaimOrder, setFrozenClaimOrder] = React.useState<FrozenClaimOrder | null>(null);
-  if (orderedClaimSeeds.length > 0 && votesForOrder && frozenClaimOrder?.key !== currentClaimOrderKey) {
-    const byVotes = orderClaimsByVotes({
-      seeds: orderedClaimSeeds,
-      leadingCount: agendaLeadCount,
-      voteTotalFor: hex => {
-        const raw = votesForOrder.get(hex);
-        return (raw?.totalPositive ?? 0) + (raw?.totalNegative ?? 0);
-      },
-    });
-    setFrozenClaimOrder(freezeClaimOrder(currentClaimOrderKey, byVotes));
-  }
-  const displayedClaimSeeds = React.useMemo(
+  // Every read that adds claims or moves them into the agenda group. Frozen before these settle, the
+  // order would be made again, and the rows reshuffled, when the agenda claims land on top.
+  const claimSetSettled =
+    !topClaimsQuery.isLoading &&
+    !bestClaimsQuery.isLoading &&
+    !bestDebatesQuery.isLoading &&
+    !recentAgendaClaimsQuery.isLoading &&
+    !isTaggedLoading;
+  const byVotesNow = React.useMemo(
     () =>
-      frozenClaimOrder
-        ? applyFrozenClaimOrder({ seeds: orderedClaimSeeds, leadingCount: agendaLeadCount, frozen: frozenClaimOrder })
-        : orderedClaimSeeds,
-    [agendaLeadCount, frozenClaimOrder, orderedClaimSeeds]
+      votesForOrder
+        ? orderClaimsByVotes({
+            seeds: orderedClaimSeeds,
+            leadingCount: agendaLeadCount,
+            voteTotalFor: hex => {
+              const raw = votesForOrder.get(hex);
+              return (raw?.totalPositive ?? 0) + (raw?.totalNegative ?? 0);
+            },
+          })
+        : null,
+    [agendaLeadCount, orderedClaimSeeds, votesForOrder]
   );
-  const claimVotesPending = orderedClaimSeeds.length > 0 && !votesForOrder && !votesQuery.isError;
+  if (claimSetSettled && byVotesNow && orderedClaimSeeds.length > 0 && frozenClaimOrder?.key !== currentClaimOrderKey) {
+    setFrozenClaimOrder(freezeClaimOrder(currentClaimOrderKey, byVotesNow));
+  }
+  const displayedClaimSeeds = React.useMemo(() => {
+    if (frozenClaimOrder) {
+      return applyFrozenClaimOrder({
+        seeds: orderedClaimSeeds,
+        leadingCount: agendaLeadCount,
+        frozen: frozenClaimOrder,
+      });
+    }
+    return byVotesNow ?? orderedClaimSeeds;
+  }, [agendaLeadCount, byVotesNow, frozenClaimOrder, orderedClaimSeeds]);
+  const claimOrderPending =
+    !claimSetSettled ||
+    (orderedClaimSeeds.length > 0 && frozenClaimOrder?.key !== currentClaimOrderKey && !votesQuery.isError);
 
   const actionCallbacks = useLiveEntityActions({
     entityId,
@@ -920,10 +940,10 @@ export function useLiveTopicTemplate({
     sectionsGateKey,
     1100
   );
-  // The Claims list is ordered by its vote counts, so it waits a little longer for them than the
-  // other sections do: drawn before they're in, it would reshuffle when they land (GEO-3876).
+  // The Claims list is ordered by its vote counts, so it waits a little longer than the other
+  // sections, for its claims and their counts: drawn before, it would reshuffle when they land (GEO-3876).
   const isWaitingForClaimVotes = useInitialHydrationGate(
-    isBaseSectionsLoading || claimVotesPending,
+    isBaseSectionsLoading || claimOrderPending,
     sectionsGateKey,
     CLAIM_VOTES_MAX_WAIT_MS
   );
