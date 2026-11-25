@@ -282,6 +282,7 @@ export function TopicTemplate({
                     turn={turn}
                     isFirst={idx === 0}
                     isLast={idx === timelineHighlights.length - 1}
+                    spineInGutter={!compact && !embedded}
                   />
                 ))}
               </ol>
@@ -327,10 +328,16 @@ function TimelineHighlightRow({
   turn,
   isFirst,
   isLast,
+  spineInGutter,
 }: {
   turn: TopicTimelineHighlightModel;
   isFirst: boolean;
   isLast: boolean;
+  /**
+   * Pull the phone spine into the page margin. Only the full page has a gutter wide enough (37px); the
+   * side panel (16px, clipped on x) and the Space home shell would cut the circle off.
+   */
+  spineInGutter: boolean;
 }) {
   const isInteractive = Boolean(turn.href || turn.onSelect);
 
@@ -356,10 +363,16 @@ function TimelineHighlightRow({
   );
 
   return (
-    // Desktop: date | spine | event. Phones: the spine sits in the page margin (the negative margin is
-    // its 18px column plus the 12px gap), so the date and event line up with the section headers, and
-    // the date sits just above its event's name (GEO-3837, GEO-3854).
-    <li className="-ml-[30px] grid grid-cols-[18px_minmax(0,1fr)] gap-x-3 @[680px]:ml-0 @[680px]:grid-cols-[118px_28px_minmax(0,1fr)] @[680px]:gap-x-4">
+    // Desktop: date | spine | event. Phones: on the full page the spine sits in the page margin (the
+    // negative margin is its 18px column plus the 12px gap), so the date and event line up with the
+    // section headers; in narrower shells it stays inside the column. The date sits just above its
+    // event's name (GEO-3837, GEO-3854).
+    <li
+      className={cx(
+        'grid grid-cols-[18px_minmax(0,1fr)] gap-x-3 @[680px]:grid-cols-[118px_28px_minmax(0,1fr)] @[680px]:gap-x-4',
+        spineInGutter && '-ml-[30px] @[680px]:ml-0'
+      )}
+    >
       {/* Date */}
       <div className="col-start-2 row-start-1 pt-4 text-[14px] font-semibold text-grey-04 @[680px]:col-start-1 @[680px]:pt-5 @[680px]:text-right">
         {turn.when}

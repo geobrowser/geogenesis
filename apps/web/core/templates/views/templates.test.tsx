@@ -1097,6 +1097,27 @@ describe('GEO-3837 phone tidy-ups', () => {
     expect(screen.getByText('Oct 2023')).toHaveClass('col-start-2', 'row-start-1');
   });
 
+  it.each([
+    ['the side panel', { compact: true }],
+    ['the Space home', { embedded: true }],
+  ])('keeps the phone timeline spine inside the column in %s, where the margin is too narrow', (_, props) => {
+    render(
+      <TopicTemplate
+        {...props}
+        model={{
+          id: 'topic-gaza',
+          title: 'Gaza',
+          lede: '',
+          timelineHighlights: [{ id: 'ev-1', when: 'Oct 2023', title: 'Attack on Israel', href: '/space/s/ev-1' }],
+        }}
+      />
+    );
+
+    const row = screen.getByRole('link', { name: /Attack on Israel/ }).closest('li')!;
+    expect(row).toHaveClass('grid-cols-[18px_minmax(0,1fr)]', 'gap-x-3');
+    expect(row).not.toHaveClass('-ml-[30px]');
+  });
+
   it('draws the Claim page sub-claims with the Topic list rows', () => {
     render(
       <ClaimTemplate

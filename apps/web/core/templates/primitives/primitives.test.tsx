@@ -645,6 +645,27 @@ describe('ClaimExplorer one list (GEO-3854)', () => {
     expect(rankOf('Brand new claim')).toBe('1');
     expect(rankOf('Settled B')).toBe('5');
   });
+
+  it('goes back to page 1 when a claim is added from a later page, so the new top row is in view', () => {
+    const many = Array.from({ length: 12 }, (_, i) => claim(`m-${i}`, `Many ${i + 1}`, true));
+    const { container } = render(
+      <EntityActionProvider callbacks={{ canOpenAddForm: () => true, onAddClaim: () => new Promise<never>(() => {}) }}>
+        <ClaimExplorer contestedClaims={many} agreedClaims={[]} />
+      </EntityActionProvider>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(rankOf('Many 12')).toBe('12');
+    expect(screen.queryByText('Many 3', { exact: false, selector: 'span' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add claim' }));
+    const input = screen.getByPlaceholderText(/Write a clear, testable statement/);
+    fireEvent.change(input, { target: { value: 'Brand new claim' } });
+    fireEvent.submit(input.closest('form') as HTMLFormElement);
+
+    expect(container.textContent).toContain('Brand new claim');
+    expect(rankOf('Brand new claim')).toBe('1');
+  });
 });
 
 describe('EntityOverflowMenu trigger', () => {

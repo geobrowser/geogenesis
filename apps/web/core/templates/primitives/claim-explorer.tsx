@@ -134,6 +134,8 @@ export function ClaimExplorer({
             label="Add claim"
             canOpen={ctx?.callbacks?.canOpenAddForm}
             onSubmit={draft => {
+              // The new claim goes to the top of the list, so show page 1 where it lands.
+              setPage(1);
               added.add(
                 state => ({
                   pending: state.status === 'pending',
