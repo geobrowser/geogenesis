@@ -254,6 +254,15 @@ describe('GraphViewer', () => {
     expect(screen.queryByRole('button', { name: /^Back to/ })).toBeNull();
   });
 
+  it('leaves the centre’s name block out of the panel on a phone, and the rest of the panel in', () => {
+    render(<Viewer start={TOPIC} scope={scope} />);
+    // jsdom applies no media queries: `md:hidden` is what takes it off a phone.
+    const header = screen.getByTestId('entity-panel-header');
+    expect(header.className).toContain('md:hidden');
+    expect(header.textContent).toContain('Israel-Gaza war');
+    expect(screen.getByText('A topic.').closest('[data-testid="entity-panel-header"]')).toBeNull();
+  });
+
   it('shows the description, and says honestly that there are no claims', () => {
     render(<Viewer start={TOPIC} scope={scope} />);
     expect(screen.getByText('A topic.')).toBeTruthy();

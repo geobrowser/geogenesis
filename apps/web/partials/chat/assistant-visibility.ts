@@ -11,7 +11,9 @@ const FULLSCREEN_CHILD_ROUTE_SUFFIXES = ['/ranking-compose'] as const;
 
 // The claim-exploration picker is its own full-screen overlay, and it parks a voice dock in the
 // bottom-right corner — exactly where the assistant's launcher floats.
-const FULLSCREEN_CHILD_ROUTE_PATTERNS = [/\/debates\/rematches\/[^/]+$/] as const;
+// The graph explorer is a full-screen map with its zoom controls in that same corner, and the
+// assistant has no part to play on it (GEO-3849).
+const FULLSCREEN_CHILD_ROUTE_PATTERNS = [/\/debates\/rematches\/[^/]+$/, /^\/explore\/graph(\/|$)/] as const;
 
 function isFullscreenChildRoute(pathname: string): boolean {
   return (

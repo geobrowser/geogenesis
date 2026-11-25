@@ -13,6 +13,7 @@ import type { SelectedNode } from '~/core/graph-explorer/select-graph';
 import { SKELETON_SELECTION, isSkeletonNode } from '~/core/graph-explorer/skeleton-graph';
 
 import { ConnectionsCanvas, clearance, nodeScale, overlapShare, overlaps } from './connections-canvas';
+import { BandLegend } from './connections-view';
 import { GraphSearch, searchNodes } from './graph-search';
 import { GraphTopBar } from './graph-top-bar';
 
@@ -561,6 +562,71 @@ describe('GraphSearch', () => {
     fireEvent.focus(box);
     fireEvent.blur(box);
     expect(onSearched.mock.calls).toEqual([[1]]);
+  });
+});
+
+// jsdom applies no media queries, so these read the phone (`md:`) classes the layout relies on.
+describe('the top bar on a phone (GEO-3849)', () => {
+  afterEach(cleanup);
+  const box = () => screen.getByRole('combobox', { name: 'Find on the map' });
+
+  it('folds the search into an icon that opens the field, focused, over the path', () => {
+    render(
+      <GraphTopBar
+        back={null}
+        trail={['Israel-Gaza war']}
+        search={<GraphSearch nodes={[person]} onPick={vi.fn()} />}
+        kinds={['ent']}
+        kindFilter="all"
+        onKindFilter={() => {}}
+        close={{ href: '/explore', label: 'Close' }}
+      />
+    );
+    expect(box().className).toContain('md:hidden');
+    // The path gives way to the open field on a phone.
+    expect(screen.getByRole('navigation', { name: 'Your path' }).className).toContain(
+      'md:group-has-[[data-search-open]]/bar:hidden'
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Search the map' }));
+    expect(box().className).not.toContain('md:hidden');
+    expect(document.activeElement).toBe(box());
+    expect(box().closest('[data-search-open]')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Search the map' })).toBeNull();
+
+    fireEvent.blur(box());
+    expect(box().closest('[data-search-open]')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Search the map' })).toBeTruthy();
+  });
+
+  it('stays open while it holds a search, and folds again after a pick', () => {
+    const onPick = vi.fn();
+    render(<GraphSearch nodes={[person]} onPick={onPick} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Search the map' }));
+    fireEvent.change(box(), { target: { value: 'Isa' } });
+    fireEvent.blur(box());
+    expect(box().closest('[data-search-open]')).toBeTruthy();
+
+    fireEvent.focus(box());
+    fireEvent.click(screen.getByRole('option'));
+    expect(onPick).toHaveBeenCalledWith(person);
+    expect(box().closest('[data-search-open]')).toBeNull();
+  });
+});
+
+describe('BandLegend', () => {
+  afterEach(cleanup);
+
+  it('keeps to one line on a phone, the three bands only', () => {
+    render(<BandLegend />);
+    const legend = screen.getByTestId('band-legend');
+    expect(legend.className).toContain('md:flex-nowrap');
+    expect(legend.textContent).toContain('Widely agreed');
+    // Desktop keeps the fourth item; a phone drops it.
+    const unvoted = screen.getByText('No responses yet');
+    expect(unvoted.className).toContain('md:hidden');
+    for (const band of ['Widely agreed', 'Contested', 'Widely rejected'])
+      expect(screen.getByText(band).className).not.toContain('md:hidden');
   });
 });
 

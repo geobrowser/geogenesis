@@ -248,7 +248,9 @@ export function GraphViewer({
     <div className="flex h-full min-h-0 flex-col md:h-auto">
       {topBar}
       <div className="flex min-h-0 flex-1 md:flex-none md:flex-col">
-        <div className="relative isolate min-w-0 flex-1 overflow-hidden bg-[#0b0b0c] md:h-[62vh] md:min-h-[400px] md:flex-none">
+        {/* The 88px the phone's two-row top bar gave up (GEO-3849), so the panel still starts
+            where it did and its top still peeks above the fold for scrolling past the map. */}
+        <div className="relative isolate min-w-0 flex-1 overflow-hidden bg-[#0b0b0c] md:h-[calc(62vh+88px)] md:min-h-[400px] md:flex-none">
           {stage}
         </div>
         <aside className="w-[360px] shrink-0 overflow-y-auto border-l border-[#f0f0f0] bg-white p-6 md:w-auto md:overflow-visible md:border-t md:border-l-0 md:p-4">

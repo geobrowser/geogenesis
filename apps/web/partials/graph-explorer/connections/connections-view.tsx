@@ -103,19 +103,24 @@ export function ConnectionsStage({
   );
 }
 
-function BandLegend() {
+/**
+ * On a phone the legend keeps to one line beside the zoom controls: the three bands only, since an
+ * unvoted card reads as plain without a key.
+ */
+export function BandLegend() {
   return (
     <div
       data-stage-control
-      className="absolute bottom-4 left-4 z-[10000] flex max-w-[calc(100%-80px)] flex-wrap gap-x-3 gap-y-1 rounded-xl bg-white/10 px-3 py-[6px] text-[12px] text-[#e6e6e6]"
+      data-testid="band-legend"
+      className="absolute bottom-4 left-4 z-[10000] flex max-w-[calc(100%-80px)] flex-wrap gap-x-3 gap-y-1 rounded-xl bg-white/10 px-3 py-[6px] text-[12px] text-[#e6e6e6] md:max-w-[calc(100%-68px)] md:flex-nowrap md:gap-x-2.5 md:px-2.5 md:whitespace-nowrap"
     >
       {(Object.keys(CLAIM_BAND_LABELS) as Array<keyof typeof CLAIM_BAND_LABELS>).map(band => (
-        <span key={band} className="flex items-center gap-[6px]">
+        <span key={band} className="flex shrink-0 items-center gap-[6px]">
           <i className={cx('block h-[10px] w-[10px] rounded-[3px]', BAND_SWATCHES[band])} />
           {CLAIM_BAND_LABELS[band]}
         </span>
       ))}
-      <span className="flex items-center gap-[6px]">
+      <span data-legend-unvoted className="flex items-center gap-[6px] md:hidden">
         <i className="block h-[10px] w-[10px] rounded-[3px] border border-white/30" />
         No responses yet
       </span>
