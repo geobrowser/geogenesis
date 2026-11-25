@@ -19,7 +19,6 @@ import {
   GROUP_ROWS,
   MIN_RESPONSES_FOR_BAND,
   type NeighbourGroup,
-  agreementLine,
   bandTally,
   claimRowLine,
   latestNews,
@@ -39,7 +38,7 @@ import { Skeleton } from '~/design-system/skeleton';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
 import { BAND_SWATCHES, nodeDateLabel, nodeTypeLabel } from './connections/node-card';
-import { EntityAvatar } from './entity-avatar';
+import { PublisherIcon } from './entity-avatar';
 import { typeNames } from './entity-panel';
 import { ClaimBatchRow, type ClaimBatchStatus, useClaimSpaceBatches } from './graph-claim-list';
 
@@ -105,7 +104,7 @@ function Row({
           <span className="flex min-w-0 items-center gap-1.5 text-footnote text-grey-04 tabular-nums">
             {publisher && (
               <span data-publisher-icon className="contents">
-                <EntityAvatar entity={publisher} size={16} />
+                <PublisherIcon entity={publisher} size={16} />
               </span>
             )}
             <span className="min-w-0">{sub}</span>
@@ -412,17 +411,6 @@ function ClaimRow({
     <li data-row-id={claim.id} className={ROW_ITEM}>
       {batch ? <ClaimBatchRow status={batch}>{content}</ClaimBatchRow> : content}
     </li>
-  );
-}
-
-/** "62% agree · 140 votes" from the live counts, with the percent only from 3 votes. */
-function ClaimAgreementLine({ claimId, spaceId }: { claimId: string; spaceId: string }) {
-  const summary = useClaimResponseSummary(claimId, spaceId, 'stance');
-  const counts = summary.hasCounts ? { positive: summary.positive, negative: summary.negative } : undefined;
-  return (
-    <span className="text-footnote text-grey-04 tabular-nums">
-      {summary.isLoading && !counts ? '…' : (agreementLine(counts) ?? 'Votes unavailable')}
-    </span>
   );
 }
 
