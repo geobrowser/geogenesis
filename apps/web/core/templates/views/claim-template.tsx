@@ -171,7 +171,7 @@ export function ClaimTemplate({
             <GroupedSubClaimSections
               subClaims={model.subClaims}
               onAddClaim={actionCallbacks?.onAddClaim}
-              canOpenAddForm={actionCallbacks?.canOpenAddForm}
+              holdAddDraft={actionCallbacks?.holdAddDraft}
             />
           )}
 
@@ -225,11 +225,11 @@ const SUBCLAIMS_PER_PAGE = 6;
 function GroupedSubClaimSections({
   subClaims,
   onAddClaim,
-  canOpenAddForm,
+  holdAddDraft,
 }: {
   subClaims: readonly SubClaimModel[];
   onAddClaim?: EntityActionCallbacks['onAddClaim'];
-  canOpenAddForm?: EntityActionCallbacks['canOpenAddForm'];
+  holdAddDraft?: EntityActionCallbacks['holdAddDraft'];
 }) {
   const listedIds = React.useMemo(() => subClaims.map(claim => claim.id), [subClaims]);
   const added = usePendingAdds<SubClaimModel>(listedIds);
@@ -268,7 +268,7 @@ function GroupedSubClaimSections({
           section={section}
           page={pagesBySection[section.id] ?? 1}
           onPageChange={next => setPagesBySection(prev => ({ ...prev, [section.id]: next }))}
-          canOpenAddForm={canOpenAddForm}
+          holdAddDraft={holdAddDraft}
           onAddClaim={draft => {
             added.add(
               state => ({
@@ -296,7 +296,7 @@ function SubClaimGroupSection({
   page,
   onPageChange,
   onAddClaim,
-  canOpenAddForm,
+  holdAddDraft,
 }: {
   section: {
     id: string;
@@ -308,7 +308,7 @@ function SubClaimGroupSection({
   page: number;
   onPageChange: (next: number) => void;
   onAddClaim: (draft: { title: string; kind: ClaimKind; note?: string }) => void;
-  canOpenAddForm?: () => boolean;
+  holdAddDraft?: EntityActionCallbacks['holdAddDraft'];
 }) {
   const rankingKey = React.useMemo(() => {
     const sig = section.items
@@ -357,7 +357,7 @@ function SubClaimGroupSection({
             onOpen={ranking.open}
             disabled={section.items.length < 2}
           />
-          <AddClaimPopover label={section.addLabel} onSubmit={onAddClaim} canOpen={canOpenAddForm} />
+          <AddClaimPopover label={section.addLabel} onSubmit={onAddClaim} holdDraft={holdAddDraft} />
         </div>
       </div>
 

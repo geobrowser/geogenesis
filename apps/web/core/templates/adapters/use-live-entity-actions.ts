@@ -210,7 +210,7 @@ export function useLiveEntityActions({
     () => ({ entityId, entityName, ownerKind, spaceId }),
     [entityId, entityName, ownerKind, spaceId]
   );
-  const { add, canOpenAddForm } = useTemplateAddPublish({ owner, pageSpaceId: spaceId });
+  const { add, holdAddDraft } = useTemplateAddPublish({ owner, pageSpaceId: spaceId });
   const onAddClaim = React.useCallback((draft: ClaimDraft) => add({ kind: 'claim', draft }), [add]);
   const onAddEvent = React.useCallback((draft: EventDraft) => add({ kind: 'event', draft }), [add]);
   const onAddQuote = React.useCallback((draft: QuoteDraft) => add({ kind: 'quote', draft }), [add]);
@@ -223,9 +223,9 @@ export function useLiveEntityActions({
       onAddClaim,
       onAddQuote,
       onAddEvent,
-      canOpenAddForm,
+      holdAddDraft,
       searchEntities,
     }),
-    [canOpenAddForm, onAddClaim, onAddEvent, onAddFlag, onAddQuote, onAddTriple, onDeleteTriple, searchEntities]
+    [holdAddDraft, onAddClaim, onAddEvent, onAddFlag, onAddQuote, onAddTriple, onDeleteTriple, searchEntities]
   );
 }

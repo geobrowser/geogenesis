@@ -13,9 +13,10 @@ import { assistantSeedAtom, isChatOpenAtom } from '~/core/state/chat-store';
 import { pendingActionsAtom } from '~/core/state/pending-actions';
 
 import type { EntityListSectionModel } from '../models';
+import { TEMPLATE_ACTIONS } from '../template-actions';
 import { RelatedListSection } from './related-list-section';
 
-const auth = vi.hoisted(() => ({ authenticated: false, promptSignIn: vi.fn() }));
+const auth = vi.hoisted(() => ({ authenticated: false, resolving: false, promptSignIn: vi.fn() }));
 const resolveSeed = vi.hoisted(() => vi.fn());
 const membership = vi.hoisted(() => ({ ensure: vi.fn(), access: vi.fn(), tx: vi.fn() }));
 const account = vi.hoisted(() => ({
@@ -41,6 +42,9 @@ vi.mock('~/core/wallet/account-readiness', () => ({
   waitForSigningAccount: vi.fn(),
   SignedOutBeforeWriteError: class extends Error {},
   SigningAccountFailedError: class extends Error {},
+}));
+vi.mock('~/core/hooks/use-auth-resolving', () => ({
+  useAuthResolving: () => auth.resolving,
 }));
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({
   usePrivySignIn: () => auth.promptSignIn,
@@ -108,8 +112,16 @@ function canEditPageSpace(canEdit: boolean) {
   membership.access.mockReturnValue(Effect.succeed({ canEdit, isEditor: canEdit, isMember: canEdit }));
 }
 
+// These tests cover the ingestion flow itself, so they switch the shipped-off Sources "+" on.
+const SHIPPED_ADD_SOURCE = TEMPLATE_ACTIONS.addSource;
+afterEach(() => {
+  TEMPLATE_ACTIONS.addSource = SHIPPED_ADD_SOURCE;
+});
+
 beforeEach(() => {
+  TEMPLATE_ACTIONS.addSource = true;
   auth.authenticated = false;
+  auth.resolving = false;
   auth.promptSignIn.mockReset();
   resolveSeed.mockReset();
   membership.ensure.mockReset().mockResolvedValue(false);
@@ -135,17 +147,85 @@ async function submitLink(value = 'example.com/story') {
 }
 afterEach(cleanup);
 
+describe('Sources section + while switched off', () => {
+  it('draws no Add source button with the shipped flag', () => {
+    TEMPLATE_ACTIONS.addSource = false;
+    render(<RelatedListSection section={{ id: 'sources', title: 'Sources', items: [] }} />);
+    expect(screen.getByRole('heading', { name: 'Sources' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add source' })).toBeNull();
+  });
+});
+
 describe('Sources section +', () => {
-  it('is shown signed out, and the press opens sign-in instead of the form', () => {
-    renderSection();
+  it('signed out, the form opens, and submitting asks for sign-in and holds the link without importing', async () => {
+    const store = renderSection();
 
     fireEvent.click(screen.getByRole('button', { name: 'Add source' }));
+    expect(auth.promptSignIn).not.toHaveBeenCalled();
+    expect(screen.getByPlaceholderText(/Paste news, podcast, tweet, blog URLs/)).toBeInTheDocument();
+
+    const input = screen.getByPlaceholderText(/Paste news, podcast, tweet, blog URLs/);
+    fireEvent.change(input, { target: { value: 'example.com/story' } });
+    await act(async () => {
+      fireEvent.submit(input.closest('form') as HTMLFormElement);
+    });
 
     expect(auth.promptSignIn).toHaveBeenCalledTimes(1);
-    expect(screen.queryByPlaceholderText(/Paste news, podcast, tweet, blog URLs/)).toBeNull();
+    const queued = store.get(pendingActionsAtom);
+    expect(queued).toHaveLength(1);
+    expect(queued[0]).toMatchObject({ intent: 'example.com/story', requires: 'personalSpace' });
     expect(resolveSeed).not.toHaveBeenCalled();
     expect(membership.access).not.toHaveBeenCalled();
     expect(membership.ensure).not.toHaveBeenCalled();
+  });
+
+  it('still resolving, submitting holds the link and leaves the prompt to the runner', async () => {
+    auth.resolving = true;
+    const store = renderSection();
+    await submitLink();
+
+    expect(auth.promptSignIn).not.toHaveBeenCalled();
+    const queued = store.get(pendingActionsAtom);
+    expect(queued).toHaveLength(1);
+    expect(queued[0]).toMatchObject({
+      intent: 'example.com/story',
+      onSignedOut: { prompt: { component: 'template_sources_section', auth_continuation: 'queued' } },
+    });
+    expect(resolveSeed).not.toHaveBeenCalled();
+  });
+
+  it('signed out, a dismissed sign-in withdraws the link and puts it back in the form', async () => {
+    const store = renderSection();
+    await submitLink();
+    const onCancel = auth.promptSignIn.mock.calls[0]![1]?.onCancel as () => void;
+
+    act(() => onCancel());
+
+    expect(store.get(pendingActionsAtom)).toHaveLength(0);
+    expect(screen.getByPlaceholderText(/Paste news, podcast, tweet, blog URLs/)).toHaveValue('example.com/story');
+    expect(resolveSeed).not.toHaveBeenCalled();
+  });
+
+  it('signed out, the held link is imported once after sign-in, without typing it again', async () => {
+    canEditPageSpace(false);
+    resolveSeed.mockResolvedValue({ mode: 'ingestion', url: 'https://example.com/story', link });
+    const store = renderSection();
+    await submitLink();
+    const [queued] = store.get(pendingActionsAtom);
+
+    auth.authenticated = true;
+    await act(async () => {
+      await queued!.run();
+    });
+
+    await waitFor(() => expect(resolveSeed).toHaveBeenCalledTimes(1));
+    expect(resolveSeed).toHaveBeenCalledWith(
+      'https://example.com/story',
+      'TemplateSourcesSection',
+      expect.objectContaining({ targetEntityId: link.targetEntityId }),
+      PERSONAL_WRITE
+    );
+    expect(store.get(isChatOpenAtom)).toBe(true);
   });
 
   it('on a phone, signed in, opens the link form in a bottom sheet without raising the keyboard', () => {
