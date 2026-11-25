@@ -487,10 +487,12 @@ function PairedDebateFeedPlayer({
    * Lifting the hold is all it takes: the recordings attach, the pair waits until both can play,
    * and the autoplay effect starts them muted, as on any card before the hold. Muted because the
    * elements do not exist yet inside this tap, and iOS lets an element make sound only from a
-   * gesture made on it; the mute control appears with the video.
+   * gesture made on it; the mute control appears with the video. The `play` is reported once they
+   * are attached and ready, as a tap-to-play card's is: `measurement` binds only to attached elements.
    */
+  const pendingTapReportRef = React.useRef(false);
   const startFullPlayback = () => {
-    measurement.control('play');
+    pendingTapReportRef.current = true;
     setFullPlaybackStarted(true);
     setStartedDebateId(debate.id);
     if (!active) onPlaybackRequest?.();
@@ -514,7 +516,6 @@ function PairedDebateFeedPlayer({
    * started, and otherwise as soon as there is media for the report to be about — reporting it now
    * would go nowhere, since `measurement` binds only to attached elements.
    */
-  const pendingTapReportRef = React.useRef(false);
   const playFromTap = () => {
     onPlaybackRequest?.();
     if (detached || !ready || !slot1VideoRef.current || !slot2VideoRef.current) {
@@ -528,8 +529,9 @@ function PairedDebateFeedPlayer({
     togglePlayback();
   };
   // After `usePlaybackAnalytics` in this component, so its effect has bound to the attached
-  // elements by the time this one reports to it. Only `playFromTap` arms it, and it re-arms or
-  // disarms on every tap, so a tap whose card never became active cannot be reported twice.
+  // elements by the time this one reports to it. Only `playFromTap` and `startFullPlayback` arm it,
+  // and `playFromTap` re-arms or disarms on every tap, so a tap whose card never became active cannot
+  // be reported twice.
   //
   // The autoplay effect starts only a debate that is neither ended nor paused, so a tap that waited
   // on one of those — an ended debate whose URLs lapsed while it was off screen, or one the viewer
