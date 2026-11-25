@@ -1520,8 +1520,8 @@ function PositionButton({
   /** Fit the debate card's response pills beside its supporting actions on phones. */
   compactMobile?: boolean;
   /**
-   * `'solid'` is the graph explorer's open claim (GEO-3841): a 32px pill with a solid grey outline and a
-   * 14px label, the map panel in the Gaza prototype. The held side is the same grey fill either way.
+   * `'solid'` is the graph explorer's open claim (GEO-3841): a 32px pill with a solid grey outline, the
+   * map panel in the Gaza prototype. The held side is the same grey fill either way.
    */
   outline?: 'dashed' | 'solid';
 }) {
@@ -1541,9 +1541,8 @@ function PositionButton({
   // band. Figma names this colour "Secondary/Line dividers", which is the same name this token
   // already has — the two systems agree, and the pill borrows it rather than inventing a shade.
   const className = cx(
-    '@container flex items-center justify-center rounded-full border px-3 text-text',
-    // The graph explorer's pill takes the prototype's 14px label; every other host keeps `button`.
-    outline === 'solid' ? 'min-h-8 text-smallButton' : 'min-h-7 text-button',
+    '@container flex items-center justify-center rounded-full border px-3 text-button text-text',
+    outline === 'solid' ? 'min-h-8' : 'min-h-7',
     compactMobile && 'md:px-1.5 md:text-[15px] md:@max-[280px]/debate-actions:px-1',
     selected ? 'border-transparent bg-divider' : cx(outline === 'dashed' && 'border-dashed', 'border-grey-03 bg-white')
   );

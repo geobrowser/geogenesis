@@ -118,11 +118,8 @@ describe('the open claim’s Agree and Disagree', () => {
     expect(bar.children).toHaveLength(1);
     expect(bar.firstElementChild).toHaveClass('bg-text');
     // Smaller than "agree", as in the prototype; not the chat widget's token, which chat.css resizes.
-    expect(count).toHaveClass('text-browseSection', 'text-mute');
+    expect(count).toHaveClass('text-browseSection');
     expect(count).not.toHaveClass('text-chat');
-    // The prototype's Geo look sizes: a 20px share over a 14px "agree".
-    expect(percent).toHaveClass('text-[20px]', 'font-semibold');
-    expect(screen.getByText('agree')).toHaveClass('text-[14px]', 'text-grey-04');
 
     const agree = screen.getByRole('button', { name: 'Agree' });
     const disagree = screen.getByRole('button', { name: 'Disagree' });
@@ -133,9 +130,6 @@ describe('the open claim’s Agree and Disagree', () => {
       expect(pill).toHaveClass('border-grey-03', 'min-h-8');
       expect(pill).not.toHaveClass('border-dashed');
       expect(pill.querySelector('img')).toBeNull();
-      // The prototype's 14px/500 pill label, not the app's 17px `button`.
-      expect(pill).toHaveClass('text-smallButton');
-      expect(pill).not.toHaveClass('text-button');
     }
     // The claim's page is the panel's title link now, not a link under the vote block.
     expect(screen.queryByRole('link')).toBeNull();

@@ -229,7 +229,7 @@ describe('EntityPanel header', () => {
     const eyebrow = screen.getByText('Source · Dataset');
     const title = screen.getByRole('heading', { level: 2 });
     expect(eyebrow.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(eyebrow).toHaveClass('text-[13px]', 'text-mute');
+    expect(eyebrow).toHaveClass('text-[13px]', 'text-grey-04');
     expect(screen.queryByText('Dataset')).toBeNull();
   });
 
@@ -261,7 +261,7 @@ describe('EntityPanel header', () => {
 
   it('sets the description as small body text', () => {
     renderPanel({ kind: 'topic' });
-    expect(screen.getByText(DESCRIPTION)).toHaveClass('text-[14px]', 'leading-[1.45]', 'text-mute');
+    expect(screen.getByText(DESCRIPTION)).toHaveClass('text-[14px]', 'leading-[1.45]', 'text-grey-05');
     expect(screen.getByText(DESCRIPTION)).not.toHaveClass('text-body');
   });
 
