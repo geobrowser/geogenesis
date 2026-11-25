@@ -90,6 +90,7 @@ describe('the band counts', () => {
     ];
     render(summary('t1'));
     expect(screen.queryByText(/with 3\+ responses/)).toBeNull();
+    expect(screen.queryByText(/first 2,000 claims/)).toBeNull();
     const count = (label: string) => screen.getByText(label).closest('li')!.textContent;
     expect(count('Widely agreed')).toBe('Widely agreed2');
     expect(count('Contested')).toBe('Contested1');
