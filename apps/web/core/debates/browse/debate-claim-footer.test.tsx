@@ -322,6 +322,19 @@ describe('DebateClaimFooter app look', () => {
     expect(plain.container.innerHTML).not.toContain('font-family');
   });
 
+  it('gives the claim the app’s 24px under the video when the host leaves the meta row out', () => {
+    const { container } = renderApp({ meta: null });
+    const titleWrapper = screen.getByRole('heading', { name: claim.claim }).parentElement!;
+    expect(titleWrapper.className).toMatch(/(^| )mt-6( |$)/);
+    expect(titleWrapper).toBe(container.firstElementChild!.firstElementChild);
+    expect(screen.queryByText('Relationships')).not.toBeInTheDocument();
+  });
+
+  it('keeps 20px above the claim under the meta row', () => {
+    renderApp();
+    expect(screen.getByRole('heading', { name: claim.claim }).parentElement!.className).toMatch(/(^| )mt-5( |$)/);
+  });
+
   it('puts the meta row above the claim, then the vote row', () => {
     renderApp();
 
