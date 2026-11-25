@@ -847,7 +847,7 @@ describe('GEO-3819 layout fixes', () => {
 });
 
 describe('EventTemplate Sources section (GEO-3819)', () => {
-  it('shows "No sources" with an add button when the event has none', () => {
+  it('shows "No sources" with no add button when the event has none', () => {
     render(
       <EventTemplate
         model={{
@@ -862,12 +862,13 @@ describe('EventTemplate Sources section (GEO-3819)', () => {
 
     const sources = screen.getByRole('region', { name: 'Sources' });
     expect(within(sources).getByText('No sources')).toBeInTheDocument();
-    expect(within(sources).getByRole('button', { name: /add source/i })).toBeInTheDocument();
+    // No "+" while TEMPLATE_ACTIONS.addSource is off.
+    expect(within(sources).queryByRole('button', { name: /add source/i })).toBeNull();
   });
 });
 
 describe('PostTemplate Sources section (GEO-3819)', () => {
-  it('shows "No sources" with an add button when the post has none', () => {
+  it('shows "No sources" with no add button when the post has none', () => {
     render(
       <PostTemplate
         model={{
@@ -884,7 +885,8 @@ describe('PostTemplate Sources section (GEO-3819)', () => {
 
     const sources = screen.getByRole('region', { name: 'Sources' });
     expect(within(sources).getByText('No sources')).toBeInTheDocument();
-    expect(within(sources).getByRole('button', { name: /add source/i })).toBeInTheDocument();
+    // No "+" while TEMPLATE_ACTIONS.addSource is off.
+    expect(within(sources).queryByRole('button', { name: /add source/i })).toBeNull();
   });
 });
 
@@ -912,8 +914,8 @@ describe('Add context and Dispute switched off (GEO-3819 defaults)', () => {
     sections: [],
   };
 
-  it('ships both actions off in the one switch', () => {
-    expect(SHIPPED_TEMPLATE_ACTIONS).toEqual({ addContext: false, dispute: false });
+  it('ships the actions off in the one switch', () => {
+    expect(SHIPPED_TEMPLATE_ACTIONS).toEqual({ addContext: false, dispute: false, addSource: false });
   });
 
   it('shows no Add context / Dispute entry point and no empty Context or Disputes section', () => {
@@ -923,10 +925,10 @@ describe('Add context and Dispute switched off (GEO-3819 defaults)', () => {
     expect(screen.queryByRole('region', { name: 'Disputes' })).toBeNull();
     expect(screen.queryByRole('button', { name: /add context|add dispute|dispute|challenge/i })).toBeNull();
     expect(screen.queryByText(/^(Add context|Dispute|Challenge)$/)).toBeNull();
-    // The Sources `+` stays: it is the link ingestion, not an Add context action.
+    // The Sources `+` is hidden too until link ingestion publishes on its own (TEMPLATE_ACTIONS.addSource).
     expect(
-      within(screen.getByRole('region', { name: 'Sources' })).getByRole('button', { name: 'Add source' })
-    ).toBeInTheDocument();
+      within(screen.getByRole('region', { name: 'Sources' })).queryByRole('button', { name: 'Add source' })
+    ).toBeNull();
   });
 
   it('hides the Post "Add context note" button and the empty Context notes section', () => {
@@ -1207,7 +1209,8 @@ describe('GEO-3837 phone tidy-ups', () => {
 
     const sources = screen.getByRole('region', { name: 'Sources' });
     expect(within(sources).getByRole('heading', { name: 'Sources' })).toBeInTheDocument();
-    expect(within(sources).getByRole('button', { name: 'Add source' })).toBeInTheDocument();
+    // Shipped off: no "+" until ingestion publishes on its own.
+    expect(within(sources).queryByRole('button', { name: 'Add source' })).toBeNull();
     expect(screen.queryByRole('region', { name: 'Evidence' })).toBeNull();
     expect(screen.queryByText(/Sources (&|and) evidence/)).toBeNull();
   });
