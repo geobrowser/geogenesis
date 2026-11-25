@@ -676,7 +676,9 @@ function RichMediaCard({ item }: { item: EntityLinkRowModel }) {
       </div>
 
       {!item.excerpt && !leadQuote && item.meta && item.publisher && (
-        <span className={CARD_META_CLASS}>{item.meta}</span>
+        <span className={cx('truncate', CARD_META_CLASS)} data-card-meta>
+          {item.meta}
+        </span>
       )}
     </article>
   );

@@ -688,6 +688,15 @@ describe('RelatedListSection', () => {
               date: '6 Nov 2026',
               excerpt,
             },
+            {
+              id: 'r',
+              kind: 'source',
+              kindLabel: 'Report',
+              title: 'Report title',
+              publisher: 'UN',
+              date: '7 Nov 2026',
+              meta: 'A report meta line long enough to wrap on a phone column',
+            },
           ],
         }}
       />
@@ -696,7 +705,7 @@ describe('RelatedListSection', () => {
     const classesOf = (els: Element[]) => new Set(els.map(el => el.className));
 
     const titles = screen.getAllByRole('heading', { level: 3 });
-    expect(titles).toHaveLength(5); // a post has no title; its body is its description
+    expect(titles).toHaveLength(6); // a post has no title; its body is its description
     expect(classesOf(titles).size).toBe(1);
     expect(titles[0]!.className).toContain('line-clamp-3');
 
@@ -707,7 +716,8 @@ describe('RelatedListSection', () => {
     expect(descriptions[0]!.className).toContain('line-clamp-3');
 
     const metas = [...document.querySelectorAll('[data-card-meta]')];
-    expect(metas).toHaveLength(6);
+    expect(metas).toHaveLength(8); // the report card shows its eyebrow and its trailing meta line
+    expect(metas.every(el => el.className.includes('truncate'))).toBe(true);
     // The meta text style sits on the line itself or on the row wrapping the card's kind icon.
     const metaStyle = (el: Element) => (el.className.includes('text-[') ? el.className : el.parentElement!.className);
     const styles = new Set(
