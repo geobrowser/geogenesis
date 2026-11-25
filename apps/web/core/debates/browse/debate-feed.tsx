@@ -68,7 +68,8 @@ const LINKED_START_HOLD_MS = 8_000;
  * claim at the debates app's size and the app's 44px vote row (GEO-3833). That chrome is about
  * 196px: 40 for the meta line and the 16px above it, 94 for the claim and its 20px above and below,
  * 44 for the vote row, 16 under it and the frame — 27px more than the 169px the earlier, compact
- * footer measured in Chrome (GEO-3454), which is the 1.4rem added to the budget below. The results
+ * footer measured in Chrome (GEO-3454), which is the 1.4rem added to the budget below. The debate's
+ * own page has no meta line and reserves less (`WITHOUT_SPACE_FITS`). The results
  * row a vote reveals is not reserved, as in the app. The app's row never wraps (its labels give way to the thumbs instead), so the wrapped
  * budget in `debateCardColumnWidth` only ever narrows a card that was already narrow.
  *
@@ -81,15 +82,28 @@ const LINKED_START_HOLD_MS = 8_000;
  * instead of expanding the card. Never wider than the screen less 16px a side, nor narrower than
  * 240px, under which a face is too small to read.
  */
-const debateColumnStyle = (wrapsBelow: number) =>
+const debateColumnStyle = (
+  wrapsBelow: number,
+  { desktopFits, phoneFits }: { desktopFits: string; phoneFits: string }
+) =>
   ({
-    '--debate-feed-column-width': `clamp(280px, min(calc(100cqw - 2rem), ${debateCardColumnWidth('82.9dvh - 15.05rem', wrapsBelow)}), 640px)`,
-    '--debate-feed-phone-column-width': 'clamp(240px, calc(83dvh - 219px), calc(100cqw - 2rem))',
+    '--debate-feed-column-width': `clamp(280px, min(calc(100cqw - 2rem), ${debateCardColumnWidth(desktopFits, wrapsBelow)}), 640px)`,
+    '--debate-feed-phone-column-width': `clamp(240px, calc(${phoneFits}), calc(100cqw - 2rem))`,
   }) as React.CSSProperties;
 
-const DEBATE_COLUMN_STYLE = debateColumnStyle(DEBATE_CARD_WRAPS_BELOW);
+const WITH_SPACE_FITS = { desktopFits: '82.9dvh - 15.05rem', phoneFits: '83dvh - 219px' };
+/**
+ * The debate's own page draws no space line, which gives back its 16px row and the 16px above it
+ * less the 4px the claim gains (`mt-6` for `mt-5`): 28px of height, 23.25px (1.45rem) of width at
+ * the media's 1.2042. Phones: `(dvh − 44 − 24 − 168 − 2) / 1.2042 + 2`, i.e. `83dvh − 196px`.
+ */
+const WITHOUT_SPACE_FITS = { desktopFits: '82.9dvh - 13.6rem', phoneFits: '83dvh - 196px' };
+
+const DEBATE_COLUMN_STYLE = debateColumnStyle(DEBATE_CARD_WRAPS_BELOW, WITH_SPACE_FITS);
 /** With the "…" for people who may remove the debate, whose actions wrap sooner. */
-const DEBATE_COLUMN_WIDE_ACTIONS_STYLE = debateColumnStyle(DEBATE_CARD_WIDE_WRAPS_BELOW);
+const DEBATE_COLUMN_WIDE_ACTIONS_STYLE = debateColumnStyle(DEBATE_CARD_WIDE_WRAPS_BELOW, WITH_SPACE_FITS);
+const DEBATE_PAGE_COLUMN_STYLE = debateColumnStyle(DEBATE_CARD_WRAPS_BELOW, WITHOUT_SPACE_FITS);
+const DEBATE_PAGE_COLUMN_WIDE_ACTIONS_STYLE = debateColumnStyle(DEBATE_CARD_WIDE_WRAPS_BELOW, WITHOUT_SPACE_FITS);
 
 export function DebatesBrowseFeed({
   spaceId,
@@ -718,7 +732,13 @@ function DebateFeedItem({
           scrollHint?.isVisible && scrollHintBounceProps.className
         )}
         style={{
-          ...(hasMenu ? DEBATE_COLUMN_WIDE_ACTIONS_STYLE : DEBATE_COLUMN_STYLE),
+          ...(showSpace
+            ? hasMenu
+              ? DEBATE_COLUMN_WIDE_ACTIONS_STYLE
+              : DEBATE_COLUMN_STYLE
+            : hasMenu
+              ? DEBATE_PAGE_COLUMN_WIDE_ACTIONS_STYLE
+              : DEBATE_PAGE_COLUMN_STYLE),
           ...(scrollHint?.isVisible ? scrollHintBounceProps.style : undefined),
         }}
       >
