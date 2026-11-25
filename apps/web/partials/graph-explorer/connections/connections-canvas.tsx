@@ -407,9 +407,12 @@ export function ConnectionsCanvas({
         const fog = Math.max(0.28, Math.min(1, 1 - (point.depth + 150) / 1100));
         const scale = nodeScale(isCentre, node.hop, point.scale, phone);
         // Hop 2 is always a marker; a hop-1 card turns into one while drawn too small to read.
-        const far = !isCentre && node.hop === 1 && tooSmallToRead(scale, node.far, phone);
-        if (far !== node.far) {
-          node.far = far;
+        // Read from the button, not the view: a node selected again while still fading out keeps
+        // its button (and its `data-far`) but gets a fresh view.
+        const wasFar = element.dataset.far !== undefined;
+        const far = !isCentre && node.hop === 1 && tooSmallToRead(scale, wasFar, phone);
+        node.far = far;
+        if (far !== wasFar) {
           if (far) element.dataset.far = '';
           else delete element.dataset.far;
         }
@@ -735,9 +738,12 @@ export function ConnectionsCanvas({
               aria-label={entry.node.name ?? undefined}
               tabIndex={gone ? -1 : 0}
               className={cx(
-                'group absolute top-0 left-0 opacity-0 will-change-transform focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white',
+                'group absolute top-0 left-0 opacity-0 will-change-transform focus-visible:outline-2 focus-visible:outline-white',
                 gone && 'pointer-events-none',
-                isCentre ? 'cursor-default' : 'cursor-pointer'
+                // The centre already wears a white ring (CENTRE_RING), so its focus ring sits clear of it.
+                isCentre
+                  ? 'cursor-default focus-visible:outline-offset-[9px]'
+                  : 'cursor-pointer focus-visible:outline-offset-4'
               )}
               onClick={event => {
                 if (moved.current) return;

@@ -286,6 +286,48 @@ describe('ConnectionsCanvas', () => {
     expect(view.distance).toBe(zoomed);
   });
 
+  it('marks a hop-1 card far while zoomed out past reading size, never the centre, and drops it zoomed back in', () => {
+    motion.reduce = true;
+    render(<Canvas />);
+    runFrames(100);
+    const isaac = () => screen.getByRole('button', { name: 'Isaac Herzog' });
+    const centreButton = screen.getByRole('button', { name: 'Centre' });
+    const zoom = (name: 'Zoom in' | 'Zoom out', times: number) => {
+      for (let i = 0; i < times; i++) {
+        fireEvent.click(screen.getByRole('button', { name }));
+        runFrames(now + 100);
+      }
+    };
+    expect(isaac().dataset.far).toBeUndefined();
+    zoom('Zoom out', 8);
+    expect(isaac().dataset.far).toBe('');
+    expect(centreButton.dataset.far).toBeUndefined();
+
+    zoom('Zoom in', 8);
+    expect(isaac().dataset.far).toBeUndefined();
+  });
+
+  it('clears a `data-far` its button carries from before, once the card is drawn readable', () => {
+    // A node picked again while its button is still fading out keeps that button, and its
+    // `data-far`, but gets a fresh view; the frame must go by the button.
+    motion.reduce = true;
+    render(<Canvas />);
+    runFrames(100);
+    const isaac = screen.getByRole('button', { name: 'Isaac Herzog' });
+    isaac.dataset.far = '';
+    // Wakes the settled loop for a frame.
+    fireEvent.mouseEnter(isaac);
+    runFrames(now + 100);
+    expect(isaac.dataset.far).toBeUndefined();
+  });
+
+  it('draws the centre focus ring clear of its white ring', () => {
+    render(<Canvas />);
+    expect(screen.getByRole('button', { name: 'Centre' }).className).toContain('focus-visible:outline-offset-[9px]');
+    expect(screen.getByRole('button', { name: 'Centre' }).className).not.toContain('focus-visible:outline-offset-4');
+    expect(screen.getByRole('button', { name: 'Isaac Herzog' }).className).toContain('focus-visible:outline-offset-4');
+  });
+
   it('sleeps after the idle spin has run its course', () => {
     render(<Canvas />);
     runFrames(2600 + 45_000 + 500);
