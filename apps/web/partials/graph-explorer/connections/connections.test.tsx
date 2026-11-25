@@ -12,7 +12,7 @@ import type { GraphSelection } from '~/core/graph-explorer/select-graph';
 import type { SelectedNode } from '~/core/graph-explorer/select-graph';
 import { SKELETON_SELECTION, isSkeletonNode } from '~/core/graph-explorer/skeleton-graph';
 
-import { ConnectionsCanvas, clearance, nodeScale, overlapShare, overlaps } from './connections-canvas';
+import { ConnectionsCanvas, clearance, coveredLabels, nodeScale, overlapShare, overlaps } from './connections-canvas';
 import { GraphSearch, searchNodes } from './graph-search';
 import { GraphTopBar } from './graph-top-bar';
 
@@ -608,5 +608,34 @@ describe('nodeScale', () => {
     expect(nodeScale(true, 0, 2, true)).toBe(1);
     expect(nodeScale(false, 2, 1, false)).toBeCloseTo(0.95);
     expect(nodeScale(false, 1, 0.1, true)).toBe(0.3);
+  });
+});
+
+describe('coveredLabels', () => {
+  const box = (left: number, top = 0) => ({ left, right: left + 100, top, bottom: top + 40 });
+  const slot = (left: number, depth: number, extra: { keep?: boolean; shown?: boolean; top?: number } = {}) => ({
+    rect: box(left, extra.top),
+    depth,
+    keep: extra.keep ?? false,
+    shown: extra.shown ?? true,
+  });
+
+  it('fades the farther of two touching labels and leaves apart ones alone', () => {
+    expect(coveredLabels([slot(0, 50), slot(60, -20), slot(400, 90)])).toEqual([true, false, false]);
+    // Edges that only meet do not overlap.
+    expect(coveredLabels([slot(0, 50), slot(100, -20)])).toEqual([false, false]);
+  });
+
+  it('lets a label a faded one would have covered show, so a chain keeps every other card', () => {
+    expect(coveredLabels([slot(0, 0), slot(60, 10), slot(120, 20)])).toEqual([false, true, false]);
+  });
+
+  it('never fades the hovered card or its neighbours, and fades what they cover instead', () => {
+    expect(coveredLabels([slot(0, 100, { keep: true }), slot(60, -50)])).toEqual([false, true]);
+    expect(coveredLabels([slot(0, 100, { keep: true }), slot(60, -50, { keep: true })])).toEqual([false, false]);
+  });
+
+  it('keeps the one already showing when depths cross, so the pair does not flicker', () => {
+    expect(coveredLabels([slot(0, 10, { shown: true }), slot(60, 9, { shown: false })])).toEqual([false, true]);
   });
 });

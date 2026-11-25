@@ -50,7 +50,7 @@ type NodeView = {
   entry: SelectedNode;
   /** Screen offset keeping it clear of the centre, eased frame to frame. */
   push: [number, number];
-  /** Opacity factor while a nearer card covers it on phone, eased frame to frame. */
+  /** Opacity factor while a nearer card covers its label, eased frame to frame. */
   dim: number;
 };
 
@@ -428,22 +428,19 @@ export function ConnectionsCanvas({
         drawn.push({ node, element, point, box, scale, opacity, isCentre });
       }
 
-      // On phone a card covered by a nearer one fades, so the front one reads.
+      // A labelled card a nearer one touches fades, so no two labels overlap; far markers carry no label.
+      const labelled = drawn.filter(entry => !entry.isCentre && entry.node.alive && entry.node.hop < 2);
+      const hidden = coveredLabels(
+        labelled.map(entry => ({
+          rect: rectAt(entry.point.x, entry.point.y, entry.box, entry.scale),
+          depth: entry.point.depth,
+          keep: entry.node.id === hover || neighbours.has(entry.node.id),
+          shown: entry.node.dim > 0.5,
+        }))
+      );
+      const covered = new Set(labelled.filter((_, i) => hidden[i]).map(entry => entry.node));
       for (const entry of drawn) {
-        let covered = false;
-        if (phone && !entry.isCentre && entry.node.alive && entry.node.id !== hover && !neighbours.has(entry.node.id)) {
-          const rect = rectAt(entry.point.x, entry.point.y, entry.box, entry.scale);
-          covered = drawn.some(
-            other =>
-              other !== entry &&
-              !other.isCentre &&
-              other.node.alive &&
-              other.opacity > 0.3 &&
-              other.point.depth < entry.point.depth &&
-              overlapShare(rect, rectAt(other.point.x, other.point.y, other.box, other.scale)) > 0.25
-          );
-        }
-        const target = covered ? 0.2 : 1;
+        const target = covered.has(entry.node) ? COVERED_DIM : 1;
         if (Math.abs(target - entry.node.dim) > 0.01) moving = true;
         entry.node.dim += (target - entry.node.dim) * (reduceMotion ? 1 : 0.2);
       }
@@ -726,7 +723,7 @@ export function ConnectionsCanvas({
               aria-label={entry.node.name ?? undefined}
               tabIndex={gone ? -1 : 0}
               className={cx(
-                'absolute top-0 left-0 opacity-0 will-change-transform focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white',
+                'group absolute top-0 left-0 opacity-0 will-change-transform focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white',
                 gone && 'pointer-events-none',
                 isCentre ? 'cursor-default' : 'cursor-pointer'
               )}
@@ -845,6 +842,35 @@ function shifted(rect: Rect, [dx, dy]: [number, number]): Rect {
 export function overlaps(centre: Rect, rect: Rect): boolean {
   const [dx, dy] = clearance(centre, rect);
   return dx !== 0 || dy !== 0;
+}
+
+/** A covered card's opacity factor: low enough that its text no longer reads over the front one. */
+const COVERED_DIM = 0.12;
+
+type LabelSlot = { rect: Rect; depth: number; keep: boolean; shown: boolean };
+
+/**
+ * Which labels to fade so no two overlap: placed greedily, the hovered one and its neighbours
+ * first, then those already showing (so a pair at equal depth doesn't flicker), then nearest first.
+ * O(n²) over a few dozen cards, so cheap per frame.
+ */
+export function coveredLabels(slots: readonly LabelSlot[]): boolean[] {
+  const order = slots
+    .map((slot, i) => i)
+    .sort(
+      (a, b) =>
+        Number(slots[b].keep) - Number(slots[a].keep) ||
+        Number(slots[b].shown) - Number(slots[a].shown) ||
+        slots[a].depth - slots[b].depth
+    );
+  const placed: Rect[] = [];
+  const hidden = slots.map(() => false);
+  for (const i of order) {
+    const { rect, keep } = slots[i];
+    if (!keep && placed.some(other => overlapShare(rect, other) > 0)) hidden[i] = true;
+    else placed.push(rect);
+  }
+  return hidden;
 }
 
 /** How much of the smaller rectangle the two share, 0 to 1. */

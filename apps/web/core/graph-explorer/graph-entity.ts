@@ -42,7 +42,10 @@ export type RawEntity = {
   spaceIds: string[] | null;
   names?: Array<{ spaceId: string; text: string | null }> | null;
   types: Array<{ id: string; name: string | null }> | null;
-  relationsList: Array<{ typeId: string; toEntity: { valuesList: Array<{ text: string | null }> } | null }> | null;
+  relationsList: Array<{
+    typeId: string;
+    toEntity: { name?: string | null; valuesList: Array<{ text: string | null }> } | null;
+  }> | null;
 };
 
 export function imageOf(entity: RawEntity): string | null {

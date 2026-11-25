@@ -53,6 +53,8 @@ export type GraphNode = GraphEntity & {
   /** Cross-space stance counts. For picking claims only; never shown, as they are not space-scoped. */
   agrees: number;
   disagrees: number;
+  /** A source's outlet (its Publisher's name), for the line above its title; null when it names none. */
+  publisher?: string | null;
 };
 
 export type GraphEdge = {
@@ -92,11 +94,14 @@ const NODE_FIELDS = /* GraphQL */ `
   dates: valuesList(filter: { propertyId: { in: $datePropertyIds } }) { datetime date }
   types { id name }
   hidden: valuesList(filter: { propertyId: { is: $hiddenPropertyId } }) { text boolean }
-  relationsList(filter: { typeId: { in: [$avatarPropertyId, $coverPropertyId] } }) {
+  relationsList(filter: { typeId: { in: [$avatarPropertyId, $coverPropertyId, $publisherPropertyId] } }) {
     typeId
-    toEntity { valuesList(filter: { propertyId: { is: $imageUrlPropertyId } }) { text } }
+    toEntity { name valuesList(filter: { propertyId: { is: $imageUrlPropertyId } }) { text } }
   }
 `;
+
+/** A source's Publisher relation: its outlet, named on source cards. */
+export const PUBLISHER_PROPERTY_ID = '9ec2b47e481947c0a99e8ddb27a3ed8e';
 
 /** Which spaces hold any other non-hidden value: only the claim space rule reads it, so only claims ask. */
 const PLACED_FIELD = 'placed: valuesList(filter: { propertyId: { notIn: $unplacingPropertyIds } }) { spaceId }';
@@ -195,6 +200,7 @@ const VARIABLE_TYPES: Record<string, string> = {
   namePropertyId: 'UUID!',
   avatarPropertyId: 'UUID!',
   coverPropertyId: 'UUID!',
+  publisherPropertyId: 'UUID!',
   imageUrlPropertyId: 'UUID!',
 };
 
@@ -281,6 +287,7 @@ function nodeVariables() {
     datePropertyIds: DATE_PROPERTY_IDS,
     avatarPropertyId: AVATAR_PROPERTY_ID,
     coverPropertyId: COVER_PROPERTY_ID,
+    publisherPropertyId: PUBLISHER_PROPERTY_ID,
     imageUrlPropertyId: IMAGE_URL_PROPERTY_ID,
   };
 }
@@ -387,7 +394,18 @@ export function decodeNode(raw: RawNode, isCentre = false): GraphNode | null {
     date,
     agrees: Number(raw.agrees ?? 0) || 0,
     disagrees: Number(raw.disagrees ?? 0) || 0,
+    publisher: kind === 'src' ? publisherOf(raw) : null,
   };
+}
+
+/** The first named Publisher a node links to. */
+export function publisherOf(raw: Pick<RawNode, 'relationsList'>): string | null {
+  for (const relation of raw.relationsList ?? []) {
+    if (normId(relation.typeId) !== PUBLISHER_PROPERTY_ID) continue;
+    const name = relation.toEntity?.name?.trim();
+    if (name) return name;
+  }
+  return null;
 }
 
 /** Links in order, each with its far end's node; hidden, unnamed, unknown and self links drop. */

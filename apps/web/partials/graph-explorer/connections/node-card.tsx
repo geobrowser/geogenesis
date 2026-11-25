@@ -47,6 +47,39 @@ export function nodeDateLabel(node: GraphNode): string | null {
   return Number.isNaN(date.getTime()) ? null : DATE_FORMAT.format(date);
 }
 
+const MONTH_FORMAT = new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' });
+
+/** A source's line above its title: type · outlet · month, each only when known ("Report · BBC Verify · Mar 2025"). */
+export function sourceEyebrow(node: GraphNode): string | null {
+  const date = node.date ? new Date(node.date) : null;
+  const month = date && !Number.isNaN(date.getTime()) ? MONTH_FORMAT.format(date) : null;
+  const outlet = node.publisher && node.publisher !== node.name ? node.publisher : null;
+  return [nodeTypeLabel(node), outlet, month].filter(Boolean).join(' · ') || null;
+}
+
+/** Hop 2 is too far to read: it drops its text and keeps a small marker (the centre never does). */
+export function isFarNode(hop: 0 | 1 | 2, isCentre: boolean) {
+  return hop === 2 && !isCentre;
+}
+
+/** A far node's marker: its band's color for a claim, else its kind's; hollow while a claim has no band. */
+export function farMarkerClass(kind: GraphNode['kind'], band: ClaimBand | null): string {
+  if (kind === 'claim') return band ? cx('h-3 w-3 rounded-[3px]', BAND_SWATCHES[band]) : FAR_HOLLOW;
+  return FAR_MARKERS[kind] ?? FAR_HOLLOW;
+}
+
+const FAR_HOLLOW = 'h-3 w-3 rounded-[3px] border border-white/50';
+const FAR_MARKERS: Partial<Record<GraphNode['kind'], string>> = {
+  topic: 'h-2 w-4 rounded-full bg-grey-03',
+  story: 'h-3 w-3 rounded-[3px] bg-grey-01',
+  event: 'h-3 w-3 rounded-[3px] bg-[#d9b46a]',
+  case: 'h-3 w-3 rounded-[3px] bg-[#4c8dff]',
+  src: 'h-3 w-[10px] rounded-[2px] border-[1.5px] border-dashed border-white/70',
+};
+
+/** The centre's mark, whatever its kind: a white ring past a dark gap, and a soft halo. */
+export const CENTRE_RING = 'shadow-[0_0_0_3px_rgba(17,17,20,.92),0_0_0_5px_#fff,0_0_48px_rgba(255,255,255,.26)]';
+
 type CardProps = { node: GraphNode; hop: 0 | 1 | 2; isCentre: boolean; phone: boolean };
 
 const LABEL = 'line-clamp-2 text-[12px] font-medium leading-[1.3]';
@@ -61,19 +94,54 @@ function labelSize({ isCentre, phone, hop }: Pick<CardProps, 'isCentre' | 'phone
 
 /** What a node looks like, by kind. Claims read their space-scoped counts (`claimSpaceId`). */
 export function NodeCard({ claimSpaceId, ...props }: CardProps & { claimSpaceId: string | null }) {
+  const far = isFarNode(props.hop, props.isCentre);
   if (props.node.kind === 'claim' && claimSpaceId) return <ClaimCard {...props} spaceId={claimSpaceId} />;
   if (props.node.kind === 'ent' || props.node.kind === 'other') return <EntityCard {...props} />;
+  if (far) return <FarMarker node={props.node} band={null} />;
   if (props.node.kind === 'topic') return <TopicCard {...props} />;
   return <ItemCard {...props} />;
 }
 
+/** A far node: a small marker with no text; its name shows on hover or focus, below it. */
+function FarMarker({ node, band }: { node: GraphNode; band: ClaimBand | null }) {
+  return (
+    <span data-far-marker className="relative flex items-center justify-center p-1">
+      <span aria-hidden className={cx('block', farMarkerClass(node.kind, band))} />
+      <FarName name={node.name} />
+    </span>
+  );
+}
+
+/** Out of flow, so showing it never resizes the measured box. */
+function FarName({ name }: { name: string | null }) {
+  return (
+    <span className="pointer-events-none absolute top-[calc(100%+4px)] left-1/2 hidden w-max max-w-[180px] -translate-x-1/2 rounded-md bg-white px-2 py-1 text-center text-[11px] leading-[1.3] font-medium text-[#151515] group-hover:block group-focus-visible:block">
+      <span className="line-clamp-3">{name}</span>
+    </span>
+  );
+}
+
+/** The centre topic is the white pill; topics around it are small gray ones, quieter than claims and people. */
 function TopicCard({ node, hop, isCentre, phone }: CardProps) {
+  if (!isCentre)
+    return (
+      <span
+        data-label
+        className={cx(
+          'block rounded-full bg-grey-05 px-[10px] py-1 text-center text-grey-02 shadow-[0_0_0_1px_rgba(255,255,255,.1)]',
+          phone ? 'max-w-[130px]' : 'max-w-[170px]'
+        )}
+      >
+        <span className={cx(LABEL, 'text-[11px]')}>{node.name}</span>
+      </span>
+    );
   return (
     <span
+      data-label
       className={cx(
-        'block rounded-full bg-white text-center text-[#151515] shadow-[0_0_0_6px_rgba(255,255,255,.07),0_0_44px_rgba(255,255,255,.22)]',
-        phone ? 'px-3 py-[6px]' : 'px-[18px] py-[10px]',
-        isCentre ? (phone ? 'max-w-[200px]' : 'max-w-[260px]') : phone ? 'max-w-[150px]' : 'max-w-[200px]'
+        'block rounded-full bg-white text-center text-[#151515]',
+        CENTRE_RING,
+        phone ? 'max-w-[200px] px-3 py-[6px]' : 'max-w-[260px] px-[18px] py-[10px]'
       )}
     >
       <span className={cx(LABEL, 'font-semibold', labelSize({ isCentre, phone, hop }))}>{node.name}</span>
@@ -84,21 +152,17 @@ function TopicCard({ node, hop, isCentre, phone }: CardProps) {
 function EntityCard({ node, hop, isCentre, phone }: CardProps) {
   const src = entityImageSrc(node);
   const [failed, setFailed] = React.useState(false);
-  const size = isCentre ? (phone ? 64 : 84) : hop === 2 ? 28 : phone ? 40 : 52;
-  const width = isCentre
-    ? phone
-      ? 'w-[110px]'
-      : 'w-[150px]'
-    : phone
-      ? 'w-[84px]'
-      : hop === 2
-        ? 'w-[96px]'
-        : 'w-[112px]';
+  const far = isFarNode(hop, isCentre);
+  const size = isCentre ? (phone ? 64 : 84) : far ? 24 : phone ? 40 : 52;
+  const width = isCentre ? (phone ? 'w-[110px]' : 'w-[150px]') : far ? null : phone ? 'w-[84px]' : 'w-[112px]';
   return (
-    <span className={cx('flex flex-col items-center gap-1 text-center', width)}>
+    <span className={cx('relative flex flex-col items-center gap-1 text-center', width)}>
       <span
         data-anchor
-        className="flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#333] text-[#ddd] shadow-[0_0_0_1px_rgba(255,255,255,.18),0_10px_30px_rgba(0,0,0,.5)]"
+        className={cx(
+          'flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#333] text-[#ddd]',
+          isCentre ? CENTRE_RING : 'shadow-[0_0_0_1px_rgba(255,255,255,.18),0_10px_30px_rgba(0,0,0,.5)]'
+        )}
         style={{ width: size, height: size, fontSize: Math.round(size * 0.4) }}
       >
         {src && !failed ? (
@@ -113,17 +177,24 @@ function EntityCard({ node, hop, isCentre, phone }: CardProps) {
           node.name?.charAt(0).toUpperCase()
         )}
       </span>
-      <span
-        className={cx(LABEL, 'rounded-md bg-white px-2 py-[2px] text-[#151515]', labelSize({ isCentre, phone, hop }))}
-      >
-        {node.name}
-      </span>
+      {far ? (
+        <FarName name={node.name} />
+      ) : (
+        <span
+          data-label
+          className={cx(LABEL, 'rounded-md bg-white px-2 py-[2px] text-[#151515]', labelSize({ isCentre, phone, hop }))}
+        >
+          {node.name}
+        </span>
+      )}
     </span>
   );
 }
 
 const ITEM_STYLES: Record<string, string> = {
   story: 'bg-[rgba(246,246,246,.96)] text-[#151515]',
+  // Evidence reads apart from claims: a dashed edge instead of the solid one.
+  src: 'border border-dashed border-white/40 bg-[rgba(28,28,32,.86)] text-[#f2f2f2] shadow-[0_10px_30px_rgba(0,0,0,.45)]',
   case: 'bg-[rgba(28,28,32,.86)] text-[#f2f2f2] shadow-[inset_3px_0_0_#4c8dff,inset_0_0_0_1px_rgba(255,255,255,.16),0_10px_30px_rgba(0,0,0,.45)]',
 };
 
@@ -134,31 +205,28 @@ function cardBox({ isCentre, phone }: Pick<CardProps, 'isCentre' | 'phone'>, des
 }
 
 function ItemCard({ node, hop, isCentre, phone }: CardProps) {
-  const meta = [nodeTypeLabel(node), nodeDateLabel(node)].filter(Boolean).join(' · ');
-  if (hop === 2 && !isCentre) {
-    return (
-      <span
-        className={cx(
-          'block rounded-lg bg-[rgba(28,28,32,.7)] px-2 py-1 text-left text-[#f2f2f2]',
-          phone ? 'w-[110px]' : 'w-[140px]'
-        )}
-      >
-        <span className="line-clamp-2 text-[11px] leading-[1.3]">{node.name}</span>
-      </span>
-    );
-  }
+  const source = node.kind === 'src';
+  const meta = source ? sourceEyebrow(node) : [nodeTypeLabel(node), nodeDateLabel(node)].filter(Boolean).join(' · ');
   return (
     <span
+      data-label
+      data-source-card={source || undefined}
       className={cx(
         // Blur behind every card is too much for low-end phones.
         'flex flex-col items-start gap-1 rounded-xl text-left',
         !phone && 'backdrop-blur-[6px]',
         ITEM_STYLES[node.kind] ?? DARK_CARD,
+        isCentre && CENTRE_RING,
         cardBox({ isCentre, phone }, ['w-[230px]', 'w-[176px]'])
       )}
     >
       {meta && (
-        <span className={cx('text-[11px] font-medium', node.kind === 'story' ? 'text-[#4b4b4b]' : 'text-[#d9b46a]')}>
+        <span
+          className={cx(
+            'text-[11px] font-medium',
+            source ? 'line-clamp-1 text-[#a8a8a8]' : node.kind === 'story' ? 'text-[#4b4b4b]' : 'text-[#d9b46a]'
+          )}
+        >
           {meta}
         </span>
       )}
@@ -171,32 +239,35 @@ function ClaimCard({ node, hop, isCentre, phone, spaceId }: CardProps & { spaceI
   const summary = useClaimResponseSummary(node.id, spaceId, 'stance');
   const ready = !summary.isLoading && summary.hasCounts;
   const band = ready ? claimBand(summary.positive, summary.negative) : null;
-  const compact = hop === 2 && !isCentre;
+  const state = band ?? (ready ? 'none' : 'loading');
+  if (isFarNode(hop, isCentre))
+    return (
+      <span data-band={state} className="contents">
+        <FarMarker node={node} band={band} />
+      </span>
+    );
   return (
     <span
-      data-band={band ?? (ready ? 'none' : 'loading')}
+      data-band={state}
+      data-label
       className={cx(
         'flex flex-col items-start gap-1 rounded-xl text-left transition-colors duration-300',
         band ? BAND_STYLES[band] : DARK_CARD,
-        compact
-          ? cx('px-2 py-[6px]', phone ? 'w-[110px]' : 'w-[150px]')
-          : cardBox({ isCentre, phone }, ['w-[260px]', 'w-[200px]'])
+        isCentre && CENTRE_RING,
+        cardBox({ isCentre, phone }, ['w-[260px]', 'w-[200px]'])
       )}
     >
-      <span className={cx(LABEL, !compact && !phone && 'line-clamp-3', labelSize({ isCentre, phone, hop }))}>
-        {node.name}
-      </span>
-      {!compact &&
-        (band && summary.percent !== null ? (
-          <span className="flex w-full flex-col gap-1">
-            <span className={cx('font-medium', phone ? 'text-[11px]' : 'text-[12px]')}>{summary.percent}% agree</span>
-            <span className="block h-[3px] w-full overflow-hidden rounded-full bg-white/20">
-              <span className="block h-full bg-white" style={{ width: `${summary.percent}%` }} />
-            </span>
+      <span className={cx(LABEL, !phone && 'line-clamp-3', labelSize({ isCentre, phone, hop }))}>{node.name}</span>
+      {band && summary.percent !== null ? (
+        <span className="flex w-full flex-col gap-1">
+          <span className={cx('font-medium', phone ? 'text-[11px]' : 'text-[12px]')}>{summary.percent}% agree</span>
+          <span className="block h-[3px] w-full overflow-hidden rounded-full bg-white/20">
+            <span className="block h-full bg-white" style={{ width: `${summary.percent}%` }} />
           </span>
-        ) : (
-          <ClaimStatusLine loading={summary.isLoading} answered={summary.hasCounts} />
-        ))}
+        </span>
+      ) : (
+        <ClaimStatusLine loading={summary.isLoading} answered={summary.hasCounts} />
+      )}
     </span>
   );
 }

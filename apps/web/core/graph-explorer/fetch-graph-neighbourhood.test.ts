@@ -3,6 +3,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { type OperationDefinitionNode, print } from 'graphql';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { AVATAR_PROPERTY_ID as AVATAR } from '~/core/io/subgraph/space-image';
 import { HIDDEN_PROPERTY_ID } from '~/core/moderation/hidden';
 
 import {
@@ -13,6 +14,7 @@ import {
   HOP2_FIRST_TRY_MS,
   type Hop1Side,
   NODES_MIN_MS,
+  PUBLISHER_PROPERTY_ID,
   declaredVariables,
   decodeCrossLinks,
   decodeHop1,
@@ -112,6 +114,26 @@ describe('decodeNode', () => {
     );
     expect(node).toMatchObject({ kind: 'event', date: '2026-08-12T00:00:00Z', agrees: 3, disagrees: 0 });
     expect(node?.placedSpaceIds).toEqual(['b'.repeat(32)]);
+  });
+
+  it("names a source's outlet from its first named Publisher, and only for sources", () => {
+    const publisher = (name: string | null, typeId = PUBLISHER_PROPERTY_ID) => ({
+      typeId,
+      toEntity: { name, valuesList: [] },
+    });
+    const relationsList = [publisher('Avatar', AVATAR), publisher('  '), publisher('BBC Verify'), publisher('Reuters')];
+    const source = decodeNode(
+      raw('1'.repeat(32), 'How the dead are counted', [GRAPH_KIND_TYPE_IDS.src[0]], { relationsList })
+    );
+    expect(source?.publisher).toBe('BBC Verify');
+    expect(decodeNode(raw('1'.repeat(32), 'A claim', [CLAIM_TYPE_ID], { relationsList }))?.publisher).toBeNull();
+    expect(decodeNode(raw('1'.repeat(32), 'Bare', [GRAPH_KIND_TYPE_IDS.src[0]]))?.publisher).toBeNull();
+  });
+
+  it('asks for the Publisher relation and its name with every node', () => {
+    const document = print(nodesDocument);
+    expect(document).toContain('$publisherPropertyId');
+    expect(document).toMatch(/toEntity \{\s*name/);
   });
 
   it('drops unnamed and plumbing neighbours, and keeps unlisted types as Other', () => {
