@@ -128,28 +128,12 @@ describe('analytics', () => {
     expect(script?.crossOrigin).toBe('anonymous');
   });
 
-  it("keeps Amplitude's viewport tracker off, since it holds every element it has seen until a full page load", async () => {
+  it('turns PostHog and Amplitude off, since every event already reaches the collector', async () => {
     const { initAnalytics } = await import('./analytics');
 
     initAnalytics();
 
-    const autocapture = window.lyticsConfig?.amplitudeAutocapture as Record<string, unknown>;
-    // The object form: a bare `false` is spread into `{ exposureDuration }` by the SDK and stays on.
-    expect(autocapture.elementInteractions).toEqual({ viewportContentUpdated: { enabled: false } });
-    // Everything `autocapture: true` turned on is still on.
-    for (const feature of [
-      'attribution',
-      'fileDownloads',
-      'formInteractions',
-      'pageViews',
-      'sessions',
-      'pageUrlEnrichment',
-      'webVitals',
-      'frustrationInteractions',
-      'networkTracking',
-    ]) {
-      expect(autocapture[feature], feature).toBe(true);
-    }
+    expect(window.lyticsConfig).toMatchObject({ amplitudeApiKey: false, posthogToken: false });
   });
 
   it('enables production collection for Genesis app routes on www.geobrowser.io', async () => {
