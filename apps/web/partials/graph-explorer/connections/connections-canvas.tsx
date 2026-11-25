@@ -48,8 +48,6 @@ type NodeView = {
   /** When it left the selection; it fades out and is removed LEAVE_MS later. */
   died: number;
   entry: SelectedNode;
-  /** Screen offset keeping it clear of the centre, eased frame to frame. */
-  push: [number, number];
   /** Opacity factor while a nearer card covers its label, eased frame to frame. */
   dim: number;
 };
@@ -231,7 +229,6 @@ export function ConnectionsCanvas({
           alive: true,
           died: 0,
           entry,
-          push: [0, 0],
           dim: 1,
         });
       }
@@ -376,7 +373,7 @@ export function ConnectionsCanvas({
       };
       const centreElement = elements.current.get(state.centreId);
       const centrePoint = projected.get(state.centreId);
-      // Every other node is kept off this box, at the scale the centre is drawn at.
+      // The centre's box, at the scale it is drawn at: a card crossing it fades by how much it covers.
       const centreRect =
         centreElement && centrePoint
           ? rectAt(
@@ -422,20 +419,7 @@ export function ConnectionsCanvas({
           moving = true;
         }
         const box = measure(node.id, element);
-        if (centreRect && !isCentre && node.alive) {
-          const rect = rectAt(point.x, point.y, box, scale);
-          const target = clearance(centreRect, rect);
-          const ease = reduceMotion ? 1 : 0.2;
-          if (Math.abs(target[0] - node.push[0]) + Math.abs(target[1] - node.push[1]) > 0.5) moving = true;
-          const eased: [number, number] = [
-            node.push[0] + (target[0] - node.push[0]) * ease,
-            node.push[1] + (target[1] - node.push[1]) * ease,
-          ];
-          // Easing may only move a card around the centre, never across it.
-          node.push = overlaps(centreRect, shifted(rect, eased)) ? target : eased;
-        } else if (isCentre) node.push = [0, 0];
-        point.x += node.push[0];
-        point.y += node.push[1];
+        // Every card stays on its projected path; depth order and fading, not a push, keep the centre clear.
         drawn.push({ node, element, point, box, scale, opacity, isCentre, far });
       }
 
@@ -450,8 +434,17 @@ export function ConnectionsCanvas({
         }))
       );
       const covered = new Set(labelled.filter((_, i) => hidden[i]).map(entry => entry.node));
+      const centreDepth = centrePoint?.depth ?? 0;
       for (const entry of drawn) {
-        const target = covered.has(entry.node) ? COVERED_DIM : 1;
+        let target = covered.has(entry.node) ? COVERED_DIM : 1;
+        if (centreRect && !entry.isCentre && entry.node.id !== hover && !neighbours.has(entry.node.id))
+          target = Math.min(
+            target,
+            centreCrossDim(rectAt(entry.point.x, entry.point.y, entry.box, entry.scale), entry.point.depth, {
+              rect: centreRect,
+              depth: centreDepth,
+            })
+          );
         if (Math.abs(target - entry.node.dim) > 0.01) moving = true;
         entry.node.dim += (target - entry.node.dim) * (reduceMotion ? 1 : 0.2);
       }
@@ -464,9 +457,7 @@ export function ConnectionsCanvas({
         element.style.zIndex = String(
           node.id === hover
             ? 9500
-            : isCentre
-              ? 8500
-              : 5000 - Math.round(point.depth) + (neighbours.has(node.id) ? 2000 : 0)
+            : depthOrder(point.depth, isCentre, centreDepth) + (neighbours.has(node.id) ? 2000 : 0)
         );
       }
 
@@ -834,28 +825,31 @@ export function nodeScale(isCentre: boolean, hop: number, depthScale: number, ph
   return Math.max(0.3, Math.min(1.2, depthScale * (hop === 2 ? 0.95 : 1)));
 }
 
-const CENTRE_MARGIN = 10;
-
-/** The shortest move that takes `rect` off `centre` (plus a margin); none when they don't touch. */
-export function clearance(centre: Rect, rect: Rect): [number, number] {
-  const right = centre.right + CENTRE_MARGIN - rect.left;
-  const left = rect.right - (centre.left - CENTRE_MARGIN);
-  const down = centre.bottom + CENTRE_MARGIN - rect.top;
-  const up = rect.bottom - (centre.top - CENTRE_MARGIN);
-  if (right <= 0 || left <= 0 || down <= 0 || up <= 0) return [0, 0];
-  const dx = right < left ? right : -left;
-  const dy = down < up ? down : -up;
-  return Math.abs(dx) < Math.abs(dy) ? [dx, 0] : [0, dy];
+/**
+ * A card's stacking order: nearer is higher, and the centre is always strictly between the cards
+ * behind it and those in front, so a card crossing it passes behind or over it, never level.
+ */
+export function depthOrder(depth: number, isCentre: boolean, centreDepth: number): number {
+  const centre = 5000 - Math.round(centreDepth);
+  if (isCentre) return centre;
+  const own = 5000 - Math.round(depth);
+  return depth > centreDepth ? Math.min(own, centre - 1) : Math.max(own, centre + 1);
 }
 
-function shifted(rect: Rect, [dx, dy]: [number, number]): Rect {
-  return { left: rect.left + dx, right: rect.right + dx, top: rect.top + dy, bottom: rect.bottom + dy };
-}
+/** Opacity factor at full cover for a card behind the centre: faint enough that the centre reads. */
+const BEHIND_CENTRE_DIM = 0.12;
+/** The same for a card passing in front: it stays readable, but the centre's name shows through. */
+const FRONT_OF_CENTRE_DIM = 0.75;
 
-/** Whether `rect` reaches into `centre`'s margin. */
-export function overlaps(centre: Rect, rect: Rect): boolean {
-  const [dx, dy] = clearance(centre, rect);
-  return dx !== 0 || dy !== 0;
+/**
+ * Opacity factor for a card crossing the centre's box, in step with how much of it the two share,
+ * so it fades in and out smoothly as it passes behind (a lot) or in front (a little).
+ */
+export function centreCrossDim(rect: Rect, depth: number, centre: { rect: Rect; depth: number }): number {
+  const share = overlapShare(rect, centre.rect);
+  if (share === 0) return 1;
+  const floor = depth > centre.depth ? BEHIND_CENTRE_DIM : FRONT_OF_CENTRE_DIM;
+  return 1 - share * (1 - floor);
 }
 
 /**

@@ -14,11 +14,11 @@ import { SKELETON_SELECTION, isSkeletonNode } from '~/core/graph-explorer/skelet
 
 import {
   ConnectionsCanvas,
-  clearance,
+  centreCrossDim,
   coveredLabels,
+  depthOrder,
   nodeScale,
   overlapShare,
-  overlaps,
   tooSmallToRead,
 } from './connections-canvas';
 import { GraphSearch, searchNodes } from './graph-search';
@@ -33,7 +33,12 @@ const resized = vi.hoisted(() => ({
   observed: [] as Array<{ callback: ResizeObserverCallback; target: Element }>,
 }));
 /** Every fit asked for, and the distance the last frame projected at. */
-const view = vi.hoisted(() => ({ fits: [] as Array<{ width: number; height: number; fit: number }>, distance: 0 }));
+const view = vi.hoisted(() => ({
+  fits: [] as Array<{ width: number; height: number; fit: number }>,
+  distance: 0,
+  /** Every point projected since the test last cleared it. */
+  projected: [] as Array<{ x: number; y: number; scale: number; depth: number }>,
+}));
 vi.mock('~/core/graph-explorer/layout-3d', async importOriginal => {
   const real = await importOriginal<typeof import('~/core/graph-explorer/layout-3d')>();
   return {
@@ -45,7 +50,10 @@ vi.mock('~/core/graph-explorer/layout-3d', async importOriginal => {
     },
     project: (...args: Parameters<typeof real.project>) => {
       view.distance = args[1].distance;
-      return real.project(...args);
+      const point = real.project(...args);
+      // A copy: the frame may move the point it was handed, as the old centre push did.
+      view.projected.push({ ...point });
+      return point;
     },
   };
 });
@@ -124,6 +132,7 @@ beforeEach(() => {
   resized.callbacks = [];
   resized.observed = [];
   view.fits = [];
+  view.projected = [];
   frames = [];
   now = 0;
   motion.reduce = false;
@@ -362,6 +371,47 @@ describe('ConnectionsCanvas', () => {
     const first = target.style.transform;
     runFrames(1200);
     expect(target.style.transform).toBe(first);
+  });
+
+  it('keeps a card crossing the centre on its projected path, drawn by depth, never pushed aside', () => {
+    // Cards this big always cover each other, so the old centre push would have moved Isaac.
+    const sizes = (['offsetWidth', 'offsetHeight'] as const).map(key => {
+      const old = Object.getOwnPropertyDescriptor(HTMLElement.prototype, key);
+      Object.defineProperty(HTMLElement.prototype, key, { configurable: true, get: () => 600 });
+      return () => old && Object.defineProperty(HTMLElement.prototype, key, old);
+    });
+    try {
+      render(<Canvas />);
+      const isaac = screen.getByRole('button', { name: 'Isaac Herzog' });
+      const centreButton = screen.getByRole('button', { name: 'Centre' });
+      const at = (element: HTMLElement) => {
+        const [, x, y] = /translate3d\(([-\d.]+)px,([-\d.]+)px/.exec(element.style.transform) ?? [];
+        return { x: Number(x), y: Number(y) };
+      };
+      const pointAt = (spot: { x: number; y: number }) =>
+        view.projected.find(point => Math.abs(point.x - spot.x) < 0.06 && Math.abs(point.y - spot.y) < 0.06);
+      // Settle the move in, then sample the idle spin frame by frame.
+      runFrames(2600 + 1000);
+      let behind = 0;
+      let inFront = 0;
+      for (let i = 0; i < 2400; i++) {
+        view.projected = [];
+        runFrames(now + 16);
+        const own = pointAt(at(isaac));
+        const middle = pointAt(at(centreButton));
+        expect(own).toBeDefined();
+        expect(middle).toBeDefined();
+        const lower = Number(isaac.style.zIndex) < Number(centreButton.style.zIndex);
+        expect(lower).toBe(own!.depth > middle!.depth);
+        if (lower) behind++;
+        else inFront++;
+      }
+      // The spin carried Isaac across the centre both ways.
+      expect(behind).toBeGreaterThan(0);
+      expect(inFront).toBeGreaterThan(0);
+    } finally {
+      sizes.forEach(restore => restore());
+    }
   });
 });
 
@@ -622,22 +672,33 @@ describe('searchNodes', () => {
   });
 });
 
-describe('clearance', () => {
-  const centre = { left: 100, right: 200, top: 100, bottom: 160 };
+describe('depthOrder', () => {
+  it('stacks nearer cards higher, the centre strictly between those behind and those in front', () => {
+    expect(depthOrder(0, true, 0)).toBe(5000);
+    expect(depthOrder(-200, false, 0)).toBe(5200);
+    expect(depthOrder(300, false, 0)).toBe(4700);
+    // Within rounding of the centre, a card still lands on its own side of it.
+    expect(depthOrder(0.2, false, 0)).toBe(4999);
+    expect(depthOrder(-0.2, false, 0)).toBe(5001);
+    expect(depthOrder(0, false, 0)).toBe(5001);
+  });
+});
 
-  it('leaves a card that clears the centre alone', () => {
-    expect(clearance(centre, { left: 220, right: 300, top: 100, bottom: 140 })).toEqual([0, 0]);
+describe('centreCrossDim', () => {
+  const centre = { rect: { left: 100, right: 200, top: 100, bottom: 160 }, depth: 0 };
+
+  it('leaves a card clear of the centre alone', () => {
+    expect(centreCrossDim({ left: 220, right: 300, top: 100, bottom: 140 }, 50, centre)).toBe(1);
   });
 
-  it('moves an overlapping card the shortest way off the centre, past a margin', () => {
-    expect(clearance(centre, { left: 180, right: 260, top: 110, bottom: 150 })).toEqual([30, 0]);
-    expect(clearance(centre, { left: 120, right: 180, top: 150, bottom: 190 })).toEqual([0, 20]);
-    expect(clearance(centre, { left: 120, right: 180, top: 80, bottom: 105 })).toEqual([0, -15]);
+  it('fades a card behind the centre in step with how much of it is covered, down to faint', () => {
+    expect(centreCrossDim({ left: 120, right: 180, top: 110, bottom: 150 }, 50, centre)).toBeCloseTo(0.12);
+    expect(centreCrossDim({ left: 170, right: 230, top: 110, bottom: 150 }, 50, centre)).toBeCloseTo(0.56);
   });
 
-  it('counts the margin as touching the centre', () => {
-    expect(overlaps(centre, { left: 205, right: 260, top: 110, bottom: 150 })).toBe(true);
-    expect(overlaps(centre, { left: 211, right: 260, top: 110, bottom: 150 })).toBe(false);
+  it('fades a card passing in front only a little', () => {
+    expect(centreCrossDim({ left: 120, right: 180, top: 110, bottom: 150 }, -50, centre)).toBeCloseTo(0.75);
+    expect(centreCrossDim({ left: 170, right: 230, top: 110, bottom: 150 }, -50, centre)).toBeCloseTo(0.875);
   });
 });
 
