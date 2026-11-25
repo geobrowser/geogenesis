@@ -43,7 +43,7 @@ function card(entry: GraphNode, hop: 0 | 1 | 2, isCentre = hop === 0) {
     .container;
 }
 
-const centreRing = CENTRE_RING.split(' ')[0];
+const centreRing = CENTRE_RING;
 
 describe('NodeCard topics', () => {
   it('draws a topic around the centre as a small gray pill, and the centre topic as the white one', () => {

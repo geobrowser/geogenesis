@@ -77,8 +77,11 @@ const FAR_MARKERS: Partial<Record<GraphNode['kind'], string>> = {
   src: 'h-3 w-[10px] rounded-[2px] border-[1.5px] border-dashed border-white/70',
 };
 
-/** The centre's mark, whatever its kind: a white ring past a dark gap, and a soft halo. */
-export const CENTRE_RING = 'shadow-[0_0_0_3px_rgba(17,17,20,.92),0_0_0_5px_#fff,0_0_48px_rgba(255,255,255,.26)]';
+/**
+ * The centre's mark, whatever its kind: a white ring a few pixels out. An outline, not a shadow, so
+ * the band and card shadows it sits on can't override it.
+ */
+export const CENTRE_RING = 'outline-2 outline-offset-[3px] outline-white';
 
 type CardProps = { node: GraphNode; hop: 0 | 1 | 2; isCentre: boolean; phone: boolean };
 
