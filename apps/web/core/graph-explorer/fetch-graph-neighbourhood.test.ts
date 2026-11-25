@@ -3,7 +3,9 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { type OperationDefinitionNode, print } from 'graphql';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { AVATAR_PROPERTY_ID } from '~/core/io/subgraph/space-image';
 import { HIDDEN_PROPERTY_ID } from '~/core/moderation/hidden';
+import { ARTICLE_TYPE_ID } from '~/core/topics/ontology';
 
 import {
   ENTITY_FIRST,
@@ -118,6 +120,28 @@ describe('decodeNode', () => {
     expect(decodeNode(raw('1'.repeat(32), null, [PERSON]))).toBeNull();
     expect(decodeNode(raw('1'.repeat(32), 'A page', [SystemIds.PAGE_TYPE]))).toBeNull();
     expect(decodeNode(raw('1'.repeat(32), 'A new type', ['f'.repeat(32)]))?.kind).toBe('other');
+  });
+
+  it('reads the first named publisher with its avatar, for a source row’s favicon', () => {
+    const avatar = (url: string) => ({ typeId: AVATAR_PROPERTY_ID, toEntity: { valuesList: [{ text: url }] } });
+    const node = decodeNode(
+      raw('1'.repeat(32), 'An article', [ARTICLE_TYPE_ID], {
+        publishers: [
+          { toEntity: null },
+          { toEntity: { id: 'B'.repeat(32), name: '  ', relationsList: [] } },
+          { toEntity: { id: 'C'.repeat(32), name: 'The Hindu', relationsList: [avatar('ipfs://QmHindu')] } },
+        ],
+      })
+    );
+    expect(node?.publisher).toEqual({ id: 'c'.repeat(32), name: 'The Hindu', image: 'ipfs://QmHindu' });
+    expect(decodeNode(raw('1'.repeat(32), 'No publisher', [ARTICLE_TYPE_ID]))?.publisher).toBeNull();
+  });
+
+  it('asks every node for its publisher in the same request, not a new one', () => {
+    for (const document of [nodesDocument, hop1CentreDocument]) {
+      expect(print(document)).toContain('publishers: relationsList(filter: {typeId: {is: $publisherPropertyId}})');
+      expect(declared(document)).toContain('publisherPropertyId');
+    }
   });
 
   it('always makes a centre a node, whatever its type', () => {

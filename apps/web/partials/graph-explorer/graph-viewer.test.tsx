@@ -512,11 +512,11 @@ describe('GraphViewer under a kind chip', () => {
     expect(screen.queryByRole('heading', { name: /^Claims/ })).toBeTruthy();
   });
 
-  it('notes capped kinds only for the groups the chip leaves in the panel', () => {
+  it('marks a capped kind in its own heading, with no "Showing the first N" footer', () => {
     mixedNeighbourhood(['topic']);
     render(<Viewer start={TOPIC} scope={scope} />);
-    expect(screen.queryByText(/Showing the first/)).toBeTruthy();
-    fireEvent.click(chips().getByRole('button', { name: 'News' }));
+    expect(heading('Topics · 1+')).toBeTruthy();
+    expect(heading('People and groups · 1')).toBeTruthy();
     expect(screen.queryByText(/Showing the first/)).toBeNull();
   });
 

@@ -11,10 +11,12 @@ import { RELATION_LABELS } from './ontology';
 import {
   agreementLine,
   bandTally,
+  claimRowLine,
   groupByKind,
   latestNews,
   mostLinked,
   rowLabels,
+  rowPublisher,
   shownAgreement,
   topClaimsInBand,
 } from './panel-sections';
@@ -406,5 +408,37 @@ describe('testnet fallback labels', () => {
       expect(typed).toContain(name);
     expect(typed).not.toContain('Addresses');
     expect(typed).not.toContain('Lives in');
+  });
+});
+
+describe('claimRowLine', () => {
+  it('reads like the prototype row: the percent from the threshold, the votes below it, none at zero', () => {
+    expect(claimRowLine(undefined)).toBeNull();
+    expect(claimRowLine({ positive: 0, negative: 0 })).toBe('No votes yet');
+    expect(claimRowLine({ positive: 1, negative: 1 })).toBe('2 votes');
+    expect(claimRowLine({ positive: 63, negative: 37 })).toBe('63% agree');
+  });
+});
+
+describe('source rows', () => {
+  const publisher = { id: id(9), name: 'BBC Verify', image: null };
+
+  it('puts the publisher between the type and the date', () => {
+    const centre: RowCentre = { kind: 'claim', typeNames: ['Claim'] };
+    expect(
+      rowLabels({ kind: 'src', relations: [], centre, typeLabel: 'Report', publisher: 'BBC Verify', date: '2025' }).sub
+    ).toBe('Report · BBC Verify · 2025');
+    expect(rowLabels({ kind: 'src', relations: [], centre, publisher: 'Times of Israel', date: 'Jan 2026' }).sub).toBe(
+      'Times of Israel · Jan 2026'
+    );
+  });
+
+  it('names a source’s or story’s publisher, but not on the publisher’s own panel or for other kinds', () => {
+    expect(rowPublisher(node(1, 'src', { publisher }), id(2))).toBe(publisher);
+    expect(rowPublisher(node(1, 'story', { publisher }), null)).toBe(publisher);
+    expect(rowPublisher(node(1, 'src', { publisher }), id(9).toUpperCase())).toBeNull();
+    expect(rowPublisher(node(1, 'ent', { publisher }), id(2))).toBeNull();
+    expect(rowPublisher(node(1, 'src'), id(2))).toBeNull();
+    expect(rowPublisher(undefined, id(2))).toBeNull();
   });
 });
