@@ -47,13 +47,25 @@ vi.mock('~/partials/entity-page/entity-vote-buttons', async () => {
     typeof import('~/core/responses/entity-response')
   >('~/core/responses/entity-response');
   return {
-    EntityVoteButtons: ({ entityId, spaceId }: { entityId: string; spaceId: string }) => {
+    EntityVoteButtons: ({
+      entityId,
+      spaceId,
+      hideClaimShare,
+      hideResponderAvatars,
+    }: {
+      entityId: string;
+      spaceId: string;
+      hideClaimShare?: boolean;
+      hideResponderAvatars?: boolean;
+    }) => {
       const client = useQueryClient();
       const getContext = useActionContext('entity_vote_buttons', 'claim', entityId);
       return (
         <button
           type="button"
           aria-label="Agree"
+          data-share={hideClaimShare ? 'hidden' : 'shown'}
+          data-faces={hideResponderAvatars ? 'hidden' : 'shown'}
           onClick={() => {
             mocks.votes.push(getContext());
             client.setQueryData(
@@ -149,17 +161,18 @@ describe('TopicOverview', () => {
   it('lists fights and settled claims with 3+ votes, voting in place and re-centring on the title', async () => {
     mocks.summary.data = {
       claims: [
-        { id: id(2), name: 'A fight', spaceId: 's', positive: 30, negative: 25, band: 'contested' },
+        { id: id(2), name: 'A fight', spaceId: 's', positive: 20, negative: 25, band: 'contested' },
         { id: id(3), name: 'Settled', spaceId: 's', positive: 9, negative: 1, band: 'agreed' },
         { id: id(4), name: 'Too few', spaceId: 's', positive: 1, negative: 1, band: 'contested' },
       ],
       truncated: false,
     };
-    seed(2, 's', 30, 25);
+    seed(2, 's', 20, 25);
     seed(3, 's', 9, 1);
     const onOpen = overview();
     const fights = screen.getByRole('region', { name: 'The biggest fights' });
-    expect(rows(fights)).toEqual(['A fight55% agree · 55 votes']);
+    // The prototype's row: the band's square, the text, and only "44% agree" under it.
+    expect(rows(fights)).toEqual(['A fight44% agree']);
     expect(within(screen.getByRole('region', { name: 'Widely agreed, most votes' })).getByText('Settled')).toBeTruthy();
     fireEvent.click(within(fights).getByRole('button', { name: 'A fight' }));
     expect(onOpen).toHaveBeenCalledWith(id(2), 'A fight');
@@ -170,7 +183,7 @@ describe('TopicOverview', () => {
     expect(mocks.votes).toEqual([
       expect.objectContaining({ list_id: 'graph_explorer_fights', item_position: 1, page_type: 'graph_explorer' }),
     ]);
-    await waitFor(() => expect(rows(fights)).toEqual(['A fight55% agree · 56 votes']));
+    await waitFor(() => expect(rows(fights)).toEqual(['A fight46% agree']));
   });
 
   it('says once that nothing has enough votes, and shows nothing for a topic without responses', () => {
@@ -209,6 +222,14 @@ describe('TopicOverview', () => {
         .getAllByRole('button')
         .map(button => button.textContent)
     ).toEqual(['Node 5News story · Jun 1, 2025']);
+  });
+
+  it('names a news row’s publisher with its favicon, between its type and date', () => {
+    const publisher = { id: id(9), name: 'Times of Israel', image: 'https://example.com/toi.png' };
+    overview({ nodes: [node(5, 'story', { date: '2025-06-01T00:00:00Z', publisher })] });
+    const news = screen.getByRole('region', { name: 'Latest news' });
+    expect(within(news).getByRole('button').textContent).toBe('Node 5News story · Times of Israel · Jun 1, 2025');
+    expect(news.querySelector('[data-publisher-icon] img')?.getAttribute('src')).toBe('https://example.com/toi.png');
   });
 });
 
@@ -374,9 +395,7 @@ describe('NeighbourGroups', () => {
     const onOpen = vi.fn();
     groups({ claims, onOpen });
     const region = screen.getByRole('region', { name: 'Claims · 3' });
-    await waitFor(() =>
-      expect(rows(region)).toEqual(['SupportsMany95% agree · 42 votes', 'Some40% agree · 5 votes', 'Few1 vote'])
-    );
+    await waitFor(() => expect(rows(region)).toEqual(['SupportsMany95% agree', 'Some40% agree', 'Few1 vote']));
     expect(region.textContent).toContain('Of 2 with 3+ votes: 1 widely agreed, 1 contested');
     expect(new Set(mocks.batches)).toEqual(new Set(['a', 'b']));
 
@@ -389,6 +408,85 @@ describe('NeighbourGroups', () => {
     await waitFor(() => expect(rows(region)[2]).toBe('Few2 votes'));
     fireEvent.click(within(region).getByRole('button', { name: 'Few' }));
     expect(onOpen).toHaveBeenCalledWith(id(1), 'Few');
+  });
+
+  it('heads each group in bold sentence case with its count, above the prototype’s gray band', () => {
+    groups({ groups: [spokeGroup('ent', 2)] });
+    const region = screen.getByRole('region', { name: 'People and groups · 2' });
+    const title = within(region).getByRole('heading');
+    expect(title.className).toContain('text-smallTitle');
+    expect(title.className).not.toContain('uppercase');
+    // The band spans the panel: an 8px top border with the panel's padding pulled back out.
+    expect(region.className).toContain('border-t-8');
+    expect(region.className).toContain('-mx-6');
+    expect(region.className).toContain('md:-mx-4');
+  });
+
+  it('draws claim rows as the prototype does: band square, text, agreement, thumbs revealed on hover', async () => {
+    seed(30, 's', 9, 1);
+    seed(31, 's', 0, 0);
+    groups({
+      claims: [
+        { id: id(30), name: 'Agreed', spaceId: 's' },
+        { id: id(31), name: 'Unvoted', spaceId: 's' },
+      ],
+    });
+    const region = screen.getByRole('region', { name: 'Claims · 2' });
+    await waitFor(() => expect(rows(region)).toEqual(['Agreed90% agree', 'UnvotedNo votes yet']));
+    const [agreed, unvoted] = within(region).getAllByRole('listitem');
+    expect(agreed.querySelector('[data-band]')?.getAttribute('data-band')).toBe('agreed');
+    expect(unvoted.querySelector('[data-band]')?.getAttribute('data-band')).toBe('none');
+    // No face pile and no share label: the thumbs alone, faded until hover or focus on desktop and
+    // always shown at phone width (md:) and on touch screens.
+    const thumbs = agreed.querySelector('[data-row-thumbs]')!;
+    expect(thumbs.className.split(' ')).toEqual(
+      expect.arrayContaining([
+        'opacity-0',
+        'group-hover/claim:opacity-100',
+        'group-focus-within/claim:opacity-100',
+        'md:opacity-100',
+        '[@media(hover:none)]:opacity-100',
+      ])
+    );
+    const vote = within(agreed).getByRole('button', { name: 'Agree' });
+    expect(vote.dataset.faces).toBe('hidden');
+    expect(vote.dataset.share).toBe('hidden');
+    // Voting still works from the row.
+    fireEvent.click(vote);
+    await waitFor(() => expect(rows(region)[0]).toBe('Agreed91% agree'));
+  });
+
+  it('names a source’s publisher with its favicon, except on the publisher’s own panel', () => {
+    const publisher = { id: id(9), name: 'BBC Verify', image: 'ipfs://QmFavicon' };
+    const report = {
+      kind: 'src' as const,
+      spokes: [
+        {
+          spoke: {
+            entity: node(40, 'src'),
+            labels: ['Source'],
+            edgeSpaceIds: [],
+            nodeSpaceId: null,
+            hasOutgoing: true,
+          },
+          node: node(40, 'src', {
+            types: [{ id: 'f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0', name: 'Report' }],
+            date: '2025-03-01T00:00:00Z',
+            publisher,
+          }),
+        },
+      ],
+    };
+    const { unmount } = groups({ groups: [report] });
+    const region = screen.getByRole('region', { name: 'Sources · 1' });
+    expect(region.textContent).toContain('Report · BBC Verify · Mar 1, 2025');
+    expect(region.querySelector('[data-publisher-icon] img')).toBeTruthy();
+    unmount();
+
+    groups({ groups: [report], centreId: id(9) });
+    const own = screen.getByRole('region', { name: 'Sources · 1' });
+    expect(own.textContent).not.toContain('BBC Verify');
+    expect(own.querySelector('[data-publisher-icon]')).toBeNull();
   });
 
   it('keeps the honest empty states', () => {

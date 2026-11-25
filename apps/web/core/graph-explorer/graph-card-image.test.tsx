@@ -175,12 +175,10 @@ describe('the panel and the card', () => {
     };
   };
 
-  it('state the same claims with 3+ responses and the same bands', () => {
+  it('state the same bands, with the count of claims with 3+ responses on the card only', () => {
     const { card, panel: shown } = both(SHAPES.topic);
-    for (const line of ['3 claims with 3+ responses']) {
-      expect(card).toContain(line);
-      expect(shown).toContain(line);
-    }
+    expect(card).toContain('3 claims with 3+ responses');
+    expect(shown).not.toContain('with 3+ responses');
     for (const [label, n] of [
       ['widely agreed', 1],
       ['contested', 1],
