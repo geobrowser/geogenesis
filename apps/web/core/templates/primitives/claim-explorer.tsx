@@ -268,6 +268,7 @@ export interface ClaimListRowProps {
  */
 export function ClaimListRow({ rank, claim, isAgreed = false, hideKindOnPhone = true, details }: ClaimListRowProps) {
   const voteMetaIndex = claim.meta?.findIndex(part => /\bvotes?\b/i.test(part)) ?? -1;
+  // Debate counts aren't shown in claim lists (GEO-3845); a "N debates" meta part is dropped too.
   const debateMetaIndex = claim.meta?.findIndex(part => /\bdebates?\b/i.test(part)) ?? -1;
 
   const voteCountLabel =
@@ -275,13 +276,6 @@ export function ClaimListRow({ rank, claim, isAgreed = false, hideKindOnPhone = 
       ? `${formatCompactCount(claim.split.totalVotes)} ${claim.split.totalVotes === 1 ? 'vote' : 'votes'}`
       : voteMetaIndex >= 0
         ? claim.meta?.[voteMetaIndex]
-        : undefined;
-
-  const debateLabel =
-    claim.debateCount && claim.debateCount > 0
-      ? `${claim.debateCount} ${claim.debateCount === 1 ? 'debate' : 'debates'}`
-      : debateMetaIndex >= 0
-        ? claim.meta?.[debateMetaIndex]
         : undefined;
 
   const metaParts: string[] = [];
@@ -293,27 +287,6 @@ export function ClaimListRow({ rank, claim, isAgreed = false, hideKindOnPhone = 
 
   const votes = Boolean(claim.voteTarget || claim.onVote);
   const youVotedLabel = claim.userVote && !votes ? (claim.userVote === 'agree' ? 'You agreed' : 'You disagreed') : null;
-
-  const debateNode =
-    debateLabel &&
-    (claim.debatesHref ? (
-      <Link
-        href={claim.debatesHref}
-        className="font-medium text-grey-04 underline decoration-grey-02 underline-offset-2 transition-colors hover:text-[#4c1fd4] hover:decoration-[#4c1fd4]"
-      >
-        {debateLabel}
-      </Link>
-    ) : claim.onOpenDebates ? (
-      <button
-        type="button"
-        onClick={claim.onOpenDebates}
-        className="cursor-pointer border-0 bg-transparent p-0 font-medium text-grey-04 underline decoration-grey-02 underline-offset-2 transition-colors hover:text-[#4c1fd4] hover:decoration-[#4c1fd4]"
-      >
-        {debateLabel}
-      </button>
-    ) : (
-      <span>{debateLabel}</span>
-    ));
 
   const kindBadge = claim.kind && (
     <TemplateBadge tone={CLAIM_KIND_TONE[claim.kind]} className="!h-6 !px-2 !text-[12px]">
@@ -332,7 +305,6 @@ export function ClaimListRow({ rank, claim, isAgreed = false, hideKindOnPhone = 
       : [];
 
   const phoneMeta: React.ReactNode[] = [];
-  if (debateNode) phoneMeta.push(<React.Fragment key="debates">{debateNode}</React.Fragment>);
   for (const part of metaParts) phoneMeta.push(<span key={`meta-${part}`}>{part}</span>);
   if (youVotedLabel) {
     phoneMeta.push(
@@ -405,7 +377,7 @@ export function ClaimListRow({ rank, claim, isAgreed = false, hideKindOnPhone = 
             </div>
           )}
 
-          {(votes || debateLabel || metaParts.length > 0 || youVotedLabel) && (
+          {(votes || metaParts.length > 0 || youVotedLabel) && (
             <div className="contents flex-wrap items-center gap-x-3 gap-y-1.5 @[760px]:flex">
               {/* The debates app's 44px Agree / Disagree (GEO-3845), across the row on phones. */}
               <div className="mt-2.5 basis-full @[760px]:contents">
@@ -421,18 +393,17 @@ export function ClaimListRow({ rank, claim, isAgreed = false, hideKindOnPhone = 
                 </ClaimVoteBinding>
               </div>
 
-              {(debateLabel || metaParts.length > 0 || youVotedLabel) && (
+              {(metaParts.length > 0 || youVotedLabel) && (
                 <span className="hidden flex-wrap items-center gap-x-2 gap-y-0.5 text-[13.5px] text-grey-04 @[760px]:flex">
-                  {debateNode}
                   {metaParts.map((part, i) => (
                     <React.Fragment key={part}>
-                      {(debateLabel || i > 0) && <span aria-hidden>·</span>}
+                      {i > 0 && <span aria-hidden>·</span>}
                       <span>{part}</span>
                     </React.Fragment>
                   ))}
                   {youVotedLabel && (
                     <>
-                      {(debateLabel || metaParts.length > 0) && <span aria-hidden>·</span>}
+                      {metaParts.length > 0 && <span aria-hidden>·</span>}
                       <span className="font-medium text-text">{youVotedLabel}</span>
                     </>
                   )}

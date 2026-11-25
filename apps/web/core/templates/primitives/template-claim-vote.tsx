@@ -330,11 +330,12 @@ export function ClaimVotePills({
       <DebateVoteButtons
         userVote={vote.userVote}
         disabled={vote.disabled}
+        compact={!fill}
         label={`Vote on ${title}`}
         titleFor={vote.titleFor}
         onPress={vote.press}
         className={fill ? 'w-full pt-0.5' : 'w-full'}
-        buttonClassName={fill ? undefined : 'flex-1 basis-0 @[760px]:w-[116px] @[760px]:flex-none'}
+        buttonClassName={fill ? undefined : 'flex-1 basis-0 @[760px]:flex-none'}
       />
       {vote.error && (
         <span role="alert" className="text-[12.5px] text-red-01">

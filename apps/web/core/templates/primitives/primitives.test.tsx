@@ -118,7 +118,7 @@ describe('VoteBox: the debates app Agree / Disagree (GEO-3845)', () => {
     const agree = screen.getByRole('button', { name: 'Agree' });
     const disagree = screen.getByRole('button', { name: 'Disagree' });
     expect(screen.getByRole('group', { name: 'Do you agree?' })).toContainElement(agree);
-    for (const button of [agree, disagree]) expect(button).toHaveClass('h-11', 'rounded-full', 'bg-transparent');
+    for (const button of [agree, disagree]) expect(button).toHaveClass('h-9', 'rounded-full', 'bg-transparent');
     expect(disagree).toHaveAttribute('aria-pressed', 'true');
     expect(disagree).toHaveClass('border-[#151515]', 'font-bold');
     expect(agree).toHaveClass('border-[#8a8a8a]');
@@ -140,6 +140,31 @@ describe('VoteBox: the debates app Agree / Disagree (GEO-3845)', () => {
     );
     expect(screen.getByRole('button', { name: 'Agree' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Disagree' })).toBeDisabled();
+  });
+});
+
+describe('ClaimExplorer rows carry no debate count', () => {
+  it('drops both the debate count and a "N debates" meta part', () => {
+    const claims: ClaimSummaryModel[] = [
+      {
+        id: 'deb-1',
+        title: 'A debated claim',
+        split: { rows: [], isSplit: true, totalVotes: 0 },
+        debateCount: 5,
+        debatesHref: '/debates/x',
+        meta: ['3 debates', 'From a source'],
+        onVote: vi.fn(),
+      },
+    ];
+    render(
+      <EntityActionProvider>
+        <ClaimExplorer contestedClaims={claims} agreedClaims={[]} />
+      </EntityActionProvider>
+    );
+
+    expect(screen.queryByText(/\bdebates?\b/)).toBeNull();
+    expect(screen.queryByRole('link', { name: /debate/ })).toBeNull();
+    expect(screen.getAllByText('From a source').length).toBeGreaterThan(0);
   });
 });
 

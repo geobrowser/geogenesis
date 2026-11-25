@@ -267,8 +267,8 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     expect(within(claims).getByRole('tab', { name: /Accepted/i })).toBeInTheDocument();
     expect(within(claims).getAllByText('World affairs').length).toBeGreaterThan(0);
     expect(within(claims).getByText('18.2k votes')).toBeInTheDocument();
-    // Rows draw debates and the split twice, once per layout; CSS shows one (GEO-3819).
-    expect(within(claims).getAllByRole('button', { name: '11 debates' }).length).toBeGreaterThan(0);
+    // No debate counts in claim lists (GEO-3845).
+    expect(within(claims).queryByRole('button', { name: '11 debates' })).toBeNull();
     expect(within(recentDebates).getAllByRole('article')).toHaveLength(6);
     expect(within(timeline).getAllByRole('listitem')).toHaveLength(8);
     expect(claims.compareDocumentPosition(recentDebates) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();

@@ -293,7 +293,7 @@ describe('ClaimVotePills: the debates app buttons (GEO-3845)', () => {
     const group = screen.getByRole('group', { name: `Vote on ${TARGET.title}` });
     expect(group).toHaveClass('w-full');
     for (const pill of [agreePill(), disagreePill()]) {
-      expect(pill).toHaveClass('h-11', 'rounded-full', 'border', 'bg-transparent', 'flex-1', 'basis-0');
+      expect(pill).toHaveClass('h-7', 'rounded-full', 'border', 'bg-transparent', 'flex-1', 'basis-0');
       expect(pill).not.toHaveTextContent(/\d/);
     }
     expect(agreePill()).toHaveAccessibleName('Agree');
