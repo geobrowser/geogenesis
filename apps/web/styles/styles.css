@@ -314,6 +314,13 @@
 @custom-variant 2xl (@media (max-width: 1535px));
 @custom-variant 3xl (@media (max-width: 1920px));
 
+/* The graph explorer's phone layout (GEO-3849): the same query as GRAPH_PHONE_QUERY in
+   core/graph-explorer/phone-breakpoint.ts, which the map reads in JS. `graph-wide:` is its exact
+   complement, so every width is one or the other. A test pins both against the constant; change
+   them together. */
+@custom-variant graph-phone (@media (max-width: 599px));
+@custom-variant graph-wide (@media not all and (max-width: 599px));
+
 /* Whether the viewer has a pointer that can hover, which is not the same question as how wide
    their screen is. The `hover` feature describes the *primary* input, so a touchscreen laptop
    reports `hover: hover` and keeps the hover affordances it can actually use — where a width
@@ -908,14 +915,15 @@ body[data-slide-up-open] [data-radix-popper-content-wrapper] {
 }
 
 /* GEO-3569: "Opening sign-in…" from first paint; shown by core/auth/sign-in-pending.ts. Taps pass
-   through, so a dialog that never comes cannot lock the page. Below Privy's dialog. */
+   through, so a dialog that never comes cannot lock the page. Below Privy's dialog, above every app
+   layer in core/z-layers.ts (the save-votes prompt is 10010). */
 #sign-in-pending {
   display: none;
 }
 html[data-sign-in-pending] #sign-in-pending {
   position: fixed;
   inset: 0;
-  z-index: 10010;
+  z-index: 10011;
   display: flex;
   align-items: center;
   justify-content: center;
