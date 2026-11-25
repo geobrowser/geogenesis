@@ -89,6 +89,16 @@ describe('Activity gallery debate card', () => {
     expect(card!.querySelector('[data-speaker-chip="top"]')).toHaveTextContent('Avery Stone· Disagree');
     expect(card!.querySelector('[data-speaker-chip="bottom"]')).toHaveTextContent('Jordan Lee· Agree');
 
+    // Both chips sit the same distance off their panel's bottom edge; the play button on the seam
+    // draws over the top chip instead of the chip moving up out of its way.
+    const topChip = card!.querySelector('[data-speaker-chip="top"]');
+    const bottomChip = card!.querySelector('[data-speaker-chip="bottom"]');
+    expect(topChip).toHaveClass('bottom-2');
+    expect(bottomChip).toHaveClass('bottom-2');
+    expect(topChip).not.toHaveClass('bottom-7');
+    const zOf = (el: Element | null) => Number(/z-\[(\d+)\]/.exec(el?.className ?? '')?.[1] ?? 0);
+    expect(zOf(card!.querySelector('[data-debate-play]'))).toBeGreaterThan(zOf(topChip));
+
     // Votes, the split and the overflow menu live on the debate page, not on the card.
     expect(within(card!).queryByRole('button', { name: /agree|disagree|more/i })).not.toBeInTheDocument();
     expect(within(card!).queryAllByRole('button')).toHaveLength(0);

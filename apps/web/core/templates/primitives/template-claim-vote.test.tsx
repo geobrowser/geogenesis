@@ -678,9 +678,12 @@ describe('list attribution on template votes', () => {
     const topChip = container.querySelector('[data-speaker-chip="top"]');
     const bottomChip = container.querySelector('[data-speaker-chip="bottom"]');
     expect(topChip).toHaveTextContent('Ada');
-    // It rides above the play button at every card width, so a long name never slides under the button.
-    expect(topChip).toHaveClass('bottom-7', 'left-2.5');
-    expect(topChip?.className).not.toMatch(/(^|\s)(@\[\d+px\]:)?(top-2|bottom-2)(\s|$)/);
+    // The same inset as the bottom chip at every width; the play button draws over it where they meet.
+    expect(topChip).toHaveClass('bottom-2', 'left-2.5');
+    expect(topChip?.className).not.toMatch(/(^|\s)(@\[\d+px\]:)?(top-2|bottom-7)(\s|$)/);
+    const playZ = /z-\[(\d+)\]/.exec(link.querySelector('[data-debate-play]')?.className ?? '')?.[1];
+    const chipZ = /z-\[(\d+)\]/.exec(topChip?.className ?? '')?.[1];
+    expect(Number(playZ)).toBeGreaterThan(Number(chipZ));
     expect(bottomChip).toHaveTextContent('Bo');
     expect(bottomChip).toHaveClass('bottom-2', 'left-2.5');
   });

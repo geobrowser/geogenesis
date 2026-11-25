@@ -677,7 +677,7 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     expect(debateCard.querySelector('[data-debate-claim-overlay]')).toHaveTextContent(
       'We should slow down AI development'
     );
-    expect(debateCard.querySelector('[data-speaker-chip="top"]')).toHaveClass('bottom-7');
+    expect(debateCard.querySelector('[data-speaker-chip="top"]')).toHaveClass('bottom-2');
     expect(within(debates).getAllByRole('article')[0].children).toHaveLength(1);
     expect(within(debates).queryByText(/28 votes/)).toBeNull();
 

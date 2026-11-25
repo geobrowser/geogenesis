@@ -70,9 +70,11 @@ export function DebateGalleryCard({
         </span>
       </div>
 
-      {/* Centered Play trigger across the two-speaker seam (matches Genesis debate cards) */}
+      {/* Centered Play trigger across the two-speaker seam (matches Genesis debate cards). Above the
+          speaker chips (z-3, and the stills open no stacking context), so it overlaps the top chip. */}
       <span
         aria-hidden
+        data-debate-play
         className="pointer-events-none absolute top-1/2 left-1/2 z-[4] grid size-11 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-white/95 text-text shadow-[0_6px_20px_rgba(0,0,0,0.28)] transition-transform duration-150 group-hover/media:scale-105"
       >
         <PlayIcon className="ml-0.5 size-4" />
@@ -248,12 +250,9 @@ function SpeakerVideoStill({
       />
       <div
         data-speaker-chip={tone}
-        className={cx(
-          'pointer-events-none absolute right-2.5 left-2.5 z-[3] flex max-w-[calc(100%-20px)] items-center gap-1.5 self-start',
-          // The play button straddles the seam right under the top chip, so the chip rides just above it at
-          // every card width; a long name would otherwise slide under the button.
-          tone === 'top' ? 'bottom-7' : 'bottom-2'
-        )}
+        // Both chips sit the same 8px off their panel's bottom edge. The play button on the seam draws
+        // over the top chip where a long name reaches it, rather than the chip moving up out of its way.
+        className="pointer-events-none absolute right-2.5 bottom-2 left-2.5 z-[3] flex max-w-[calc(100%-20px)] items-center gap-1.5 self-start"
       >
         <span className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-black/60 py-0.5 pr-2.5 pl-1 text-[12px] leading-[16px] text-white backdrop-blur-xs">
           <SpeakerProfileAvatar
