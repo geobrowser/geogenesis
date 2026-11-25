@@ -624,7 +624,12 @@ function RespondersPopover({
           // floating over a row it no longer belongs to.
           collisionPadding={{ top: 52, right: 16, bottom: 16, left: 16 }}
           hideWhenDetached
-          className="z-100 w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
+          // Never taller than the room the padding leaves: on a short phone neither side fits the
+          // 356px list, and Radix keeps it below its trigger, running off the bottom of the screen
+          // (13px at 320x568 in the graph explorer's panel sheet, GEO-3849). As a flex column the
+          // list inside scrolls in what is left. Where the list fits, as it does on every taller
+          // screen, the cap is above its height and nothing changes.
+          className="z-100 flex max-h-(--radix-popover-content-available-height) w-[200px] flex-col overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
         >
           <RespondersPopoverContent
             entityId={entityId}
