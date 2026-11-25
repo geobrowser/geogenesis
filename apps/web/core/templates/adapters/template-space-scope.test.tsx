@@ -1,5 +1,5 @@
 import { ContentIds } from '@geoprotocol/geo-sdk/lite';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -498,7 +498,7 @@ describe('Topic template', () => {
     );
   });
 
-  it('lists claims in Best order, then fills from Top, debate claims and linked claims, never regrouped (GEO-3868)', async () => {
+  it('lists the claims with the most votes first, then the rest in Best order, then Top, debate and linked claims (GEO-3876)', async () => {
     topicCorpus();
     state.bestClaims = [
       { entityId: 'b1', title: 'Best 1, accepted', spaceId: SPACE },
@@ -515,7 +515,7 @@ describe('Topic template', () => {
       ],
     };
     state.taggedInSpace = new Set(['b1', 'b2', 't1', 'd1']);
-    // Top 1 has the most votes and Best 1 is accepted: neither moves either one.
+    // Top 1 has the most votes, then Best 1; the claims with none keep Best order and the fill order.
     const vote = (userId: string, objectId: string, voteType: number) => ({
       userId,
       objectId,
@@ -538,13 +538,87 @@ describe('Topic template', () => {
     await waitFor(() => expect(result.current.data?.claims).toBeDefined());
     const claims = result.current.data!.claims!;
     expect(claims.map(claim => claim.title)).toEqual([
+      'Top 1, most votes',
       'Best 1, accepted',
       'Best 2, disputed',
-      'Top 1, most votes',
       'Debated claim',
       'Claim here',
     ]);
-    expect(claims.map(claim => claim.split.isSplit)).toEqual([false, true, true, true, true]);
+    expect(claims.map(claim => claim.split.totalVotes)).toEqual([6, 2, undefined, undefined, undefined]);
+    expect(claims.map(claim => claim.split.isSplit)).toEqual([true, false, true, true, true]);
+  });
+
+  it('keeps the sections loading past the usual wait until the claim vote counts are in (GEO-3876)', async () => {
+    vi.useFakeTimers();
+    try {
+      topicCorpus();
+      state.corpus = [];
+      state.bestClaims = [{ entityId: 'b1', title: 'Best 1', spaceId: SPACE }];
+      state.taggedInSpace = new Set(['b1']);
+      const { result, rerender } = renderHook(() => useLiveTopicTemplate({ entityId: PAGE, spaceId: SPACE }));
+      await act(async () => {
+        vi.advanceTimersByTime(2000);
+      });
+      // The other sections' wait (1.1 s) is over, but the Claims order needs its counts.
+      expect(result.current.isSectionsLoading).toBe(true);
+
+      state.votes = { byClaim: new Map() };
+      rerender();
+      await act(async () => {
+        vi.advanceTimersByTime(0);
+      });
+      expect(result.current.isSectionsLoading).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('holds the vote order when the counts change for the same claims, and orders a new set afresh (GEO-3876)', async () => {
+    topicCorpus();
+    state.corpus = [];
+    state.bestClaims = [
+      { entityId: 'b1', title: 'Best 1', spaceId: SPACE },
+      { entityId: 'b2', title: 'Best 2', spaceId: SPACE },
+    ];
+    state.taggedInSpace = new Set(['b1', 'b2', 'b3']);
+    const vote = (userId: string, objectId: string) => ({
+      userId,
+      objectId,
+      spaceId: SPACE,
+      voteType: 0,
+      voteKind: CLAIM_STANCE_VOTE_KIND,
+    });
+    const votesFor = (votes: [string, string][]) => ({
+      byClaim: aggregateClaimVotes(activeStanceVotes(votes.map(([u, c]) => vote(u, c))), null),
+    });
+    state.votes = votesFor([['u1', 'b2']]);
+    const { result, rerender } = renderHook(() => useLiveTopicTemplate({ entityId: PAGE, spaceId: SPACE }));
+    await waitFor(() => expect(result.current.data?.claims?.map(c => c.title)).toEqual(['Best 2', 'Best 1']));
+
+    // The viewer votes and Best 1 pulls ahead: the count changes, the rows stay put.
+    state.votes = votesFor([
+      ['u1', 'b2'],
+      ['u2', 'b1'],
+      ['u3', 'b1'],
+    ]);
+    rerender();
+    expect(result.current.data!.claims!.map(c => [c.title, c.split.totalVotes])).toEqual([
+      ['Best 2', 1],
+      ['Best 1', 2],
+    ]);
+
+    // A new claim joins the list: the new set is ordered by its counts.
+    state.bestClaims = [...state.bestClaims, { entityId: 'b3', title: 'Best 3', spaceId: SPACE }];
+    state.votes = votesFor([
+      ['u1', 'b2'],
+      ['u2', 'b1'],
+      ['u3', 'b1'],
+      ['u1', 'b3'],
+      ['u2', 'b3'],
+      ['u3', 'b3'],
+    ]);
+    rerender();
+    await waitFor(() => expect(result.current.data?.claims?.map(c => c.title)).toEqual(['Best 3', 'Best 1', 'Best 2']));
   });
 
   it('shows the first 40 Best claims alone when Best has 40 or more', async () => {
