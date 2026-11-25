@@ -19,6 +19,14 @@ import { entityTemplatePagesOnScreenAtom } from '~/atoms';
 export const TEMPLATE_CARD_SURFACE =
   'rounded-xl border border-black/[0.025] bg-white shadow-[0_10px_36px_-6px_rgba(0,0,0,0.065),0_2px_10px_-2px_rgba(0,0,0,0.03)]';
 
+/**
+ * The surface of a template claim list (Topic, Source, Episode, Post, a Claim's sub-claims). Wide
+ * (760px+ template) it is the card; phones drop the card for hairlines above and below, so the rows
+ * use the page's full width (Preston, GEO-3857). Rows pad themselves only on the wide card.
+ */
+export const TEMPLATE_CLAIM_LIST_SURFACE =
+  'border-y border-divider bg-white @[760px]:rounded-xl @[760px]:border @[760px]:border-black/[0.025] @[760px]:shadow-[0_10px_36px_-6px_rgba(0,0,0,0.065),0_2px_10px_-2px_rgba(0,0,0,0.03)]';
+
 export const TEMPLATE_INTERACTIVE_CARD_SURFACE =
   'rounded-xl border border-black/[0.025] bg-white shadow-[0_10px_36px_-6px_rgba(0,0,0,0.065),0_2px_10px_-2px_rgba(0,0,0,0.03)] transition-all duration-200 hover:-translate-y-[1.5px] hover:border-black/[0.05] hover:shadow-[0_18px_44px_-8px_rgba(0,0,0,0.095),0_4px_14px_-2px_rgba(0,0,0,0.04)]';
 

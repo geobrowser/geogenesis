@@ -344,9 +344,18 @@ describe('ClaimExplorer row layout (GEO-3845)', () => {
 
     const title = screen.getByText('A judgment claim');
     const agree = screen.getByRole('button', { name: 'Agree' });
-    // A size up from 16px title and 13.5px result (Yaniv, GEO-3857).
-    expect(title).toHaveClass('text-[17.5px]', 'leading-[24px]');
-    expect(tag.parentElement).toHaveClass('text-[14.5px]');
+    // Bigger title and numbers than the old 16px title and 13.5px result (Yaniv, Preston, GEO-3857).
+    expect(title).toHaveClass('text-[19px]', 'leading-[26px]');
+    expect(tag.parentElement).toHaveClass('text-[15px]');
+    expect(screen.getAllByText('71%').find(node => node.tagName === 'STRONG')).toHaveClass('text-[17px]');
+    // The rank sits on the title's first baseline, and the row pads itself only on the wide card.
+    const row = title.closest('div.py-4');
+    expect(row).toHaveClass('items-baseline', '@[760px]:px-5');
+    expect(row).not.toHaveClass('px-5');
+    // Phones lose the card for hairlines; wide lists keep it.
+    const surface = screen.getByRole('region', { name: 'Claims' }).querySelector('.overflow-hidden');
+    expect(surface).toHaveClass('border-y', 'border-divider', '@[760px]:rounded-xl');
+    expect(surface).not.toHaveClass('rounded-xl');
     // The title comes first, then the buttons, then the result group.
     expect(title.compareDocumentPosition(agree) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(agree.compareDocumentPosition(tag) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
