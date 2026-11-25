@@ -213,6 +213,29 @@ describe('entities without a picture', () => {
     }
   });
 
+  it.each([
+    [false, false, 'w-[184px] px-4 py-[14px]', 'gap-[10px]'],
+    [false, true, 'w-[240px] px-5 py-[18px]', 'gap-[10px]'],
+    [true, false, 'w-[128px] px-3 py-[10px]', 'gap-[6px]'],
+    [true, true, 'w-[176px] p-[14px]', 'gap-[6px]'],
+  ] as const)(
+    "sizes a name card in the prototype's Geo geometry (phone %s, centre %s)",
+    (phone, isCentre, box, gap) => {
+      const { container } = render(
+        <NodeCard node={person()} hop={isCentre ? 0 : 1} isCentre={isCentre} phone={phone} claimSpaceId={null} />
+      );
+      const named = container.querySelector('[data-name-card]')!;
+      expect(named.className).toContain(box);
+      expect(named.className).toContain(gap);
+      // An event shares the box; a news card keeps the smaller source-like one.
+      const event = render(
+        <NodeCard node={node('event')} hop={1} isCentre={false} phone={false} claimSpaceId={null} />
+      );
+      expect(event.container.querySelector('[data-label]')!.className).toContain('w-[184px]');
+      expect(card(node('story'), 1).querySelector('[data-label]')!.className).toContain('w-[168px]');
+    }
+  );
+
   it('heads a typed name card with its type, like other cards', () => {
     expect(visibleText(card(person(), 1))).toEqual(['Person', 'Talia Levin']);
   });
