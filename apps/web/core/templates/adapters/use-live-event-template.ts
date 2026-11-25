@@ -8,7 +8,6 @@ import { claimResponseTargetKey } from '~/core/responses/claim-response-summarie
 import { useClaimResponseSummaryBatch } from '~/core/responses/use-claim-response-summaries';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import { Entities } from '~/core/utils/entity';
-import { normId } from '~/core/utils/norm-id';
 import { resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -32,6 +31,7 @@ import {
 import { sourcesIngestionLink } from './source-ingestion-links';
 import { useHydratedSourceCards } from './use-hydrated-source-cards';
 import { useLiveEntityActions } from './use-live-entity-actions';
+import { spacesWhere, useEntityInScope, useTemplateSpaceScope } from './use-template-space-scope';
 import { useEntityWithViewerSources } from './use-viewer-sources';
 
 /**
@@ -51,12 +51,15 @@ export function useLiveEventTemplate({
 }): TemplateDataSource<EventTemplateModel> {
   const { entity, isLoading } = useQueryEntity({ id: entityId, spaceId });
   const { space } = useSpace(spaceId);
+  // Lists read the canonical spaces, not only the route space (`useTemplateSpaceScope`).
+  const { spaceIds } = useTemplateSpaceScope(spaceId);
+  const scopedEntity = useEntityInScope({ entity, entityId, spaceId, spaceIds });
 
   const relatedClaimsWhere = React.useMemo(
     () => ({
       types: [{ id: { equals: TEMPLATE_ONTOLOGY.CLAIM_TYPE_ID } }],
-      // Only claims in the viewed space.
-      spaces: [{ equals: normId(spaceId) }],
+      // Claims living in a scope space.
+      spaces: spacesWhere(spaceIds),
       relations: [
         {
           typeOf: { id: { equals: TEMPLATE_ONTOLOGY.RELATED_ENTITIES_PROPERTY_ID } },
@@ -64,7 +67,7 @@ export function useLiveEventTemplate({
         },
       ],
     }),
-    [entityId, spaceId]
+    [entityId, spaceIds]
   );
 
   const { entities: linkedClaims } = useQueryEntities({ where: relatedClaimsWhere, first: 12 });
@@ -87,9 +90,9 @@ export function useLiveEventTemplate({
     ownerKind: 'event',
   });
 
-  // Page-space Sources plus the viewer's own personal-space ones, so a non-member who added a source
+  // Scope-space Sources plus the viewer's own personal-space ones, so a non-member who added a source
   // sees it (GEO-3819).
-  const sourcesEntity = useEntityWithViewerSources({ entity, entityId, spaceId });
+  const sourcesEntity = useEntityWithViewerSources({ entity: scopedEntity, entityId, spaceId });
   const sourceSeeds = React.useMemo(
     () =>
       readEntityRelations(sourcesEntity, TEMPLATE_ONTOLOGY.SOURCES_PROPERTY_ID).map(rel => ({
@@ -110,8 +113,8 @@ export function useLiveEventTemplate({
     const title = entity.name ?? entity.id;
     const spaceLabel = space?.entity?.name?.trim() || 'Everyone';
     const when = formatOntologyDate(readEntityTextValue(entity, TEMPLATE_ONTOLOGY.EVENT_DATE_PROPERTY_ID)) ?? '';
-    const topics = readEntityRelations(entity, TEMPLATE_ONTOLOGY.TOPICS_PROPERTY_ID);
-    const relatedClaimsRels = readEntityRelations(entity, TEMPLATE_ONTOLOGY.RELATED_CLAIMS_PROPERTY_ID);
+    const topics = readEntityRelations(sourcesEntity, TEMPLATE_ONTOLOGY.TOPICS_PROPERTY_ID);
+    const relatedClaimsRels = readEntityRelations(sourcesEntity, TEMPLATE_ONTOLOGY.RELATED_CLAIMS_PROPERTY_ID);
 
     const firstTopic = topics[0];
     const breadcrumbs: BreadcrumbItem[] | undefined = firstTopic
@@ -218,7 +221,16 @@ export function useLiveEventTemplate({
       claims: Array.from(claimsById.values()),
       sections,
     };
-  }, [entity, hydratedSourceCards, linkedClaims, responseBatch.data, serverCoverUrl, space?.entity?.name, spaceId]);
+  }, [
+    entity,
+    hydratedSourceCards,
+    linkedClaims,
+    responseBatch.data,
+    serverCoverUrl,
+    sourcesEntity,
+    space?.entity?.name,
+    spaceId,
+  ]);
 
   return {
     data: model,

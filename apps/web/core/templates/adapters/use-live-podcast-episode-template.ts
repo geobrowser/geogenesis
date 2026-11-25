@@ -34,6 +34,7 @@ import {
 import { formatPodcastDuration } from '../views/podcast-shared';
 import { useLiveEntityActions } from './use-live-entity-actions';
 import { useTemplateClaimVoteCounts } from './use-template-claim-vote-counts';
+import { useEntityInScope, useTemplateSpaceScope } from './use-template-space-scope';
 import { useEntityWithViewerSources } from './use-viewer-sources';
 
 function fallbackPlatformUrl(name: string): string | null {
@@ -103,7 +104,10 @@ export function useLivePodcastEpisodeTemplate({
   );
   // With the viewer's own personal-space claims and quotes, so a non-editor who added one sees it
   // (GEO-3836).
-  const viewerLinksEntity = useEntityWithViewerSources({ entity, entityId, spaceId });
+  // Read from the canonical spaces (`useTemplateSpaceScope`), not only the route space.
+  const { spaceIds } = useTemplateSpaceScope(spaceId);
+  const scopedEntity = useEntityInScope({ entity, entityId, spaceId, spaceIds });
+  const viewerLinksEntity = useEntityWithViewerSources({ entity: scopedEntity, entityId, spaceId });
   const claimRelations = React.useMemo(
     () =>
       readEntityRelations(viewerLinksEntity, [
@@ -262,7 +266,7 @@ export function useLivePodcastEpisodeTemplate({
     // Topics (deduplicated by normalized name, sorted alphabetically)
     const seenTopicNames = new Set<string>();
     const topics: PodcastTopicChipModel[] = [];
-    for (const rel of readEntityRelations(entity, TEMPLATE_ONTOLOGY.TOPICS_PROPERTY_ID)) {
+    for (const rel of readEntityRelations(viewerLinksEntity, TEMPLATE_ONTOLOGY.TOPICS_PROPERTY_ID)) {
       const label = rel.toEntity.name?.trim();
       if (!label) continue;
       const key = label.toLowerCase();
@@ -431,6 +435,7 @@ export function useLivePodcastEpisodeTemplate({
     quoteRelations,
     voteCounts,
     serverCoverUrl,
+    viewerLinksEntity,
     space?.entity?.name,
     spaceId,
   ]);

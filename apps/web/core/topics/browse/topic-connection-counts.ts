@@ -40,9 +40,9 @@ export const EMPTY_TOPIC_CONNECTION_COUNTS: TopicConnectionCounts = { claims: 0,
  * on testnet carry at most 7 topics, so a claim's whole Topics tab is normally a single request.
  * Five topics measured ~0.75s against testnet, against five round trips for the same work.
  *
- * `scoped` adds a space clause for callers that show one space's content, such as the topic
- * template's header, which lists only what the viewed space published: the entity must be in the
- * space and its Topics relation published there.
+ * `scoped` adds a space clause for callers that show a set of spaces' content, such as the topic
+ * template's header, which lists what the canonical spaces published: the entity must be in one of
+ * the spaces and its Topics relation published in one of them.
  */
 function buildCountsSource(topicCount: number, scoped: boolean): string {
   const declarations = [
@@ -148,19 +148,21 @@ export function topicCountBatches(topicIds: readonly string[]): string[][] {
 
 /**
  * One batch of `topicCountBatches`, answered. Shared by the hook and the server's seed.
- * With `spaceId`, counts only entities in that space whose Topics relation that space published.
+ * With `spaceIds`, counts only entities in one of those spaces whose Topics relation one of them
+ * published. All spaces go in one request.
  */
-export function fetchTopicConnectionCountsBatch(ids: string[], signal?: AbortSignal, spaceId?: string) {
+export function fetchTopicConnectionCountsBatch(ids: string[], signal?: AbortSignal, spaceIds?: readonly string[]) {
+  const scoped = spaceIds !== undefined && spaceIds.length > 0;
   return Effect.runPromise(
     graphql({
-      query: topicConnectionCountsDocument(ids.length, Boolean(spaceId)),
+      query: topicConnectionCountsDocument(ids.length, scoped),
       decoder: (response: CountsResponse) => decodeTopicConnectionCounts(response, ids),
       variables: {
         topicsPropertyId: ID.uuidToHex(TOPICS_PROPERTY_ID),
         claimTypeIds: [ID.uuidToHex(CLAIM_TYPE_ID)],
         newsTypeIds: [ID.uuidToHex(NEWS_STORY_TYPE_ID)],
         debateTypeIds: [ID.uuidToHex(DEBATE_TYPE_ID)],
-        ...(spaceId ? { spaceIds: [ID.uuidToHex(spaceId)] } : {}),
+        ...(scoped ? { spaceIds: spaceIds.map(id => ID.uuidToHex(id)) } : {}),
         ...Object.fromEntries(ids.map((id, index) => [`topic${index}`, ID.uuidToHex(id)])),
       },
       signal,
@@ -168,7 +170,7 @@ export function fetchTopicConnectionCountsBatch(ids: string[], signal?: AbortSig
   );
 }
 
-export const topicConnectionCountsQueryKey = (ids: string[], spaceId?: string) =>
-  spaceId
-    ? (['topic', 'connection-counts', ids, normId(spaceId)] as const)
+export const topicConnectionCountsQueryKey = (ids: string[], spaceIds?: readonly string[]) =>
+  spaceIds && spaceIds.length > 0
+    ? (['topic', 'connection-counts', ids, [...new Set(spaceIds.map(normId))].sort().join(',')] as const)
     : (['topic', 'connection-counts', ids] as const);

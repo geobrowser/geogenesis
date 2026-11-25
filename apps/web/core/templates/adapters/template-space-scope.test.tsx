@@ -19,18 +19,27 @@ import { useLivePostTemplate } from './use-live-post-template';
 import { useLiveSourceTemplate } from './use-live-source-template';
 import { useLiveTopicTemplate } from './use-live-topic-template';
 
-// Template lists hold only the viewed space's items. The store runs the real local `where`
-// matcher, so a query missing its space clause lists the other space's entities.
+// Template lists hold the canonical spaces' items (`useTemplateSpaceScope`): the route space plus the
+// other canonical spaces, never a space outside them. The store runs the real local `where` matcher,
+// so a query missing its space clause lists the stray space's entities too.
 
 const SPACE = '89bd89bf28ff8a0963faf92a8c905e20';
+/** Another canonical space. */
 const OTHER = 'b5a31f8182b042437ede0f84ee02f104';
+/** A space outside the canonical set: nothing from it may show. */
+const STRAY = 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
 const VIEWER = 'dddddddddddddddddddddddddddddddd';
 const PAGE = '4ed3162278994f29bde7a6f7cf60e28e';
 /** `SPACE` as a dashed, uppercase UUID: the store's space ids are dashless lowercase. */
 const SPACE_DASHED = '89BD89BF-28FF-8A09-63FA-F92A8C905E20';
 
 const state = vi.hoisted(() => ({
+  /** What `useTopicSpaceScope` answers; undefined while it resolves. */
+  scope: undefined as string[] | undefined,
   page: null as Entity | null,
+  /** Every `useQuery` call's options, so a test can run a feed's `queryFn`. */
+  queries: [] as { queryKey: unknown[]; queryFn?: (ctx: { signal?: AbortSignal }) => Promise<unknown> }[],
+  taggedReads: [] as { spaceIds: string[] }[],
   corpus: [] as Entity[],
   viewerSpaceId: null as string | null,
   /** `relationSpaceId` is where the source's Topics link was published; defaults to `spaceId`. */
@@ -70,9 +79,15 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('~/core/sync/use-store', () => ({
   useValues: () => [],
-  useQueryEntity: (args: { id?: string; spaceId?: string }) => {
-    state.entityReads.push(args);
-    return { entity: state.page, isLoading: false };
+  // Like the store: a read in a space keeps only that space's relations; an unscoped read keeps all.
+  useQueryEntity: (args: { id?: string; spaceId?: string; enabled?: boolean }) => {
+    state.entityReads.push({ id: args.id, spaceId: args.spaceId });
+    if (args.enabled === false || !state.page) return { entity: null, isLoading: false };
+    const norm = (id: string) => id.replace(/-/g, '').toLowerCase();
+    const relations = args.spaceId
+      ? state.page.relations.filter(relation => norm(relation.spaceId) === norm(args.spaceId!))
+      : state.page.relations;
+    return { entity: { ...state.page, relations }, isLoading: false };
   },
   useQueryEntities: ({
     where,
@@ -91,23 +106,27 @@ vi.mock('~/core/sync/use-store', () => ({
 
 vi.mock('@tanstack/react-query', async importOriginal => ({
   ...(await importOriginal<typeof import('@tanstack/react-query')>()),
-  useQuery: ({ queryKey }: { queryKey: unknown[] }) => ({
-    data:
-      queryKey[1] === 'multi-space-votes'
-        ? state.votes
-        : queryKey[1] === 'tweet-authors'
-          ? state.tweetAuthors
-          : queryKey[1] === 'top-claims'
-            ? state.feedClaims
-            : queryKey[1] === 'best-claims'
-              ? state.bestClaims
-              : queryKey[1] === 'best-debates'
-                ? state.bestDebates
-                : queryKey[1] === 'best-news'
-                  ? state.feedNews
-                  : undefined,
-    isLoading: false,
-  }),
+  useQuery: (options: { queryKey: unknown[]; queryFn?: (ctx: { signal?: AbortSignal }) => Promise<unknown> }) => {
+    state.queries.push(options);
+    const { queryKey } = options;
+    return {
+      data:
+        queryKey[1] === 'multi-space-votes'
+          ? state.votes
+          : queryKey[1] === 'tweet-authors'
+            ? state.tweetAuthors
+            : queryKey[1] === 'top-claims'
+              ? state.feedClaims
+              : queryKey[1] === 'best-claims'
+                ? state.bestClaims
+                : queryKey[1] === 'best-debates'
+                  ? state.bestDebates
+                  : queryKey[1] === 'best-news'
+                    ? state.feedNews
+                    : undefined,
+      isLoading: false,
+    };
+  },
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),
   useInfiniteQuery: (options: (typeof state.infiniteQueries)[number]) => {
     state.infiniteQueries.push(options);
@@ -123,16 +142,17 @@ vi.mock('~/core/io/graphql-client', () => ({
 }));
 
 vi.mock('~/core/hooks/use-space', () => ({ useSpace: () => ({ space: null }) }));
+vi.mock('~/core/topics/use-topic-space-scope', () => ({ useTopicSpaceScope: () => state.scope }));
 vi.mock('~/core/hooks/use-personal-space-id', () => ({ usePersonalSpaceId: () => ({ personalSpaceId: null }) }));
 vi.mock('~/core/responses/use-claim-response-summaries', () => ({
   useClaimResponseSummaryBatch: () => ({ data: undefined }),
 }));
 vi.mock('./use-live-entity-actions', () => ({ useLiveEntityActions: () => ({}) }));
 vi.mock('./use-topic-tagged-in-space', () => ({
-  useTopicTaggedInSpace: ({ entityIds }: { entityIds: string[] }) => ({
-    tagged: state.taggedInSpace,
-    isLoading: entityIds.length > 0 && state.taggedInSpace === null,
-  }),
+  useTopicTaggedInSpace: ({ entityIds, spaceIds }: { entityIds: string[]; spaceIds: string[] }) => {
+    state.taggedReads.push({ spaceIds });
+    return { tagged: state.taggedInSpace, isLoading: entityIds.length > 0 && state.taggedInSpace === null };
+  },
 }));
 vi.mock('./use-viewer-sources', () => ({
   useEntityWithViewerSources: ({ entity }: { entity: Entity | null }) => entity,
@@ -219,6 +239,9 @@ function pageEntity(typeId: string, relations: Relation[] = []): Entity {
 }
 
 beforeEach(() => {
+  state.scope = [OTHER, SPACE];
+  state.queries = [];
+  state.taggedReads = [];
   state.page = null;
   state.corpus = [];
   state.viewerSpaceId = null;
@@ -272,13 +295,15 @@ beforeEach(() => {
 });
 
 describe('Claim template', () => {
-  it('lists sub-claims and quotes from the viewed space only', () => {
+  it('lists sub-claims and quotes from every canonical space, never a stray one', () => {
     state.page = pageEntity(CLAIM_TYPE_ID);
     state.corpus = [
       linked('a1', 'Supports, here', SPACE, [CLAIM_TYPE_ID], TEMPLATE_ONTOLOGY.CLAIM_SUPPORTS_PROPERTY_ID),
       linked('a2', 'Supports, elsewhere', OTHER, [CLAIM_TYPE_ID], TEMPLATE_ONTOLOGY.CLAIM_SUPPORTS_PROPERTY_ID),
+      linked('a3', 'Supports, stray', STRAY, [CLAIM_TYPE_ID], TEMPLATE_ONTOLOGY.CLAIM_SUPPORTS_PROPERTY_ID),
       linked('b1', 'Opposes, here', SPACE, [CLAIM_TYPE_ID], TEMPLATE_ONTOLOGY.CLAIM_OPPOSES_PROPERTY_ID),
       linked('b2', 'Opposes, elsewhere', OTHER, [CLAIM_TYPE_ID], TEMPLATE_ONTOLOGY.CLAIM_OPPOSES_PROPERTY_ID),
+      linked('b3', 'Opposes, stray', STRAY, [CLAIM_TYPE_ID], TEMPLATE_ONTOLOGY.CLAIM_OPPOSES_PROPERTY_ID),
       linked(
         'q1',
         'Quote, here',
@@ -293,14 +318,68 @@ describe('Claim template', () => {
         [TEMPLATE_ONTOLOGY.QUOTE_TYPE_ID],
         TEMPLATE_ONTOLOGY.CLAIM_SUPPORTS_PROPERTY_ID
       ),
+      linked(
+        'q3',
+        'Quote, stray',
+        STRAY,
+        [TEMPLATE_ONTOLOGY.QUOTE_TYPE_ID],
+        TEMPLATE_ONTOLOGY.CLAIM_SUPPORTS_PROPERTY_ID
+      ),
     ];
 
     const { result } = renderHook(() => useLiveClaimTemplate({ entityId: PAGE, spaceId: SPACE }));
     const model = result.current.data!;
 
-    expect(model.subClaims?.map(claim => claim.title).sort()).toEqual(['Opposes, here', 'Supports, here']);
+    expect(model.subClaims?.map(claim => claim.title).sort()).toEqual([
+      'Opposes, elsewhere',
+      'Opposes, here',
+      'Supports, elsewhere',
+      'Supports, here',
+    ]);
+    // A row in another canonical space links to that space.
+    expect(model.subClaims?.find(claim => claim.title === 'Supports, elsewhere')?.href).toContain(OTHER);
     const quotes = model.sections.find(section => section.id === 'quotes');
-    expect(quotes?.items.map(item => item.title)).toEqual(['Quote, here']);
+    expect(quotes?.items.map(item => item.title)).toEqual(['Quote, here', 'Quote, elsewhere']);
+  });
+
+  it('lists the claim’s own links from every canonical space, the route space’s first', () => {
+    state.page = pageEntity(CLAIM_TYPE_ID, [
+      relation(TEMPLATE_ONTOLOGY.SUPPORTED_BY_PROPERTY_ID, 's1', SPACE, 'Supported here'),
+      relation(TEMPLATE_ONTOLOGY.SUPPORTED_BY_PROPERTY_ID, 's2', OTHER, 'Supported elsewhere'),
+      relation(TEMPLATE_ONTOLOGY.SUPPORTED_BY_PROPERTY_ID, 's3', STRAY, 'Supported stray'),
+      relation(TEMPLATE_ONTOLOGY.QUOTES_THAT_OPPOSE_CLAIMS_PROPERTY_ID, 'o1', OTHER, 'Opposing quote elsewhere'),
+      relation(TEMPLATE_ONTOLOGY.QUOTES_THAT_OPPOSE_CLAIMS_PROPERTY_ID, 'o2', STRAY, 'Opposing quote stray'),
+      relation(TOPICS_PROPERTY_ID, 'topic-here', SPACE),
+      relation(TOPICS_PROPERTY_ID, 'topic-elsewhere', OTHER),
+      relation(TOPICS_PROPERTY_ID, 'topic-stray', STRAY),
+    ]);
+
+    const { result } = renderHook(() => useLiveClaimTemplate({ entityId: PAGE, spaceId: SPACE }));
+    const model = result.current.data!;
+
+    expect(model.subClaims?.map(claim => claim.title)).toEqual(['Supported here', 'Supported elsewhere']);
+    expect(model.sections.find(section => section.id === 'opposing-quotes')?.items.map(item => item.title)).toEqual([
+      'Opposing quote elsewhere',
+    ]);
+    expect(mocks.useClaimRecord).toHaveBeenLastCalledWith(
+      expect.objectContaining({ topicIds: ['topic-here', 'topic-elsewhere'] })
+    );
+  });
+
+  it('lists the route space alone while the canonical spaces are still resolving', () => {
+    state.scope = undefined;
+    state.page = pageEntity(CLAIM_TYPE_ID, [
+      relation(TEMPLATE_ONTOLOGY.SUPPORTED_BY_PROPERTY_ID, 's2', OTHER, 'Supported elsewhere'),
+    ]);
+    state.corpus = [
+      linked('a1', 'Supports, here', SPACE, [CLAIM_TYPE_ID], TEMPLATE_ONTOLOGY.CLAIM_SUPPORTS_PROPERTY_ID),
+      linked('a2', 'Supports, elsewhere', OTHER, [CLAIM_TYPE_ID], TEMPLATE_ONTOLOGY.CLAIM_SUPPORTS_PROPERTY_ID),
+    ];
+
+    const { result } = renderHook(() => useLiveClaimTemplate({ entityId: PAGE, spaceId: SPACE }));
+
+    expect(result.current.data!.subClaims?.map(claim => claim.title)).toEqual(['Supports, here']);
+    expect(mocks.useClaimRecord).toHaveBeenLastCalledWith(expect.objectContaining({ spaceIds: [SPACE] }));
   });
 
   it('splits supporting and opposing quotes into their own sections', () => {
@@ -343,12 +422,16 @@ describe('Claim template', () => {
     expect(result.current.data!.sections.some(section => section.id === 'opposing-quotes')).toBe(false);
   });
 
-  it('reads more claims in the topic and debates in the viewed space alone', () => {
+  it('reads more claims in the topic and debates in every canonical space, the route space first', () => {
     state.page = pageEntity(CLAIM_TYPE_ID, [relation(TOPICS_PROPERTY_ID, 'topic', SPACE)]);
     renderHook(() => useLiveClaimTemplate({ entityId: PAGE, spaceId: SPACE }));
 
-    // No `spaceIds`: the record then scopes to `spaceId` only.
-    expect(mocks.useClaimRecord).toHaveBeenCalledWith({ claimId: PAGE, spaceId: SPACE, topicIds: ['topic'] });
+    expect(mocks.useClaimRecord).toHaveBeenCalledWith({
+      claimId: PAGE,
+      spaceId: SPACE,
+      spaceIds: [SPACE, OTHER],
+      topicIds: ['topic'],
+    });
   });
 });
 
@@ -376,21 +459,22 @@ describe('A route space id written differently', () => {
 });
 
 describe('Event template', () => {
-  it('lists related claims from the viewed space only', () => {
+  it('lists related claims from every canonical space, never a stray one', () => {
     state.page = pageEntity(ContentIds.NEWS_EVENT_TYPE);
     state.corpus = [
       linked('c1', 'Claim here', SPACE, [CLAIM_TYPE_ID], TEMPLATE_ONTOLOGY.RELATED_ENTITIES_PROPERTY_ID),
       linked('c2', 'Claim elsewhere', OTHER, [CLAIM_TYPE_ID], TEMPLATE_ONTOLOGY.RELATED_ENTITIES_PROPERTY_ID),
+      linked('c3', 'Claim stray', STRAY, [CLAIM_TYPE_ID], TEMPLATE_ONTOLOGY.RELATED_ENTITIES_PROPERTY_ID),
     ];
 
     const { result } = renderHook(() => useLiveEventTemplate({ entityId: PAGE, spaceId: SPACE }));
 
-    expect(result.current.data!.claims.map(claim => claim.title)).toEqual(['Claim here']);
+    expect(result.current.data!.claims.map(claim => claim.title)).toEqual(['Claim here', 'Claim elsewhere']);
   });
 });
 
 describe('Source template', () => {
-  it('lists citing claims, quotes and stories from the viewed space only', () => {
+  it('lists citing claims, quotes and stories from every canonical space, never a stray one', () => {
     state.page = pageEntity(TEMPLATE_ONTOLOGY.ARTICLE_TYPE_ID);
     const sources = TEMPLATE_ONTOLOGY.SOURCES_PROPERTY_ID;
     state.corpus = [
@@ -400,28 +484,34 @@ describe('Source template', () => {
       linked('q2', 'Quote elsewhere', OTHER, [TEMPLATE_ONTOLOGY.QUOTE_TYPE_ID], sources),
       linked('s1', 'Story here', SPACE, [TEMPLATE_ONTOLOGY.NEWS_STORY_TYPE_ID], sources),
       linked('s2', 'Story elsewhere', OTHER, [TEMPLATE_ONTOLOGY.NEWS_STORY_TYPE_ID], sources),
+      linked('c3', 'Claim stray', STRAY, [CLAIM_TYPE_ID], sources),
+      linked('q3', 'Quote stray', STRAY, [TEMPLATE_ONTOLOGY.QUOTE_TYPE_ID], sources),
+      linked('s3', 'Story stray', STRAY, [TEMPLATE_ONTOLOGY.NEWS_STORY_TYPE_ID], sources),
     ];
 
     const { result } = renderHook(() => useLiveSourceTemplate({ entityId: PAGE, spaceId: SPACE }));
     const model = result.current.data!;
 
-    expect(model.supportedClaims.map(claim => claim.title)).toEqual(['Claim here']);
-    expect(model.quotes?.map(quote => quote.text)).toEqual(['Quote here']);
-    expect(model.sections.find(section => section.id === 'cited-by')?.items.map(item => item.title)).toEqual([
-      'Story here',
-    ]);
+    expect(model.supportedClaims.map(claim => claim.title).sort()).toEqual(['Claim elsewhere', 'Claim here']);
+    expect(model.quotes?.map(quote => quote.text).sort()).toEqual(['Quote elsewhere', 'Quote here']);
+    expect(
+      model.sections
+        .find(section => section.id === 'cited-by')
+        ?.items.map(item => item.title)
+        .sort()
+    ).toEqual(['Story elsewhere', 'Story here']);
   });
 });
 
 describe('Podcast show template', () => {
-  it('asks for episodes in the viewed space only', async () => {
+  it('asks for episodes in every canonical space, in one request', async () => {
     state.page = pageEntity(TEMPLATE_ONTOLOGY.PODCAST_TYPE_ID);
     renderHook(() => useLivePodcastShowTemplate({ entityId: PAGE, spaceId: SPACE }));
 
     const episodes = state.infiniteQueries.at(-1)!;
     expect(episodes.queryKey).toContain(SPACE);
     await episodes.queryFn({ pageParam: null });
-    expect(state.graphqlVariables.at(-1)).toMatchObject({ showId: PAGE, spaceIds: [SPACE] });
+    expect(state.graphqlVariables.at(-1)).toMatchObject({ showId: PAGE, spaceIds: [SPACE, OTHER] });
   });
 });
 
@@ -448,35 +538,82 @@ describe('Topic template', () => {
       linked('c2', 'Claim elsewhere', OTHER, [CLAIM_TYPE_ID], TOPICS_PROPERTY_ID),
       linked('e1', 'Event here', SPACE, [TEMPLATE_ONTOLOGY.NEWS_EVENT_TYPE_ID], TOPICS_PROPERTY_ID),
       linked('e2', 'Event elsewhere', OTHER, [TEMPLATE_ONTOLOGY.NEWS_EVENT_TYPE_ID], TOPICS_PROPERTY_ID),
-      // In the viewed space, but tagged with this topic only from another space.
+      linked('c4', 'Claim stray', STRAY, [CLAIM_TYPE_ID], TOPICS_PROPERTY_ID),
+      linked('e4', 'Event stray', STRAY, [TEMPLATE_ONTOLOGY.NEWS_EVENT_TYPE_ID], TOPICS_PROPERTY_ID),
+      // In the viewed space, but tagged with this topic only from a space outside the canonical set.
       {
-        ...linked('c3', 'Claim tagged elsewhere', SPACE, [CLAIM_TYPE_ID], TOPICS_PROPERTY_ID),
-        relations: [relation(TOPICS_PROPERTY_ID, PAGE, OTHER)],
+        ...linked('c3', 'Claim tagged in a stray space', SPACE, [CLAIM_TYPE_ID], TOPICS_PROPERTY_ID),
+        relations: [relation(TOPICS_PROPERTY_ID, PAGE, STRAY)],
       },
       {
-        ...linked('e3', 'Event tagged elsewhere', SPACE, [TEMPLATE_ONTOLOGY.NEWS_EVENT_TYPE_ID], TOPICS_PROPERTY_ID),
-        relations: [relation(TOPICS_PROPERTY_ID, PAGE, OTHER)],
+        ...linked(
+          'e3',
+          'Event tagged in a stray space',
+          SPACE,
+          [TEMPLATE_ONTOLOGY.NEWS_EVENT_TYPE_ID],
+          TOPICS_PROPERTY_ID
+        ),
+        relations: [relation(TOPICS_PROPERTY_ID, PAGE, STRAY)],
       },
     ];
     state.coverage = [
       { entityId: 'r1', spaceId: SPACE, title: 'Source here' },
       { entityId: 'r2', spaceId: OTHER, title: 'Source elsewhere' },
       { entityId: 'r3', spaceId: VIEWER, title: 'Source the viewer added' },
-      // In the viewed space, but tagged with this topic only in another space.
-      { entityId: 'r4', spaceId: SPACE, relationSpaceId: OTHER, title: 'Source tagged elsewhere' },
+      { entityId: 'r5', spaceId: STRAY, title: 'Source stray' },
+      // In the viewed space, but tagged with this topic only in a space outside the canonical set.
+      { entityId: 'r4', spaceId: SPACE, relationSpaceId: STRAY, title: 'Source tagged in a stray space' },
     ];
   }
 
-  it('lists claims, timeline items and sources from the viewed space only', async () => {
+  it('lists claims, timeline items and sources from every canonical space, never a stray one', async () => {
     topicCorpus();
     const { result } = renderHook(() => useLiveTopicTemplate({ entityId: PAGE, spaceId: SPACE }));
 
     await waitFor(() => expect(result.current.data?.claims).toBeDefined());
     const model = result.current.data!;
-    expect(model.claims?.map(claim => claim.title)).toEqual(['Claim here']);
-    expect(model.timelineHighlights?.map(item => item.title)).toEqual(['Event here']);
-    expect(model.sections?.[0]?.items.map(item => item.title)).toEqual(['Source here']);
-    expect(mocks.useTopicConnectionCounts).toHaveBeenCalledWith([PAGE], { spaceId: SPACE });
+    expect(model.claims?.map(claim => claim.title)).toEqual(['Claim here', 'Claim elsewhere']);
+    // Each row links to the space it lives in.
+    expect(model.claims?.[1]?.href).toContain(OTHER);
+    expect(model.timelineHighlights?.map(item => item.title)).toEqual(['Event here', 'Event elsewhere']);
+    expect(model.sections?.[0]?.items.map(item => item.title)).toEqual(['Source here', 'Source elsewhere']);
+    expect(mocks.useTopicConnectionCounts).toHaveBeenCalledWith([PAGE], { spaceIds: [SPACE, OTHER] });
+  });
+
+  it('asks the topic feed for every canonical space in one request, and keeps what any of them tagged', async () => {
+    topicCorpus();
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ items: [] }) }));
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      renderHook(() => useLiveTopicTemplate({ entityId: PAGE, spaceId: SPACE }));
+      const best = state.queries.find(query => query.queryKey[1] === 'best-claims')!;
+      await best.queryFn!({});
+      const url = new URL(String((fetchMock.mock.calls[0] as unknown[])[0]), 'https://geo.test');
+      expect(url.pathname).toBe('/api/topics/feed');
+      expect(url.searchParams.get('spaceId')).toBe(SPACE);
+      expect(url.searchParams.get('spaceIds')).toBe(`${SPACE},${OTHER}`);
+      expect(state.taggedReads.at(-1)).toEqual({ spaceIds: [SPACE, OTHER] });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('lists the topic’s own Claims, Stories and Subtopics links from every canonical space', async () => {
+    topicCorpus();
+    state.corpus = [];
+    state.page = pageEntity(TEMPLATE_ONTOLOGY.TOPIC_TYPE_ID, [
+      relation(TEMPLATE_ONTOLOGY.TOPIC_CLAIMS_PROPERTY_ID, 'tc1', OTHER, 'Topic claim elsewhere'),
+      relation(TEMPLATE_ONTOLOGY.TOPIC_CLAIMS_PROPERTY_ID, 'tc2', STRAY, 'Topic claim stray'),
+      relation(TEMPLATE_ONTOLOGY.SUBTOPICS_PROPERTY_ID, 'st1', SPACE, 'Subtopic here'),
+      relation(TEMPLATE_ONTOLOGY.SUBTOPICS_PROPERTY_ID, 'st2', OTHER, 'Subtopic elsewhere'),
+      relation(TEMPLATE_ONTOLOGY.SUBTOPICS_PROPERTY_ID, 'st3', STRAY, 'Subtopic stray'),
+    ]);
+    const { result } = renderHook(() => useLiveTopicTemplate({ entityId: PAGE, spaceId: SPACE }));
+
+    await waitFor(() => expect(result.current.data?.claims).toBeDefined());
+    const model = result.current.data!;
+    expect(model.claims?.map(claim => claim.title)).toEqual(['Topic claim elsewhere']);
+    expect(model.subtopics?.map(item => item.label)).toEqual(['Subtopic here', 'Subtopic elsewhere']);
   });
 
   it('lists feed claims only once the viewed space is known to have tagged them', async () => {
@@ -543,8 +680,9 @@ describe('Topic template', () => {
       'Top 1, most votes',
       'Debated claim',
       'Claim here',
+      'Claim elsewhere',
     ]);
-    expect(claims.map(claim => claim.split.isSplit)).toEqual([false, true, true, true, true]);
+    expect(claims.map(claim => claim.split.isSplit)).toEqual([false, true, true, true, true, true]);
   });
 
   it('shows the first 40 Best claims alone when Best has 40 or more', async () => {
@@ -589,7 +727,7 @@ describe('Topic template', () => {
     renderHook(() => useLiveTopicTemplate({ entityId: PAGE, spaceId: SPACE }));
 
     const [pageRead, viewerRead] = mocks.useTopicCoverage.mock.calls.slice(-2).map(call => call[0]);
-    expect(pageRead).toMatchObject({ spaceIds: [SPACE], scopeRelationToSpaces: true });
+    expect(pageRead).toMatchObject({ spaceIds: [SPACE, OTHER], scopeRelationToSpaces: true });
     expect(viewerRead).toMatchObject({ spaceIds: [VIEWER], scopeRelationToSpaces: true, enabled: true });
   });
 
@@ -601,6 +739,7 @@ describe('Topic template', () => {
     await waitFor(() => expect(result.current.data?.sections).toBeDefined());
     expect(result.current.data!.sections?.[0]?.items.map(item => item.title)).toEqual([
       'Source here',
+      'Source elsewhere',
       'Source the viewer added',
     ]);
   });
@@ -616,7 +755,10 @@ describe('Topic template', () => {
     const viewerRead = mocks.useTopicCoverage.mock.calls.at(-1)![0];
     expect(viewerRead.enabled).toBe(false);
     await waitFor(() => expect(result.current.data?.sections).toBeDefined());
-    expect(result.current.data!.sections?.[0]?.items.map(item => item.title)).toEqual(['Source here']);
+    expect(result.current.data!.sections?.[0]?.items.map(item => item.title)).toEqual([
+      'Source here',
+      'Source elsewhere',
+    ]);
   });
 
   it('labels a claim split "Everyone", never another space', async () => {

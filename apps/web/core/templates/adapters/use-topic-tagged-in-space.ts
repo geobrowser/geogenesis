@@ -19,7 +19,7 @@ const TOPIC_TAGGED_IN_SPACE_QUERY = parse(/* GraphQL */ `
   query TopicTaggedInSpace(
     $topicsPropertyId: UUID!
     $topicId: UUID!
-    $spaceId: UUID!
+    $spaceIds: [UUID!]!
     $fromEntityIds: [UUID!]!
     $first: Int!
     $after: Cursor
@@ -30,7 +30,7 @@ const TOPIC_TAGGED_IN_SPACE_QUERY = parse(/* GraphQL */ `
       filter: {
         typeId: { is: $topicsPropertyId }
         toEntityId: { is: $topicId }
-        spaceId: { is: $spaceId }
+        spaceId: { in: $spaceIds }
         fromEntityId: { in: $fromEntityIds }
       }
     ) {
@@ -53,7 +53,7 @@ const TOPIC_TAGGED_IN_SPACE_QUERY = parse(/* GraphQL */ `
   {
     topicsPropertyId: string;
     topicId: string;
-    spaceId: string;
+    spaceIds: string[];
     fromEntityIds: string[];
     first: number;
     after?: string;
@@ -66,22 +66,25 @@ type FetchPage = (args: {
   signal?: AbortSignal;
 }) => Promise<CursorPage<string>>;
 
-/** Which of `entityIds` carry a Topics relation to `topicId` published in `spaceId`, as hex ids. */
+/**
+ * Which of `entityIds` carry a Topics relation to `topicId` published in any of `spaceIds`, as hex
+ * ids. One request for every space (an `in` filter), never one per space.
+ */
 export async function fetchTopicTaggedInSpace({
   topicId,
-  spaceId,
+  spaceIds,
   entityIds,
   signal,
   fetchPage,
 }: {
   topicId: string;
-  spaceId: string;
+  spaceIds: string[];
   entityIds: string[];
   signal?: AbortSignal;
   fetchPage?: FetchPage;
 }): Promise<Set<string>> {
   const fromEntityIds = [...new Set(entityIds.map(id => ID.uuidToHex(id)))];
-  if (fromEntityIds.length === 0) return new Set();
+  if (fromEntityIds.length === 0 || spaceIds.length === 0) return new Set();
   const page: FetchPage =
     fetchPage ??
     (args =>
@@ -91,7 +94,7 @@ export async function fetchTopicTaggedInSpace({
           variables: {
             topicsPropertyId: ID.uuidToHex(TOPICS_PROPERTY_ID),
             topicId: ID.uuidToHex(topicId),
-            spaceId: ID.uuidToHex(spaceId),
+            spaceIds: spaceIds.map(id => ID.uuidToHex(id)),
             fromEntityIds: args.fromEntityIds,
             first: PAGE_SIZE,
             after: args.after,
@@ -109,25 +112,26 @@ export async function fetchTopicTaggedInSpace({
 }
 
 /**
- * The feed entities whose Topics relation the space itself published, matching the header counts.
- * Null while loading or after a failure.
+ * The feed entities whose Topics relation one of the page's scope spaces published, matching the
+ * header counts. Null while loading or after a failure.
  */
 export function useTopicTaggedInSpace({
   topicId,
-  spaceId,
+  spaceIds,
   entityIds,
   enabled = true,
 }: {
   topicId: string;
-  spaceId: string;
+  spaceIds: string[];
   entityIds: string[];
   /** False holds the check, and reports it loading, until the feed has settled. */
   enabled?: boolean;
 }): { tagged: Set<string> | null; isLoading: boolean } {
   const ids = React.useMemo(() => [...new Set(entityIds.map(id => ID.uuidToHex(id)))].sort(), [entityIds]);
+  const spaces = React.useMemo(() => [...new Set(spaceIds.map(id => ID.uuidToHex(id)))].sort(), [spaceIds]);
   const query = useQuery({
-    queryKey: ['topic', 'tagged-in-space', ID.uuidToHex(topicId), ID.uuidToHex(spaceId), ids],
-    queryFn: ({ signal }) => fetchTopicTaggedInSpace({ topicId, spaceId, entityIds: ids, signal }),
+    queryKey: ['topic', 'tagged-in-space', ID.uuidToHex(topicId), spaces, ids],
+    queryFn: ({ signal }) => fetchTopicTaggedInSpace({ topicId, spaceIds: spaces, entityIds: ids, signal }),
     enabled: enabled && ids.length > 0,
     staleTime: 60_000,
   });

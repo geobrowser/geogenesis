@@ -68,6 +68,7 @@ import { useDebateParticipantsBatch } from './use-debate-participants-batch';
 import { fetchPostAuthorMetadata } from './use-hydrated-source-cards';
 import { useInitialHydrationGate } from './use-initial-hydration-gate';
 import { useLiveEntityActions } from './use-live-entity-actions';
+import { useEntityInScope, useTemplateSpaceScope } from './use-template-space-scope';
 import { useTopicTaggedInSpace } from './use-topic-tagged-in-space';
 import { useViewerSpaceId, useViewerTopicSources } from './use-viewer-sources';
 
@@ -82,6 +83,7 @@ const VIEWER_ADDED_LIMIT = 8;
 async function fetchTopicFeedSlice({
   topicId,
   spaceId,
+  spaceIds,
   typeId,
   sort = 'best',
   endpoint = 'topic',
@@ -89,6 +91,8 @@ async function fetchTopicFeedSlice({
 }: {
   topicId: string;
   spaceId: string;
+  /** The topic feed's space filter (the route space always included). Ignored by the space feed. */
+  spaceIds?: readonly string[];
   typeId: string;
   sort?: 'best' | 'top';
   endpoint?: 'topic' | 'space';
@@ -107,6 +111,7 @@ async function fetchTopicFeedSlice({
           spaceId,
           sort,
           typeIds: typeId,
+          ...(spaceIds && spaceIds.length > 0 ? { spaceIds: spaceIds.join(',') } : {}),
         }
   );
   const path = endpoint === 'space' ? '/api/topics/space/feed' : '/api/topics/feed';
@@ -156,9 +161,11 @@ function classifyCoverage(
  * - Header stats (`countsByTopicId`), compact clickable `Subtopics` chips, `Context` relation
  *   pills, `Flags` (`Community notes` / `Disclaimer`), and live `useMutate` actions.
  *
- * Every list holds only what the viewed space published: the feeds are scoped to the route space,
- * and the linked-entity, coverage and count reads take it as their only space. Vote counts still
- * include every voter, since votes live in each voter's personal space.
+ * Every list holds what the canonical spaces published (`useTemplateSpaceScope`): the feeds, the
+ * linked-entity, coverage and count reads take the whole scope in one request each, and the topic's
+ * own Claims, Stories and Subtopics links are read from every scope space. Vote counts still include
+ * every voter, since votes live in each voter's personal space. A Topic Space's homepage keeps its
+ * own space's debates and news (`/api/topics/space/feed`) when it has any.
  */
 export function useLiveTopicTemplate({
   entityId,
@@ -174,30 +181,39 @@ export function useLiveTopicTemplate({
 }): TemplateDataSource<TopicTemplateModel> {
   const { entity, isLoading: isEntityLoading } = useQueryEntity({ id: entityId, spaceId });
   const { personalSpaceId } = usePersonalSpaceId();
-  const spaceIds = React.useMemo(() => [normId(spaceId)], [spaceId]);
+  const { spaceIds, isResolving: isScopeResolving } = useTemplateSpaceScope(spaceId);
+  const scopeKey = spaceIds.join(',');
+  const scopedEntity = useEntityInScope({ entity, entityId, spaceId, spaceIds });
   const ancestors = useTopicAncestors(entityId, spaceId);
   const topicIds = React.useMemo(() => [entityId], [entityId]);
-  const { countsByTopicId } = useTopicConnectionCounts(topicIds, { spaceId });
+  const { countsByTopicId } = useTopicConnectionCounts(topicIds, { spaceIds });
 
   const queryClient = useQueryClient();
 
   // 1. Top-voted AND Best-ranked Claims, Debates, and News stories from Geo's topic/space ranking feed
   const topClaimsQuery = useQuery({
-    queryKey: ['live-topic-template', 'top-claims', ID.uuidToHex(entityId), ID.uuidToHex(spaceId)],
+    queryKey: ['live-topic-template', 'top-claims', ID.uuidToHex(entityId), ID.uuidToHex(spaceId), scopeKey],
     queryFn: ({ signal }) =>
-      fetchTopicFeedSlice({ topicId: entityId, spaceId, typeId: CLAIM_TYPE_ID, sort: 'top', signal }),
+      fetchTopicFeedSlice({ topicId: entityId, spaceId, spaceIds, typeId: CLAIM_TYPE_ID, sort: 'top', signal }),
     staleTime: 60_000,
   });
 
   const bestClaimsQuery = useQuery({
-    queryKey: ['live-topic-template', 'best-claims', ID.uuidToHex(entityId), ID.uuidToHex(spaceId)],
+    queryKey: ['live-topic-template', 'best-claims', ID.uuidToHex(entityId), ID.uuidToHex(spaceId), scopeKey],
     queryFn: ({ signal }) =>
-      fetchTopicFeedSlice({ topicId: entityId, spaceId, typeId: CLAIM_TYPE_ID, sort: 'best', signal }),
+      fetchTopicFeedSlice({ topicId: entityId, spaceId, spaceIds, typeId: CLAIM_TYPE_ID, sort: 'best', signal }),
     staleTime: 60_000,
   });
 
   const bestDebatesQuery = useQuery({
-    queryKey: ['live-topic-template', 'best-debates', ID.uuidToHex(entityId), ID.uuidToHex(spaceId), isSpaceHome],
+    queryKey: [
+      'live-topic-template',
+      'best-debates',
+      ID.uuidToHex(entityId),
+      ID.uuidToHex(spaceId),
+      isSpaceHome,
+      scopeKey,
+    ],
     queryFn: async ({ signal }) => {
       if (isSpaceHome) {
         const spaceDebates = await fetchTopicFeedSlice({
@@ -210,7 +226,7 @@ export function useLiveTopicTemplate({
         if (spaceDebates.length > 0) return { items: spaceDebates, fromSpaceFeed: true };
       }
       return {
-        items: await fetchTopicFeedSlice({ topicId: entityId, spaceId, typeId: DEBATE_TYPE_ID, signal }),
+        items: await fetchTopicFeedSlice({ topicId: entityId, spaceId, spaceIds, typeId: DEBATE_TYPE_ID, signal }),
         fromSpaceFeed: false,
       };
     },
@@ -218,7 +234,14 @@ export function useLiveTopicTemplate({
   });
 
   const bestNewsQuery = useQuery({
-    queryKey: ['live-topic-template', 'best-news', ID.uuidToHex(entityId), ID.uuidToHex(spaceId), isSpaceHome],
+    queryKey: [
+      'live-topic-template',
+      'best-news',
+      ID.uuidToHex(entityId),
+      ID.uuidToHex(spaceId),
+      isSpaceHome,
+      scopeKey,
+    ],
     queryFn: async ({ signal }) => {
       if (isSpaceHome) {
         const spaceNews = await fetchTopicFeedSlice({
@@ -231,14 +254,15 @@ export function useLiveTopicTemplate({
         if (spaceNews.length > 0) return { items: spaceNews, fromSpaceFeed: true };
       }
       return {
-        items: await fetchTopicFeedSlice({ topicId: entityId, spaceId, typeId: NEWS_STORY_TYPE_ID, signal }),
+        items: await fetchTopicFeedSlice({ topicId: entityId, spaceId, spaceIds, typeId: NEWS_STORY_TYPE_ID, signal }),
         fromSpaceFeed: false,
       };
     },
     staleTime: 60_000,
   });
 
-  // The topic feed checks only that an entity lives in the space; keep what the space itself tagged.
+  // The topic feed checks only that an entity lives in a scope space; keep what a scope space itself
+  // tagged.
   // The space feed lists the space's own items by space, not by tag, so its rows are not checked.
   const topicFeedDebates = bestDebatesQuery.data?.fromSpaceFeed ? undefined : bestDebatesQuery.data?.items;
   const topicFeedNews = bestNewsQuery.data?.fromSpaceFeed ? undefined : bestNewsQuery.data?.items;
@@ -251,7 +275,7 @@ export function useLiveTopicTemplate({
   );
   const { tagged: taggedInSpace, isLoading: isTaggedLoading } = useTopicTaggedInSpace({
     topicId: entityId,
-    spaceId,
+    spaceIds,
     entityIds: feedEntityIds,
     // One check once every slice has landed, rather than one per slice.
     enabled:
@@ -305,7 +329,7 @@ export function useLiveTopicTemplate({
     scopeRelationToSpaces: true,
   });
 
-  // Sources the viewed space both holds and tagged with this Topic itself.
+  // Sources a scope space both holds and tagged with this Topic itself.
   const coverage = useTopicCoverage({
     topicId: entityId,
     spaceIds,
@@ -380,8 +404,8 @@ export function useLiveTopicTemplate({
   });
 
   const directClaimRels = React.useMemo(
-    () => readEntityRelations(entity, TEMPLATE_ONTOLOGY.TOPIC_CLAIMS_PROPERTY_ID),
-    [entity]
+    () => readEntityRelations(scopedEntity, TEMPLATE_ONTOLOGY.TOPIC_CLAIMS_PROPERTY_ID),
+    [scopedEntity]
   );
 
   // The Claims list is the topic's Best order (GEO-3868): Best claims first, in Best's order. Only when
@@ -693,7 +717,7 @@ export function useLiveTopicTemplate({
       .map(entry => entry.item);
 
     // 4. Evidence: rich format-aware 2-column media cards
-    const directStories = readEntityRelations(entity, TEMPLATE_ONTOLOGY.STORIES_PROPERTY_ID);
+    const directStories = readEntityRelations(scopedEntity, TEMPLATE_ONTOLOGY.STORIES_PROPERTY_ID);
     const seenCoverageIds = new Set<string>();
     const coverageItems: EntityLinkRowModel[] = [];
 
@@ -773,7 +797,7 @@ export function useLiveTopicTemplate({
     ];
 
     // 5. Compact Subtopics chips in header (deduplicated by ID & normalized name)
-    const subtopicRels = readEntityRelations(entity, [
+    const subtopicRels = readEntityRelations(scopedEntity, [
       TEMPLATE_ONTOLOGY.SUBTOPICS_PROPERTY_ID,
       TEMPLATE_ONTOLOGY.UNNAMED_SUBTOPIC_PROPERTY_ID,
     ]);
@@ -838,6 +862,7 @@ export function useLiveTopicTemplate({
     viewerLinkedEvents,
     orderedClaimSeeds,
     queryClient,
+    scopedEntity,
     serverCoverUrl,
     spaceId,
     tweetAuthorsQuery.data,
@@ -845,7 +870,8 @@ export function useLiveTopicTemplate({
   ]);
 
   const isSectionsLoading = useInitialHydrationGate(
-    topClaimsQuery.isLoading ||
+    isScopeResolving ||
+      topClaimsQuery.isLoading ||
       bestClaimsQuery.isLoading ||
       bestDebatesQuery.isLoading ||
       isTaggedLoading ||
