@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { markGraphExplorerEntry } from '~/core/graph-explorer/graph-share';
+import { type GraphExplorerEntryPoint, markGraphExplorerEntry } from '~/core/graph-explorer/graph-share';
 import { graphExplorerHref } from '~/core/graph-explorer/href';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
@@ -25,7 +25,7 @@ import { useEntityHistory } from '../history/use-entity-history';
 import { EntityPageContextMenu } from './entity-page-context-menu';
 import { EntityVoteButtons } from './entity-vote-buttons';
 
-interface EntityPageActionsProps {
+type EntityPageActionsProps = {
   entityId: string;
   spaceId: string;
   isVoteable?: boolean;
@@ -33,12 +33,18 @@ interface EntityPageActionsProps {
   compact?: boolean;
   /** The entity's own primary action, ahead of the votes — a topic's Follow, which replaces them. */
   leading?: React.ReactNode;
-  /**
-   * `template`: the entity template header (GEO-3837). Version history moves into the "…" menu, and
-   * a graph link takes the history icon's place.
-   */
-  variant?: 'page' | 'template';
-}
+} & (
+  | { variant?: 'page'; graphEntryPoint?: never }
+  | {
+      /**
+       * `template`: the entity template header (GEO-3837). Version history moves into the "…" menu,
+       * and a graph link takes the history icon's place.
+       */
+      variant: 'template';
+      /** Which template page the graph link sits on, recorded as the explorer's entry point (GEO-3866). */
+      graphEntryPoint: GraphExplorerEntryPoint;
+    }
+);
 
 /** Votes, create, history, and menu — separate from type metadata */
 export function EntityPageActions({
@@ -48,6 +54,7 @@ export function EntityPageActions({
   compact = false,
   leading,
   variant = 'page',
+  graphEntryPoint,
 }: EntityPageActionsProps) {
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
   const editable = useUserIsEditing(spaceId);
@@ -117,17 +124,19 @@ export function EntityPageActions({
         </Link>
       )}
       {isTemplate ? (
-        <Link
-          href={graphExplorerHref({ entityId, topicId: entityId, spaceId })}
-          onClick={() => markGraphExplorerEntry('topic_page')}
-          aria-label="Explore graph"
-          title="Explore graph"
-          data-geo-analytics-label="Explore graph"
-          data-geo-analytics-intent="open_graph_explorer"
-          className="inline-flex text-grey-04 transition-colors duration-75 hover:text-text"
-        >
-          <NetworkIcon className="size-4" />
-        </Link>
+        graphEntryPoint && (
+          <Link
+            href={graphExplorerHref({ entityId, topicId: entityId, spaceId })}
+            onClick={() => markGraphExplorerEntry(graphEntryPoint)}
+            aria-label="Explore graph"
+            title="Explore graph"
+            data-geo-analytics-label="Explore graph"
+            data-geo-analytics-intent="open_graph_explorer"
+            className="inline-flex text-grey-04 transition-colors duration-75 hover:text-text"
+          >
+            <NetworkIcon className="size-4" />
+          </Link>
+        )
       ) : (
         <HistoryPanel open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
           {versionList(() => setIsHistoryOpen(false))}

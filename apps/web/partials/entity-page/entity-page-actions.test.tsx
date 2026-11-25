@@ -1,9 +1,11 @@
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { GRAPH_EXPLORER_ENTRY_POINTS, takeGraphExplorerEntry } from '~/core/graph-explorer/graph-share';
 
 import { EntityPageActions } from './entity-page-actions';
 
@@ -16,7 +18,6 @@ const mocks = vi.hoisted(() => ({
   contextMenu: null as Record<string, unknown> | null,
   voteButtons: null as Record<string, unknown> | null,
 }));
-
 
 vi.mock('~/core/hooks/use-user-is-editing', () => ({ useUserIsEditing: () => mocks.isEditing }));
 
@@ -165,7 +166,9 @@ describe('EntityPageActions', () => {
 
   describe('on entity templates (GEO-3837)', () => {
     it('puts a graph link where history was, opening this entity in this space, with no flag to set (GEO-3865)', () => {
-      render(<EntityPageActions entityId="entity-1" spaceId="space-1" variant="template" />);
+      render(
+        <EntityPageActions entityId="entity-1" spaceId="space-1" variant="template" graphEntryPoint="topic_page" />
+      );
 
       const graph = screen.getByRole('link', { name: 'Explore graph' });
       expect(graph).toHaveAttribute('href', '/explore/graph/entity-1?topic=entity-1&space=space-1');
@@ -175,8 +178,24 @@ describe('EntityPageActions', () => {
       expectInDocumentOrder([graph, screen.getByTestId('context-menu')]);
     });
 
+    // GEO-3866: every template page used to record its graph clicks as `topic_page`.
+    it.each(GRAPH_EXPLORER_ENTRY_POINTS)('records a graph click with its page kind, %s', entryPoint => {
+      takeGraphExplorerEntry();
+      render(
+        <EntityPageActions entityId="entity-1" spaceId="space-1" variant="template" graphEntryPoint={entryPoint} />
+      );
+
+      const graph = screen.getByRole('link', { name: 'Explore graph' });
+      graph.addEventListener('click', event => event.preventDefault());
+      fireEvent.click(graph);
+
+      expect(takeGraphExplorerEntry()).toBe(entryPoint);
+    });
+
     it('hands version history to the menu, fetching only while it is open', () => {
-      render(<EntityPageActions entityId="entity-1" spaceId="space-1" variant="template" />);
+      render(
+        <EntityPageActions entityId="entity-1" spaceId="space-1" variant="template" graphEntryPoint="topic_page" />
+      );
 
       expect(mocks.contextMenu?.versionHistory).toBeTypeOf('function');
       expect(mocks.historyArgs).toMatchObject({ entityId: 'entity-1', spaceId: 'space-1', enabled: false });

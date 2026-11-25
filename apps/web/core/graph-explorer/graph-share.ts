@@ -80,16 +80,32 @@ export function graphShareLanding() {
   return landingShare;
 }
 
+/**
+ * The in-app pages with an "Explore graph" link, one per entity template (GEO-3866). Sent as
+ * `graph_explorer_opened.entry_point`, a free string in the analytics registry.
+ */
+export const GRAPH_EXPLORER_ENTRY_POINTS = [
+  'topic_page',
+  'claim_page',
+  'event_page',
+  'news_story_page',
+  'source_page',
+  'post_page',
+  'podcast_show_page',
+  'podcast_episode_page',
+] as const;
+export type GraphExplorerEntryPoint = (typeof GRAPH_EXPLORER_ENTRY_POINTS)[number];
+
 const ENTRY_TTL_MS = 60_000;
-let pendingEntry: { entryPoint: 'topic_page'; at: number } | null = null;
+let pendingEntry: { entryPoint: GraphExplorerEntryPoint; at: number } | null = null;
 
 /** Set by an in-app link into the explorer, in memory so a copied URL never claims it. */
-export function markGraphExplorerEntry(entryPoint: 'topic_page') {
+export function markGraphExplorerEntry(entryPoint: GraphExplorerEntryPoint) {
   pendingEntry = { entryPoint, at: Date.now() };
 }
 
 /** The in-app entry point within the last minute, consumed once. */
-export function takeGraphExplorerEntry(): 'topic_page' | null {
+export function takeGraphExplorerEntry(): GraphExplorerEntryPoint | null {
   const entry = pendingEntry;
   pendingEntry = null;
   return entry && Date.now() - entry.at <= ENTRY_TTL_MS ? entry.entryPoint : null;

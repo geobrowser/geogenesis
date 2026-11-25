@@ -7,7 +7,7 @@ import { captureSafely } from '~/core/analytics-capture-safely';
 import { currentNavigationType } from '~/core/utils/navigation-type';
 
 import type { GraphKind } from './graph-kinds';
-import { graphShareLanding, takeGraphExplorerEntry } from './graph-share';
+import { type GraphExplorerEntryPoint, graphShareLanding, takeGraphExplorerEntry } from './graph-share';
 
 // Graph explorer events (GEO-3826), registered in geobrowser/analytics. Sent unstamped: never
 // `measurement_version`, `source`, `session_id`, `name` or `duration*`, and no names or search text.
@@ -42,7 +42,7 @@ if (typeof window !== 'undefined') window.addEventListener('popstate', () => (la
 
 type EntrySignals = {
   share: { share_id: string; method: string } | null;
-  inApp: 'topic_page' | null;
+  inApp: GraphExplorerEntryPoint | null;
   navigationType: string;
   /** The document was loaded on this explorer URL and no explorer session ran before in it. */
   firstRoute: boolean;
