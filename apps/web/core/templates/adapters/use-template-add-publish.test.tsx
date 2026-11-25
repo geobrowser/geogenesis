@@ -7,6 +7,7 @@ import { Effect } from 'effect';
 import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { registerPageTemplate } from '~/core/action-context';
 import { pendingActionsAtom } from '~/core/state/pending-actions';
 
 import type { TemplateAddResult } from '../models';
@@ -452,15 +453,24 @@ describe('useTemplateAddPublish analytics', () => {
     Object.assign(account, { personalSpaceId: null, isRegistered: false, address: null });
     const { result, rerender, store, queryClient } = renderPublisher();
 
+    // Pressed on the topic's own page, drawn by its template.
+    const pressPath = `/space/${PAGE_SPACE}/${PAGE}`;
+    window.history.replaceState(null, '', pressPath);
+    const unregister = registerPageTemplate({ entityId: PAGE, template: 'topic', renderer: 'template' });
     act(() => {
       result.current.holdAddDraft(() => {}, 'add_claim');
       void result.current.add(CLAIM);
     });
     const [queued] = store.get(pendingActionsAtom);
+    const pressViewId = queued!.context?.page_view_id;
     // The "+" it came from survives the sign-up (and a Google redirect) inside the queued intent.
     expect(JSON.parse(queued!.intent!)).toEqual({ ...CLAIM, surface: 'add_claim' });
-    expect(queued!.context).toMatchObject({ component: 'template_add_form' });
+    expect(queued!.context).toMatchObject({ component: 'template_add_form', page_template: 'topic' });
     expect(captured('action_completed')).toEqual([]);
+
+    // By the time it publishes the viewer is somewhere else, with no template registered.
+    unregister();
+    window.history.replaceState(null, '', '/explore');
 
     auth.authenticated = true;
     Object.assign(account, { personalSpaceId: PERSONAL_SPACE, isRegistered: true, address: ADDRESS });
@@ -484,8 +494,14 @@ describe('useTemplateAddPublish analytics', () => {
         add_surface: 'add_claim',
         replayed: true,
         space_id: PERSONAL_SPACE,
+        // The press's page, not the one the viewer is on when it publishes.
+        page_path: pressPath,
+        page_view_id: pressViewId,
+        page_template: 'topic',
+        page_template_renderer: 'template',
       }),
     ]);
+    window.history.replaceState(null, '', '/');
   });
 
   it('drops a surface that is not a plain form name', async () => {

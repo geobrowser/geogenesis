@@ -132,7 +132,9 @@ export function TopicTemplate({
           <button
             type="button"
             onClick={() => setSubtopicsExpanded(prev => !prev)}
-            data-geo-analytics-label={subtopicsExpanded ? 'Template subtopics show less' : 'Template subtopics more'}
+            data-geo-analytics-label={
+              subtopicsExpanded ? 'Template subtopics show less' : 'Template subtopics show more'
+            }
             data-geo-analytics-intent={subtopicsExpanded ? 'collapse_subtopics' : 'expand_subtopics'}
             className="inline-flex h-7 cursor-pointer items-center rounded-md border border-divider bg-grey-01 px-2.5 text-[13px] font-medium text-grey-04 transition-colors hover:border-text hover:text-text"
           >
