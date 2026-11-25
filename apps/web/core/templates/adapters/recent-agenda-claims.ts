@@ -36,37 +36,27 @@ export type RecentAgendaClaim = {
 };
 
 const AGENDAS_QUERY = parse(/* GraphQL */ `
-  query RecentDebateAgendas($agendaTypeId: UUID!, $since: String!, $blocksTypeId: UUID!, $first: Int!) {
+  query RecentDebateAgendas($agendaTypeId: UUID!, $since: String!, $first: Int!) {
     entitiesConnection(first: $first, typeId: $agendaTypeId, filter: { createdAt: { greaterThanOrEqualTo: $since } }) {
       nodes {
         id
         createdAt
-        relationsList(filter: { typeId: { is: $blocksTypeId } }) {
-          toEntityId
-        }
       }
     }
   }
 `) as TypedDocumentNode<
-  {
-    entitiesConnection?: {
-      nodes?: Array<{
-        id: string;
-        createdAt: string;
-        relationsList?: Array<{ toEntityId: string } | null> | null;
-      } | null> | null;
-    } | null;
-  },
-  { agendaTypeId: string; since: string; blocksTypeId: string; first: number }
+  { entitiesConnection?: { nodes?: Array<{ id: string; createdAt: string } | null> | null } | null },
+  { agendaTypeId: string; since: string; first: number }
 >;
 
-// Versions, not current relations: a claim taken off an agenda once it has enough debates still counts.
-const LISTING_VERSIONS_QUERY = parse(/* GraphQL */ `
-  query AgendaListingVersions($blockIds: [UUID!]!, $itemTypeId: UUID!, $first: Int!, $after: Cursor) {
+// Versions, not current relations, for both hops: a claim taken off an agenda once it has enough
+// debates still counts, and so does a data block later removed from its agenda (GEO-3873).
+const RELATION_VERSIONS_QUERY = parse(/* GraphQL */ `
+  query AgendaRelationVersions($fromIds: [UUID!]!, $typeId: UUID!, $first: Int!, $after: Cursor) {
     relationVersionsConnection(
       first: $first
       after: $after
-      filter: { fromEntityId: { in: $blockIds }, typeId: { is: $itemTypeId } }
+      filter: { fromEntityId: { in: $fromIds }, typeId: { is: $typeId } }
     ) {
       pageInfo {
         hasNextPage
@@ -85,7 +75,7 @@ const LISTING_VERSIONS_QUERY = parse(/* GraphQL */ `
       nodes?: Array<{ fromEntityId: string; toEntityId: string } | null> | null;
     } | null;
   },
-  { blockIds: string[]; itemTypeId: string; first: number; after?: string }
+  { fromIds: string[]; typeId: string; first: number; after?: string }
 >;
 
 // Claims only: "All spaces" agendas list debates, which never lead a Claims list.
@@ -117,8 +107,9 @@ const LISTED_CLAIMS_QUERY = parse(/* GraphQL */ `
   { ids: string[]; claimTypeId: string; topicsPropertyId: string; first: number }
 >;
 
-type Agenda = { id: string; createdAt: number; blockIds: string[] };
-type Listing = { blockId: string; itemId: string };
+type Agenda = { id: string; createdAt: number };
+/** One version of a relation, current or since removed. */
+type Edge = { fromId: string; toId: string };
 type ListedEntity = {
   id: string;
   name: string;
@@ -128,7 +119,13 @@ type ListedEntity = {
 
 export type AgendaClaimsIo = {
   agendas: (since: number, signal?: AbortSignal) => Promise<Agenda[]>;
-  listings: (blockIds: string[], after: string | undefined, signal?: AbortSignal) => Promise<CursorPage<Listing>>;
+  /** Every version of a `typeId` relation from `fromIds`, removed ones included. */
+  versions: (
+    fromIds: string[],
+    typeId: string,
+    after: string | undefined,
+    signal?: AbortSignal
+  ) => Promise<CursorPage<Edge>>;
   claims: (ids: string[], signal?: AbortSignal) => Promise<ListedEntity[]>;
 };
 
@@ -140,37 +137,23 @@ const liveIo: AgendaClaimsIo = {
         variables: {
           agendaTypeId: DEBATE_AGENDA_TYPE_ID,
           since: String(since),
-          blocksTypeId: ID.uuidToHex(SystemIds.BLOCKS),
           first: PAGE_SIZE,
         },
         decoder: data =>
           (data.entitiesConnection?.nodes ?? []).flatMap(node =>
-            node
-              ? [
-                  {
-                    id: node.id,
-                    createdAt: Number(node.createdAt),
-                    blockIds: (node.relationsList ?? []).flatMap(rel => (rel ? [rel.toEntityId] : [])),
-                  },
-                ]
-              : []
+            node ? [{ id: node.id, createdAt: Number(node.createdAt) }] : []
           ),
         signal,
       })
     ),
-  listings: (blockIds, after, signal) =>
+  versions: (fromIds, typeId, after, signal) =>
     Effect.runPromise(
       graphql({
-        query: LISTING_VERSIONS_QUERY,
-        variables: {
-          blockIds,
-          itemTypeId: ID.uuidToHex(SystemIds.COLLECTION_ITEM_RELATION_TYPE),
-          first: PAGE_SIZE,
-          after,
-        },
-        decoder: (data): CursorPage<Listing> => ({
+        query: RELATION_VERSIONS_QUERY,
+        variables: { fromIds, typeId, first: PAGE_SIZE, after },
+        decoder: (data): CursorPage<Edge> => ({
           items: (data.relationVersionsConnection?.nodes ?? []).flatMap(node =>
-            node ? [{ blockId: node.fromEntityId, itemId: node.toEntityId }] : []
+            node ? [{ fromId: node.fromEntityId, toId: node.toEntityId }] : []
           ),
           endCursor: data.relationVersionsConnection?.pageInfo?.endCursor ?? null,
           hasNextPage: data.relationVersionsConnection?.pageInfo?.hasNextPage ?? false,
@@ -210,8 +193,9 @@ const liveIo: AgendaClaimsIo = {
 
 /**
  * Every claim listed on any Debate agenda created in the last {@link AGENDA_PIN_DAYS} days, with the
- * newest such listing, including claims since taken off their agenda. Three requests whatever the
- * number of claims, and the answer covers every Topic page.
+ * newest such listing, including claims since taken off their agenda and blocks since taken off it.
+ * Four requests (plus pages past 1000 versions) whatever the number of claims, and the answer covers
+ * every Topic page.
  */
 export async function fetchRecentAgendaClaims({
   nowMs = Date.now(),
@@ -221,25 +205,21 @@ export async function fetchRecentAgendaClaims({
   const since = Math.floor(nowMs / 1000) - AGENDA_PIN_DAYS * DAY_SECONDS;
   const agendas = await io.agendas(since, signal);
 
-  const blockListedAt = new Map<string, number>();
+  const agendaCreatedAt = new Map<string, number>();
   for (const agenda of agendas) {
     if (!Number.isFinite(agenda.createdAt) || agenda.createdAt < since) continue;
-    for (const blockId of agenda.blockIds) {
-      const hex = ID.uuidToHex(blockId);
-      blockListedAt.set(hex, Math.max(blockListedAt.get(hex) ?? 0, agenda.createdAt));
-    }
+    agendaCreatedAt.set(ID.uuidToHex(agenda.id), agenda.createdAt);
   }
-  if (blockListedAt.size === 0) return [];
+  if (agendaCreatedAt.size === 0) return [];
 
-  const blockIds = [...blockListedAt.keys()];
-  const listings = await collectCursorPages(after => io.listings(blockIds, after, signal));
-  const itemListedAt = new Map<string, number>();
-  for (const listing of listings) {
-    const listedAt = blockListedAt.get(ID.uuidToHex(listing.blockId));
-    if (listedAt === undefined) continue;
-    const hex = ID.uuidToHex(listing.itemId);
-    itemListedAt.set(hex, Math.max(itemListedAt.get(hex) ?? 0, listedAt));
-  }
+  const blockListedAt = await listedAtByTarget(io, agendaCreatedAt, ID.uuidToHex(SystemIds.BLOCKS), signal);
+  if (blockListedAt.size === 0) return [];
+  const itemListedAt = await listedAtByTarget(
+    io,
+    blockListedAt,
+    ID.uuidToHex(SystemIds.COLLECTION_ITEM_RELATION_TYPE),
+    signal
+  );
   if (itemListedAt.size === 0) return [];
 
   const claims = await io.claims([...itemListedAt.keys()], signal);
@@ -256,6 +236,25 @@ export async function fetchRecentAgendaClaims({
     }
     return [{ id, name: claim.name, spaceIds: claim.spaceIds.map(s => ID.uuidToHex(s)), topicSpaces, listedAt }];
   });
+}
+
+/** Each `typeId` target of `listedAtBySource`'s ids, ever, with the newest date of a source pointing at it. */
+async function listedAtByTarget(
+  io: AgendaClaimsIo,
+  listedAtBySource: Map<string, number>,
+  typeId: string,
+  signal: AbortSignal | undefined
+): Promise<Map<string, number>> {
+  const fromIds = [...listedAtBySource.keys()];
+  const edges = await collectCursorPages(after => io.versions(fromIds, typeId, after, signal));
+  const listedAt = new Map<string, number>();
+  for (const edge of edges) {
+    const at = listedAtBySource.get(ID.uuidToHex(edge.fromId));
+    if (at === undefined) continue;
+    const hex = ID.uuidToHex(edge.toId);
+    listedAt.set(hex, Math.max(listedAt.get(hex) ?? 0, at));
+  }
+  return listedAt;
 }
 
 /** The recent agenda claims, read once for every Topic page. */

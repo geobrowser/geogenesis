@@ -28,42 +28,71 @@ function agendaClaim(n: number, listedAt: number, overrides: Partial<RecentAgend
   };
 }
 
+const BLOCKS = 'beaba5cba67741a8b35377030613fc70';
+const ITEM = 'a99f9ce12ffa4dac8c61f6310d46064a';
+
+/** A fake API whose relation versions include removed ones, as relationVersionsConnection does. */
+function fakeIo({
+  agendas,
+  blockVersions,
+  itemVersions,
+  claims,
+}: {
+  agendas: { id: string; createdAt: number }[];
+  blockVersions: { fromId: string; toId: string }[];
+  itemVersions: { fromId: string; toId: string }[];
+  claims: Awaited<ReturnType<AgendaClaimsIo['claims']>>;
+}) {
+  return {
+    agendas: vi.fn(async () => agendas),
+    // Two pages each, so a walk that stops at the first page loses rows.
+    versions: vi.fn(async (fromIds: string[], typeId: string, after: string | undefined) => {
+      const all = (typeId === BLOCKS ? blockVersions : typeId === ITEM ? itemVersions : []).filter(edge =>
+        fromIds.includes(edge.fromId)
+      );
+      const half = Math.ceil(all.length / 2);
+      return after
+        ? { items: all.slice(half), endCursor: '2', hasNextPage: false }
+        : { items: all.slice(0, half), endCursor: '1', hasNextPage: true };
+    }),
+    claims: vi.fn(async (ids: string[]) => claims.filter(claim => ids.includes(claim.id))),
+  } satisfies AgendaClaimsIo;
+}
+
 describe('fetchRecentAgendaClaims', () => {
   it('counts every listing in the window, removed ones too, with the newest agenda', async () => {
-    const io: AgendaClaimsIo = {
-      agendas: vi.fn(async () => [
-        { id: 'a1', createdAt: NOW_S - 16 * DAY, blockIds: ['b1'] },
-        { id: 'a2', createdAt: NOW_S - DAY, blockIds: ['b2'] },
+    const io = fakeIo({
+      agendas: [
+        { id: 'a1', createdAt: NOW_S - 16 * DAY },
+        { id: 'a2', createdAt: NOW_S - DAY },
         // Older than the window even if the API returned it.
-        { id: 'a3', createdAt: NOW_S - (AGENDA_PIN_DAYS + 1) * DAY, blockIds: ['b3'] },
-      ]),
-      // Versions: claim 1 was taken off b1 since, and is on b2 too; claim 3 only on the old agenda.
-      listings: vi.fn(async (_ids: string[], after: string | undefined) =>
-        after
-          ? { items: [{ blockId: 'b2', itemId: hex(1) }], endCursor: '2', hasNextPage: false }
-          : {
-              items: [
-                { blockId: 'b1', itemId: hex(1) },
-                { blockId: 'b1', itemId: hex(2) },
-                { blockId: 'b3', itemId: hex(3) },
-                { blockId: 'b2', itemId: hex(4) },
-              ],
-              endCursor: '1',
-              hasNextPage: true,
-            }
-      ),
-      // hex(4) is a debate, not a claim, so the claims read leaves it out.
-      claims: vi.fn(async () => [
+        { id: 'a3', createdAt: NOW_S - (AGENDA_PIN_DAYS + 1) * DAY },
+      ],
+      blockVersions: [
+        { fromId: 'a1', toId: 'b1' },
+        { fromId: 'a2', toId: 'b2' },
+        { fromId: 'a3', toId: 'b3' },
+      ],
+      // Claim 1 was taken off b1 since, and is on b2 too; claim 3 is only on the old agenda; 4 is a debate.
+      itemVersions: [
+        { fromId: 'b1', toId: hex(1) },
+        { fromId: 'b1', toId: hex(2) },
+        { fromId: 'b3', toId: hex(3) },
+        { fromId: 'b2', toId: hex(4) },
+        { fromId: 'b2', toId: hex(1) },
+      ],
+      claims: [
         { id: hex(1), name: 'One', spaceIds: [SPACE], topics: [{ topicId: TOPIC, spaceId: SPACE }] },
         { id: hex(2), name: 'Two', spaceIds: [OTHER_SPACE], topics: [] },
-      ]),
-    };
+        { id: hex(3), name: 'Three', spaceIds: [SPACE], topics: [] },
+      ],
+    });
 
     const claims = await fetchRecentAgendaClaims({ nowMs: NOW_S * 1000, io });
 
     expect(io.agendas).toHaveBeenCalledWith(NOW_S - AGENDA_PIN_DAYS * DAY, undefined);
-    expect((io.listings as ReturnType<typeof vi.fn>).mock.calls[0]![0]).toEqual(['b1', 'b2']);
-    expect((io.claims as ReturnType<typeof vi.fn>).mock.calls[0]![0].sort()).toEqual([hex(1), hex(2), hex(4)]);
+    expect(io.versions.mock.calls[0]!.slice(0, 2)).toEqual([['a1', 'a2'], BLOCKS]);
+    expect(io.claims.mock.calls[0]![0].sort()).toEqual([hex(1), hex(2), hex(4)]);
     expect(claims.map(c => [c.id, c.listedAt])).toEqual([
       [hex(1), NOW_S - DAY],
       [hex(2), NOW_S - 16 * DAY],
@@ -71,10 +100,34 @@ describe('fetchRecentAgendaClaims', () => {
     expect(claims[0]!.topicSpaces.get(TOPIC)).toEqual(new Set([SPACE]));
   });
 
+  // The 24 Nov World affairs agenda: Arturas replaced a data block, so two of its claims sat only on a
+  // block that is no longer on the agenda. Reading the agenda's current Blocks dropped them.
+  it('counts claims on a data block since removed from its agenda', async () => {
+    const io = fakeIo({
+      agendas: [{ id: 'a1', createdAt: NOW_S - DAY }],
+      blockVersions: [
+        { fromId: 'a1', toId: 'removedblock' },
+        { fromId: 'a1', toId: 'liveblock' },
+      ],
+      itemVersions: [
+        { fromId: 'removedblock', toId: hex(1) },
+        { fromId: 'liveblock', toId: hex(2) },
+      ],
+      claims: [
+        { id: hex(1), name: 'There is no genocide in Gaza', spaceIds: [SPACE], topics: [] },
+        { id: hex(2), name: 'Two', spaceIds: [SPACE], topics: [] },
+      ],
+    });
+
+    const claims = await fetchRecentAgendaClaims({ nowMs: NOW_S * 1000, io });
+
+    expect(claims.map(c => c.name).sort()).toEqual(['There is no genocide in Gaza', 'Two']);
+  });
+
   it('asks nothing more when no agenda is in the window', async () => {
-    const io: AgendaClaimsIo = { agendas: vi.fn(async () => []), listings: vi.fn(), claims: vi.fn() };
+    const io = fakeIo({ agendas: [], blockVersions: [], itemVersions: [], claims: [] });
     expect(await fetchRecentAgendaClaims({ nowMs: NOW_S * 1000, io })).toEqual([]);
-    expect(io.listings).not.toHaveBeenCalled();
+    expect(io.versions).not.toHaveBeenCalled();
     expect(io.claims).not.toHaveBeenCalled();
   });
 });
