@@ -122,6 +122,9 @@ export function simulateLayout({
   return new Map(ids.map((id, i) => [id, nodes[i]]));
 }
 
+/** Projection focal length: a point at depth 0 with the camera `distance` away draws at FOCAL_LENGTH / distance. */
+export const FOCAL_LENGTH = 900;
+
 export type View = { yaw: number; pitch: number; distance: number; width: number; height: number };
 
 /** Portrait screens stretch the vertical axis, as the design does, to use the height. */
@@ -139,7 +142,7 @@ export function project(point: Vec3, view: View): { x: number; y: number; scale:
   const z1 = point[0] * sy + point[2] * cy;
   const y2 = point[1] * cp - z1 * sp;
   const z2 = point[1] * sp + z1 * cp;
-  const scale = 900 / Math.max(120, view.distance + z2);
+  const scale = FOCAL_LENGTH / Math.max(120, view.distance + z2);
   return {
     x: view.width / 2 + x1 * scale,
     y: view.height / 2 + y2 * scale * verticalStretch(view.width, view.height),

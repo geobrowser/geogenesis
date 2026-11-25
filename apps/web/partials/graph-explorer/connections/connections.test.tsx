@@ -14,6 +14,8 @@ import { SKELETON_SELECTION, isSkeletonNode } from '~/core/graph-explorer/skelet
 
 import {
   ConnectionsCanvas,
+  MIN_LABEL_PX,
+  PHONE_CARD_TEXT_PX,
   clearance,
   coveredLabels,
   nodeScale,
@@ -756,6 +758,33 @@ describe('nodeScale', () => {
     expect(nodeScale(false, 2, 1, false)).toBeCloseTo(0.95);
     expect(nodeScale(false, 1, 0.1, true)).toBe(0.3);
   });
+
+  it('leaves desktop and tablet on plain perspective, whatever the fit scale', () => {
+    for (const depthScale of [0.2, 0.45, 0.6, 0.9, 1.1, 1.6]) {
+      expect(nodeScale(false, 1, depthScale, false, 0.6)).toBe(nodeScale(false, 1, depthScale, false));
+      expect(nodeScale(false, 1, depthScale, false)).toBe(Math.max(0.3, Math.min(1.2, depthScale)));
+    }
+  });
+
+  it('draws a phone card at the default zoom a little over full size, so its 11px text stays readable', () => {
+    // Depth 0 at the fit zoom: the camera pulled back to fit the map, but the card is not shrunk for it.
+    expect(nodeScale(false, 1, 0.6, true, 0.6)).toBeCloseTo(1.1);
+    expect(nodeScale(false, 1, 0.45, true, 0.45)).toBeCloseTo(1.1);
+    expect(nodeScale(false, 1, 0.6, true, 0.6) * PHONE_CARD_TEXT_PX).toBeGreaterThanOrEqual(MIN_LABEL_PX);
+  });
+
+  it('shrinks phone cards with depth and zoom, less steeply than desktop', () => {
+    const fit = 0.6;
+    const back = nodeScale(false, 1, 0.45, true, fit);
+    const front = nodeScale(false, 1, 0.7, true, fit);
+    expect(back).toBeLessThan(nodeScale(false, 1, 0.6, true, fit));
+    expect(front).toBeGreaterThan(nodeScale(false, 1, 0.6, true, fit));
+    // Desktop's back/front ratio is the raw perspective (0.45 / 0.7); phone's is flatter.
+    expect(back / front).toBeGreaterThan(0.45 / 0.7);
+    // Pinching out (half the scale) turns cards into markers; pinching in grows them to the cap.
+    expect(tooSmallToRead(nodeScale(false, 1, 0.3, true, fit), false, true)).toBe(true);
+    expect(nodeScale(false, 1, 3, true, fit)).toBe(1.2);
+  });
 });
 
 describe('coveredLabels', () => {
@@ -795,11 +824,20 @@ describe('tooSmallToRead', () => {
     expect(tooSmallToRead(0.71, true, false)).toBe(false);
   });
 
-  it('cuts lower on phone, whose whole map is drawn smaller', () => {
-    expect(tooSmallToRead(0.55, false, true)).toBe(false);
-    expect(tooSmallToRead(0.49, false, true)).toBe(true);
-    expect(tooSmallToRead(0.55, true, true)).toBe(true);
-    expect(tooSmallToRead(0.59, true, true)).toBe(false);
+  it('on phone, cuts where its 11px card text would drop under 11px, with the same hysteresis', () => {
+    expect(tooSmallToRead(1, false, true)).toBe(false);
+    expect(tooSmallToRead(0.99, false, true)).toBe(true);
+    expect(tooSmallToRead(1.03, true, true)).toBe(true);
+    expect(tooSmallToRead(1.07, true, true)).toBe(false);
+  });
+
+  it('never shows a phone label under 11px', () => {
+    for (let scale = 0.3; scale <= 1.2; scale += 0.005) {
+      for (const wasFar of [false, true]) {
+        if (!tooSmallToRead(scale, wasFar, true))
+          expect(scale * PHONE_CARD_TEXT_PX).toBeGreaterThanOrEqual(MIN_LABEL_PX);
+      }
+    }
   });
 });
 

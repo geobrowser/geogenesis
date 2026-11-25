@@ -9,6 +9,7 @@ import type { GraphEdge, GraphNode } from '~/core/graph-explorer/fetch-graph-nei
 import { useGraphAnalytics } from '~/core/graph-explorer/graph-explorer-analytics';
 import {
   DESKTOP_LAYOUT,
+  FOCAL_LENGTH,
   PHONE_LAYOUT,
   type Vec3,
   easeInOutCubic,
@@ -377,6 +378,7 @@ export function ConnectionsCanvas({
         }
         return box;
       };
+      const fitScale = FOCAL_LENGTH / state.fit;
       const centreElement = elements.current.get(state.centreId);
       const centrePoint = projected.get(state.centreId);
       // Every other node is kept off this box, at the scale the centre is drawn at.
@@ -407,7 +409,7 @@ export function ConnectionsCanvas({
         if (!element || !point) continue;
         const isCentre = node.id === state.centreId;
         const fog = Math.max(0.28, Math.min(1, 1 - (point.depth + 150) / 1100));
-        const scale = nodeScale(isCentre, node.hop, point.scale, phone);
+        const scale = nodeScale(isCentre, node.hop, point.scale, phone, fitScale);
         // Hop 2 is always a marker; a hop-1 card turns into one while drawn too small to read.
         // Read from the button, not the view: a node selected again while still fading out keeps
         // its button (and its `data-far`) but gets a fresh view.
@@ -835,10 +837,33 @@ function rectAt(x: number, y: number, box: Box, scale: number): Rect {
   };
 }
 
-/** On-screen size: the centre stays at least full size (exactly 1 on phone); others shrink with depth. */
-export function nodeScale(isCentre: boolean, hop: number, depthScale: number, phone: boolean) {
+/** The smallest text a map card shows a label in on phone (node-card's 11px). */
+export const PHONE_CARD_TEXT_PX = 11;
+/** The smallest label the map shows on phone; a card drawn smaller shows its marker instead. */
+export const MIN_LABEL_PX = 11;
+
+/**
+ * Phone cards relative to the default (fit) zoom: a card at the centre's depth is drawn a little
+ * over full size, and depth shrinks it less than desktop's perspective does (a square-root-ish
+ * curve), so the front half of the map reads at 11px or more. Zoom still scales cards, so pinching
+ * out turns them into markers and pinching in grows them up to the cap.
+ */
+const PHONE_SCALE = { front: 1.1, depthPower: 0.6 } as const;
+
+/**
+ * On-screen size: the centre stays at least full size (exactly 1 on phone); others shrink with depth.
+ * `fitScale` is the depth-0 projection scale at the default zoom (FOCAL_LENGTH / fit distance); only phone
+ * reads it, to size cards relative to the default zoom rather than to how far the camera had to
+ * pull back to fit the map on a narrow screen.
+ */
+export function nodeScale(isCentre: boolean, hop: number, depthScale: number, phone: boolean, fitScale = 1) {
   if (isCentre) return phone ? 1 : Math.max(1, Math.min(1.5, depthScale * 1.12));
-  return Math.max(0.3, Math.min(1.2, depthScale * (hop === 2 ? 0.95 : 1)));
+  const hopFactor = hop === 2 ? 0.95 : 1;
+  if (phone) {
+    const relative = depthScale / Math.max(0.05, fitScale);
+    return Math.max(0.3, Math.min(1.2, PHONE_SCALE.front * Math.pow(relative, PHONE_SCALE.depthPower) * hopFactor));
+  }
+  return Math.max(0.3, Math.min(1.2, depthScale * hopFactor));
 }
 
 const CENTRE_MARGIN = 10;
@@ -867,10 +892,11 @@ export function overlaps(centre: Rect, rect: Rect): boolean {
 
 /**
  * Scale below which a card's text is too small to read, and the higher one it must grow past to
- * come back, so it doesn't flap. Phone's whole map is drawn smaller and on a denser screen, so its
- * cut is lower or most of its cards would go.
+ * come back, so it doesn't flap. Phone cuts where its 11px card text would drop under 11px, so any
+ * label a phone shows is at least `MIN_LABEL_PX`.
  */
-const FAR_SCALE = { desktop: [0.6, 0.7], phone: [0.5, 0.58] } as const;
+const PHONE_CUT = MIN_LABEL_PX / PHONE_CARD_TEXT_PX;
+const FAR_SCALE = { desktop: [0.6, 0.7], phone: [PHONE_CUT, PHONE_CUT + 0.06] } as const;
 
 /** Whether a card drawn at `scale` is too small to read, with hysteresis on `wasFar`. */
 export function tooSmallToRead(scale: number, wasFar: boolean, phone: boolean) {
