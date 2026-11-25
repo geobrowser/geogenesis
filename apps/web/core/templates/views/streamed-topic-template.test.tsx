@@ -13,9 +13,10 @@ import { StreamedLiveTopicTemplateView, TopicTemplateSeedProvider } from './stre
 // The live view reads a dozen hooks; this stand-in draws only what the seed decides: the sections
 // when their key is seeded, a skeleton when it is not.
 vi.mock('./live-topic-template-view', () => ({
-  LiveTopicTemplateView: ({ entityId }: { entityId: string }) => {
+  LiveTopicTemplateView: ({ entityId, awaitingSeed }: { entityId: string; awaitingSeed?: boolean }) => {
     const rows = useQueryClient().getQueryData<string[]>(['sections', entityId]);
-    return <section>{rows ? `sections:${rows.join(',')}` : 'skeleton'}</section>;
+    // `awaiting` marks the view that must not read the feeds itself: the seed is on its way.
+    return <section>{rows ? `sections:${rows.join(',')}` : awaitingSeed ? 'skeleton awaiting' : 'skeleton'}</section>;
   },
 }));
 
@@ -67,7 +68,7 @@ describe('StreamedLiveTopicTemplateView', () => {
 
     // The shell was out while the seed was still pending: title and section skeletons, no sections.
     expect(sentBeforeAnswer).toContain('Topic title');
-    expect(sentBeforeAnswer).toContain('skeleton');
+    expect(sentBeforeAnswer).toContain('skeleton awaiting');
     expect(sentBeforeAnswer).not.toContain('sections:');
     // Then the seeded sections streamed into the same response.
     expect(html).toContain('sections:a,b');
@@ -78,6 +79,7 @@ describe('StreamedLiveTopicTemplateView', () => {
     const stream = await renderToReadableStream(page(never, 'other-topic'));
     const html = await readAll(stream, () => {});
     expect(html).toContain('skeleton');
+    expect(html).not.toContain('awaiting');
     expect(html).not.toContain('<template');
   });
 
@@ -86,5 +88,7 @@ describe('StreamedLiveTopicTemplateView', () => {
     const html = await readAll(stream, () => {});
     expect(html).toContain('skeleton');
     expect(html).not.toContain('sections:');
+    // The view that replaced the fallback reads the feeds itself.
+    expect(html.slice(html.lastIndexOf('<section'))).not.toContain('awaiting');
   });
 });
