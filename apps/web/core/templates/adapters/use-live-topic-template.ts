@@ -528,7 +528,8 @@ export function useLiveTopicTemplate({
   // Rows go most votes first (GEO-3876), agenda claims among themselves and then the rest; ties and
   // claims with no votes keep Best order. The order is made once the reads that pick the claims have
   // settled and the counts for those claims are in, and then held, so a refetch (say after the viewer
-  // votes) never moves a row.
+  // votes) never moves a row. Once the rows are drawn they hold even when the claim set changes: see
+  // the freeze after the sections gate below.
   const agendaLeadCount = React.useMemo(
     () => new Set(agendaClaims.map(claim => ID.uuidToHex(claim.id))).size,
     [agendaClaims]
@@ -561,9 +562,6 @@ export function useLiveTopicTemplate({
         : null,
     [agendaLeadCount, orderedClaimSeeds, votesForOrder]
   );
-  if (claimSetSettled && byVotesNow && orderedClaimSeeds.length > 0 && frozenClaimOrder?.key !== currentClaimOrderKey) {
-    setFrozenClaimOrder(freezeClaimOrder(currentClaimOrderKey, byVotesNow));
-  }
   const displayedClaimSeeds = React.useMemo(() => {
     if (frozenClaimOrder) {
       return applyFrozenClaimOrder({
@@ -920,6 +918,17 @@ export function useLiveTopicTemplate({
     CLAIM_VOTES_MAX_WAIT_MS
   );
   const isSectionsLoading = isBaseSectionsLoading || isWaitingForClaimVotes;
+  if (orderedClaimSeeds.length > 0 && frozenClaimOrder?.key !== currentClaimOrderKey) {
+    if (isSectionsLoading) {
+      // Not drawn yet: order the claims by their counts once the set has settled and the counts are in.
+      if (claimSetSettled && byVotesNow) setFrozenClaimOrder(freezeClaimOrder(currentClaimOrderKey, byVotesNow));
+    } else {
+      // Drawn: hold what this render shows, so no row on screen moves. A claim that joins the list (one
+      // the viewer adds, or a refetch brings in) goes after the rows of its group, and past the wait
+      // with no counts the rows keep Best order.
+      setFrozenClaimOrder(freezeClaimOrder(currentClaimOrderKey, displayedClaimSeeds));
+    }
+  }
 
   return {
     data: model,
