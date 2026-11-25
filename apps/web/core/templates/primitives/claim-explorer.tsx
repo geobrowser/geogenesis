@@ -479,8 +479,9 @@ export function ClaimListRow({ rank, claim, isAgreed = false, hideKindOnPhone = 
 /**
  * The split rows and vote total a claim row draws. With a vote binding that has counts, the row's
  * overall result comes from it, so a press moves the result at once (the binding adjusts for the
- * viewer's own vote). The overall row is the "Everyone" row, or else the first row: a Claim page
- * sub-claim's single row names the space its vote target counts in. Other rows keep the fetched numbers.
+ * viewer's own vote). The overall row is the "Everyone" row, or else a lone row (a Claim page
+ * sub-claim's single row names the space its vote target counts in); with several space rows and no
+ * Everyone row, an Everyone row goes first. Other rows keep the fetched numbers.
  * No votes, no split, as in the Claim page's vote box.
  */
 export function claimRowResult(
@@ -492,12 +493,18 @@ export function claimRowResult(
     if (total === 0) return { splitRows: [], totalVotes: 0 };
     const percent = (vote.agreeCount / total) * 100;
     const rows = claim.split.rows;
-    const primary = rows.find(row => row.isEveryone) ?? rows[0];
+    // A lone row is the overall one; among several space rows with no Everyone row, none is.
+    const primary = rows.find(row => row.isEveryone) ?? (rows.length === 1 ? rows[0] : undefined);
     if (!primary) {
-      return {
-        splitRows: [{ id: 'all', label: 'Everyone', color: '#202020', percent, voterCount: total, isEveryone: true }],
-        totalVotes: total,
+      const everyone: SplitRow = {
+        id: 'all',
+        label: 'Everyone',
+        color: '#202020',
+        percent,
+        voterCount: total,
+        isEveryone: true,
       };
+      return { splitRows: [everyone, ...rows], totalVotes: total };
     }
     return {
       splitRows: rows.map(row => (row === primary ? { ...row, percent, voterCount: total } : row)),

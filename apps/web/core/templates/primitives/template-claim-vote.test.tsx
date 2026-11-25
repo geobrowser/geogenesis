@@ -10,6 +10,7 @@ import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-
 
 import type { ClaimSummaryModel, ClaimVoteTarget, SubClaimModel, TopicRecentDebateModel } from '../models';
 import { ClaimTemplate } from '../views/claim-template';
+import { claimRowResult } from './claim-explorer';
 import {
   ClaimExplorer,
   ClaimVoteBinding,
@@ -288,7 +289,7 @@ describe('TemplateClaimVote', () => {
 });
 
 describe('ClaimVotePills: the debates app buttons (GEO-3845)', () => {
-  it('draws two equal 44px outlined pills that share the row, with no counts on them', () => {
+  it('draws two equal 28px outlined pills that share the row, with no counts on them', () => {
     renderVote(TARGET, { agree: 12, disagree: 3 });
     const group = screen.getByRole('group', { name: `Vote on ${TARGET.title}` });
     expect(group).toHaveClass('w-full');
@@ -526,6 +527,35 @@ describe('ClaimExplorer voting', () => {
     const meters = screen.getAllByRole('meter');
     expect(meters.length).toBeGreaterThan(0);
     for (const meter of meters) expect(meter).toHaveAttribute('aria-valuenow', '57');
+  });
+
+  describe('claimRowResult: which row takes the live overall numbers', () => {
+    const live = { agreeCount: 6, disagreeCount: 4 };
+    const pp = { id: 'pp', label: 'Pro-Palestinian', color: '#6833ff', percent: 40, voterCount: 5, isSubspace: true };
+    const pi = { id: 'pi', label: 'Pro-Israel', color: '#3963fe', percent: 80, voterCount: 5, isSubspace: true };
+
+    it('an Everyone row after the space rows takes them; the space rows keep their own', () => {
+      const everyone = { id: 'all', label: 'Everyone', color: '#202020', percent: 50, voterCount: 8, isEveryone: true };
+      const { splitRows, totalVotes } = claimRowResult(
+        { split: { rows: [pp, pi, everyone], isSplit: true, totalVotes: 8 } },
+        live
+      );
+      expect(totalVotes).toBe(10);
+      expect(splitRows).toEqual([pp, pi, { ...everyone, percent: 60, voterCount: 10 }]);
+    });
+
+    it('several space rows and no Everyone row: an Everyone row goes first, no space row is relabeled', () => {
+      const { splitRows, totalVotes } = claimRowResult(
+        { split: { rows: [pp, pi], isSplit: true, totalVotes: 10 } },
+        live
+      );
+      expect(totalVotes).toBe(10);
+      expect(splitRows).toEqual([
+        { id: 'all', label: 'Everyone', color: '#202020', percent: 60, voterCount: 10, isEveryone: true },
+        pp,
+        pi,
+      ]);
+    });
   });
 
   it('a row without a target (the fixture) keeps its local handler', () => {
