@@ -64,3 +64,38 @@ export function LiveClaimTemplateView({
     />
   );
 }
+
+export interface LiveClaimSectionsViewProps {
+  entityId: string;
+  spaceId: string;
+}
+
+/**
+ * The Claim page from its Supporting claims down, for the Debate page to scroll into below the debate
+ * (GEO-3869). Same adapter and template as the Claim page, so votes, the add-claim "+" and the rows
+ * behave and look the same; the debate already shows the claim, so its title and vote box are left out
+ * and Supporting claims follows the debate as the page's next section.
+ */
+export function LiveClaimSectionsView({ entityId, spaceId }: LiveClaimSectionsViewProps) {
+  const { data, isLoading, isSectionsLoading, actionCallbacks } = useLiveClaimTemplate({ entityId, spaceId });
+
+  if (isLoading) {
+    return (
+      <div aria-busy="true" className="mx-auto flex w-full max-w-[980px] flex-col gap-4 px-5 pb-8">
+        <Skeleton className="h-5 w-1/2 rounded" />
+        <Skeleton className="h-[140px] w-full rounded-xl" />
+      </div>
+    );
+  }
+
+  if (!data) return null;
+
+  return (
+    <ClaimTemplate
+      model={data}
+      actionCallbacks={actionCallbacks}
+      isLoadingSections={isSectionsLoading}
+      startAtSubClaims
+    />
+  );
+}
