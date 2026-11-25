@@ -258,7 +258,7 @@ export function ClaimListRow({ rank, claim, isAgreed = false, hideKindOnPhone = 
   }
 
   const titleNode = (
-    <span className="block max-w-[720px] text-[19px] leading-[26px] font-medium text-pretty text-text transition-colors group-hover/claim:text-[#4c1fd4]">
+    <span className="block max-w-[720px] text-[19px] leading-[26px] font-normal text-pretty text-text transition-colors group-hover/claim:text-[#4c1fd4]">
       {/* Phones: the rank leads the title instead of holding a column, so the row keeps its width. */}
       <span aria-hidden className="mr-2 text-[17.5px] font-semibold text-grey-04 tabular-nums @[760px]:hidden">
         {rank}
