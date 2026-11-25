@@ -594,6 +594,7 @@ export function DebatesBrowseFeed({
             activateVisibleDebate(debate.id);
           }}
           onScrolledAway={linkedOnly ? () => setLinkedInView(false) : undefined}
+          fitsContent={linkedOnly}
           // Pressing a debate's own control makes it the active one rather than
           // waiting for the scroll observer: its bar is reachable from 0%
           // visibility but activation needs 60%, so mid-scroll the panel would
@@ -676,6 +677,7 @@ function DebateFeedItem({
   onPlaybackState,
   onStillShown,
   onScrolledAway,
+  fitsContent = false,
 }: {
   debate: Debate;
   spaceId: string;
@@ -700,6 +702,11 @@ function DebateFeedItem({
   onStillShown?: DebatePageOutcome['stillShown'];
   /** The card has left the screen bar a sliver: on the Debate page, scrolled into the claim below. */
   onScrolledAway?: () => void;
+  /**
+   * As tall as the debate rather than the screen: on the Debate page the claim's content follows
+   * straight on, and peeks in below, instead of starting after a screen's worth of white.
+   */
+  fitsContent?: boolean;
 }) {
   const itemRef = React.useRef<HTMLElement | null>(null);
   useStillFrameShown(itemRef, onStillShown);
@@ -740,7 +747,11 @@ function DebateFeedItem({
       // 20px below the navbar, per the design — the media sizing has slack to absorb it, so
       // the card doesn't need to sit flush against the chrome. `md:py-3` still wins on
       // mobile: Tailwind emits variant utilities after unprefixed ones, so no `md:pt-3` needed.
-      className="flex h-full snap-start items-start justify-center px-4 pt-5 md:h-auto md:min-h-full md:py-3"
+      className={cx(
+        'flex items-start justify-center px-4 pt-5',
+        // Room below for the out-of-flow scroll nudge, so it doesn't sit on the claim's content.
+        fitsContent ? 'pb-14 md:pt-3' : 'h-full snap-start md:h-auto md:min-h-full md:py-3'
+      )}
     >
       {/* The whole debate lifts with the nudge — media, claim and controls together — so the
           gesture reads as the feed scrolling rather than as one element twitching. Shared
