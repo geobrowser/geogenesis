@@ -617,10 +617,7 @@ export function useLiveClaimTemplate({
           meta: item.description ?? undefined,
           href: NavUtils.toEntity(item.spaceId || spaceId, item.entityId),
         })),
-        action:
-          record.claimsTotal && record.claimsTotal > 6
-            ? { label: 'All related claims', href: `${overviewHref}/claims` }
-            : undefined,
+        // No "All related claims" link (Preston): the section shows its six and stops.
       });
     }
 
@@ -695,7 +692,6 @@ export function useLiveClaimTemplate({
     hydratedSubClaimKindByHex,
     incomingSupportingQuotes,
     record.claimRows,
-    record.claimsTotal,
     record.debateRows,
     record.debatesTotal,
     row,

@@ -1175,6 +1175,15 @@ describe('GEO-3837 phone tidy-ups', () => {
     expect(within(box).queryByText('You disagreed.')).toBeNull();
     expect(within(box).queryByRole('button', { name: 'Change' })).toBeNull();
     expect(within(box).getByRole('button', { name: 'Disagree' })).toHaveAttribute('aria-pressed', 'true');
+    // Phones: the claim-row split line under the buttons, "60% (5)" with no space name.
+    const phoneSplit = within(box).getByTestId('vote-box-phone-split');
+    expect(phoneSplit).toHaveTextContent('60%(5)');
+    expect(within(phoneSplit).queryByText('World affairs')).toBeNull();
+    phoneSplit.remove(); // jsdom applies no container queries; check the wide layout alone below.
+    // The result leads: a large percentage and the count, no space name, over the split bar (GEO-3845).
+    expect(within(box).getByTestId('vote-box-result')).toHaveTextContent('60%agree·5 votes');
+    expect(within(box).getByRole('meter')).toHaveAttribute('aria-valuenow', '60');
+    expect(within(box).queryByText('World affairs')).toBeNull();
 
     fireEvent.click(within(box).getByRole('button', { name: 'Disagree' }));
     expect(onClear).toHaveBeenCalledTimes(1);

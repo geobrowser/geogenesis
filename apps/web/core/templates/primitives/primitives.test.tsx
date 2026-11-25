@@ -109,7 +109,7 @@ describe('SplitBars without an "Everyone" label (GEO-3845)', () => {
 });
 
 describe('VoteBox: the debates app Agree / Disagree (GEO-3845)', () => {
-  it('draws the two 44px outlined buttons and switches or retracts by press', () => {
+  it('draws the two 36px outlined buttons and switches or retracts by press', () => {
     const onVote = vi.fn();
     const onClear = vi.fn();
     render(
@@ -141,6 +141,149 @@ describe('VoteBox: the debates app Agree / Disagree (GEO-3845)', () => {
     );
     expect(screen.getByRole('button', { name: 'Agree' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Disagree' })).toBeDisabled();
+  });
+});
+
+describe('VoteBox: the result leads, over a full-width split bar (GEO-3845)', () => {
+  const control = { userVote: null, countSummary: '7 votes', onVote: vi.fn() } as const;
+  const lone: SplitBreakdown = {
+    isSplit: false,
+    totalVotes: 7,
+    rows: [{ id: 'wa', label: 'World affairs', color: '#202020', percent: 71, voterCount: 7, isEveryone: true }],
+  };
+
+  it('leads with a large "71% agree" and the quiet count, with no space label or prompt', () => {
+    render(<VoteBox split={lone} control={control} />);
+    // jsdom applies no container queries: drop the phone split line to check the wide layout alone.
+    screen.getByTestId('vote-box-phone-split').remove();
+
+    const result = screen.getByTestId('vote-box-result');
+    expect(result).toHaveTextContent('71%agree·7 votes');
+    const percent = within(result).getByText('71%');
+    expect(percent).toHaveClass('text-[40px]', 'font-medium');
+    expect(within(result).getByText('7 votes')).toHaveClass('text-grey-04');
+    expect(screen.queryByText('World affairs')).toBeNull();
+    // "Do you agree?" sits over the buttons.
+    const ask = screen.getByTestId('vote-box-ask');
+    expect(within(ask).getByText('Do you agree?')).toBeInTheDocument();
+    // Read once: the visible text is hidden from screen readers, the button group carries the name.
+    expect(within(ask).getByText('Do you agree?')).toHaveAttribute('aria-hidden');
+    expect(within(ask).getByRole('group', { name: 'Do you agree?' })).toBeInTheDocument();
+    expect(
+      within(ask)
+        .getByText('Do you agree?')
+        .compareDocumentPosition(screen.getByRole('button', { name: 'Agree' })) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
+
+  it('puts the result over a bar that stops at the buttons, bottom-aligned with them', () => {
+    render(<VoteBox split={lone} control={control} />);
+    // jsdom applies no container queries: drop the phone split line to check the wide layout alone.
+    screen.getByTestId('vote-box-phone-split').remove();
+
+    const result = screen.getByTestId('vote-box-result');
+    const meter = screen.getByRole('meter');
+    expect(screen.getAllByRole('meter')).toHaveLength(1);
+    expect(meter).toHaveAttribute('aria-valuenow', '71');
+    expect(meter).toHaveClass('w-full', 'bg-grey-02');
+    // Wide: the result and its bar form the left column; the ask and buttons sit to its right, and the
+    // row is bottom-aligned, so the bar ends at the buttons and lines up with their bottom.
+    const left = screen.getByTestId('vote-box-wide-result');
+    const ask = screen.getByTestId('vote-box-ask');
+    expect(left).toContainElement(result);
+    expect(left).toContainElement(meter);
+    expect(left).not.toContainElement(ask);
+    expect(left).toHaveClass('hidden', '@[680px]:flex', 'flex-1');
+    expect(left.parentElement).toHaveClass('@[680px]:flex-row', '@[680px]:items-end');
+    expect(left.parentElement).toContainElement(ask);
+    expect(left.compareDocumentPosition(ask) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(ask).toHaveClass('w-full', '@[680px]:w-auto');
+    // No Agree / Disagree share labels under the bar (Preston): the result above already says it.
+    expect(left).toHaveTextContent(/^71%agree·7 votes$/);
+  });
+
+  it('matches the claim rows on phones: buttons, then the split line with "71% (7)" and no label', () => {
+    render(<VoteBox split={lone} control={control} />);
+
+    const phone = screen.getByTestId('vote-box-phone-split');
+    expect(phone).toHaveClass('@[680px]:hidden');
+    // Phones: the buttons come first, then the split line.
+    expect(
+      screen.getByTestId('vote-box-ask').compareDocumentPosition(phone) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    expect(phone).toHaveTextContent('71%(7)');
+    expect(within(phone).queryByText('World affairs')).toBeNull();
+    expect(screen.getByTestId('vote-box-ask')).toHaveClass('w-full');
+  });
+
+  it('names a non-agree unit in the headline', () => {
+    render(<VoteBox split={{ ...lone, rows: [{ ...lone.rows[0], unit: 'helpful' }] }} control={control} />);
+    expect(screen.getByTestId('vote-box-result')).toHaveTextContent('71%helpful');
+    expect(screen.getByRole('meter', { name: 'World affairs helpful' })).toBeInTheDocument();
+  });
+
+  it('leads with the overall row and lists the spaces under the bar', () => {
+    render(<VoteBox split={CONTESTED_SPLIT} control={{ ...control, countSummary: '2,418 votes' }} />);
+    // jsdom applies no container queries: drop the phone split line to check the wide layout alone.
+    screen.getByTestId('vote-box-phone-split').remove();
+
+    const result = screen.getByTestId('vote-box-result');
+    expect(result).toHaveTextContent('52%agree·2,418 votes');
+    expect(within(result).queryByText('Community A')).toBeNull();
+    const overall = screen.getByRole('meter', { name: 'Everyone agree' });
+    const spaceA = screen.getByText('Community A');
+    expect(overall.compareDocumentPosition(spaceA) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText('Community B')).toBeInTheDocument();
+    expect(screen.getAllByRole('meter')).toHaveLength(3);
+  });
+
+  it('lists every space when no row is the overall one, with the count as the headline', () => {
+    render(
+      <VoteBox
+        split={{ ...CONTESTED_SPLIT, rows: CONTESTED_SPLIT.rows.filter(row => !row.isEveryone) }}
+        control={control}
+      />
+    );
+    // jsdom applies no container queries: drop the phone split line to check the wide layout alone.
+    screen.getByTestId('vote-box-phone-split').remove();
+
+    const result = screen.getByTestId('vote-box-result');
+    expect(result).toHaveTextContent('7 votes');
+    expect(screen.queryByTestId('vote-box-empty-bar')).toBeNull();
+    expect(screen.getAllByRole('meter')).toHaveLength(2);
+  });
+
+  it('keeps a prompt (the News story accuracy rating) above the result and the buttons', () => {
+    render(
+      <VoteBox
+        prompt="This is an accurate account of what happened"
+        split={CONTESTED_SPLIT}
+        control={{ ...control, countSummary: '2,418 people rated this account' }}
+      />
+    );
+    const box = screen.getByRole('region', { name: 'This is an accurate account of what happened' });
+    const prompt = within(box).getByText('This is an accurate account of what happened');
+    const result = within(box).getByTestId('vote-box-result');
+    expect(prompt.compareDocumentPosition(result) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(result).toHaveTextContent('52%agree·2,418 people rated this account');
+    expect(within(box).getByRole('button', { name: 'Agree' })).toBeInTheDocument();
+    // The prompt already asks, so "Do you agree?" is not drawn over the buttons.
+    expect(within(box).queryByText('Do you agree?')).toBeNull();
+  });
+
+  it('says a large, quiet "No votes yet" over an empty bar, buttons still there', () => {
+    render(
+      <VoteBox
+        split={{ rows: [], isSplit: false, totalVotes: 0 }}
+        control={{ ...control, countSummary: 'No votes yet' }}
+      />
+    );
+    const result = screen.getByTestId('vote-box-result');
+    expect(result).toHaveTextContent('No votes yet');
+    expect(within(result).getByText('No votes yet')).toHaveClass('text-[28px]', 'text-grey-04');
+    expect(screen.queryByRole('meter')).toBeNull();
+    expect(screen.getByTestId('vote-box-empty-bar')).toHaveClass('w-full', 'bg-grey-01');
+    expect(screen.getByRole('button', { name: 'Agree' })).toBeEnabled();
   });
 });
 
