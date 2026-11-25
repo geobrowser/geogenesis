@@ -122,9 +122,10 @@ function useIngestionSpace({
  * ingestion as the space's Add data panel: the assistant opens, imports the page and stages it, and
  * `link` makes it a source of the page the `+` was on.
  *
- * Shown to everyone. Signed out, the press opens the sign-in dialog instead of the form, the way the
- * app's other signed-out write controls do. Signed in but not a member, the import goes into their
- * own personal space (see `useIngestionSpace`).
+ * Shown to everyone, and opens for everyone. Signed out, the viewer pastes their link first and is
+ * asked to sign up at submit (GEO-3861); the link waits in the queue and the import starts once
+ * their account can write. Dismissing the sign-in puts the link back in the form. Signed in but not
+ * a member, the import goes into their own personal space (see `useIngestionSpace`).
  */
 export function SourceIngestionPopover({
   label,
@@ -137,6 +138,9 @@ export function SourceIngestionPopover({
 }) {
   const { authenticated } = usePrivy();
   const [open, setOpen] = React.useState(false);
+  // The link the form opens with: one held through a sign-in, submitted on its own once the
+  // account is ready, or put back for another try when the sign-in was dismissed.
+  const [held, setHeld] = React.useState<{ url: string; submit: boolean } | null>(null);
   const promptSignIn = usePrivySignIn(undefined, {
     analytics: {
       component: 'template_sources_section',
@@ -144,9 +148,38 @@ export function SourceIngestionPopover({
       target_id: link?.targetEntityId,
       auth_control: 'add_source',
       auth_intent: 'add_source',
-      auth_continuation: 'repeat',
+      auth_continuation: 'queued',
     },
   });
+
+  // Held here rather than in the form, which is mounted only while open and closes at submit.
+  const { queue, cancel } = useQueuedAction({
+    id: `source-ingestion-sign-in:${link?.targetEntityId ?? ''}`,
+    component: 'ai_assistant',
+    label: 'your source',
+    survivesRedirect: true,
+    // Reopens this `+` and submits from the form mounted then, which knows the new account.
+    liveOnly: true,
+    run: url => {
+      if (!url) return;
+      setHeld({ url, submit: true });
+      setOpen(true);
+    },
+  });
+
+  const submitSignedOut = (url: string) => {
+    setHeld(null);
+    setOpen(false);
+    queue(url);
+    promptSignIn(undefined, {
+      // A dismissed sign-in withdraws the link, so walking away never imports it later.
+      onCancel: () => {
+        cancel();
+        setHeld({ url, submit: false });
+        setOpen(true);
+      },
+    });
+  };
 
   return (
     <AddFormSurface
@@ -155,15 +188,24 @@ export function SourceIngestionPopover({
       align={align}
       onClose={() => setOpen(false)}
       onOpenChange={next => {
-        if (next && !authenticated) {
-          promptSignIn();
-          return;
-        }
         // Closing unmounts the form, which drops the typed link and any error with it.
         setOpen(next);
+        if (!next) setHeld(null);
       }}
     >
-      <SourceIngestionForm label={label} link={link} onClose={() => setOpen(false)} />
+      <SourceIngestionForm
+        // A new hold remounts the form, so its field starts from the held link.
+        key={held ? `${held.submit}:${held.url}` : 'empty'}
+        label={label}
+        link={link}
+        initialUrl={held?.url}
+        autoSubmit={held?.submit ?? false}
+        onSignedOutSubmit={authenticated ? undefined : submitSignedOut}
+        onClose={() => {
+          setHeld(null);
+          setOpen(false);
+        }}
+      />
     </AddFormSurface>
   );
 }
@@ -172,7 +214,23 @@ export function SourceIngestionPopover({
  * The link form inside the popover. Mounted only while the popover is open, so the space pick and
  * the ingestion's hooks (which need the app's query client) never run for a closed `+`.
  */
-function SourceIngestionForm({ label, link, onClose }: { label: string; link?: IngestionLink; onClose: () => void }) {
+function SourceIngestionForm({
+  label,
+  link,
+  initialUrl,
+  autoSubmit,
+  onSignedOutSubmit,
+  onClose,
+}: {
+  label: string;
+  link?: IngestionLink;
+  initialUrl?: string;
+  /** Submits `initialUrl` as the form mounts: a link held through the sign-in, now able to post. */
+  autoSubmit: boolean;
+  /** Set while signed out: takes the link to hold through a sign-up instead of importing it. */
+  onSignedOutSubmit?: (url: string) => void;
+  onClose: () => void;
+}) {
   const [needsAccount, setNeedsAccount] = React.useState(false);
   const autoFocus = useAddFormAutoFocus();
   const resolveSpace = useIngestionSpace({
@@ -185,10 +243,24 @@ function SourceIngestionForm({ label, link, onClose }: { label: string; link?: I
     onComplete: onClose,
     link,
     resolveSpace,
+    initialUrl,
   });
 
+  const autoSubmitted = React.useRef(false);
+  React.useEffect(() => {
+    if (!autoSubmit || autoSubmitted.current) return;
+    autoSubmitted.current = true;
+    void handleSubmit({ preventDefault: () => {} } as React.FormEvent);
+  }, [autoSubmit, handleSubmit]);
+
+  const onSubmit = (event: React.FormEvent) => {
+    if (!onSignedOutSubmit) return void handleSubmit(event);
+    event.preventDefault();
+    if (canSubmit) onSignedOutSubmit(url);
+  };
+
   return (
-    <form data-geo-analytics-label="Add source from URL" onSubmit={handleSubmit} className="flex flex-col gap-2.5">
+    <form data-geo-analytics-label="Add source from URL" onSubmit={onSubmit} className="flex flex-col gap-2.5">
       <label className="flex flex-col gap-1">
         <span className="text-[12.5px] font-medium text-grey-04">Link</span>
         <input

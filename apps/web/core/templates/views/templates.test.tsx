@@ -997,11 +997,7 @@ describe('News story Add claim with claim groups (GEO-3836)', () => {
     let settle!: (result: { ok: true; id: string; spaceId: string }) => void;
     const onAddClaim = vi.fn(() => new Promise<never>(resolve => (settle = resolve as never)));
     const view = (reportedClaims: ReturnType<typeof claim>[], key = 'a') => (
-      <NewsStoryTemplate
-        key={key}
-        model={{ ...base, reportedClaims }}
-        actionCallbacks={{ onAddClaim, canOpenAddForm: () => true }}
-      />
+      <NewsStoryTemplate key={key} model={{ ...base, reportedClaims }} actionCallbacks={{ onAddClaim }} />
     );
     const { rerender } = render(view([]));
 

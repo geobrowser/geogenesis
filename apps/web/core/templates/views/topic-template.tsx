@@ -255,7 +255,7 @@ export function TopicTemplate({
                     secondaryPlaceholder="e.g. 18 Nov 2026"
                     tertiaryLabel="Summary (optional)"
                     tertiaryPlaceholder="Brief neutral summary of what happened..."
-                    canOpen={actionCallbacks?.canOpenAddForm}
+                    holdDraft={actionCallbacks?.holdAddDraft}
                     onSubmit={draft => {
                       addedTimelineTurns.add(
                         state => ({

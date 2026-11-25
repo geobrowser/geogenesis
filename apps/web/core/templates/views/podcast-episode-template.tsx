@@ -206,7 +206,7 @@ export function PodcastEpisodeTemplate({
             <h2 className="m-0 text-mediumTitle font-semibold text-text">Notable claims</h2>
             <AddClaimPopover
               label="Add notable claim"
-              canOpen={actionCallbacks?.canOpenAddForm}
+              holdDraft={actionCallbacks?.holdAddDraft}
               onSubmit={draft => {
                 addClaim(
                   state => ({
@@ -237,7 +237,7 @@ export function PodcastEpisodeTemplate({
               primaryPlaceholder="Exact quote from the episode…"
               secondaryLabel="Speaker (optional)"
               secondaryPlaceholder="e.g. Guest or host name"
-              canOpen={actionCallbacks?.canOpenAddForm}
+              holdDraft={actionCallbacks?.holdAddDraft}
               onSubmit={({ primary, secondary }) => {
                 addQuote(
                   state => ({

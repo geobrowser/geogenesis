@@ -298,7 +298,7 @@ export function NewsStoryTemplate({
                         <h2 className="m-0 text-mediumTitle font-semibold text-text">Other claims</h2>
                         <AddClaimPopover
                           label="Add claim"
-                          canOpen={actionCallbacks?.canOpenAddForm}
+                          holdDraft={actionCallbacks?.holdAddDraft}
                           onSubmit={addClaim}
                         />
                       </div>
@@ -310,7 +310,7 @@ export function NewsStoryTemplate({
                 <section aria-label="Claims" className="flex flex-col gap-3">
                   <div className="flex items-center justify-between gap-3">
                     <h2 className="m-0 text-mediumTitle font-semibold text-text">Claims</h2>
-                    <AddClaimPopover label="Add claim" canOpen={actionCallbacks?.canOpenAddForm} onSubmit={addClaim} />
+                    <AddClaimPopover label="Add claim" holdDraft={actionCallbacks?.holdAddDraft} onSubmit={addClaim} />
                   </div>
                   <NewsClaimBulletList claims={flatClaims} />
                 </section>

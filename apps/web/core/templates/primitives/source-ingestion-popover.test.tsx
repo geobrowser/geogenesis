@@ -136,16 +136,60 @@ async function submitLink(value = 'example.com/story') {
 afterEach(cleanup);
 
 describe('Sources section +', () => {
-  it('is shown signed out, and the press opens sign-in instead of the form', () => {
-    renderSection();
+  it('signed out, the form opens, and submitting asks for sign-in and holds the link without importing', async () => {
+    const store = renderSection();
 
     fireEvent.click(screen.getByRole('button', { name: 'Add source' }));
+    expect(auth.promptSignIn).not.toHaveBeenCalled();
+    expect(screen.getByPlaceholderText(/Paste news, podcast, tweet, blog URLs/)).toBeInTheDocument();
+
+    const input = screen.getByPlaceholderText(/Paste news, podcast, tweet, blog URLs/);
+    fireEvent.change(input, { target: { value: 'example.com/story' } });
+    await act(async () => {
+      fireEvent.submit(input.closest('form') as HTMLFormElement);
+    });
 
     expect(auth.promptSignIn).toHaveBeenCalledTimes(1);
-    expect(screen.queryByPlaceholderText(/Paste news, podcast, tweet, blog URLs/)).toBeNull();
+    const queued = store.get(pendingActionsAtom);
+    expect(queued).toHaveLength(1);
+    expect(queued[0]).toMatchObject({ intent: 'example.com/story', requires: 'personalSpace' });
     expect(resolveSeed).not.toHaveBeenCalled();
     expect(membership.access).not.toHaveBeenCalled();
     expect(membership.ensure).not.toHaveBeenCalled();
+  });
+
+  it('signed out, a dismissed sign-in withdraws the link and puts it back in the form', async () => {
+    const store = renderSection();
+    await submitLink();
+    const onCancel = auth.promptSignIn.mock.calls[0]![1]?.onCancel as () => void;
+
+    act(() => onCancel());
+
+    expect(store.get(pendingActionsAtom)).toHaveLength(0);
+    expect(screen.getByPlaceholderText(/Paste news, podcast, tweet, blog URLs/)).toHaveValue('example.com/story');
+    expect(resolveSeed).not.toHaveBeenCalled();
+  });
+
+  it('signed out, the held link is imported once after sign-in, without typing it again', async () => {
+    canEditPageSpace(false);
+    resolveSeed.mockResolvedValue({ mode: 'ingestion', url: 'https://example.com/story', link });
+    const store = renderSection();
+    await submitLink();
+    const [queued] = store.get(pendingActionsAtom);
+
+    auth.authenticated = true;
+    await act(async () => {
+      await queued!.run();
+    });
+
+    await waitFor(() => expect(resolveSeed).toHaveBeenCalledTimes(1));
+    expect(resolveSeed).toHaveBeenCalledWith(
+      'https://example.com/story',
+      'TemplateSourcesSection',
+      expect.objectContaining({ targetEntityId: link.targetEntityId }),
+      PERSONAL_WRITE
+    );
+    expect(store.get(isChatOpenAtom)).toBe(true);
   });
 
   it('on a phone, signed in, opens the link form in a bottom sheet without raising the keyboard', () => {
