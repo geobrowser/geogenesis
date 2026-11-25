@@ -75,7 +75,7 @@ export function GraphExplorerShell() {
         <Skeleton className="hidden md:block md:h-8 md:basis-full md:rounded-full" />
       </div>
       <div className="flex min-h-0 flex-1 md:flex-none md:flex-col">
-        <div className="relative isolate min-w-0 flex-1 overflow-hidden bg-[#0b0b0c] md:h-[calc(62vh+88px)] md:min-h-[400px] md:flex-none">
+        <div className="relative isolate min-w-0 flex-1 overflow-hidden bg-[#0b0b0c] md:h-[calc(62vh+76px)] md:min-h-[400px] md:flex-none">
           <StaticSkeletonStage />
         </div>
         <aside
