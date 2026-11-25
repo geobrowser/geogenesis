@@ -33,6 +33,7 @@ import { ExploreFeedCard } from '~/partials/explore/explore-feed-card';
 
 import { ExploreTypeFilterMenu } from './explore-type-filter-menu';
 import { feedEditionKey } from './feed-edition-key';
+import { FEED_SNAP_END_CLASS_NAME, FEED_SNAP_ITEM_CLASS_NAME, useFeedSnap } from './use-feed-snap';
 
 /**
  * Cards drawn in full on the first render, whatever the viewport. The rest wait until they are near
@@ -203,6 +204,8 @@ type EntityFeedProps = {
   cdnFirstPage?: boolean;
   /** Extra cards between the feed's own (GEO-3421's past calls). Only on an unfiltered feed. */
   interleave?: FeedInterleave;
+  /** Scroll a card at a time, each resting in the middle of the screen (Explore). See `useFeedSnap`. */
+  snapCards?: boolean;
 };
 
 /**
@@ -390,6 +393,7 @@ export function EntityFeed({
   cdnFirstPage = false,
   interleave,
   entryEntityId = null,
+  snapCards = false,
 }: EntityFeedProps) {
   const [time, setTime] = React.useState<ExploreTime>(initialTime);
   const [sort, setSort] = React.useState<ExplorePageSort>(initialSort);
@@ -814,6 +818,8 @@ export function EntityFeed({
 
   // Slots follow the unfiltered list, so leaving a replaced card out cannot move them.
   const interleaved = unfiltered ? interleave?.(items.length) : undefined;
+  // Only once there are cards to rest on: with none, mandatory snapping has nowhere but the top.
+  useFeedSnap(snapCards && items.length > 0);
 
   const timeLabel = TIME_OPTIONS.find(o => o.value === time)?.label ?? time;
   const sortLabel = SORT_LABELS[sort];
@@ -982,23 +988,27 @@ export function EntityFeed({
               {/* A feed, so its debates play as they come into view; nowhere else does (GEO-3812).
                   Around the card only, not what is interleaved between them. */}
               {interleaved?.replaces.has(feedEditionKey(item.spaceId, item.entityId)) ? null : (
-                <DebateFeedAutoplay>
-                  <ExploreFeedCard
-                    itemPosition={index + 1}
-                    item={item}
-                    hideSpaceLink={lockedSpaceId != null}
-                    hideJoinButton={lockedSpaceId != null}
-                    titleOpensSidePanel={titleOpensSidePanel}
-                    claimCardVariant={claimCardVariant}
-                    deferUntilNearViewport={index >= EAGER_CARD_COUNT}
-                  />
-                </DebateFeedAutoplay>
+                <FeedSnapSlot snap={snapCards}>
+                  <DebateFeedAutoplay>
+                    <ExploreFeedCard
+                      itemPosition={index + 1}
+                      item={item}
+                      hideSpaceLink={lockedSpaceId != null}
+                      hideJoinButton={lockedSpaceId != null}
+                      titleOpensSidePanel={titleOpensSidePanel}
+                      claimCardVariant={claimCardVariant}
+                      deferUntilNearViewport={index >= EAGER_CARD_COUNT}
+                    />
+                  </DebateFeedAutoplay>
+                </FeedSnapSlot>
               )}
-              {interleaved?.cards.get(index)}
+              {interleaved?.cards.has(index) ? (
+                <FeedSnapSlot snap={snapCards}>{interleaved.cards.get(index)}</FeedSnapSlot>
+              ) : null}
             </React.Fragment>
           ))
         )}
-        <div ref={sentinelRef} className="h-4 w-full" aria-hidden />
+        <div ref={sentinelRef} className={cx('h-4 w-full', snapCards && FEED_SNAP_END_CLASS_NAME)} aria-hidden />
         {isFetchNextPageError && !isFetchingNextPage && items.length > 0 ? (
           <FeedRetry className="mt-4" onRetry={() => void fetchNextPage()} retrying={false}>
             Could not load more.
@@ -1014,4 +1024,9 @@ export function EntityFeed({
       </div>
     </div>
   );
+}
+
+/** A card's place in the feed: a snap target where the feed snaps, and no element where it does not. */
+function FeedSnapSlot({ snap, children }: { snap: boolean; children: React.ReactNode }) {
+  return snap ? <div className={FEED_SNAP_ITEM_CLASS_NAME}>{children}</div> : <>{children}</>;
 }

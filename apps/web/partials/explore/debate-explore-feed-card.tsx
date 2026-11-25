@@ -17,6 +17,7 @@ import { DebateShareDialog } from '~/core/debates/browse/lazy-share-dialog';
 import { useDebateShareAction } from '~/core/debates/browse/use-debate-share-action';
 import { compositeTopSlot } from '~/core/debates/composite-top-slot';
 import { clickAsksToPlay, useDebateCardPlayback } from '~/core/debates/debate-playback-gate';
+import { useFeedPlayingCard } from '~/core/debates/feed-playing-card';
 import { useDebate, useDebateMedia } from '~/core/debates/hooks';
 import { MomentsCardPlayer } from '~/core/debates/moments-player/moments-card-player';
 import { hasProcessedVideo, isWatchableDebate } from '~/core/debates/playback-utils';
@@ -271,9 +272,11 @@ export function DebateExploreFeedCard({
    * less than 60% of it is showing yet: the tap started its elements, and holding them for the
    * scroll that brings it into view would stop them again under the viewer's finger.
    */
-  const playerActive = tapToPlay
-    ? playbackAllowed && onScreen && !coveredBySheet
-    : active && playbackAllowed && !coveredBySheet;
+  // A feed card in view enough to play is a candidate; of the candidates on screen, only the one
+  // nearest the middle plays, so two cards never play at once (GEO-3867, `useFeedPlayingCard`).
+  const feedCandidate = !tapToPlay && active && playbackAllowed && !coveredBySheet;
+  const playingHere = useFeedPlayingCard(owner, container, feedCandidate);
+  const playerActive = tapToPlay ? playbackAllowed && onScreen && !coveredBySheet : playingHere;
 
   // A tap lasts as long as the viewer is watching this card: it is given up once the card leaves
   // the screen, goes behind a sheet, or scrolls back out of the active range it reached — so it
@@ -342,7 +345,8 @@ export function DebateExploreFeedCard({
     // Let the player's handler keep the play request, but leave activation to visibility. Forcing
     // this card active in place could play it over the previous card, and a toolbar resize would
     // immediately undo that activation while it was still below the lower threshold.
-    if (!active) container?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    // A card in view that is not the one playing is brought to the middle, which makes it the one.
+    if (!playingHere) container?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
   };
 
   /*
