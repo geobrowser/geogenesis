@@ -133,6 +133,45 @@ describe('Topic timeline Add event date', () => {
     expect(screen.getByText('Day must be less than 29 for the entered month.')).toBeInTheDocument();
   });
 
+  it('reads the date still being typed when Enter submits from the day field', async () => {
+    const { onAddEvent } = renderTopic();
+    typeTitle('Ceasefire signed');
+    const group = screen.getByRole('group', { name: 'Date' });
+    const set = (placeholder: string, value: string, blur: boolean) => {
+      const input = within(group).getByPlaceholderText(placeholder);
+      input.focus();
+      fireEvent.change(input, { target: { value } });
+      if (blur) fireEvent.blur(input);
+      return input;
+    };
+    set('YYYY', '2026', true);
+    set('MM', '11', true);
+    const day = set('DD', '18', false);
+    expect(document.activeElement).toBe(day);
+
+    await act(async () => fireEvent.submit(day.closest('form') as HTMLFormElement));
+
+    expect(onAddEvent).toHaveBeenCalledWith({
+      title: 'Ceasefire signed',
+      when: '2026-11-18T00:00:00.000Z',
+      summary: undefined,
+    });
+  });
+
+  it('blocks an Enter submit while the day field still holds a partial date', () => {
+    const { onAddEvent } = renderTopic();
+    typeTitle('Ceasefire signed');
+    const group = screen.getByRole('group', { name: 'Date' });
+    const year = within(group).getByPlaceholderText('YYYY');
+    year.focus();
+    fireEvent.change(year, { target: { value: '2026' } });
+
+    fireEvent.submit(year.closest('form') as HTMLFormElement);
+
+    expect(onAddEvent).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent('Enter a full date, or leave it blank.');
+  });
+
   it('gives the date fields at least a 16px font, so iOS does not zoom in the phone sheet', () => {
     renderTopic();
     const group = screen.getByRole('group', { name: 'Date' });
