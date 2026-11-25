@@ -57,6 +57,7 @@ export {
   type ListRankingViewMode,
   type RankableListItem,
 } from './list-ranking';
+export { DEBATE_GALLERY_CARD_WIDTH_CLASS, DebateGalleryCard, type DebateGalleryCardProps } from './debate-gallery-card';
 export { RecentDebatesGallery, type RecentDebatesGalleryProps } from './recent-debates-gallery';
 export { RelatedListSection, type RelatedListSectionProps } from './related-list-section';
 export { SourceChipList, type SourceChipListProps } from './source-chip-list';
