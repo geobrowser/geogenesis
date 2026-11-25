@@ -78,14 +78,27 @@ vi.mock('~/core/sync/use-store', () => ({
     where,
     first,
     enabled = true,
+    sort,
   }: {
     where: WhereCondition;
     first?: number;
     enabled?: boolean;
+    sort?: { propertyId: string; direction: 'asc' | 'desc' };
   }) => {
     if (!enabled) return { entities: [], isLoading: false };
-    const query = new EntityQuery(state.corpus).where(where);
-    return { entities: (first ? query.limit(first) : query).execute(), isLoading: false };
+    let matched = new EntityQuery(state.corpus).where(where).execute();
+    // Stands in for the server's property order: newest value first, entities without one after.
+    if (sort) {
+      const valueOf = (entity: Entity) =>
+        entity.values.find(value => value.property.id === sort.propertyId)?.value ?? null;
+      matched = [...matched].sort((a, b) => {
+        const left = valueOf(a);
+        const right = valueOf(b);
+        if (left === null || right === null) return left === null ? (right === null ? 0 : 1) : -1;
+        return sort.direction === 'desc' ? right.localeCompare(left) : left.localeCompare(right);
+      });
+    }
+    return { entities: first ? matched.slice(0, first) : matched, isLoading: false };
   },
 }));
 
@@ -204,6 +217,17 @@ function linked(id: string, name: string, spaceId: string, typeIds: string[], li
     relations: [relation(linkTypeId, PAGE, spaceId)],
     values: [],
   };
+}
+
+/** A News event's `Event date` value, as the store holds it. */
+function eventDate(entityId: string, spaceId: string, date: string): Entity['values'][number] {
+  return {
+    id: `${entityId}-date`,
+    entity: { id: entityId, name: null },
+    spaceId,
+    property: { id: TEMPLATE_ONTOLOGY.EVENT_DATE_PROPERTY_ID, name: 'Event date', dataType: 'DATETIME' },
+    value: date,
+  } as Entity['values'][number];
 }
 
 function pageEntity(typeId: string, relations: Relation[] = []): Entity {
@@ -564,23 +588,67 @@ describe('Topic template', () => {
     );
   });
 
-  it.each([
-    [true, ['Space story', 'Story the space tagged']],
-    [false, ['Story the space tagged']],
-  ])('checks news tags only for topic-feed rows (from the space feed: %s)', async (fromSpaceFeed, expected) => {
+  it('lists the newest News events by Event date, never News stories', async () => {
     topicCorpus();
-    state.corpus = [];
-    state.taggedInSpace = new Set(['n2']);
+    const dated = (id: string, name: string, spaceId: string, date: string | null): Entity => ({
+      ...linked(id, name, spaceId, [TEMPLATE_ONTOLOGY.NEWS_EVENT_TYPE_ID], TOPICS_PROPERTY_ID),
+      values: date ? [eventDate(id, spaceId, date)] : [],
+    });
+    // Listed oldest first, the way a page ordered by last update can come back: an old event edited
+    // last week sorts ahead of one that happened last week.
+    state.corpus = [
+      dated('old1', 'Event from 2025', SPACE, '2025-09-29T00:00:00Z'),
+      dated('old2', 'Event from early 2026', SPACE, '2026-01-21T00:00:00Z'),
+      dated('undated', 'Event with no date', SPACE, null),
+      ...Array.from({ length: 8 }, (_, i) =>
+        dated(`n${i}`, `November ${23 - i * 2}`, SPACE, `2026-11-${String(23 - i * 2).padStart(2, '0')}T00:00:00Z`)
+      ),
+      dated('mine', 'Viewer event, November 20', VIEWER, '2026-11-20T00:00:00Z'),
+    ];
+    state.viewerSpaceId = VIEWER;
+    state.taggedInSpace = new Set(['story']);
     state.feedNews = {
-      fromSpaceFeed,
-      items: [
-        { entityId: 'n1', title: 'Space story', spaceId: SPACE, createdAtSec: 2 },
-        { entityId: 'n2', title: 'Story the space tagged', spaceId: SPACE, createdAtSec: 1 },
-      ],
+      fromSpaceFeed: false,
+      items: [{ entityId: 'story', title: 'Newest news story', spaceId: SPACE, createdAtSec: 1_900_000_000 }],
     };
-    const { result } = renderHook(() => useLiveTopicTemplate({ entityId: PAGE, spaceId: SPACE, isSpaceHome: true }));
+    const { result } = renderHook(() => useLiveTopicTemplate({ entityId: PAGE, spaceId: SPACE }));
 
-    await waitFor(() => expect(result.current.data?.timelineHighlights?.map(item => item.title)).toEqual(expected));
+    await waitFor(() => expect(result.current.data?.timelineHighlights).toBeDefined());
+    expect(result.current.data!.timelineHighlights!.map(item => item.title)).toEqual([
+      'November 23',
+      'November 21',
+      'Viewer event, November 20',
+      'November 19',
+      'November 17',
+      'November 15',
+      'November 13',
+      'November 11',
+    ]);
+    expect(result.current.data!.timelineHighlights![0]!.when).toBe('Nov 23, 2026');
+  });
+
+  it('lists an undated News event after every dated one, pre-1970 included', async () => {
+    topicCorpus();
+    state.corpus = [
+      linked('undated', 'Event with no date', SPACE, [TEMPLATE_ONTOLOGY.NEWS_EVENT_TYPE_ID], TOPICS_PROPERTY_ID),
+      {
+        ...linked('d1', 'Dated event', SPACE, [TEMPLATE_ONTOLOGY.NEWS_EVENT_TYPE_ID], TOPICS_PROPERTY_ID),
+        values: [eventDate('d1', SPACE, '2026-11-01T00:00:00Z')],
+      },
+      // Before 1970 its timestamp is negative, which must still rank above having no date at all.
+      {
+        ...linked('d0', 'Event from 1967', SPACE, [TEMPLATE_ONTOLOGY.NEWS_EVENT_TYPE_ID], TOPICS_PROPERTY_ID),
+        values: [eventDate('d0', SPACE, '1967-06-05T00:00:00Z')],
+      },
+    ];
+    const { result } = renderHook(() => useLiveTopicTemplate({ entityId: PAGE, spaceId: SPACE }));
+
+    await waitFor(() => expect(result.current.data?.timelineHighlights).toBeDefined());
+    expect(result.current.data!.timelineHighlights!.map(item => [item.title, item.when])).toEqual([
+      ['Dated event', 'Nov 1, 2026'],
+      ['Event from 1967', 'Jun 5, 1967'],
+      ['Event with no date', 'Event'],
+    ]);
   });
 
   it('reads coverage by where the Topics relation was published, not only where the source lives', async () => {
