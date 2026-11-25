@@ -1100,6 +1100,24 @@ describe('EntityFeed interleave', () => {
     new Map<number, React.ReactNode>([[1, <p key="extra">{`extra after 2 of ${feedLength}`}</p>]]);
   const interleave = (feedLength: number) => ({ cards: cards(feedLength), replaces: new Set<string>() });
 
+  // GEO-3867: Explore scrolls a card at a time, each card and each extra card its own stop.
+  it('makes every card a snap stop and snaps the page only where asked', () => {
+    mocks.pages = [{ items: [item('a'), item('b'), item('c')] }];
+    const { container, unmount } = render(
+      <EntityFeed apiEndpoint="/api/explore/feed" initialSort="best" interleave={interleave} snapCards />
+    );
+    expect(container.querySelectorAll('.snap-center.snap-always')).toHaveLength(4);
+    expect(screen.getByText('extra after 2 of 3').parentElement?.className).toBe('snap-center snap-always');
+    expect(container.querySelector('.snap-end')).not.toBeNull();
+    expect(document.documentElement.style.scrollSnapType).toBe('y mandatory');
+    unmount();
+    expect(document.documentElement.style.scrollSnapType).toBe('');
+
+    const plain = render(<EntityFeed apiEndpoint="/api/explore/feed" initialSort="best" interleave={interleave} />);
+    expect(plain.container.querySelector('.snap-center, .snap-end')).toBeNull();
+    expect(document.documentElement.style.scrollSnapType).toBe('');
+  });
+
   it('draws the extra cards where asked, without touching the request', async () => {
     mocks.pages = [{ items: [item('a'), item('b'), item('c')] }];
     render(<EntityFeed apiEndpoint="/api/explore/feed" initialSort="best" interleave={interleave} />);

@@ -606,7 +606,7 @@ describe('DebateExploreFeedCard', () => {
       Object.defineProperty(player().closest('article'), 'scrollIntoView', { value: scrollIntoView });
       expect(player()).toHaveAttribute('data-active', 'false');
       fireEvent.click(player());
-      expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center', inline: 'center' });
       expect(player()).toHaveAttribute('data-active', 'false');
       // The player keeps the tap, but visibility decides when it may start.
       expect(mocks.playerToggle).toHaveBeenCalledOnce();
@@ -650,7 +650,7 @@ describe('DebateExploreFeedCard', () => {
     expect(secondPlayer).toHaveAttribute('data-active', 'false');
 
     fireEvent.click(secondPlayer);
-    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center', inline: 'center' });
     expect(firstPlayer).toHaveAttribute('data-active', 'true');
     expect(secondPlayer).toHaveAttribute('data-active', 'false');
     expect(mocks.playerToggle).toHaveBeenCalledOnce();
@@ -659,6 +659,48 @@ describe('DebateExploreFeedCard', () => {
     intersectOnScreen(0.6, secondCard);
     expect(firstPlayer).toHaveAttribute('data-active', 'false');
     expect(secondPlayer).toHaveAttribute('data-active', 'true');
+  });
+
+  // GEO-3867: the card leaving still holds between its thresholds when the next reaches its own, so
+  // both qualified at once and, with sound on, played over each other.
+  it('plays only the card nearer the middle when two Explore cards are both in view enough', async () => {
+    mocks.debateQuery = { data: watchableDebate(), isError: false };
+    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+    const { container } = render(
+      <QueryClientProvider client={client}>
+        <Provider>
+          <DebateFeedAutoplay>
+            <DebateExploreFeedCard item={item} fallback={<div />} />
+            <DebateExploreFeedCard item={{ ...item, entityId: 'debate-two' }} fallback={<div />} />
+          </DebateFeedAutoplay>
+        </Provider>
+      </QueryClientProvider>
+    );
+    intersectAll(0.1);
+    const [firstCard, secondCard] = container.querySelectorAll('article');
+    const [firstPlayer, secondPlayer] = screen.getAllByTestId('player');
+    const at = (card: Element, top: number) =>
+      Object.defineProperty(card, 'getBoundingClientRect', {
+        configurable: true,
+        value: () => ({ top, height: 600, bottom: top + 600 }) as DOMRect,
+      });
+
+    at(firstCard!, 44);
+    at(secondCard!, 700);
+    intersectOnScreen(0.7, firstCard);
+    expect(firstPlayer).toHaveAttribute('data-active', 'true');
+
+    // Scrolled on: the first is half out and still holding, the second most of the way in.
+    at(firstCard!, -300);
+    at(secondCard!, 320);
+    intersectOnScreen(0.5, firstCard);
+    intersectOnScreen(0.7, secondCard);
+    act(() => {
+      fireEvent.scroll(window);
+    });
+    await act(async () => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
+    expect(secondPlayer).toHaveAttribute('data-active', 'true');
+    expect(firstPlayer).toHaveAttribute('data-active', 'false');
   });
 
   // The lead card used to stream both full recordings on arrival: 76.5 MB of an idle visit's 84 MB.

@@ -46,6 +46,7 @@ const EXPLORE_FEED_PROPS = {
   feedTopSpacingClassName: '',
   sendIdentityToken: true,
   cdnFirstPage: true,
+  snapCards: true,
 } satisfies React.ComponentProps<typeof EntityFeed>;
 
 /**
