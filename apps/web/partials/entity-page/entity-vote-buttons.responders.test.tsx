@@ -236,6 +236,22 @@ describe('the responder faces on a claim', () => {
     await waitFor(() => expect(screen.getAllByRole('button').length).toBeGreaterThan(0));
     expect(screen.queryByTestId('responder-faces')).toBeNull();
   });
+
+  it('are left out of a list row that keeps only the thumbs (GEO-3850)', async () => {
+    render(
+      <EntityVoteButtons
+        entityId="entity-1"
+        spaceId={SPACE}
+        responseKind="stance"
+        hideClaimShare
+        hideResponderAvatars
+      />,
+      { wrapper }
+    );
+
+    await waitFor(() => expect(screen.getAllByRole('button').length).toBe(2));
+    expect(screen.queryByTestId('responder-faces')).toBeNull();
+  });
 });
 
 /**

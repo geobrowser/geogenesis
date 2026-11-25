@@ -114,7 +114,7 @@ describe('source cards', () => {
   const report = node('src', {
     name: 'How Gaza’s dead are counted',
     types: [{ id: REPORT, name: 'Report' }],
-    publisher: 'BBC Verify',
+    publisher: { id: 'c'.repeat(32), name: 'BBC Verify', image: null },
     date: '2025-03-04T00:00:00Z',
   });
 
@@ -124,7 +124,7 @@ describe('source cards', () => {
     expect(sourceEyebrow({ ...report, publisher: null })).toBe('Report · Mar 2025');
     expect(sourceEyebrow({ ...report, date: 'not a date' })).toBe('Report · BBC Verify');
     // An outlet that is the source's own name says nothing new.
-    expect(sourceEyebrow({ ...report, publisher: report.name })).toBe('Report · Mar 2025');
+    expect(sourceEyebrow({ ...report, publisher: { id: 'c'.repeat(32), name: report.name!, image: null } })).toBe('Report · Mar 2025');
     expect(sourceEyebrow({ ...report, types: [], publisher: null, date: null })).toBeNull();
   });
 

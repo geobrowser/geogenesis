@@ -53,7 +53,8 @@ const MONTH_FORMAT = new Intl.DateTimeFormat('en-US', { month: 'short', year: 'n
 export function sourceEyebrow(node: GraphNode): string | null {
   const date = node.date ? new Date(node.date) : null;
   const month = date && !Number.isNaN(date.getTime()) ? MONTH_FORMAT.format(date) : null;
-  const outlet = node.publisher && node.publisher !== node.name ? node.publisher : null;
+  const name = node.publisher?.name;
+  const outlet = name && name !== node.name ? name : null;
   return [nodeTypeLabel(node), outlet, month].filter(Boolean).join(' · ') || null;
 }
 
