@@ -57,7 +57,14 @@ export function LiveEventTemplateView({
       actionCallbacks={actionCallbacks}
       compact={compact}
       headerActions={
-        <EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable compact={compact} variant="template" />
+        <EntityPageActions
+          entityId={entityId}
+          spaceId={spaceId}
+          isVoteable
+          compact={compact}
+          variant="template"
+          graphEntryPoint="event_page"
+        />
       }
     />
   );
@@ -86,7 +93,14 @@ export function LiveNewsStoryTemplateView({
       compact={compact}
       isLoadingSections={isSectionsLoading}
       headerActions={
-        <EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable compact={compact} variant="template" />
+        <EntityPageActions
+          entityId={entityId}
+          spaceId={spaceId}
+          isVoteable
+          compact={compact}
+          variant="template"
+          graphEntryPoint="news_story_page"
+        />
       }
     />
   );
@@ -114,7 +128,14 @@ export function LiveSourceTemplateView({
       compact={compact}
       isLoadingSections={isSectionsLoading}
       headerActions={
-        <EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable compact={compact} variant="template" />
+        <EntityPageActions
+          entityId={entityId}
+          spaceId={spaceId}
+          isVoteable
+          compact={compact}
+          variant="template"
+          graphEntryPoint="source_page"
+        />
       }
     />
   );
@@ -141,7 +162,14 @@ export function LivePostTemplateView({
       actionCallbacks={actionCallbacks}
       compact={compact}
       headerActions={
-        <EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable compact={compact} variant="template" />
+        <EntityPageActions
+          entityId={entityId}
+          spaceId={spaceId}
+          isVoteable
+          compact={compact}
+          variant="template"
+          graphEntryPoint="post_page"
+        />
       }
     />
   );
@@ -168,7 +196,14 @@ export function LivePodcastShowTemplateView({
       actionCallbacks={actionCallbacks}
       compact={compact}
       headerActions={
-        <EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable compact={compact} variant="template" />
+        <EntityPageActions
+          entityId={entityId}
+          spaceId={spaceId}
+          isVoteable
+          compact={compact}
+          variant="template"
+          graphEntryPoint="podcast_show_page"
+        />
       }
     />
   );
@@ -195,7 +230,14 @@ export function LivePodcastEpisodeTemplateView({
       actionCallbacks={actionCallbacks}
       compact={compact}
       headerActions={
-        <EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable compact={compact} variant="template" />
+        <EntityPageActions
+          entityId={entityId}
+          spaceId={spaceId}
+          isVoteable
+          compact={compact}
+          variant="template"
+          graphEntryPoint="podcast_episode_page"
+        />
       }
     />
   );

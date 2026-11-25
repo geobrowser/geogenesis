@@ -308,6 +308,7 @@ export function TopicPageView({
               spaceId={spaceId}
               leading={<TopicFollowControl topic={{ id: entityId, name: entity.name }} />}
               variant="template"
+              graphEntryPoint="topic_page"
             />
           </div>
 

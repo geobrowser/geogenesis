@@ -372,6 +372,8 @@ describe('TopicPageView parity with the generic entity page', () => {
       render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
 
       expect(mocks.pageActions?.variant).toBe('template');
+      // GEO-3866: the graph link records that it was opened from a topic page.
+      expect(mocks.pageActions?.graphEntryPoint).toBe('topic_page');
       expect(screen.queryByText('Explore graph')).toBeNull();
     } finally {
       window.localStorage.removeItem(featureFlagsStorageKey);
