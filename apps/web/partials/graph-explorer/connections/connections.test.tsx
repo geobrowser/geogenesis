@@ -421,21 +421,82 @@ describe('ConnectionsCanvas leaving nodes', () => {
 });
 
 describe('GraphTopBar chips', () => {
-  const bar = (kinds: GraphKind[]) =>
-    render(
-      <GraphTopBar
-        back={null}
-        trail={['Centre']}
-        search={null}
-        kinds={kinds}
-        kindFilter="all"
-        onKindFilter={() => {}}
-        close={null}
-      />
-    );
+  const bar = (kinds: GraphKind[], kindFilter: GraphKind | 'all' = 'all') => (
+    <GraphTopBar
+      back={null}
+      trail={['Centre']}
+      search={null}
+      kinds={kinds}
+      kindFilter={kindFilter}
+      onKindFilter={() => {}}
+      close={null}
+    />
+  );
+  const pressed = () =>
+    screen
+      .getAllByRole('button')
+      .filter(button => button.getAttribute('aria-pressed') === 'true')
+      .map(button => button.textContent);
+
+  it('keeps the chip in force, pressed and in kind order, when none of its kind is around', () => {
+    render(bar(['topic', 'ent', 'src'], 'claim'));
+    expect(screen.getAllByRole('button').map(button => button.textContent)).toEqual([
+      'Everything',
+      'People and groups',
+      'Claims',
+      'Sources',
+    ]);
+    expect(pressed()).toEqual(['Claims']);
+  });
+
+  it('keeps the row, so Everything is reachable, when only topics are around a filtered map', () => {
+    render(bar(['topic'], 'event'));
+    expect(pressed()).toEqual(['Events']);
+    expect(screen.getByRole('button', { name: 'Everything' })).toBeTruthy();
+  });
+
+  describe('in a row that scrolls', () => {
+    // jsdom has no layout: a 100px row whose chips sit 120px apart, so only the first fits.
+    const restore: Array<() => void> = [];
+    beforeEach(() => {
+      const original = HTMLElement.prototype.getBoundingClientRect;
+      HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) {
+        const row = this.closest('[role="group"]') as HTMLElement | null;
+        if (this.getAttribute('role') === 'group') return { left: 0, right: 100 } as DOMRect;
+        if (!row || this.tagName !== 'BUTTON') return original.call(this);
+        const left = [...row.children].indexOf(this) * 120 - row.scrollLeft;
+        return { left, right: left + 100 } as DOMRect;
+      };
+      restore.push(() => {
+        HTMLElement.prototype.getBoundingClientRect = original;
+      });
+    });
+    afterEach(() => restore.splice(0).forEach(undo => undo()));
+    const row = () => screen.getByRole('group', { name: 'Show' });
+
+    it('scrolls a pressed chip past the edge into view when it opens on it', () => {
+      render(bar(['ent', 'claim', 'story'], 'story'));
+      expect(row().scrollLeft).toBe(360);
+    });
+
+    it('leaves a chip already in view alone, and scrolls just far enough to one set for the viewer', () => {
+      const { rerender } = render(bar(['ent', 'claim', 'story']));
+      expect(row().scrollLeft).toBe(0);
+      rerender(bar(['ent', 'claim', 'story'], 'story'));
+      expect(row().scrollLeft).toBe(360);
+      rerender(bar(['ent', 'claim', 'story'], 'claim'));
+      expect(row().scrollLeft).toBe(240);
+    });
+
+    it('scrolls once the chips arrive, as they do after the first hop loads', () => {
+      const { rerender } = render(bar([], 'story'));
+      rerender(bar(['ent', 'claim', 'story'], 'story'));
+      expect(row().scrollLeft).toBe(360);
+    });
+  });
 
   it('offers Everything plus the kinds actually around the centre, never Topics', () => {
-    bar(['topic', 'ent', 'story']);
+    render(bar(['topic', 'ent', 'story']));
     expect(screen.getAllByRole('button').map(button => button.textContent)).toEqual([
       'Everything',
       'People and groups',
@@ -444,7 +505,7 @@ describe('GraphTopBar chips', () => {
   });
 
   it('shows no chips when nothing but topics is around', () => {
-    bar(['topic']);
+    render(bar(['topic']));
     expect(screen.queryByRole('group', { name: 'Show' })).toBeNull();
   });
 });

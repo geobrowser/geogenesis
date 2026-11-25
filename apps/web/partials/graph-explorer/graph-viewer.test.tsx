@@ -8,6 +8,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { captureSafely } from '~/core/analytics-capture-safely';
 import type { GraphHop } from '~/core/graph-explorer/graph-entity';
 import { GraphAnalyticsProvider, useGraphExplorerSession } from '~/core/graph-explorer/graph-explorer-analytics';
+import * as share from '~/core/graph-explorer/graph-share';
 import { type GraphHistory, recentre, startGraphHistory } from '~/core/graph-explorer/history';
 import {
   CLAIM_TYPE_ID,
@@ -102,6 +103,10 @@ vi.mock('~/core/claims/browse/claim-response-summary', () => ({
   useClaimResponseSummary: () => ({ isLoading: false, hasCounts: false, positive: 0, negative: 0 }),
 }));
 vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({ EntityVoteButtons: () => <div /> }));
+vi.mock('~/core/graph-explorer/graph-share', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/graph-explorer/graph-share')>()),
+  shareGraph: vi.fn(async () => 'copied'),
+}));
 vi.mock('~/core/utils/space/space-ranking', () => ({
   getTopRankedSpaceId: (ids: string[]) => ids[0] ?? null,
 }));
@@ -443,8 +448,207 @@ describe('GraphViewer', () => {
   });
 });
 
+describe('GraphViewer under a kind chip', () => {
+  const STORY = '33333333333333333333333333333333';
+  const OTHER_TOPIC = '44444444444444444444444444444444';
+  const CLAIM = '55555555555555555555555555555555';
+  const topicScope = { ...scope, topicId: TOPIC, topicSpaceId: SPACE };
+
+  /** The topic with a person, a dated story and another topic around it, and a claim about it. */
+  function mixedNeighbourhood(moreKinds: string[] = []) {
+    const base = neighbourhood({ centreId: TOPIC, filter: {} });
+    const person = base.selection!.nodes[1].node;
+    const story = {
+      ...person,
+      id: STORY,
+      name: 'A news story',
+      kind: 'story',
+      date: '2026-11-01',
+      types: [{ id: 'cccccccccccccccccccccccccccccccc', name: 'News story' }],
+    };
+    const topic = {
+      ...person,
+      id: OTHER_TOPIC,
+      name: 'Gaza ceasefire',
+      kind: 'topic',
+      types: [{ id: TOPIC_TYPE_ID, name: 'Topic' }],
+    };
+    const edgeTo = (id: string, n: number) => ({
+      id: `e${n}`,
+      fromId: id,
+      toId: TOPIC,
+      propertyId: 'p',
+      propertyName: 'Topics',
+      spaceId: SPACE,
+    });
+    const neighbours = [
+      { node: person, edge: base.selection!.links[0].edge },
+      { node: story, edge: edgeTo(STORY, 2) },
+      { node: topic, edge: edgeTo(OTHER_TOPIC, 3) },
+    ];
+    const centre = base.selection!.nodes[0].node;
+    hooks.useGraphNeighbourhood.mockReturnValue({
+      ...base,
+      selection: {
+        nodes: [base.selection!.nodes[0], ...neighbours.map(({ node }) => ({ node, hop: 1, parentId: TOPIC }))],
+        links: neighbours.map(({ edge }) => ({ hop: 1, edge })),
+      },
+      kinds: ['topic', 'ent', 'story'],
+      hop1: { isError: false, data: { centre, neighbours, moreKinds } },
+      centre,
+    });
+    hooks.useClaimsAbout.mockReturnValue({
+      data: { pages: [{ claims: [{ id: CLAIM, name: 'A claim about it', spaceId: SPACE }], endCursor: null }] },
+      isLoading: false,
+      isError: false,
+      hasNextPage: false,
+      isFetchingNextPage: false,
+      fetchNextPage: vi.fn(),
+    });
+  }
+  const chips = () => within(screen.getByRole('group', { name: 'Show' }));
+  const heading = (name: string) => screen.queryByRole('heading', { name });
+
+  it('shows only the chosen kind’s group in the panel, and every group again under Everything', () => {
+    mixedNeighbourhood();
+    render(<Viewer start={TOPIC} scope={scope} />);
+    expect(heading('Topics · 1')).toBeTruthy();
+
+    fireEvent.click(chips().getByRole('button', { name: 'News' }));
+    expect(heading('News · 1')).toBeTruthy();
+    expect(heading('Topics · 1')).toBeNull();
+    expect(heading('People and groups · 1')).toBeNull();
+    expect(screen.queryByRole('heading', { name: /^Claims/ })).toBeNull();
+    expect(screen.queryByText(/No claims/)).toBeNull();
+
+    fireEvent.click(chips().getByRole('button', { name: 'Everything' }));
+    expect(heading('Topics · 1')).toBeTruthy();
+    expect(heading('People and groups · 1')).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: /^Claims/ })).toBeTruthy();
+  });
+
+  it('notes capped kinds only for the groups the chip leaves in the panel', () => {
+    mixedNeighbourhood(['topic']);
+    render(<Viewer start={TOPIC} scope={scope} />);
+    expect(screen.queryByText(/Showing the first/)).toBeTruthy();
+    fireEvent.click(chips().getByRole('button', { name: 'News' }));
+    expect(screen.queryByText(/Showing the first/)).toBeNull();
+  });
+
+  it('keeps claims about the centre under Claims, and nothing else', () => {
+    mixedNeighbourhood();
+    // No claim is on this map, so there is no Claims chip: open it the way a shared link does.
+    render(<Viewer start={TOPIC} scope={scope} overrides={{ chip: 'claim' }} />);
+    expect(screen.getByText('A claim about it')).toBeTruthy();
+    expect(heading('News · 1')).toBeNull();
+    expect(heading('Topics · 1')).toBeNull();
+  });
+
+  it('hides the topic overview’s People and Latest news under a chip, keeping the centre', () => {
+    mixedNeighbourhood();
+    render(<Viewer start={TOPIC} scope={topicScope} />);
+    expect(heading('People and groups')).toBeTruthy();
+    expect(heading('Latest news')).toBeTruthy();
+
+    fireEvent.click(chips().getByRole('button', { name: 'News' }));
+    expect(heading('People and groups')).toBeNull();
+    expect(heading('Latest news')).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Israel-Gaza war' })).toBeTruthy();
+  });
+
+  it('opens a ?kinds= link on that chip', () => {
+    mixedNeighbourhood();
+    render(<Viewer start={TOPIC} scope={scope} overrides={{ chip: 'story' }} />);
+    expect(chips().getByRole('button', { name: 'News' }).getAttribute('aria-pressed')).toBe('true');
+    expect(heading('Topics · 1')).toBeNull();
+  });
+
+  it('shares the chip in view', () => {
+    mixedNeighbourhood();
+    render(<Viewer start={TOPIC} scope={topicScope} />);
+    fireEvent.click(chips().getByRole('button', { name: 'News' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Copy link' }));
+    expect(share.shareGraph).toHaveBeenLastCalledWith(
+      expect.objectContaining({ entityId: TOPIC, topicId: TOPIC }),
+      expect.anything(),
+      { nativeShare: false, kindFilter: 'story' }
+    );
+  });
+
+  it('gives way to Everything when recentring on a topic under a chip', () => {
+    mixedNeighbourhood();
+    render(<Viewer start={TOPIC} scope={scope} />);
+    fireEvent.click(chips().getByRole('button', { name: 'News' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Gaza ceasefire' }));
+    expect(chips().getByRole('button', { name: 'Everything' }).getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('shows a shared chip pressed even with none of its kind around the centre', () => {
+    mixedNeighbourhood();
+    render(<Viewer start={TOPIC} scope={scope} overrides={{ chip: 'event' }} />);
+    expect(chips().getByRole('button', { name: 'Events' }).getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it.each([
+    ['the most-responded claim', true],
+    ['a widely agreed claim', false],
+  ] as const)('gives way to Everything when opening %s from the topic summary under a chip', (_, inHeadline) => {
+    mixedNeighbourhood();
+    topicSummary.data = {
+      claims: [{ id: CLAIM, name: 'A claim', spaceId: SPACE, positive: 3, negative: 0, band: 'agreed' }],
+      truncated: false,
+    };
+    render(<Viewer start={TOPIC} scope={topicScope} />);
+    fireEvent.click(chips().getByRole('button', { name: 'News' }));
+    const headline = screen.getByRole('region', { name: 'How people responded' });
+    const rows = screen.getAllByRole('button', { name: /A claim/ });
+    expect(rows).toHaveLength(2);
+    fireEvent.click(rows.find(row => headline.contains(row) === inHeadline)!);
+    expect(chips().getByRole('button', { name: 'Everything' }).getAttribute('aria-pressed')).toBe('true');
+  });
+
+  // The map's node of the same kind keeps the chip too, so these open the row inside the panel.
+  const panel = () => within(screen.getByRole('region', { name: 'About Israel-Gaza war' }));
+  const recentredKinds = () =>
+    vi
+      .mocked(captureSafely)
+      .mock.calls.filter(([event]) => event === 'graph_explorer_recentred')
+      .map(([, props]) => (props as Record<string, unknown>).kind_filter);
+
+  it('keeps the chip when opening a row of its kind from the panel, and reports the hop under it', () => {
+    mixedNeighbourhood();
+    const move: React.MutableRefObject<((next: GraphHistory) => void) | null> = { current: null };
+    render(<TrackedViewer move={move} />);
+    fireEvent.click(chips().getByRole('button', { name: 'News' }));
+    fireEvent.click(panel().getByRole('button', { name: /A news story/ }));
+    expect(chips().getByRole('button', { name: 'News' }).getAttribute('aria-pressed')).toBe('true');
+    expect(recentredKinds()).toEqual(['story']);
+  });
+
+  it('reports the hop under Everything when a summary claim opened under a chip', () => {
+    mixedNeighbourhood();
+    topicSummary.data = {
+      claims: [{ id: CLAIM, name: 'A claim', spaceId: SPACE, positive: 3, negative: 0, band: 'agreed' }],
+      truncated: false,
+    };
+    const move: React.MutableRefObject<((next: GraphHistory) => void) | null> = { current: null };
+    render(<TrackedViewer move={move} viewScope={topicScope} />);
+    fireEvent.click(chips().getByRole('button', { name: 'News' }));
+    fireEvent.click(
+      within(screen.getByRole('region', { name: 'How people responded' })).getByRole('button', { name: /A claim/ })
+    );
+    expect(recentredKinds()).toEqual(['all']);
+  });
+});
+
 /** The page's session around the viewer, with a way to move history as browser Back would. */
-function TrackedViewer({ move }: { move: React.MutableRefObject<((next: GraphHistory) => void) | null> }) {
+function TrackedViewer({
+  move,
+  viewScope = scope,
+}: {
+  move: React.MutableRefObject<((next: GraphHistory) => void) | null>;
+  viewScope?: React.ComponentProps<typeof GraphViewer>['scope'];
+}) {
   const [history, setHistory] = React.useState(() => startGraphHistory(TOPIC));
   const [client] = React.useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }));
   const session = useGraphExplorerSession({ entityId: TOPIC, topicId: TOPIC, spaceId: null, trailDepth: 0 });
@@ -452,7 +656,7 @@ function TrackedViewer({ move }: { move: React.MutableRefObject<((next: GraphHis
   return (
     <QueryClientProvider client={client}>
       <GraphAnalyticsProvider value={session}>
-        <GraphViewer scope={scope} history={history} onNavigate={setHistory} />
+        <GraphViewer scope={viewScope} history={history} onNavigate={setHistory} />
       </GraphAnalyticsProvider>
     </QueryClientProvider>
   );
