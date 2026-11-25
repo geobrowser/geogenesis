@@ -23,9 +23,15 @@ describe('ExpandableLede', () => {
     const text = screen.getByTestId('expandable-lede');
     expect(text).toHaveClass('line-clamp-4');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Show more' }));
+    // "Show more" sits on the last line, after an ellipsis, not below the text.
+    const more = screen.getByRole('button', { name: 'Show more' });
+    expect(more.parentElement).toHaveClass('absolute', 'right-0', 'bottom-0');
+    expect(more.parentElement).toHaveTextContent('… Show more');
+    fireEvent.click(more);
     expect(text).not.toHaveClass('line-clamp-4');
+    // "Show less" follows the full text, inside the paragraph.
     expect(screen.getByRole('button', { name: 'Show less' })).toHaveAttribute('aria-expanded', 'true');
+    expect(text).toContainElement(screen.getByRole('button', { name: 'Show less' }));
 
     fireEvent.click(screen.getByRole('button', { name: 'Show less' }));
     expect(text).toHaveClass('line-clamp-4');

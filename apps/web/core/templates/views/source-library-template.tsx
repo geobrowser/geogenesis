@@ -85,7 +85,7 @@ export function SourceLibraryTemplate({ model, headerActions, footer, className 
           {headerActions}
         </div>
         <h1 className="m-0 text-entityTitle text-pretty text-text">{model.title}</h1>
-        {model.lede && <ExpandableLede text={model.lede} className="max-w-[760px]" />}
+        {model.lede && <ExpandableLede text={model.lede} />}
       </header>
 
       {/* Search + group filters */}
