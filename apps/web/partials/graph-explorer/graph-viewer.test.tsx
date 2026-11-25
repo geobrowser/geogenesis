@@ -801,6 +801,46 @@ describe('GraphViewer on a phone', () => {
     expect(opens).toHaveLength(2);
   });
 
+  it('swaps the legend for a key button in the zoom stack that toggles the three bands', () => {
+    media.phone = true;
+    render(<TrackedViewer move={{ current: null }} />);
+    expect(screen.queryByTestId('band-legend')).toBeNull();
+    const key = screen.getByRole('button', { name: 'Show color key' });
+    // Top of the zoom stack, above Zoom in.
+    expect(key.parentElement).toBe(screen.getByRole('button', { name: 'Zoom in' }).parentElement);
+    expect(key.nextElementSibling).toBe(screen.getByRole('button', { name: 'Zoom in' }));
+    expect(key.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByTestId('band-key-items')).toBeNull();
+
+    fireEvent.click(key);
+    expect(key.getAttribute('aria-expanded')).toBe('true');
+    const items = screen.getByTestId('band-key-items');
+    expect(items.textContent).toBe('Widely agreedContestedWidely rejected');
+    // Portalled out of the map, whose overflow would clip it.
+    expect(screen.getByTestId('graph-map').contains(items)).toBe(false);
+
+    fireEvent.click(key);
+    expect(screen.queryByTestId('band-key-items')).toBeNull();
+    fireEvent.click(key);
+    fireEvent.keyDown(screen.getByTestId('band-key-items'), { key: 'Escape' });
+    expect(screen.queryByTestId('band-key-items')).toBeNull();
+    expect(key.getAttribute('aria-expanded')).toBe('false');
+
+    const opens = vi
+      .mocked(captureSafely)
+      .mock.calls.filter(
+        ([name, props]) =>
+          name === 'graph_explorer_interacted' && (props as { interaction?: string }).interaction === 'legend'
+      );
+    expect(opens).toHaveLength(2);
+  });
+
+  it('keeps the legend and no key button off a phone', () => {
+    render(<Viewer start={TOPIC} scope={scope} />);
+    expect(screen.getByTestId('band-legend').textContent).toContain('Widely agreed');
+    expect(screen.queryByRole('button', { name: 'Show color key' })).toBeNull();
+  });
+
   it('keeps the side panel and no handle off a phone', () => {
     const { container } = render(<Viewer start={TOPIC} scope={scope} />);
     expect(container.querySelector('aside')).not.toBeNull();

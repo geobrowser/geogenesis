@@ -69,21 +69,25 @@ describe('graph explorer phone breakpoint', () => {
     expect(dvh).toBeGreaterThan(fallback);
   });
 
-  // The legend and zoom sit 52px above the pill's bottom edge (its 40px plus a 12px gap), both
-  // clear of the home indicator. An offset Tailwind can't parse is dropped and lands them on the pill.
+  // The zoom stack (with the phone's color key) sits 52px above the pill's bottom edge (its 40px plus
+  // a 12px gap), clear of the home indicator. An offset Tailwind can't parse is dropped and lands it on the pill.
   it('compiles the phone offsets above the pill, with the safe-area inset', async () => {
     const read = (file: string) => readFileSync(join(WEB, 'partials', 'graph-explorer', file), 'utf8');
     const pill = read('phone-panel-sheet.tsx').match(/ (bottom-\[[^\]]+\]) /)?.[1];
-    const above = ['connections/connections-view.tsx', 'connections/connections-canvas.tsx'].map(
-      file => read(file).match(/graph-phone:bottom-\[[^\]]+\]/)?.[0]
-    );
+    const above = read('connections/connections-canvas.tsx').match(/graph-phone:bottom-\[[^\]]+\]/)?.[0];
     expect(pill).toBe('bottom-[max(16px,env(safe-area-inset-bottom))]');
-    expect(new Set(above).size).toBe(1);
-    const flat = await compile(`${pill} ${above[0]}`);
+    const flat = await compile(`${pill} ${above}`);
     expect(flat).toContain('{ bottom: max(16px, env(safe-area-inset-bottom)); }');
     expect(flat).toContain(
       `@media ${GRAPH_PHONE_QUERY} { bottom: calc(max(16px, env(safe-area-inset-bottom)) + 52px); }`
     );
+  });
+
+  // The legend gives way to the key on a phone, and nothing else sits at the map's foot beside the pill.
+  it('hides the legend on a phone in CSS too, before the map reads the query', async () => {
+    const view = readFileSync(join(WEB, 'partials', 'graph-explorer', 'connections', 'connections-view.tsx'), 'utf8');
+    expect(view).not.toMatch(/graph-phone:bottom-/);
+    expect(await compile('graph-phone:hidden')).toContain(`@media ${GRAPH_PHONE_QUERY} { display: none; }`);
   });
 
   it('leaves no ad-hoc width variant in the graph explorer UI', () => {

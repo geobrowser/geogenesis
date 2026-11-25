@@ -24,6 +24,8 @@ type Interaction =
   | { interaction: 'summary_seen' }
   // Each open of the phone's panel sheet (GEO-3849).
   | { interaction: 'panel_sheet' }
+  // Each open of the phone's color key (GEO-3849).
+  | { interaction: 'legend' }
   | { interaction: 'open_page'; value: 'claim' | 'entity'; target_id: string };
 
 /** An `open_page` click this soon before leaving is why the viewer left. */
