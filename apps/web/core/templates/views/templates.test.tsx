@@ -267,8 +267,8 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     expect(within(claims).getByRole('tab', { name: /Accepted/i })).toBeInTheDocument();
     expect(within(claims).getAllByText('World affairs').length).toBeGreaterThan(0);
     expect(within(claims).getByText('18.2k votes')).toBeInTheDocument();
-    // Rows draw debates and the split twice, once per layout; CSS shows one (GEO-3819).
-    expect(within(claims).getAllByRole('button', { name: '11 debates' }).length).toBeGreaterThan(0);
+    // No debate counts in claim lists (GEO-3845).
+    expect(within(claims).queryByRole('button', { name: '11 debates' })).toBeNull();
     expect(within(recentDebates).getAllByRole('article')).toHaveLength(6);
     expect(within(timeline).getAllByRole('listitem')).toHaveLength(8);
     expect(claims.compareDocumentPosition(recentDebates) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -347,6 +347,9 @@ describe('TopicTemplate ↔ ClaimTemplate ↔ Event ↔ Story ↔ Source ↔ Pos
     const flagAgree = within(flagVoteGroup).getByRole('button', { name: 'Agree' });
     fireEvent.click(flagAgree);
     expect(flagAgree).toHaveAttribute('aria-pressed', 'true');
+    // The debates app's button (GEO-3845): ink outline on the held side, not the old black-filled pill.
+    expect(flagAgree).toHaveClass('border-[#151515]');
+    expect(flagAgree).not.toHaveClass('bg-text');
     fireEvent.click(within(claimContextDrawer).getByRole('button', { name: 'Close' }));
 
     // Adding a new key-value triple via `...` -> Add context increments the graph chip count (5 -> 7)
@@ -1113,7 +1116,7 @@ describe('GEO-3837 phone tidy-ups', () => {
     const supporting = screen.getByRole('region', { name: 'Supporting claims' });
     // The shared row draws the split twice: compact beside the row on desktop, full under it on phones.
     expect(within(supporting).getAllByRole('meter')).toHaveLength(2);
-    // And keeps the Factual chip to desktop.
+    // And keeps the Factual tag to wide rows, as quiet text in the result group.
     expect(within(supporting).getByText('Factual').closest('.hidden')).not.toBeNull();
   });
 

@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -10,6 +10,7 @@ import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-
 
 import type { ClaimSummaryModel, ClaimVoteTarget, SubClaimModel, TopicRecentDebateModel } from '../models';
 import { ClaimTemplate } from '../views/claim-template';
+import { claimRowResult } from './claim-explorer';
 import {
   ClaimExplorer,
   ClaimVoteBinding,
@@ -17,6 +18,7 @@ import {
   EntityActionProvider,
   RecentDebatesGallery,
   TemplateClaimVote,
+  type TemplateVoteBinding,
   TemplateVoteRows,
 } from './index';
 
@@ -116,10 +118,23 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
+// The buttons carry no counts (the debates app's don't, GEO-3845), so the binding's counts are read
+// through a probe beside them.
+const withCounts = (title: string) =>
+  function VoteWithCounts(vote: TemplateVoteBinding) {
+    return (
+      <>
+        <ClaimVotePills title={title} vote={vote} />
+        <span data-testid="agree-count">{vote.agreeCount}</span>
+        <span data-testid="disagree-count">{vote.disagreeCount}</span>
+      </>
+    );
+  };
+
 function renderVote(target: ClaimVoteTarget = TARGET, counts: { agree?: number; disagree?: number } = {}) {
   return render(
     <TemplateClaimVote target={target} agreeCount={counts.agree} disagreeCount={counts.disagree}>
-      {vote => <ClaimVotePills title={target.title} vote={vote} />}
+      {withCounts(target.title)}
     </TemplateClaimVote>
   );
 }
@@ -196,31 +211,31 @@ describe('TemplateClaimVote', () => {
       setControl({ viewerPosition: true });
       renderVote({ ...TARGET, baselineVote: 'agree' }, { agree: 10, disagree: 4 });
 
-      expect(within(agreePill()).getByText('10')).toBeInTheDocument();
-      expect(within(disagreePill()).getByText('4')).toBeInTheDocument();
+      expect(screen.getByTestId('agree-count')).toHaveTextContent(/^10$/);
+      expect(screen.getByTestId('disagree-count')).toHaveTextContent(/^4$/);
     });
 
     it('adds a new vote in the target space once, on top of a vote held in another space', () => {
       // Adapter total of 10 includes the viewer's vote in another space; none in this one.
       setControl({ viewerPosition: null });
       const { rerender } = renderVote({ ...TARGET, baselineVote: null }, { agree: 10 });
-      expect(within(agreePill()).getByText('10')).toBeInTheDocument();
+      expect(screen.getByTestId('agree-count')).toHaveTextContent(/^10$/);
       expect(agreePill()).toHaveAttribute('aria-pressed', 'false');
 
       setControl({ viewerPosition: true });
       rerender(
         <TemplateClaimVote target={{ ...TARGET, baselineVote: null }} agreeCount={10}>
-          {vote => <ClaimVotePills title={TARGET.title} vote={vote} />}
+          {withCounts(TARGET.title)}
         </TemplateClaimVote>
       );
-      expect(within(agreePill()).getByText('11')).toBeInTheDocument();
+      expect(screen.getByTestId('agree-count')).toHaveTextContent(/^11$/);
     });
 
     it('switching sides moves the vote from one count to the other', () => {
       setControl({ viewerPosition: false });
       renderVote({ ...TARGET, baselineVote: 'agree' }, { agree: 10, disagree: 4 });
-      expect(within(agreePill()).getByText('9')).toBeInTheDocument();
-      expect(within(disagreePill()).getByText('5')).toBeInTheDocument();
+      expect(screen.getByTestId('agree-count')).toHaveTextContent(/^9$/);
+      expect(screen.getByTestId('disagree-count')).toHaveTextContent(/^5$/);
     });
   });
 
@@ -232,8 +247,8 @@ describe('TemplateClaimVote', () => {
     setControl({ viewerPosition: true });
     renderVote(TARGET, { agree: 99, disagree: 99 });
 
-    expect(within(agreePill()).getByText('7')).toBeInTheDocument();
-    expect(within(disagreePill()).getByText('2')).toBeInTheDocument();
+    expect(screen.getByTestId('agree-count')).toHaveTextContent(/^7$/);
+    expect(screen.getByTestId('disagree-count')).toHaveTextContent(/^2$/);
   });
 
   it("does not count a press twice while the target space's summary already counts it", () => {
@@ -246,8 +261,8 @@ describe('TemplateClaimVote', () => {
     setControl({ viewerPosition: true, isResponsePending: true });
     renderVote(TARGET);
 
-    expect(within(agreePill()).getByText('8')).toBeInTheDocument();
-    expect(within(disagreePill()).getByText('2')).toBeInTheDocument();
+    expect(screen.getByTestId('agree-count')).toHaveTextContent(/^8$/);
+    expect(screen.getByTestId('disagree-count')).toHaveTextContent(/^2$/);
   });
 
   it('tells the adapter once a vote from the row is indexed', () => {
@@ -273,12 +288,50 @@ describe('TemplateClaimVote', () => {
   });
 });
 
-describe('ClaimVotePills layout', () => {
-  it('lets the pair wrap inside a narrow row instead of running past it (GEO-3825)', () => {
-    renderVote();
+describe('ClaimVotePills: the debates app buttons (GEO-3845)', () => {
+  it('draws two equal 28px outlined pills that share the row, with no counts on them', () => {
+    renderVote(TARGET, { agree: 12, disagree: 3 });
     const group = screen.getByRole('group', { name: `Vote on ${TARGET.title}` });
-    expect(group).toHaveClass('flex-wrap');
-    expect(group.parentElement).toHaveClass('max-w-full');
+    expect(group).toHaveClass('w-full');
+    for (const pill of [agreePill(), disagreePill()]) {
+      expect(pill).toHaveClass('h-7', 'rounded-full', 'border', 'bg-transparent', 'flex-1', 'basis-0');
+      expect(pill).not.toHaveTextContent(/\d/);
+    }
+    expect(agreePill()).toHaveAccessibleName('Agree');
+    expect(disagreePill()).toHaveAccessibleName('Disagree');
+  });
+
+  it('marks only the held side: ink border, bold label, filled thumb', () => {
+    setControl({ viewerPosition: false });
+    renderVote();
+    expect(disagreePill()).toHaveAttribute('aria-pressed', 'true');
+    expect(disagreePill()).toHaveClass('border-[#151515]', 'font-bold');
+    expect(disagreePill().querySelector('svg')).toHaveAttribute('data-filled', 'true');
+    expect(agreePill()).toHaveAttribute('aria-pressed', 'false');
+    expect(agreePill()).toHaveClass('border-[#8a8a8a]', 'font-semibold');
+    expect(agreePill().querySelector('svg')).not.toHaveAttribute('data-filled');
+  });
+
+  it('a filled-side press retracts through the local binding; the other side switches', () => {
+    const onVote = vi.fn();
+    const onClearVote = vi.fn();
+    const { rerender } = render(
+      <ClaimVoteBinding userVote="agree" onVote={onVote} onClearVote={onClearVote}>
+        {vote => vote && <ClaimVotePills title={TARGET.title} vote={vote} />}
+      </ClaimVoteBinding>
+    );
+    fireEvent.click(agreePill());
+    expect(onClearVote).toHaveBeenCalledTimes(1);
+    expect(onVote).not.toHaveBeenCalled();
+
+    rerender(
+      <ClaimVoteBinding userVote="agree" onVote={onVote} onClearVote={onClearVote}>
+        {vote => vote && <ClaimVotePills title={TARGET.title} vote={vote} />}
+      </ClaimVoteBinding>
+    );
+    fireEvent.click(disagreePill());
+    expect(onVote).toHaveBeenCalledWith('disagree');
+    expect(onClearVote).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -379,6 +432,130 @@ describe('ClaimExplorer voting', () => {
     fireEvent.click(agreePill());
     expect(mocks.respond).toHaveBeenCalledWith(true);
     expect(onVote).not.toHaveBeenCalled();
+  });
+
+  // The buttons carry no counts (GEO-3845), so the row's result has to follow the viewer's press.
+  it("a row's result follows the viewer's vote at once, not only the fetched split", () => {
+    const noVotes = claim({
+      voteTarget: TARGET,
+      userVote: null,
+      agreeCount: 0,
+      disagreeCount: 0,
+      split: { rows: [], isSplit: true },
+    });
+    const view = render(
+      <EntityActionProvider>
+        <ClaimExplorer contestedClaims={[noVotes]} agreedClaims={[]} />
+      </EntityActionProvider>
+    );
+    expect(screen.getByText('No votes yet')).toBeInTheDocument();
+    expect(screen.queryAllByRole('meter')).toHaveLength(0);
+    view.unmount();
+
+    // The press is drawn: the control now holds Agree, the fetched split still says no votes.
+    setControl({ viewerPosition: true });
+    render(
+      <EntityActionProvider>
+        <ClaimExplorer contestedClaims={[noVotes]} agreedClaims={[]} />
+      </EntityActionProvider>
+    );
+    expect(screen.queryByText('No votes yet')).toBeNull();
+    expect(screen.getByText('1 vote')).toBeInTheDocument();
+    const meters = screen.getAllByRole('meter');
+    expect(meters.length).toBeGreaterThan(0);
+    for (const meter of meters) expect(meter).toHaveAttribute('aria-valuenow', '100');
+  });
+
+  // A Claim page sub-claim's split is one row named for its space, with no Everyone row.
+  it("a sub-claim's single space row takes the live numbers, with no second overall row", () => {
+    setControl({ viewerPosition: true });
+    render(
+      <EntityActionProvider>
+        <ClaimExplorer
+          contestedClaims={[
+            claim({
+              voteTarget: TARGET,
+              userVote: null,
+              agreeCount: 1,
+              disagreeCount: 1,
+              split: {
+                rows: [{ id: 'space-1', label: 'AI', color: '#3963fe', percent: 50, voterCount: 2 }],
+                isSplit: true,
+                totalVotes: 2,
+              },
+            }),
+          ]}
+          agreedClaims={[]}
+        />
+      </EntityActionProvider>
+    );
+    expect(screen.getByText('3 votes')).toBeInTheDocument();
+    // One inline meter (wide) and one phone row: the space row, at 2 of 3.
+    const meters = screen.getAllByRole('meter');
+    expect(meters).toHaveLength(2);
+    for (const meter of meters) expect(meter).toHaveAttribute('aria-valuenow', '67');
+    expect(screen.queryByText('Everyone')).toBeNull();
+  });
+
+  it('a switched vote moves the inline percentage and keeps the total', () => {
+    setControl({ viewerPosition: false });
+    setState({ readiness: { response_kind: 'stance', viewer_response: { position: true } } });
+    render(
+      <EntityActionProvider>
+        <ClaimExplorer
+          contestedClaims={[
+            claim({
+              voteTarget: TARGET,
+              userVote: 'agree',
+              agreeCount: 5,
+              disagreeCount: 2,
+              split: {
+                rows: [
+                  { id: 'all', label: 'Everyone', color: '#202020', percent: 71, voterCount: 7, isEveryone: true },
+                ],
+                isSplit: true,
+                totalVotes: 7,
+              },
+            }),
+          ]}
+          agreedClaims={[]}
+        />
+      </EntityActionProvider>
+    );
+    expect(screen.getByText('7 votes')).toBeInTheDocument();
+    // 4 of 7 agree once the viewer's Agree turns into Disagree.
+    const meters = screen.getAllByRole('meter');
+    expect(meters.length).toBeGreaterThan(0);
+    for (const meter of meters) expect(meter).toHaveAttribute('aria-valuenow', '57');
+  });
+
+  describe('claimRowResult: which row takes the live overall numbers', () => {
+    const live = { agreeCount: 6, disagreeCount: 4 };
+    const pp = { id: 'pp', label: 'Pro-Palestinian', color: '#6833ff', percent: 40, voterCount: 5, isSubspace: true };
+    const pi = { id: 'pi', label: 'Pro-Israel', color: '#3963fe', percent: 80, voterCount: 5, isSubspace: true };
+
+    it('an Everyone row after the space rows takes them; the space rows keep their own', () => {
+      const everyone = { id: 'all', label: 'Everyone', color: '#202020', percent: 50, voterCount: 8, isEveryone: true };
+      const { splitRows, totalVotes } = claimRowResult(
+        { split: { rows: [pp, pi, everyone], isSplit: true, totalVotes: 8 } },
+        live
+      );
+      expect(totalVotes).toBe(10);
+      expect(splitRows).toEqual([pp, pi, { ...everyone, percent: 60, voterCount: 10 }]);
+    });
+
+    it('several space rows and no Everyone row: an Everyone row goes first, no space row is relabeled', () => {
+      const { splitRows, totalVotes } = claimRowResult(
+        { split: { rows: [pp, pi], isSplit: true, totalVotes: 10 } },
+        live
+      );
+      expect(totalVotes).toBe(10);
+      expect(splitRows).toEqual([
+        { id: 'all', label: 'Everyone', color: '#202020', percent: 60, voterCount: 10, isEveryone: true },
+        pp,
+        pi,
+      ]);
+    });
   });
 
   it('a row without a target (the fixture) keeps its local handler', () => {

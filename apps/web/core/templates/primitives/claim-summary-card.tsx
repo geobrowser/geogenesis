@@ -10,10 +10,11 @@ import { CheckCircleIcon } from './icons';
 import { SplitBars } from './split-bars';
 import { TEMPLATE_INTERACTIVE_CARD_SURFACE, TemplateBadge, type TemplateBadgeTone } from './template-shell';
 
+// Gray for every kind (GEO-3845).
 const CLAIM_KIND_TONE: Record<ClaimKind, TemplateBadgeTone> = {
-  fact: 'fact',
-  judgment: 'judgment',
-  'value-judgment': 'value',
+  fact: 'neutral',
+  judgment: 'neutral',
+  'value-judgment': 'neutral',
 };
 
 export interface ClaimSummaryCardProps {

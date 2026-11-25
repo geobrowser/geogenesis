@@ -8,7 +8,14 @@ import Link from 'next/link';
 import { ActionContextProvider } from '~/core/action-context-provider';
 import { NavUtils } from '~/core/utils/utils';
 
-import { type ClaimKind, type ClaimSummaryModel, formatClaimKindLabel, formatCompactCount } from '../models';
+import {
+  type ClaimKind,
+  type ClaimSummaryModel,
+  type SplitRow,
+  formatClaimKindLabel,
+  formatCompactCount,
+  formatPercentInt,
+} from '../models';
 import {
   AddClaimPopover,
   EntityInlineContext,
@@ -19,14 +26,15 @@ import {
 import { CheckCircleIcon } from './icons';
 import { ListRankingHeaderControl, ListRankingWorkspace, type RankableListItem, useListRanking } from './list-ranking';
 import { SplitBars } from './split-bars';
-import { ClaimVoteBinding, ClaimVotePills, TemplateVoteRows } from './template-claim-vote';
-import { TEMPLATE_CARD_SURFACE, TemplateBadge, type TemplateBadgeTone } from './template-shell';
+import { ClaimVoteBinding, ClaimVotePills, type TemplateVoteBinding, TemplateVoteRows } from './template-claim-vote';
+import { TEMPLATE_CARD_SURFACE, type TemplateBadgeTone } from './template-shell';
 import { PUBLISHING_LABEL, usePendingAdds } from './use-pending-adds';
 
+// Gray for every kind (GEO-3845): the tag says what kind of claim it is without the loud blue/purple.
 const CLAIM_KIND_TONE: Record<ClaimKind, TemplateBadgeTone> = {
-  fact: 'fact',
-  judgment: 'judgment',
-  'value-judgment': 'value',
+  fact: 'neutral',
+  judgment: 'neutral',
+  'value-judgment': 'neutral',
 };
 
 export interface ClaimExplorerProps {
@@ -34,7 +42,7 @@ export interface ClaimExplorerProps {
   agreedClaims: readonly ClaimSummaryModel[];
   title?: string;
   /**
-   * Below 760px the Factual / Judgment chip is dropped to keep each row short (GEO-3819). On for
+   * Below 760px the Factual / Judgment tag is dropped to keep each row short (GEO-3819). On for
    * every template claim list (GEO-3837); pass `false` for a list where the kind matters on phones.
    */
   hideKindOnPhone?: boolean;
@@ -261,27 +269,18 @@ export interface ClaimListRowProps {
 }
 
 /**
- * One claim in a template claim list: rank, title, kind, vote pills, split and "…". Every template
- * list of claims draws its rows with this, so the phone layout (GEO-3819) is the same everywhere
- * (GEO-3837). Wrap it in a `divide-y` card and a `TemplateVoteRows` for its vote batch.
+ * One claim in a template claim list: rank, title, vote buttons, result and "…". Every template
+ * list of claims draws its rows with this, so phones (GEO-3819) and wide rows look the same
+ * everywhere (GEO-3837). Wrap it in a `divide-y` card and a `TemplateVoteRows` for its vote batch.
+ *
+ * One column at every width (GEO-3845): the title across the row, then Agree / Disagree with the
+ * result beside them on wide rows ("bar 71% · 7 votes · Judgment"), so nothing floats at the far
+ * right. Phones keep the split as its own line under the buttons, as the Claim page's vote box draws it.
  */
 export function ClaimListRow({ rank, claim, isAgreed = false, hideKindOnPhone = true, details }: ClaimListRowProps) {
   const voteMetaIndex = claim.meta?.findIndex(part => /\bvotes?\b/i.test(part)) ?? -1;
+  // Debate counts aren't shown in claim lists (GEO-3845); a "N debates" meta part is dropped too.
   const debateMetaIndex = claim.meta?.findIndex(part => /\bdebates?\b/i.test(part)) ?? -1;
-
-  const voteCountLabel =
-    claim.split.totalVotes !== undefined
-      ? `${formatCompactCount(claim.split.totalVotes)} ${claim.split.totalVotes === 1 ? 'vote' : 'votes'}`
-      : voteMetaIndex >= 0
-        ? claim.meta?.[voteMetaIndex]
-        : undefined;
-
-  const debateLabel =
-    claim.debateCount && claim.debateCount > 0
-      ? `${claim.debateCount} ${claim.debateCount === 1 ? 'debate' : 'debates'}`
-      : debateMetaIndex >= 0
-        ? claim.meta?.[debateMetaIndex]
-        : undefined;
 
   const metaParts: string[] = [];
   if (claim.meta && claim.meta.length > 0) {
@@ -292,47 +291,11 @@ export function ClaimListRow({ rank, claim, isAgreed = false, hideKindOnPhone = 
 
   const votes = Boolean(claim.voteTarget || claim.onVote);
   const youVotedLabel = claim.userVote && !votes ? (claim.userVote === 'agree' ? 'You agreed' : 'You disagreed') : null;
+  const kindLabel = claim.kind ? formatClaimKindLabel(claim.kind) : null;
 
-  const debateNode =
-    debateLabel &&
-    (claim.debatesHref ? (
-      <Link
-        href={claim.debatesHref}
-        className="font-medium text-grey-04 underline decoration-grey-02 underline-offset-2 transition-colors hover:text-[#4c1fd4] hover:decoration-[#4c1fd4]"
-      >
-        {debateLabel}
-      </Link>
-    ) : claim.onOpenDebates ? (
-      <button
-        type="button"
-        onClick={claim.onOpenDebates}
-        className="cursor-pointer border-0 bg-transparent p-0 font-medium text-grey-04 underline decoration-grey-02 underline-offset-2 transition-colors hover:text-[#4c1fd4] hover:decoration-[#4c1fd4]"
-      >
-        {debateLabel}
-      </button>
-    ) : (
-      <span>{debateLabel}</span>
-    ));
-
-  const kindBadge = claim.kind && (
-    <TemplateBadge tone={CLAIM_KIND_TONE[claim.kind]} className="!h-6 !px-2 !text-[12px]">
-      {formatClaimKindLabel(claim.kind)}
-    </TemplateBadge>
-  );
-
-  // Phones: the split sits under the pills as the Claim page's vote box draws it (dot, space, bar,
-  // "80% (5)"), so the count lives in the parentheses. No votes, no split line, as in that box.
-  const phoneSplitRows =
-    claim.split.rows.length > 0 && claim.split.totalVotes !== 0
-      ? claim.split.rows.map(row => ({
-          ...row,
-          voterCount: row.voterCount ?? (claim.split.rows.length === 1 ? claim.split.totalVotes : undefined),
-        }))
-      : [];
-  const phoneKindBadge = hideKindOnPhone ? null : kindBadge;
-
+  // Phones show the kind only when the list asks for it.
   const phoneMeta: React.ReactNode[] = [];
-  if (debateNode) phoneMeta.push(<React.Fragment key="debates">{debateNode}</React.Fragment>);
+  if (kindLabel && !hideKindOnPhone) phoneMeta.push(<span key="kind">{kindLabel}</span>);
   for (const part of metaParts) phoneMeta.push(<span key={`meta-${part}`}>{part}</span>);
   if (youVotedLabel) {
     phoneMeta.push(
@@ -343,7 +306,7 @@ export function ClaimListRow({ rank, claim, isAgreed = false, hideKindOnPhone = 
   }
 
   const titleNode = (
-    <span className="block text-[16px] leading-[22px] font-medium text-pretty text-text transition-colors group-hover/claim:text-[#4c1fd4]">
+    <span className="block max-w-[720px] text-[16px] leading-[22px] font-medium text-pretty text-text transition-colors group-hover/claim:text-[#4c1fd4]">
       {/* Phones: the rank leads the title instead of holding a column, so the row keeps its width. */}
       <span aria-hidden className="mr-2 text-[15px] font-semibold text-grey-04 tabular-nums @[760px]:hidden">
         {rank}
@@ -353,131 +316,224 @@ export function ClaimListRow({ rank, claim, isAgreed = false, hideKindOnPhone = 
     </span>
   );
 
-  // Below 760px the row is one column: the title with "…" beside it, a meta line (kind, debates), the
-  // vote pills, then the split. ("…" moved up because at 320px it collided with "Disagree 2".) The desktop wrappers turn into `contents` there so the pills
-  // and "…" (one instance each) can share a line; at 760px and wider the markup lays out exactly as
-  // before (GEO-3819).
-  return (
-    <div className="flex flex-wrap items-center gap-x-3 px-5 py-4 transition-colors hover:bg-bg @[760px]:flex-nowrap @[760px]:gap-6">
-      <div className="contents min-w-0 flex-1 items-start gap-4 @[760px]:flex">
-        <span className="hidden w-6 shrink-0 pt-0.5 text-center text-[15px] font-semibold text-grey-04 tabular-nums @[760px]:block">
-          {rank}
-        </span>
+  // The buttons, the result beside them and the split lines, from the row's vote binding (or none):
+  // the counts follow the viewer's press at once, as the old pill counts did.
+  const voteArea = (vote: TemplateVoteBinding | null) => {
+    const { splitRows, totalVotes } = claimRowResult(claim, vote);
+    const voteCountLabel =
+      totalVotes !== undefined
+        ? totalVotes > 0
+          ? `${formatCompactCount(totalVotes)} ${totalVotes === 1 ? 'vote' : 'votes'}`
+          : undefined
+        : voteMetaIndex >= 0
+          ? claim.meta?.[voteMetaIndex]
+          : undefined;
 
-        <div className="contents min-w-0 flex-1 flex-col gap-2 @[760px]:flex">
-          <div className="-order-1 min-w-0 flex-1 @[760px]:contents">
-            {claim.href ? (
-              <Link href={claim.href} className="group/claim self-start text-left text-text no-underline">
-                {titleNode}
-              </Link>
-            ) : claim.onSelect ? (
-              <button
-                type="button"
-                onClick={claim.onSelect}
-                className="group/claim cursor-pointer self-start border-0 bg-transparent p-0 text-left text-text"
-              >
-                {titleNode}
-              </button>
-            ) : (
-              titleNode
+    // Wide rows draw the overall split inline beside the buttons; any per-space rows sit under it.
+    const primaryRow = splitRows.find(row => row.isEveryone) ?? splitRows[0];
+    const extraRows = splitRows.filter(row => row !== primaryRow);
+
+    // Phones: the split sits under the buttons as the Claim page's vote box draws it (dot, space, bar,
+    // "80% (5)"), so the count lives in the parentheses.
+    const phoneSplitRows = splitRows.map(row => ({
+      ...row,
+      voterCount: row.voterCount ?? (splitRows.length === 1 ? totalVotes : undefined),
+    }));
+
+    // Quiet gray text after the result on wide rows: "7 votes · Judgment · <meta> · You agreed".
+    const wideMeta: React.ReactNode[] = [];
+    if (voteCountLabel) wideMeta.push(<span key="votes">{voteCountLabel}</span>);
+    else if (votes && !claim.pending) wideMeta.push(<span key="votes">No votes yet</span>);
+    if (kindLabel) {
+      wideMeta.push(
+        <span key="kind" data-testid="claim-kind-tag">
+          {kindLabel}
+        </span>
+      );
+    }
+    for (const part of metaParts) wideMeta.push(<span key={`meta-${part}`}>{part}</span>);
+    if (youVotedLabel) {
+      wideMeta.push(
+        <span key="you" className="font-medium text-text">
+          {youVotedLabel}
+        </span>
+      );
+    }
+
+    const voteButtons = vote ? <ClaimVotePills title={claim.title} vote={vote} /> : null;
+    const hasWideResult = Boolean(primaryRow) || wideMeta.length > 0;
+
+    return (
+      <>
+        {(voteButtons || hasWideResult) && (
+          <div
+            className={cx(
+              'flex-wrap items-center gap-x-4 gap-y-2 @[760px]:mt-2.5 @[760px]:flex',
+              voteButtons ? 'mt-2.5 flex' : 'hidden'
+            )}
+          >
+            {/* The debates app's Agree / Disagree (GEO-3845), across the row on phones. */}
+            {voteButtons && <div className="basis-full @[760px]:basis-auto">{voteButtons}</div>}
+
+            {hasWideResult && (
+              <div className="hidden min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[13.5px] leading-[18px] text-grey-04 tabular-nums @[760px]:flex">
+                {primaryRow && <InlineSplit row={primaryRow} />}
+                {wideMeta.map((node, i) => (
+                  <React.Fragment key={i}>
+                    {(i > 0 || primaryRow) && <span aria-hidden>·</span>}
+                    {node}
+                  </React.Fragment>
+                ))}
+              </div>
             )}
           </div>
+        )}
 
-          {(phoneKindBadge || phoneMeta.length > 0) && (
-            <div className="mt-1.5 flex basis-full flex-wrap items-center gap-x-1.5 gap-y-1 text-[13px] text-grey-04 @[760px]:hidden">
-              {phoneKindBadge && <span className="mr-0.5 inline-flex">{phoneKindBadge}</span>}
-              {phoneMeta.map((node, i) => (
-                <React.Fragment key={i}>
-                  {i > 0 && <span aria-hidden>·</span>}
-                  {node}
-                </React.Fragment>
-              ))}
-            </div>
-          )}
-
-          {(claim.kind || votes || debateLabel || metaParts.length > 0 || youVotedLabel) && (
-            <div className="contents flex-wrap items-center gap-x-3 gap-y-1.5 @[760px]:flex">
-              {kindBadge && <span className="hidden @[760px]:contents">{kindBadge}</span>}
-
-              {/* 32px tap targets on phones; the desktop pills keep their 28px. */}
-              <div className="mt-2.5 basis-full @[760px]:contents [&_button]:h-8 @[760px]:[&_button]:h-7">
-                <ClaimVoteBinding
-                  voteTarget={claim.voteTarget}
-                  userVote={claim.userVote}
-                  agreeCount={claim.agreeCount}
-                  disagreeCount={claim.disagreeCount}
-                  onVote={claim.onVote}
-                  onClearVote={claim.onClearVote}
-                >
-                  {vote => vote && <ClaimVotePills title={claim.title} vote={vote} />}
-                </ClaimVoteBinding>
-              </div>
-
-              {(debateLabel || metaParts.length > 0 || youVotedLabel) && (
-                <span className="hidden flex-wrap items-center gap-x-2 gap-y-0.5 text-[13.5px] text-grey-04 @[760px]:flex">
-                  {debateNode}
-                  {metaParts.map((part, i) => (
-                    <React.Fragment key={part}>
-                      {(debateLabel || i > 0) && <span aria-hidden>·</span>}
-                      <span>{part}</span>
-                    </React.Fragment>
-                  ))}
-                  {youVotedLabel && (
-                    <>
-                      {(debateLabel || metaParts.length > 0) && <span aria-hidden>·</span>}
-                      <span className="font-medium text-text">{youVotedLabel}</span>
-                    </>
-                  )}
-                </span>
-              )}
-            </div>
-          )}
-
-          {details && (
-            // After the split on phones (both are `order-last`, so the DOM order holds).
-            <div className="order-last mt-3 flex basis-full flex-col gap-2 @[760px]:order-none @[760px]:mt-0">
-              {details}
-            </div>
-          )}
-
-          <EntityInlineContext
-            targetId={claim.id}
-            targetTitle={claim.title}
-            targetKind="Claim"
-            className="order-last mt-3 basis-full @[760px]:order-none @[760px]:mt-0.5"
-          />
-        </div>
-      </div>
-
-      <div className="contents min-w-0 items-center gap-x-3 @[760px]:flex @[760px]:shrink-0">
-        {claim.split.rows.length > 0 ? (
+        {extraRows.length > 0 && (
           <span className="hidden @[760px]:contents">
-            <SplitBars rows={claim.split.rows} density="compact" className="w-[264px] shrink-0" />
+            <SplitBars rows={extraRows} density="compact" className="mt-2.5 w-full max-w-[420px]" />
           </span>
-        ) : (
-          <div className="hidden w-[264px] shrink-0 items-center gap-2 @[760px]:flex">
-            <div className="h-[5px] flex-1 overflow-hidden rounded-full bg-grey-01" />
-            <span className="w-[38px] text-right text-[12.5px] text-grey-03 tabular-nums">—</span>
+        )}
+
+        {phoneSplitRows.length > 0 && (
+          <SplitBars rows={phoneSplitRows} density="full" className="mt-3 @[760px]:hidden" />
+        )}
+      </>
+    );
+  };
+
+  return (
+    <div className="flex items-start gap-3 px-5 py-4 transition-colors hover:bg-bg @[760px]:gap-4">
+      <span className="hidden w-6 shrink-0 pt-px text-center text-[15px] leading-[22px] font-semibold text-grey-04 tabular-nums @[760px]:block">
+        {rank}
+      </span>
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="min-w-0">
+          {claim.href ? (
+            <Link href={claim.href} className="group/claim text-left text-text no-underline">
+              {titleNode}
+            </Link>
+          ) : claim.onSelect ? (
+            <button
+              type="button"
+              onClick={claim.onSelect}
+              className="group/claim cursor-pointer border-0 bg-transparent p-0 text-left text-text"
+            >
+              {titleNode}
+            </button>
+          ) : (
+            titleNode
+          )}
+        </div>
+
+        {phoneMeta.length > 0 && (
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[13px] text-grey-04 @[760px]:hidden">
+            {phoneMeta.map((node, i) => (
+              <React.Fragment key={i}>
+                {i > 0 && <span aria-hidden>·</span>}
+                {node}
+              </React.Fragment>
+            ))}
           </div>
         )}
 
-        <span className="hidden w-[76px] shrink-0 text-right text-[13px] whitespace-nowrap text-grey-04 tabular-nums @[760px]:block">
-          {voteCountLabel ?? '0 votes'}
-        </span>
-
-        <EntityOverflowMenu
-          target={{ id: claim.id, kind: 'Claim', title: claim.title }}
-          // A pending row's id isn't an entity yet; the menu keeps its space but can't be used.
-          className={cx(
-            '-order-1 -my-[5px] self-start @[760px]:order-none @[760px]:my-0 @[760px]:w-[120px] @[760px]:justify-end @[760px]:self-auto [&>button[aria-haspopup]]:size-8 @[760px]:[&>button[aria-haspopup]]:size-7',
-            claim.pending && 'invisible'
-          )}
-        />
-
-        {phoneSplitRows.length > 0 && (
-          <SplitBars rows={phoneSplitRows} density="full" className="mt-3 basis-full @[760px]:hidden" />
+        {votes ? (
+          <ClaimVoteBinding
+            voteTarget={claim.voteTarget}
+            userVote={claim.userVote}
+            agreeCount={claim.agreeCount}
+            disagreeCount={claim.disagreeCount}
+            onVote={claim.onVote}
+            onClearVote={claim.onClearVote}
+          >
+            {voteArea}
+          </ClaimVoteBinding>
+        ) : (
+          voteArea(null)
         )}
+
+        {details && <div className="mt-3 flex flex-col gap-2">{details}</div>}
+
+        <EntityInlineContext
+          targetId={claim.id}
+          targetTitle={claim.title}
+          targetKind="Claim"
+          className="mt-3 @[760px]:mt-2"
+        />
       </div>
+
+      <EntityOverflowMenu
+        target={{ id: claim.id, kind: 'Claim', title: claim.title }}
+        // Level with the title's first line. A pending row's id isn't an entity yet; the menu keeps
+        // its space but can't be used.
+        className={cx(
+          '-my-[5px] shrink-0 @[760px]:-my-[3px] [&>button[aria-haspopup]]:size-8 @[760px]:[&>button[aria-haspopup]]:size-7',
+          claim.pending && 'invisible'
+        )}
+      />
     </div>
+  );
+}
+
+/**
+ * The split rows and vote total a claim row draws. With a vote binding that has counts, the row's
+ * overall result comes from it, so a press moves the result at once (the binding adjusts for the
+ * viewer's own vote). The overall row is the "Everyone" row, or else a lone row (a Claim page
+ * sub-claim's single row names the space its vote target counts in); with several space rows and no
+ * Everyone row, an Everyone row goes first. Other rows keep the fetched numbers.
+ * No votes, no split, as in the Claim page's vote box.
+ */
+export function claimRowResult(
+  claim: Pick<ClaimSummaryModel, 'split'>,
+  vote: Pick<TemplateVoteBinding, 'agreeCount' | 'disagreeCount'> | null
+): { splitRows: readonly SplitRow[]; totalVotes: number | undefined } {
+  if (vote && vote.agreeCount !== undefined && vote.disagreeCount !== undefined) {
+    const total = vote.agreeCount + vote.disagreeCount;
+    if (total === 0) return { splitRows: [], totalVotes: 0 };
+    const percent = (vote.agreeCount / total) * 100;
+    const rows = claim.split.rows;
+    // A lone row is the overall one; among several space rows with no Everyone row, none is.
+    const primary = rows.find(row => row.isEveryone) ?? (rows.length === 1 ? rows[0] : undefined);
+    if (!primary) {
+      const everyone: SplitRow = {
+        id: 'all',
+        label: 'Everyone',
+        color: '#202020',
+        percent,
+        voterCount: total,
+        isEveryone: true,
+      };
+      return { splitRows: [everyone, ...rows], totalVotes: total };
+    }
+    return {
+      splitRows: rows.map(row => (row === primary ? { ...row, percent, voterCount: total } : row)),
+      totalVotes: total,
+    };
+  }
+  const totalVotes = claim.split.totalVotes;
+  return { splitRows: totalVotes !== 0 ? claim.split.rows : [], totalVotes };
+}
+
+/** The overall split drawn inline beside the vote buttons on a wide row: a short bar and its percentage. */
+function InlineSplit({ row }: { row: SplitRow }) {
+  const clamped = Math.max(0, Math.min(100, row.percent));
+  return (
+    <span className="inline-flex items-center gap-2.5">
+      <span
+        role="meter"
+        aria-label={`${row.label} ${row.unit ?? 'agree'}`}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(clamped)}
+        className="block h-2 w-[140px] overflow-hidden rounded-full bg-grey-01"
+      >
+        <span
+          className="block h-full rounded-full transition-[width] duration-200"
+          style={{ width: `${clamped.toFixed(2)}%`, backgroundColor: row.color }}
+        />
+      </span>
+      <strong className="font-semibold text-text">{formatPercentInt(clamped)}</strong>
+    </span>
   );
 }

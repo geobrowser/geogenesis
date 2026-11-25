@@ -2,8 +2,6 @@
 
 import * as React from 'react';
 
-import cx from 'classnames';
-
 import { useClaimResponseState } from '~/core/claims/browse/use-claim-response-state';
 import type { DebateClaim } from '~/core/debates/api';
 import { useDebateClaims, useDebateClaimsBySpaces } from '~/core/debates/hooks';
@@ -13,8 +11,8 @@ import type { Entity } from '~/core/types';
 
 import { ClaimBatchRow, type ClaimBatchStatus, useClaimSpaceBatches } from '~/partials/graph-explorer/graph-claim-list';
 
-import { type ClaimVoteTarget, type VoteChoice, formatCompactCount } from '../models';
-import { ThumbDownIcon, ThumbUpIcon } from './icons';
+import { type ClaimVoteTarget, type VoteChoice } from '../models';
+import { DebateVoteButtons } from './debate-vote-buttons';
 
 type Side = Exclude<VoteChoice, null>;
 
@@ -311,56 +309,24 @@ export function ClaimVoteBinding({
 }
 
 /**
- * The Agree / Disagree pill pair a claim list row draws from its binding. `fill` stretches the pair
- * across its container, as a Recent debates card does.
+ * The Agree / Disagree pair a claim list row draws from its binding: the debates app's buttons
+ * (GEO-3845, see `debate-vote-buttons.tsx`). It spans the row on phones and keeps two natural-width
+ * buttons in a wide (760px+) row. The counts live in the row's result, as in the app, so the buttons
+ * carry none.
  */
-export function ClaimVotePills({
-  title,
-  vote,
-  fill = false,
-}: {
-  title: string;
-  vote: TemplateVoteBinding;
-  fill?: boolean;
-}) {
+export function ClaimVotePills({ title, vote }: { title: string; vote: TemplateVoteBinding }) {
   return (
-    <span className={cx('flex flex-col gap-1', fill ? 'w-full' : 'max-w-full shrink-0')}>
-      {/* Wraps rather than running past a narrow card (a 320px phone): Disagree drops below Agree. */}
-      <div
-        className={cx('flex items-center gap-1.5', fill ? 'pt-0.5' : 'flex-wrap')}
-        role="group"
-        aria-label={`Vote on ${title}`}
-      >
-        {(['agree', 'disagree'] as const).map(choice => {
-          const pressed = vote.userVote === choice;
-          const count = choice === 'agree' ? vote.agreeCount : vote.disagreeCount;
-          const Icon = choice === 'agree' ? ThumbUpIcon : ThumbDownIcon;
-          return (
-            <button
-              key={choice}
-              type="button"
-              aria-pressed={pressed}
-              disabled={vote.disabled}
-              title={vote.titleFor(choice)}
-              onClick={() => vote.press(choice)}
-              className={cx(
-                // 8px narrower below 360px so the pair still fits one line in a 320px phone's rows.
-                'inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full border px-2.5 text-[13px] font-medium whitespace-nowrap transition-colors disabled:cursor-default disabled:opacity-60 max-[359px]:px-1.5',
-                fill && 'flex-1 justify-center',
-                pressed ? 'border-text bg-text text-white' : 'border-grey-02 bg-white text-text hover:border-text'
-              )}
-            >
-              <Icon className="size-3.5 shrink-0" />
-              <span>{choice === 'agree' ? 'Agree' : 'Disagree'}</span>
-              {count !== undefined && count > 0 && (
-                <span className={cx('text-[12px] tabular-nums', pressed ? 'text-white/80' : 'text-grey-04')}>
-                  {formatCompactCount(count)}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
+    <span className="flex w-full flex-col gap-1 @[760px]:w-auto @[760px]:shrink-0">
+      <DebateVoteButtons
+        userVote={vote.userVote}
+        disabled={vote.disabled}
+        compact
+        label={`Vote on ${title}`}
+        titleFor={vote.titleFor}
+        onPress={vote.press}
+        className="w-full"
+        buttonClassName="flex-1 basis-0 @[760px]:flex-none"
+      />
       {vote.error && (
         <span role="alert" className="text-[12.5px] text-red-01">
           {vote.error}

@@ -24,6 +24,7 @@ import type {
   EntityTripleValueModel,
 } from '../models';
 import { TEMPLATE_ACTIONS } from '../template-actions';
+import { DebateVoteButtons } from './debate-vote-buttons';
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
@@ -33,8 +34,6 @@ import {
   MoreHorizontalIcon,
   NetworkIcon,
   PlusIcon,
-  ThumbDownIcon,
-  ThumbUpIcon,
 } from './icons';
 
 export type EntityActionKind = 'flag' | 'add-context';
@@ -1783,36 +1782,14 @@ export function EntityActionProvider({
                             </a>
                           )}
 
-                          <div className="flex items-center gap-1.5 pt-1" role="group" aria-label="Vote on dispute">
-                            <button
-                              type="button"
-                              aria-pressed={vote === 'agree'}
-                              onClick={() => voteOnFlag(flag.id, 'agree')}
-                              className={cx(
-                                'inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full border px-2.5 text-[12.5px] font-medium transition-colors',
-                                vote === 'agree'
-                                  ? 'border-text bg-text text-white'
-                                  : 'border-grey-02 bg-white text-text hover:border-text'
-                              )}
-                            >
-                              <ThumbUpIcon className="size-3" />
-                              <span>Agree</span>
-                            </button>
-                            <button
-                              type="button"
-                              aria-pressed={vote === 'disagree'}
-                              onClick={() => voteOnFlag(flag.id, 'disagree')}
-                              className={cx(
-                                'inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full border px-2.5 text-[12.5px] font-medium transition-colors',
-                                vote === 'disagree'
-                                  ? 'border-text bg-text text-white'
-                                  : 'border-grey-02 bg-white text-text hover:border-text'
-                              )}
-                            >
-                              <ThumbDownIcon className="size-3" />
-                              <span>Disagree</span>
-                            </button>
-                          </div>
+                          <DebateVoteButtons
+                            compact
+                            userVote={vote}
+                            label="Vote on dispute"
+                            onPress={choice => voteOnFlag(flag.id, choice)}
+                            className="pt-1"
+                            buttonClassName="flex-none"
+                          />
                         </article>
                       );
                     })}
@@ -2049,36 +2026,14 @@ export function EntityInlineContext({
               )}
             </div>
             <p className="m-0 text-text/85">{flag.body}</p>
-            <div className="flex items-center gap-1.5 pt-0.5" role="group" aria-label="Vote on dispute">
-              <button
-                type="button"
-                aria-pressed={vote === 'agree'}
-                onClick={() => ctx.voteOnFlag(flag.id, 'agree')}
-                className={cx(
-                  'inline-flex h-6 cursor-pointer items-center gap-1 rounded-full border px-2 text-[12px] font-medium transition-colors',
-                  vote === 'agree'
-                    ? 'border-text bg-text text-white'
-                    : 'border-grey-02 bg-white text-text hover:border-text'
-                )}
-              >
-                <ThumbUpIcon className="size-3" />
-                <span>Agree</span>
-              </button>
-              <button
-                type="button"
-                aria-pressed={vote === 'disagree'}
-                onClick={() => ctx.voteOnFlag(flag.id, 'disagree')}
-                className={cx(
-                  'inline-flex h-6 cursor-pointer items-center gap-1 rounded-full border px-2 text-[12px] font-medium transition-colors',
-                  vote === 'disagree'
-                    ? 'border-text bg-text text-white'
-                    : 'border-grey-02 bg-white text-text hover:border-text'
-                )}
-              >
-                <ThumbDownIcon className="size-3" />
-                <span>Disagree</span>
-              </button>
-            </div>
+            <DebateVoteButtons
+              compact
+              userVote={vote}
+              label="Vote on dispute"
+              onPress={choice => ctx.voteOnFlag(flag.id, choice)}
+              className="pt-0.5"
+              buttonClassName="flex-none"
+            />
           </div>
         );
       })}
@@ -2145,36 +2100,14 @@ export function EntityFlagsSection({ target, className }: { target: EntityAction
                   )}
 
                   {ctx && (
-                    <div className="flex items-center gap-1.5 pt-0.5" role="group" aria-label="Vote on dispute">
-                      <button
-                        type="button"
-                        aria-pressed={vote === 'agree'}
-                        onClick={() => ctx.voteOnFlag(flag.id, 'agree')}
-                        className={cx(
-                          'inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full border px-2.5 text-[12.5px] font-medium transition-colors',
-                          vote === 'agree'
-                            ? 'border-text bg-text text-white'
-                            : 'border-grey-02 bg-white text-text hover:border-text'
-                        )}
-                      >
-                        <ThumbUpIcon className="size-3" />
-                        <span>Agree</span>
-                      </button>
-                      <button
-                        type="button"
-                        aria-pressed={vote === 'disagree'}
-                        onClick={() => ctx.voteOnFlag(flag.id, 'disagree')}
-                        className={cx(
-                          'inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-full border px-2.5 text-[12.5px] font-medium transition-colors',
-                          vote === 'disagree'
-                            ? 'border-text bg-text text-white'
-                            : 'border-grey-02 bg-white text-text hover:border-text'
-                        )}
-                      >
-                        <ThumbDownIcon className="size-3" />
-                        <span>Disagree</span>
-                      </button>
-                    </div>
+                    <DebateVoteButtons
+                      compact
+                      userVote={vote}
+                      label="Vote on dispute"
+                      onPress={choice => ctx.voteOnFlag(flag.id, choice)}
+                      className="pt-0.5"
+                      buttonClassName="flex-none"
+                    />
                   )}
                 </article>
               );

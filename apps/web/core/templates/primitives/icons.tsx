@@ -336,3 +336,39 @@ export function MessagePlusIcon({ className = 'size-4' }: IconProps) {
     </svg>
   );
 }
+
+/*
+ * The debates app's vote icons (debates-react-native src/components/artwork.ts `agree`, `disagree`,
+ * `agreeFilled`, `disagreeFilled`), drawn on its 20px grid. Filled marks the viewer's side.
+ */
+const AGREE_PATHS = [
+  'M2.19653 8.58673C2.19653 8.14558 2.55415 7.78796 2.99529 7.78796H5.39158C5.83272 7.78796 6.19034 8.14558 6.19034 8.58673V15.3762C6.19034 15.8173 5.83272 16.175 5.39158 16.175H2.99529C2.55415 16.175 2.19653 15.8173 2.19653 15.3762V8.58673Z',
+  'M9.91502 2.24328L9.53868 2.19653C8.38702 5.99065 6.19043 6.76019 6.19043 9.0129V14.3337C6.19043 14.9746 6.56124 15.567 7.16727 15.7863C9.22385 16.5306 11.3751 16.6898 13.5499 16.5025C14.878 16.3881 15.9187 15.3688 16.2113 14.0764L16.912 10.9818C17.262 9.4358 16.079 7.96623 14.4845 7.96623H10.7981L11.5852 5.42413C12.04 3.95508 11.4497 2.43393 9.91502 2.24328Z',
+];
+const DISAGREE_PATHS = [
+  'M16.9737 10.5836C16.9737 11.0247 16.616 11.3824 16.1749 11.3824H13.7786C13.3375 11.3824 12.9799 11.0247 12.9799 10.5836V3.79412C12.9799 3.35298 13.3375 2.99536 13.7786 2.99536H16.1749C16.616 2.99536 16.9737 3.35298 16.9737 3.79412V10.5836Z',
+  'M9.25522 16.9269L9.63155 16.9736C10.7832 13.1795 12.9798 12.41 12.9798 10.1573V4.83651C12.9798 4.19556 12.609 3.60317 12.003 3.38386C9.94639 2.63963 7.79512 2.48043 5.62034 2.66773C4.29225 2.78211 3.25151 3.80135 2.95889 5.09382L2.25825 8.18841C1.90824 9.73438 3.09125 11.2039 4.68577 11.2039H8.37213L7.58504 13.7461C7.1302 15.2151 7.72052 16.7363 9.25522 16.9269Z',
+];
+
+export function DebateVoteIcon({
+  choice,
+  filled = false,
+  className = 'size-5',
+}: IconProps & { choice: 'agree' | 'disagree'; filled?: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      fill={filled ? 'currentColor' : 'none'}
+      stroke="currentColor"
+      strokeWidth="1.35"
+      strokeLinejoin="round"
+      aria-hidden
+      data-filled={filled ? 'true' : undefined}
+      className={`shrink-0 ${className}`}
+    >
+      {(choice === 'agree' ? AGREE_PATHS : DISAGREE_PATHS).map(d => (
+        <path key={d} d={d} />
+      ))}
+    </svg>
+  );
+}

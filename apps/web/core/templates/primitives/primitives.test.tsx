@@ -16,6 +16,7 @@ import { TEMPLATE_ACTIONS } from '../template-actions';
 import {
   ClaimExplorer,
   ClaimSummaryCard,
+  ContextPeekDrawer,
   EntityActionProvider,
   EntityContextAndDisputes,
   EntityFlagsSection,
@@ -77,6 +78,159 @@ describe('SplitBars', () => {
     expect(screen.getByText('6%')).toBeInTheDocument();
     expect(screen.getByText('52%')).toBeInTheDocument();
     expect(screen.getAllByRole('meter')).toHaveLength(3);
+  });
+});
+
+describe('SplitBars without an "Everyone" label (GEO-3845)', () => {
+  const everyone = { id: 'all', label: 'Everyone', color: '#202020', percent: 80, voterCount: 5, isEveryone: true };
+
+  it('draws the lone Everyone row as its bar and percentage only', () => {
+    const { container } = render(<SplitBars rows={[everyone]} density="full" />);
+    expect(screen.queryByText('Everyone')).toBeNull();
+    expect(screen.getByText('80%')).toBeInTheDocument();
+    expect(screen.getByText('(5)')).toBeInTheDocument();
+    expect(screen.getByRole('meter')).toHaveAttribute('aria-valuenow', '80');
+    // No label column left behind: the bar takes the row.
+    expect(container.querySelector('.grid')).toHaveClass('grid-cols-[minmax(40px,1fr)_auto]');
+  });
+
+  it('keeps space names when other rows are listed, and still drops "Everyone"', () => {
+    render(<SplitBars rows={CONTESTED_SPLIT.rows} density="compact" />);
+    expect(screen.getByText('Community A')).toBeInTheDocument();
+    expect(screen.getByText('Community B')).toBeInTheDocument();
+    expect(screen.queryByText('Everyone')).toBeNull();
+    expect(screen.getAllByRole('meter')).toHaveLength(3);
+  });
+
+  it('keeps a space-named everyone row (the Claim page names its space)', () => {
+    render(<SplitBars rows={[{ ...everyone, label: 'Crypto' }]} density="full" />);
+    expect(screen.getByText('Crypto')).toBeInTheDocument();
+  });
+});
+
+describe('VoteBox: the debates app Agree / Disagree (GEO-3845)', () => {
+  it('draws the two 44px outlined buttons and switches or retracts by press', () => {
+    const onVote = vi.fn();
+    const onClear = vi.fn();
+    render(
+      <VoteBox split={CONTESTED_SPLIT} control={{ userVote: 'disagree', countSummary: '6 votes', onVote, onClear }} />
+    );
+
+    const agree = screen.getByRole('button', { name: 'Agree' });
+    const disagree = screen.getByRole('button', { name: 'Disagree' });
+    expect(screen.getByRole('group', { name: 'Do you agree?' })).toContainElement(agree);
+    for (const button of [agree, disagree]) expect(button).toHaveClass('h-9', 'rounded-full', 'bg-transparent');
+    expect(disagree).toHaveAttribute('aria-pressed', 'true');
+    expect(disagree).toHaveClass('border-[#151515]', 'font-bold');
+    expect(agree).toHaveClass('border-[#8a8a8a]');
+    expect(agree).not.toHaveClass('bg-text');
+
+    fireEvent.click(agree);
+    expect(onVote).toHaveBeenCalledWith('agree');
+    fireEvent.click(disagree);
+    expect(onClear).toHaveBeenCalledTimes(1);
+    expect(onVote).toHaveBeenCalledTimes(1);
+  });
+
+  it('is disabled as a pair', () => {
+    render(
+      <VoteBox
+        split={CONTESTED_SPLIT}
+        control={{ userVote: null, countSummary: '0 votes', disabled: true, onVote: vi.fn() }}
+      />
+    );
+    expect(screen.getByRole('button', { name: 'Agree' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Disagree' })).toBeDisabled();
+  });
+});
+
+describe('ClaimExplorer rows carry no debate count', () => {
+  it('drops both the debate count and a "N debates" meta part', () => {
+    const claims: ClaimSummaryModel[] = [
+      {
+        id: 'deb-1',
+        title: 'A debated claim',
+        split: { rows: [], isSplit: true, totalVotes: 0 },
+        debateCount: 5,
+        debatesHref: '/debates/x',
+        meta: ['3 debates', 'From a source'],
+        onVote: vi.fn(),
+      },
+    ];
+    render(
+      <EntityActionProvider>
+        <ClaimExplorer contestedClaims={claims} agreedClaims={[]} />
+      </EntityActionProvider>
+    );
+
+    expect(screen.queryByText(/\bdebates?\b/)).toBeNull();
+    expect(screen.queryByRole('link', { name: /debate/ })).toBeNull();
+    expect(screen.getAllByText('From a source').length).toBeGreaterThan(0);
+  });
+});
+
+describe('ClaimExplorer row layout (GEO-3845)', () => {
+  it('puts the kind in the quiet result text beside the vote buttons, after the title', () => {
+    const claims: ClaimSummaryModel[] = [
+      {
+        id: 'kind-1',
+        title: 'A judgment claim',
+        kind: 'judgment',
+        split: {
+          rows: [{ id: 'everyone', label: 'Everyone', color: '#000', percent: 71, isEveryone: true }],
+          isSplit: true,
+          totalVotes: 7,
+        },
+        onVote: vi.fn(),
+      },
+    ];
+    render(
+      <EntityActionProvider>
+        <ClaimExplorer contestedClaims={claims} agreedClaims={[]} />
+      </EntityActionProvider>
+    );
+
+    const tag = screen.getByTestId('claim-kind-tag');
+    // Plain text, not a chip, and only on wide rows.
+    expect(tag).toHaveTextContent('Judgment');
+    expect(tag.tagName).toBe('SPAN');
+    expect(tag).not.toHaveClass('bg-grey-01');
+
+    const title = screen.getByText('A judgment claim');
+    const agree = screen.getByRole('button', { name: 'Agree' });
+    // The title comes first, then the buttons, then the result group.
+    expect(title.compareDocumentPosition(agree) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(agree.compareDocumentPosition(tag) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(title.parentElement).not.toContainElement(tag);
+
+    // The result group holds the short bar, its percentage, the vote count and the kind together,
+    // on the same line as the buttons, and is hidden on phones.
+    const group = tag.parentElement!;
+    expect(group).toHaveClass('hidden', '@[760px]:flex');
+    expect(within(group).getByRole('meter')).toHaveAttribute('aria-valuenow', '71');
+    expect(group).toHaveTextContent('71%·7 votes·Judgment');
+    expect(group.parentElement).toContainElement(agree);
+  });
+
+  it('says "No votes yet" beside the buttons when nobody has voted', () => {
+    render(
+      <EntityActionProvider>
+        <ClaimExplorer
+          contestedClaims={[
+            {
+              id: 'kind-2',
+              title: 'A fresh claim',
+              kind: 'fact',
+              split: { rows: [], isSplit: true, totalVotes: 0 },
+              onVote: vi.fn(),
+            },
+          ]}
+          agreedClaims={[]}
+        />
+      </EntityActionProvider>
+    );
+    expect(screen.queryByRole('meter')).toBeNull();
+    expect(screen.getByTestId('claim-kind-tag').parentElement).toHaveTextContent('No votes yet·Factual');
   });
 });
 
@@ -750,5 +904,33 @@ describe('Add claim on a live page (GEO-3836)', () => {
     expect(screen.getByText('This one will fail')).toBeInTheDocument();
     await React.act(async () => settle({ ok: false, error: 'Could not publish.' }));
     expect(screen.queryByText('This one will fail')).toBeNull();
+  });
+});
+
+describe('Context drawer dispute votes (GEO-3845)', () => {
+  it("draw the debates app's Agree / Disagree, and pressing the held side takes the vote back", () => {
+    render(
+      <EntityActionProvider>
+        <ContextPeekDrawer
+          item={{
+            id: 'peek-1',
+            kind: 'source',
+            kindLabel: 'Source',
+            title: 'A report',
+            flags: [{ id: 'flag-1', reason: 'Misleading', body: 'The figure is from 2019.' }],
+          }}
+          onClose={() => {}}
+        />
+      </EntityActionProvider>
+    );
+    const group = screen.getByRole('group', { name: 'Vote on dispute' });
+    const agree = within(group).getByRole('button', { name: 'Agree' });
+    expect(agree).toHaveClass('border-[#8a8a8a]');
+    fireEvent.click(agree);
+    expect(agree).toHaveAttribute('aria-pressed', 'true');
+    expect(agree).toHaveClass('border-[#151515]');
+    expect(agree).not.toHaveClass('bg-text');
+    fireEvent.click(agree);
+    expect(agree).toHaveAttribute('aria-pressed', 'false');
   });
 });
