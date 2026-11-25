@@ -55,6 +55,10 @@ vi.mock('~/core/templates/views', () => ({
     mocks.liveTopicPage = props;
     return <div data-testid="live-topic-template">{props.footer as React.ReactNode}</div>;
   },
+  StreamedLiveTopicTemplateView: (props: Record<string, unknown>) => {
+    mocks.liveTopicPage = props;
+    return <div data-testid="live-topic-template">{props.footer as React.ReactNode}</div>;
+  },
   LiveEventTemplateView: (props: Record<string, unknown>) => {
     mocks.liveEventPage = props;
     return <div data-testid="live-event-template">{props.footer as React.ReactNode}</div>;
