@@ -184,10 +184,8 @@ function FarMarker({ node, band }: { node: GraphNode; band: ClaimBand | null }) 
 }
 
 /**
- * A hop-1 node on a phone (GEO-3864): its marker, which the map scales with depth through
- * `--pin-scale`, over its name at a fixed size, so the name reads however far back the node sits.
- * `--pin-shift` slides the name in from a stage edge. The map fades a covered name through `--pin-label` and sets `data-covered` on the button, which
- * then takes taps on the marker only.
+ * A hop-1 node on a phone: a marker the map scales with depth (`--pin-scale`) over a fixed-size name,
+ * which the map moves (`--pin-dx`, `--pin-dy`) and fades (`--pin-label`). A covered pin takes taps on its marker only.
  */
 function PhonePin({ marker, name }: { marker: React.ReactNode; name: string | null }) {
   return (
@@ -200,7 +198,7 @@ function PhonePin({ marker, name }: { marker: React.ReactNode; name: string | nu
       </span>
       <span
         data-label
-        className="[translate:var(--pin-shift,0px)_0] rounded-md bg-[rgba(20,20,23,.8)] px-[6px] py-[2px] text-[#f2f2f2] opacity-[var(--pin-label,1)] shadow-[0_0_0_1px_rgba(255,255,255,.1)]"
+        className="[translate:var(--pin-dx,0px)_var(--pin-dy,0px)] rounded-md bg-[rgba(20,20,23,.8)] px-[6px] py-[2px] text-[#f2f2f2] opacity-[var(--pin-label,1)] shadow-[0_0_0_1px_rgba(255,255,255,.1)]"
       >
         <span className={cx(LABEL, 'line-clamp-2')}>{name}</span>
       </span>

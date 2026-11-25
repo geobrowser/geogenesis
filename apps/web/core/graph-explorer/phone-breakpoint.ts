@@ -18,9 +18,8 @@ export function isPhonePin(phone: boolean, hop: number, isCentre: boolean) {
 const PIN_EDGE = 6;
 
 /**
- * How far to slide a pin's name sideways so it stays between the stage's left edge and `rightEdge`
- * (the stage's right edge, or the zoom buttons beside the name), px. It slides no further than
- * keeps it over its marker, so a name never shows without the marker it belongs to.
+ * Sideways slide, px, keeping a pin's name between the stage's left edge and `rightEdge`; never so
+ * far that the name leaves its marker.
  */
 export function pinShift(x: number, halfWidth: number, rightEdge: number) {
   const reach = Math.max(0, halfWidth - 8);

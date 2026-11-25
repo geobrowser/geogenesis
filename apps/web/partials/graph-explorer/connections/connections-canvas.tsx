@@ -19,7 +19,8 @@ import {
   simulateLayout,
   starfield,
 } from '~/core/graph-explorer/layout-3d';
-import { isPhonePin, pinMarkerScale, pinShift } from '~/core/graph-explorer/phone-breakpoint';
+import { isPhonePin, pinMarkerScale } from '~/core/graph-explorer/phone-breakpoint';
+import { type NamePlace, type Rect, placeName } from '~/core/graph-explorer/pin-name';
 import type { GraphSelection, SelectedNode } from '~/core/graph-explorer/select-graph';
 import { INITIAL_VIEW, isSkeletonNode, isSkeletonSelection } from '~/core/graph-explorer/skeleton-graph';
 
@@ -53,6 +54,8 @@ type NodeView = {
   dim: number;
   /** A phone pin's name alone fades when covered (its marker stays); eased like `dim`. */
   labelDim: number;
+  /** Where a phone pin's name sits around its marker; kept while it stays clear. */
+  place: NamePlace;
 };
 
 type DrawnLink = { a: string; b: string; hop: 1 | 2 | 3; edge: GraphEdge };
@@ -80,8 +83,11 @@ type Engine = {
   dpr: number;
   /** Placeholders only: links are faint and carry no moving dots. */
   skeleton: boolean;
-  /** The zoom buttons' box in stage coordinates, measured on resize; phone names keep clear of it. */
-  controls: { left: number; top: number; bottom: number } | null;
+  /** Overlays over the stage (zoom buttons, sheet handle), in stage coordinates; phone names keep clear. */
+  obstacles: Rect[];
+  /** The hint's box while it shows. */
+  hint: Rect | null;
+  hintShown: boolean;
 };
 
 export type ConnectionsCanvasProps = {
@@ -120,7 +126,7 @@ export function ConnectionsCanvas({
     analyticsRef.current = analytics;
   }, [analytics]);
   const stageRef = React.useRef<HTMLDivElement>(null);
-  const controlsRef = React.useRef<HTMLDivElement>(null);
+  const hintRef = React.useRef<HTMLParagraphElement>(null);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const elements = React.useRef(new Map<string, HTMLElement>());
   const moved = React.useRef(false);
@@ -158,7 +164,9 @@ export function ConnectionsCanvas({
     height: 0,
     dpr: 1,
     skeleton: false,
-    controls: null,
+    obstacles: [],
+    hint: null,
+    hintShown: true,
   });
   const [leaving, setLeaving] = React.useState<SelectedNode[]>([]);
   const [layoutMs, setLayoutMs] = React.useState<number | null>(null);
@@ -241,6 +249,7 @@ export function ConnectionsCanvas({
           entry,
           dim: 1,
           labelDim: 1,
+          place: 'below',
         });
       }
     }
@@ -295,6 +304,35 @@ export function ConnectionsCanvas({
     return [...selection.nodes, ...leaving.filter(entry => !ids.has(entry.node.id))];
   }, [leaving, selection]);
 
+  /** The overlays phone names keep clear of, in stage coordinates. */
+  const measureOverlays = () => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    const state = engine.current;
+    const origin = stage.getBoundingClientRect();
+    const toStage = (rect: DOMRect): Rect => ({
+      left: rect.left - origin.left,
+      right: rect.right - origin.left,
+      top: rect.top - origin.top,
+      bottom: rect.bottom - origin.top,
+    });
+    // The zoom buttons and the phone's sheet handle both carry `data-stage-control`.
+    state.obstacles = [...document.querySelectorAll('[data-stage-control]')]
+      .map(element => element.getBoundingClientRect())
+      .filter(rect => rect.width > 0 && rect.left < origin.right && rect.right > origin.left)
+      .filter(rect => rect.top < origin.bottom && rect.bottom > origin.top)
+      .map(toStage);
+    const hint = hintRef.current?.getBoundingClientRect();
+    state.hint = state.hintShown && hint && hint.width > 0 ? toStage(hint) : null;
+  };
+
+  const loading = isSkeletonSelection(selection);
+  React.useLayoutEffect(() => {
+    engine.current.hintShown = !(hinted || loading);
+    if (phone) measureOverlays();
+    wake.current();
+  }, [phone, hinted, loading, selection]);
+
   // Size the canvas to the stage.
   React.useLayoutEffect(() => {
     const stage = stageRef.current;
@@ -306,10 +344,7 @@ export function ConnectionsCanvas({
       state.width = rect.width;
       state.height = rect.height;
       state.dpr = Math.min(phone ? 1.5 : 2, window.devicePixelRatio || 1);
-      const controls = controlsRef.current?.getBoundingClientRect();
-      state.controls = controls
-        ? { left: controls.left - rect.left, top: controls.top - rect.top, bottom: controls.bottom - rect.top }
-        : null;
+      if (phone) measureOverlays();
       canvas.width = rect.width * state.dpr;
       canvas.height = rect.height * state.dpr;
       canvas.style.width = `${rect.width}px`;
@@ -378,6 +413,13 @@ export function ConnectionsCanvas({
           if (link.b === hover) neighbours.add(link.a);
         }
 
+      const obstacles = state.hint ? [...state.obstacles, state.hint] : state.obstacles;
+      const pinName = (node: NodeView, point: ReturnType<typeof project>, box: Box) => {
+        const pin = { x: point.x, y: point.y, anchor: box.anchor, width: box.width, height: box.height };
+        const at = placeName(pin, state, obstacles, node.place);
+        node.place = at.place;
+        return at;
+      };
       const measure = (id: string, element: HTMLElement) => {
         let box = anchors.current.get(id);
         if (!box) {
@@ -413,7 +455,8 @@ export function ConnectionsCanvas({
         pin: boolean;
         markerScale: number;
         /** A pin's name slid in from a stage edge, px; its rect below moves with it. */
-        shift: number;
+        /** A pin's name: its offset from below the marker, rect, and whether a place clear of overlays exists. */
+        name: { dx: number; dy: number; rect: Rect; clear: boolean } | null;
       }> = [];
       for (const node of state.views.values()) {
         const element = elements.current.get(node.id);
@@ -453,17 +496,15 @@ export function ConnectionsCanvas({
           far,
           pin,
           markerScale: pin ? pinMarkerScale(point.scale) : 1,
-          shift: pin ? pinShift(point.x, box.width / 2, pinRightEdge(state, point.y, box)) : 0,
+          name: pin ? pinName(node, point, box) : null,
         });
       }
 
       // A labelled card a nearer one touches fades, so no two labels overlap; far markers carry no label.
       const labelled = drawn.filter(entry => !entry.isCentre && entry.node.alive && entry.node.hop < 2 && !entry.far);
       // A pin's label is its name: the part below its marker, which ends at twice the anchor.
-      const labelRect = (entry: (typeof drawn)[number]) => {
-        const rect = rectAt(entry.point.x + entry.shift, entry.point.y, entry.box, entry.scale);
-        return entry.pin ? { ...rect, top: entry.point.y + entry.box.anchor } : rect;
-      };
+      const labelRect = (entry: (typeof drawn)[number]) =>
+        entry.name?.rect ?? rectAt(entry.point.x, entry.point.y, entry.box, entry.scale);
       const hidden = coveredLabels(
         labelled.map(entry => ({
           rect: labelRect(entry),
@@ -478,7 +519,8 @@ export function ConnectionsCanvas({
         return from + (to - from) * (reduceMotion ? 1 : 0.2);
       };
       for (const entry of drawn) {
-        let isCovered = covered.has(entry.node);
+        // A pin's name with no place clear of the overlays fades rather than draw under them.
+        let isCovered = covered.has(entry.node) || entry.name?.clear === false;
         let target = isCovered && !entry.pin ? COVERED_DIM : 1;
         // The centre draws over every card but the hovered one, so any other card crossing it fades.
         if (centreRect && !entry.isCentre && entry.node.id !== hover) {
@@ -496,7 +538,7 @@ export function ConnectionsCanvas({
         }
       }
 
-      for (const { node, element, point, box, scale, opacity, isCentre, pin, markerScale, shift } of drawn) {
+      for (const { node, element, point, box, scale, opacity, isCentre, pin, markerScale, name } of drawn) {
         const anchor = box.anchor;
         element.style.transformOrigin = `50% ${anchor}px`;
         element.style.transform = `translate3d(${point.x.toFixed(1)}px,${point.y.toFixed(1)}px,0) translate(-50%,-${anchor}px) scale(${scale.toFixed(3)})`;
@@ -504,10 +546,13 @@ export function ConnectionsCanvas({
         if (pin) {
           element.style.setProperty('--pin-scale', markerScale.toFixed(3));
           element.style.setProperty('--pin-label', node.labelDim.toFixed(3));
-          element.style.setProperty('--pin-shift', `${shift.toFixed(1)}px`);
+          element.style.setProperty('--pin-dx', `${(name?.dx ?? 0).toFixed(1)}px`);
+          element.style.setProperty('--pin-dy', `${(name?.dy ?? 0).toFixed(1)}px`);
         }
         element.style.zIndex = String(
-          node.id === hover ? HOVER_ORDER : depthOrder(point.depth, isCentre, neighbours.has(node.id))
+          node.id === hover
+            ? HOVER_ORDER
+            : depthOrder(point.depth, isCentre, neighbours.has(node.id), phone && node.hop === 2)
         );
       }
 
@@ -710,7 +755,6 @@ export function ConnectionsCanvas({
   };
 
   const centreId = selection.nodes[0]?.node.id;
-  const loading = isSkeletonSelection(selection);
 
   return (
     <div
@@ -815,7 +859,6 @@ export function ConnectionsCanvas({
         })}
       </div>
       <div
-        ref={controlsRef}
         data-stage-control
         className="absolute right-4 bottom-4 z-[10000] flex flex-col gap-2 graph-phone:bottom-[calc(max(16px,env(safe-area-inset-bottom))+52px)]"
       >
@@ -840,6 +883,7 @@ export function ConnectionsCanvas({
       </div>
       {children}
       <p
+        ref={hintRef}
         aria-hidden
         className={cx(
           'pointer-events-none absolute top-4 left-1/2 z-[9999] -translate-x-1/2 rounded-full bg-white/10 px-[14px] py-[6px] text-[13px] whitespace-nowrap text-[#e6e6e6] transition-opacity duration-500 md:text-[12px]',
@@ -863,7 +907,6 @@ function useCanHover() {
 }
 
 type Box = { anchor: number; width: number; height: number };
-type Rect = { left: number; right: number; top: number; bottom: number };
 
 /** A card's screen rectangle: centred on x, anchored at y, scaled about its anchor. */
 function rectAt(x: number, y: number, box: Box, scale: number): Rect {
@@ -881,17 +924,12 @@ export function nodeScale(isCentre: boolean, hop: number, depthScale: number, ph
   return Math.max(0.3, Math.min(1.2, depthScale * (hop === 2 ? 0.95 : 1)));
 }
 
-/** Where a pin's name must end on the right: the zoom buttons when level with them, else the stage edge. */
-function pinRightEdge(state: Pick<Engine, 'width' | 'controls'>, y: number, box: Box) {
-  const { controls } = state;
-  const [top, bottom] = [y + box.anchor, y + box.height - box.anchor];
-  return controls && bottom > controls.top && top < controls.bottom ? controls.left : state.width;
-}
-
 /** The hovered card draws over everything, the centre included. */
 const HOVER_ORDER = 9500;
 /** The centre is pinned above every other card, so cards glide behind it whichever side they're on. */
 const CENTRE_ORDER = 8500;
+/** How far a phone's hop-2 markers sink, so they pass under the hop-1 pins and their names. */
+const SUNK = 3000;
 /** How far a hovered card's neighbours rise over the other cards (still under the centre). */
 const NEIGHBOUR_LIFT = 2000;
 
@@ -900,9 +938,10 @@ const NEIGHBOUR_LIFT = 2000;
  * over the rest, and the centre stays above them all, so a card in front of it in depth still
  * passes under it and the centre's name stays readable.
  */
-export function depthOrder(depth: number, isCentre: boolean, lifted = false): number {
+export function depthOrder(depth: number, isCentre: boolean, lifted = false, sunk = false): number {
   if (isCentre) return CENTRE_ORDER;
-  return Math.min(CENTRE_ORDER - 1, 5000 - Math.round(depth) + (lifted ? NEIGHBOUR_LIFT : 0));
+  const lift = (lifted ? NEIGHBOUR_LIFT : 0) - (sunk ? SUNK : 0);
+  return Math.min(CENTRE_ORDER - 1, 5000 - Math.round(depth) + lift);
 }
 
 /** Opacity factor at full cover for a card under the centre: faint enough that the centre reads. */

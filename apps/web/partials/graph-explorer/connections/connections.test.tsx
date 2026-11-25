@@ -319,6 +319,11 @@ describe('ConnectionsCanvas', () => {
 
   it('draws a hop-1 node on a phone as a pin: full size, its marker scaled by depth, never far', () => {
     motion.reduce = true;
+    // The stage only: overlays keep jsdom's empty boxes, so nothing is in the names' way.
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const size = this.dataset.testid === 'connections-stage' ? { width: 390, height: 844 } : { width: 0, height: 0 };
+      return { ...size, x: 0, y: 0, top: 0, left: 0, right: size.width, bottom: size.height } as DOMRect;
+    });
     render(<Canvas phone />);
     runFrames(100);
     const isaac = screen.getByRole('button', { name: 'Isaac Herzog' });
@@ -874,6 +879,11 @@ describe('depthOrder', () => {
     expect(depthOrder(300, false, true)).toBe(6700);
     expect(depthOrder(300, false, true)).toBeGreaterThan(depthOrder(-1000, false));
     expect(depthOrder(-1500, false, true)).toBe(8499);
+  });
+
+  it("sinks a phone's hop-2 markers under the hop-1 pins, even when nearer", () => {
+    expect(depthOrder(-800, false, false, true)).toBeLessThan(depthOrder(800, false));
+    expect(depthOrder(-800, false, false, true)).toBeGreaterThan(0);
   });
 });
 
