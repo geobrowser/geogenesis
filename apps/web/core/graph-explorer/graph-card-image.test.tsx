@@ -8,7 +8,13 @@ import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
 
 import { GraphCard, generateGraphCardResponse, shownVerdict } from './graph-card-image';
-import { CLAIM_TITLE_MAX_LINES, TITLE_MIN_PX, claimNodeLabel, fitLinkCardTitle } from './link-card-layout';
+import {
+  CLAIM_TITLE_MAX_LINES,
+  TITLE_MIN_PX,
+  claimNodeLabel,
+  fitLinkCardTitle,
+  textBlockTop,
+} from './link-card-layout';
 import type { GraphCardData, GraphCardNode } from './server/graph-card-data';
 import { TopicCard } from './topic-card-image';
 
@@ -150,6 +156,19 @@ describe('graph share card', () => {
     expect(fit.lines.join(' ')).toBe(name);
     expect(renderToStaticMarkup(<GraphCard data={SHAPES.claim} />)).toMatch(/line-clamp:\s?5/);
     expect(renderToStaticMarkup(<GraphCard data={SHAPES.person} />)).not.toMatch(/line-clamp:\s?5/);
+  });
+
+  it('keeps a mid-length claim small enough that its label clears the Geo logo', () => {
+    for (const name of [
+      'Israel has committed war crimes in its military campaign in Gaza since October 2023',
+      'The United States should stop sending offensive weapons to Israel until a ceasefire',
+      'Remote work makes software teams less productive than working together in one office',
+    ]) {
+      const fit = fitLinkCardTitle(name, CLAIM_TITLE_MAX_LINES);
+      // The logo row ends near y 105; the label needs room under it.
+      expect(textBlockTop(fit, CLAIM_TITLE_MAX_LINES)).toBeGreaterThanOrEqual(130);
+      expect(fit.lines.join(' ')).toBe(name);
+    }
   });
 
   it('draws a topic centre exactly as the Topic link preview does: one shared layout', () => {

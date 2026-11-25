@@ -43,6 +43,10 @@ const LABEL_GAP = 12;
  */
 const CALIBRE_400_WIDTH_RATIO = 0.78;
 const MARGIN = 24;
+/** The text block's top never rises above this: the logo row ends near y 105. */
+const TEXT_MIN_TOP = 130;
+/** The tallest title whose block, centred on the hub's line, still starts at `TEXT_MIN_TOP`. */
+export const TITLE_MAX_HEIGHT = 2 * (HUB.y - TEXT_MIN_TOP) - (LABEL_PX * LABEL_LINE_HEIGHT + LABEL_GAP);
 
 const PILL_MAX_W = 260;
 const PERSON = { w: 180, h: 112, avatar: 72 };
@@ -50,10 +54,14 @@ const CARD = { w: 250, h: 90 };
 const DARK_CARD = '#1c1c20';
 const KIND_GRAY = '#a8a8ae';
 
-/** The title's size and lines: 78px down to 48px, at most `maxLines` in the 536px column, broken at spaces. */
+/**
+ * The title's size and lines: 78px down to 48px, at most `maxLines` in the 536px column, broken at
+ * spaces, and short enough that the block clears the logo. A 3-line title at 78px is well under it.
+ */
 export function fitLinkCardTitle(name: string, maxLines = TITLE_MAX_LINES) {
   return fitWrappedText(name, TITLE_MAX_PX, TITLE_MIN_PX, TITLE_WIDTH / CALIBRE_400_WIDTH_RATIO, maxLines, name, {
     lineHeight: TITLE_LINE_HEIGHT,
+    maxHeight: TITLE_MAX_HEIGHT,
   });
 }
 
