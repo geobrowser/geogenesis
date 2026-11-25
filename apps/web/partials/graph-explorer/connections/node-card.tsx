@@ -194,7 +194,9 @@ function TopicCard({ node, isCentre, phone }: CardProps) {
       )}
     >
       {/* Geo sets the centre topic in medium (LABEL's weight), not the semibold other centres use. */}
-      <span className={cx(LABEL, labelClamp({ isCentre, phone }, 'line-clamp-2'), phone ? 'text-[13px]' : 'text-[14px]')}>
+      <span
+        className={cx(LABEL, labelClamp({ isCentre, phone }, 'line-clamp-2'), phone ? 'text-[13px]' : 'text-[14px]')}
+      >
         {node.name}
       </span>
     </span>
