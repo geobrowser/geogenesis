@@ -158,7 +158,7 @@ describe('VoteBox: the result leads, over a full-width split bar (GEO-3845)', ()
     const result = screen.getByTestId('vote-box-result');
     expect(result).toHaveTextContent('71%agree·7 votes');
     const percent = within(result).getByText('71%');
-    expect(percent).toHaveClass('text-[40px]', 'font-bold');
+    expect(percent).toHaveClass('text-[40px]', 'font-medium');
     expect(within(result).getByText('7 votes')).toHaveClass('text-grey-04');
     expect(screen.queryByText('World affairs')).toBeNull();
     expect(screen.queryByText('Do you agree?')).toBeNull();

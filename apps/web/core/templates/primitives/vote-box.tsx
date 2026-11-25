@@ -108,7 +108,7 @@ function Headline({ row, countSummary, noVotes }: { row?: SplitRow; countSummary
       {row ? (
         <>
           <span className="flex items-baseline gap-2">
-            <strong className="text-[40px] leading-[44px] font-bold tracking-[-0.03em] text-text">
+            <strong className="text-[40px] leading-[44px] font-medium tracking-[-0.03em] text-text">
               {formatPercentInt(row.percent)}
             </strong>
             <span className="text-[17px] leading-[24px] font-semibold text-text">{row.unit ?? 'agree'}</span>
