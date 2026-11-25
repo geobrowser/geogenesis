@@ -11,6 +11,7 @@ import { type GraphFilterOverrides, type GraphScope, resolveGraphFilter } from '
 import { shareGraph } from '~/core/graph-explorer/graph-share';
 import { type GraphHistory, goBack, recentre } from '~/core/graph-explorer/history';
 import { spokesOfKind } from '~/core/graph-explorer/panel-sections';
+import { GRAPH_PHONE_QUERY } from '~/core/graph-explorer/phone-breakpoint';
 import { DESKTOP_GRAPH_CAPS, type GraphKindFilter, PHONE_GRAPH_CAPS } from '~/core/graph-explorer/select-graph';
 import { SKELETON_SELECTION } from '~/core/graph-explorer/skeleton-graph';
 import { buildSpokes, entitySpaceId } from '~/core/graph-explorer/spokes';
@@ -23,7 +24,7 @@ import { normId } from '~/core/utils/norm-id';
 import { Skeleton } from '~/design-system/skeleton';
 
 import { ClaimActions, TopicClaimsSummary } from './connections/centre-summary';
-import { ConnectionsStage, PHONE_QUERY } from './connections/connections-view';
+import { ConnectionsStage } from './connections/connections-view';
 import { GraphSearch } from './connections/graph-search';
 import { GraphTopBar } from './connections/graph-top-bar';
 import { claimsEmptyMessage, descriptionEmptyMessage, relationshipsEmptyMessage } from './empty-states';
@@ -57,7 +58,7 @@ export function GraphViewer({
   const [kindFilter, setKindFilter] = React.useState<GraphKindFilter>(() => overrides?.chip ?? 'all');
   // Names of entities already seen, for "Back to X" and the trail before a hop is refetched.
   const [names, setNames] = React.useState<Record<string, string>>({});
-  const phone = useMediaQuery(PHONE_QUERY);
+  const phone = useMediaQuery(GRAPH_PHONE_QUERY);
   const analytics = useGraphAnalytics();
 
   const centreId = history.centreId;

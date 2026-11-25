@@ -257,12 +257,11 @@ describe('GraphViewer', () => {
   it('leaves the centre’s name block out of the panel on a phone, at the map’s phone breakpoint', () => {
     render(<Viewer start={TOPIC} scope={scope} />);
     // jsdom applies no media queries, so this pins the classes. The breakpoint must be the map's own
-    // `(max-width: 599px)`: with `md:` (767px), a 600-767px window cut the name on the map and had none here.
-    // Tailwind v4's `max-[N]:` is `width < N`, so `max-[600px]:` is the class that covers 599px too.
+    // (`graph-phone:`, pinned to GRAPH_PHONE_QUERY in phone-breakpoint.test.ts): with `md:` (767px), a
+    // 600-767px window cut the name on the map and had none here.
     const header = screen.getByTestId('entity-panel-header');
     const classes = header.className.split(' ');
-    expect(classes).toContain('max-[600px]:hidden');
-    expect(classes.filter(name => name.endsWith(':hidden'))).toEqual(['max-[600px]:hidden']);
+    expect(classes.filter(name => name.endsWith(':hidden'))).toEqual(['graph-phone:hidden']);
     expect(
       screen.getByRole('heading', { name: 'Israel-Gaza war' }).closest('[data-testid="entity-panel-header"]')
     ).toBe(header);

@@ -11,9 +11,9 @@ import { SkeletonNode } from './connections/skeleton-node';
 
 const DESKTOP_NODES = staticSkeleton(false);
 const PHONE_NODES = staticSkeleton(true);
-/** The viewer's phone query (max-width 599px), as CSS so the server markup needs no media query. */
-const ON_DESKTOP = 'max-[599px]:hidden';
-const ON_PHONE = 'min-[600px]:hidden';
+/** The map's phone breakpoint as CSS variants, so the server markup needs no JS media query. */
+const ON_DESKTOP = 'graph-phone:hidden';
+const ON_PHONE = 'graph-wide:hidden';
 
 /**
  * The stage as the map first draws its skeleton, as plain DOM: server-rendered, so the first paint
