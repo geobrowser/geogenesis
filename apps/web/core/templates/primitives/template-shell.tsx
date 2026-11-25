@@ -3,12 +3,14 @@
 import * as React from 'react';
 
 import cx from 'classnames';
+import { useSetAtom } from 'jotai';
 import Link from 'next/link';
 
 import type { BreadcrumbItem, EntityActionCallbacks, EntityContextDataModel } from '../models';
 import { resolveTemplateImageUrl } from '../ontology';
 import { EntityActionProvider } from './entity-overflow-menu';
 import { ChevronRightIcon } from './icons';
+import { entityTemplatePagesOnScreenAtom } from '~/atoms';
 
 /**
  * Shared Geo card surfaces: barely-there border + wide, silky ambient shadow
@@ -226,6 +228,21 @@ export function TemplateBreadcrumb({ items, className }: { items: readonly Bread
 }
 
 /**
+ * Tells the app a full entity page that uses a template is on screen (not the side panel or a Space
+ * embed), which keeps the assistant's floating button off (GEO-3846). `TemplateShell` calls it, and so
+ * does each live template view from its first render, so the button doesn't show while the page
+ * loads and then vanish once the template draws.
+ */
+export function useEntityTemplatePageOnScreen(active: boolean) {
+  const setTemplatePagesOnScreen = useSetAtom(entityTemplatePagesOnScreenAtom);
+  React.useEffect(() => {
+    if (!active) return;
+    setTemplatePagesOnScreen(count => count + 1);
+    return () => setTemplatePagesOnScreen(count => count - 1);
+  }, [active, setTemplatePagesOnScreen]);
+}
+
+/**
  * Container-query wrapper shared by every v2 entity template.
  */
 export function TemplateShell({
@@ -254,6 +271,8 @@ export function TemplateShell({
   className?: string;
 }) {
   const resolvedCoverUrl = embedded ? null : resolveTemplateImageUrl(coverUrl);
+
+  useEntityTemplatePageOnScreen(!compact && !embedded);
 
   return (
     <EntityActionProvider initialContextByTarget={contextByEntityId} callbacks={actionCallbacks}>

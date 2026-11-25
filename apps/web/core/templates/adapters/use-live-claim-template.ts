@@ -609,7 +609,7 @@ export function useLiveClaimTemplate({
 
     sections.push({
       id: 'sources',
-      title: 'Evidence',
+      title: 'Sources',
       layout: 'cards',
       items: hydratedSourceCards,
       emptyText: 'No sources',

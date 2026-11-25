@@ -8,6 +8,7 @@ import { useLivePodcastEpisodeTemplate } from '~/core/templates/adapters/use-liv
 import { useLivePodcastShowTemplate } from '~/core/templates/adapters/use-live-podcast-show-template';
 import { useLivePostTemplate } from '~/core/templates/adapters/use-live-post-template';
 import { useLiveSourceTemplate } from '~/core/templates/adapters/use-live-source-template';
+import { useEntityTemplatePageOnScreen } from '~/core/templates/primitives/template-shell';
 import { EventTemplate } from '~/core/templates/views/event-template';
 import { NewsStoryTemplate } from '~/core/templates/views/news-story-template';
 import { PodcastEpisodeTemplate } from '~/core/templates/views/podcast-episode-template';
@@ -41,6 +42,7 @@ export function LiveEventTemplateView({
   serverCoverUrl,
   compact = false,
 }: LiveEntityTemplateViewProps) {
+  useEntityTemplatePageOnScreen(!compact);
   const { data, isLoading, actionCallbacks } = useLiveEventTemplate({
     entityId,
     spaceId,
@@ -67,6 +69,7 @@ export function LiveNewsStoryTemplateView({
   serverCoverUrl,
   compact = false,
 }: LiveEntityTemplateViewProps) {
+  useEntityTemplatePageOnScreen(!compact);
   const { data, isLoading, isSectionsLoading, actionCallbacks } = useLiveNewsStoryTemplate({
     entityId,
     spaceId,
@@ -95,6 +98,7 @@ export function LiveSourceTemplateView({
   serverCoverUrl,
   compact = false,
 }: LiveEntityTemplateViewProps) {
+  useEntityTemplatePageOnScreen(!compact);
   const { data, isLoading, isSectionsLoading, actionCallbacks } = useLiveSourceTemplate({
     entityId,
     spaceId,
@@ -122,6 +126,7 @@ export function LivePostTemplateView({
   serverCoverUrl,
   compact = false,
 }: LiveEntityTemplateViewProps) {
+  useEntityTemplatePageOnScreen(!compact);
   const { data, isLoading, actionCallbacks } = useLivePostTemplate({
     entityId,
     spaceId,
@@ -148,6 +153,7 @@ export function LivePodcastShowTemplateView({
   serverCoverUrl,
   compact = false,
 }: LiveEntityTemplateViewProps) {
+  useEntityTemplatePageOnScreen(!compact);
   const { data, isLoading, actionCallbacks } = useLivePodcastShowTemplate({
     entityId,
     spaceId,
@@ -174,6 +180,7 @@ export function LivePodcastEpisodeTemplateView({
   serverCoverUrl,
   compact = false,
 }: LiveEntityTemplateViewProps) {
+  useEntityTemplatePageOnScreen(!compact);
   const { data, isLoading, actionCallbacks } = useLivePodcastEpisodeTemplate({
     entityId,
     spaceId,

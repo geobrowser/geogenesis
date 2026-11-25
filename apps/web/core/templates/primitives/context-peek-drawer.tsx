@@ -533,11 +533,11 @@ function PeekAddedContextRelations({
   if (!TEMPLATE_ACTIONS.addContext && grouped.length === 0) return null;
 
   return (
-    <section aria-label="Context" className="flex flex-col gap-3">
+    <section aria-label="Properties" className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-2">
         <h4 className="m-0 inline-flex items-center gap-2 text-[17px] leading-[22px] font-semibold text-text">
           <NetworkIcon className="size-4 text-grey-04" />
-          <span>Context</span>
+          <span>Properties</span>
         </h4>
         <AddContextPopover
           onSubmit={(predicate, values) =>
@@ -641,10 +641,10 @@ function PeekAddedContextRelations({
             })}
           </dl>
 
-          <InlinePagination page={safePage} totalPages={totalPages} onPageChange={setPage} label="Context pages" />
+          <InlinePagination page={safePage} totalPages={totalPages} onPageChange={setPage} label="Properties pages" />
         </>
       ) : (
-        <p className="m-0 text-[14px] text-grey-04">No context added yet.</p>
+        <p className="m-0 text-[14px] text-grey-04">No properties added yet.</p>
       )}
     </section>
   );

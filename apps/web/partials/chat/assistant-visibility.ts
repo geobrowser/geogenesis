@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 
 import { useMediaQuery } from '~/core/hooks/use-media-query';
 
-import { debateFullscreenActiveAtom } from '~/atoms';
+import { debateFullscreenActiveAtom, entityTemplatePagesOnScreenAtom } from '~/atoms';
 
 const FULLSCREEN_CHILD_ROUTE_SUFFIXES = ['/ranking-compose'] as const;
 
@@ -31,4 +31,13 @@ export function useHideAssistant(): boolean {
   // Match the debate feed's `md:` fullscreen overlay breakpoint.
   const isMobile = useMediaQuery('(max-width: 767px)');
   return isFullscreenChildRoute(pathname) || (isMobile && debateFullscreenActive);
+}
+
+/**
+ * Whether only the floating button stays off: on an entity page that uses a v2 template (GEO-3846),
+ * where it competes with the template. The panel itself still opens there, from Cmd/Ctrl+K or from
+ * a template's add-source "+", which hands its link to the assistant.
+ */
+export function useHideAssistantLauncher(): boolean {
+  return useAtomValue(entityTemplatePagesOnScreenAtom) > 0;
 }

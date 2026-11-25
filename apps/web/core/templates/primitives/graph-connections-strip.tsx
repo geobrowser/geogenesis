@@ -76,9 +76,9 @@ export function GraphConnectionsStrip({ groups = [], target, className }: GraphC
   const pagedGroups = visibleGroups.slice((safePage - 1) * GROUPS_PER_PAGE, safePage * GROUPS_PER_PAGE);
 
   return (
-    <section aria-label="Context" className={cx('flex flex-col gap-3', className)}>
+    <section aria-label="Properties" className={cx('flex flex-col gap-3', className)}>
       <div className="flex items-center justify-between gap-3">
-        <h2 className="m-0 text-mediumTitle font-semibold text-text">Context</h2>
+        <h2 className="m-0 text-mediumTitle font-semibold text-text">Properties</h2>
 
         {target && ctx && <AddContextPopover onSubmit={(pred, vals) => ctx.addTriple(target.id, pred, vals)} />}
       </div>
@@ -165,10 +165,10 @@ export function GraphConnectionsStrip({ groups = [], target, className }: GraphC
             })}
           </dl>
 
-          <InlinePagination page={safePage} totalPages={totalPages} onPageChange={setPage} label="Context pages" />
+          <InlinePagination page={safePage} totalPages={totalPages} onPageChange={setPage} label="Properties pages" />
         </div>
       ) : (
-        <TemplateEmptyState>No context added yet.</TemplateEmptyState>
+        <TemplateEmptyState>No properties added yet.</TemplateEmptyState>
       )}
     </section>
   );

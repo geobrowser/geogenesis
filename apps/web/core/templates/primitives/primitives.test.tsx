@@ -437,7 +437,7 @@ describe('Context & Disputes empty states, inline pill +, and pagination', () =>
       </EntityActionProvider>
     );
 
-    expect(screen.getByText('No context added yet.')).toBeInTheDocument();
+    expect(screen.getByText('No properties added yet.')).toBeInTheDocument();
     const noDisputes = screen.getByText('No disputes');
     expect(noDisputes).toBeInTheDocument();
     expect(noDisputes.closest('section')?.querySelectorAll('svg')).toHaveLength(1); // only the '+' icon button
@@ -659,7 +659,7 @@ describe('Add context and Dispute switch (GEO-3819)', () => {
         <EntityFlagsSection target={target} />
       </EntityActionProvider>
     );
-    expect(screen.queryByRole('region', { name: 'Context' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Properties' })).toBeNull();
     expect(screen.queryByRole('region', { name: 'Disputes' })).toBeNull();
 
     rerender(
@@ -667,7 +667,7 @@ describe('Add context and Dispute switch (GEO-3819)', () => {
         <GraphConnectionsStrip groups={groups} target={target} />
       </EntityActionProvider>
     );
-    const context = screen.getByRole('region', { name: 'Context' });
+    const context = screen.getByRole('region', { name: 'Properties' });
     expect(within(context).getByText('UN OCHA')).toBeInTheDocument();
     expect(within(context).queryByRole('button', { name: 'Add context' })).toBeNull();
     expect(within(context).queryByRole('button', { name: 'Add Related actors' })).toBeNull();
