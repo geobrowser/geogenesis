@@ -356,6 +356,10 @@ function MomentsStory({
   const togglePlay = () => {
     const video = videoRef.current;
     if (!video) return;
+    if (failed) {
+      retry();
+      return;
+    }
     if (story.mode === 'moments' && story.finished) {
       autoplayRef.current = true;
       viewerStartRef.current = true;
@@ -390,6 +394,11 @@ function MomentsStory({
     const atEdge = direction === 1 ? story.index >= story.count - 1 : story.index === 0;
     if (atEdge) {
       // The first card's left edge replays it, as in a story; the last card's right edge holds.
+      // A failed clip has nowhere to step from here, so either edge reloads it.
+      if (failed) {
+        retry();
+        return;
+      }
       if (direction === -1 && videoRef.current) {
         videoRef.current.currentTime = 0;
         setClipPosition({ src, ms: 0 });
@@ -620,7 +629,7 @@ function MomentsStory({
 
       {/* Tap zones. While playing, the middle pauses and in the moments the edges step; paused, a tap
           anywhere plays (Preston, 12 Nov), so the edges only step once it is going, or to get past a
-          clip that failed. */}
+          clip that failed. After a load error, the rest of the picture retries. */}
       {story.mode === 'moments' && (active || failed) && (
         <>
           <button
@@ -725,14 +734,14 @@ function MomentsStory({
       )}
 
       {failed && (
-        <div className="absolute inset-x-3 top-1/2 z-30 flex -translate-y-1/2 flex-col items-center gap-2 text-center">
+        <div className="pointer-events-none absolute inset-x-3 top-1/2 z-30 flex -translate-y-1/2 flex-col items-center gap-2 text-center">
           <span className="text-breadcrumb text-white/90">
             {story.mode === 'moments' ? 'Couldn’t play this moment.' : 'Couldn’t play this debate.'}
           </span>
           <button
             type="button"
             onClick={retry}
-            className="rounded bg-white px-3 py-1.5 text-smallButton text-text shadow-card"
+            className="pointer-events-auto rounded bg-white px-3 py-1.5 text-smallButton text-text shadow-card"
           >
             Retry
           </button>
