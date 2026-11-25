@@ -1141,8 +1141,10 @@ describe('GEO-3837 phone tidy-ups', () => {
     expect(within(box).queryByText('You disagreed.')).toBeNull();
     expect(within(box).queryByRole('button', { name: 'Change' })).toBeNull();
     expect(within(box).getByRole('button', { name: 'Disagree' })).toHaveAttribute('aria-pressed', 'true');
-    // The claim-row result beside the buttons: bar, percentage and count, no space name (GEO-3845).
-    expect(within(box).getByTestId('vote-box-result')).toHaveTextContent('60%·5 votes');
+    // The result leads: a large percentage and the count, no space name, over the split bar (GEO-3845).
+    expect(within(box).getByTestId('vote-box-result')).toHaveTextContent('60%agree·5 votes');
+    expect(within(box).getByRole('meter')).toHaveAttribute('aria-valuenow', '60');
+    expect(within(box).getByTestId('vote-box-bar-ends')).toHaveTextContent('Agree 60%Disagree 40%');
     expect(within(box).queryByText('World affairs')).toBeNull();
 
     fireEvent.click(within(box).getByRole('button', { name: 'Disagree' }));

@@ -144,45 +144,62 @@ describe('VoteBox: the debates app Agree / Disagree (GEO-3845)', () => {
   });
 });
 
-describe('VoteBox: one column in the claim-row style (GEO-3845)', () => {
+describe('VoteBox: the result leads, over a full-width split bar (GEO-3845)', () => {
   const control = { userVote: null, countSummary: '7 votes', onVote: vi.fn() } as const;
+  const lone: SplitBreakdown = {
+    isSplit: false,
+    totalVotes: 7,
+    rows: [{ id: 'wa', label: 'World affairs', color: '#202020', percent: 71, voterCount: 7, isEveryone: true }],
+  };
 
-  it('groups a lone split beside the buttons as "bar 71% · 7 votes", with no space label', () => {
-    render(
-      <VoteBox
-        split={{
-          isSplit: false,
-          totalVotes: 7,
-          rows: [{ id: 'wa', label: 'World affairs', color: '#202020', percent: 71, voterCount: 7, isEveryone: true }],
-        }}
-        control={control}
-      />
-    );
+  it('leads with a large "71% agree" and the quiet count, with no space label or prompt', () => {
+    render(<VoteBox split={lone} control={control} />);
 
     const result = screen.getByTestId('vote-box-result');
-    expect(result).toHaveTextContent('71%·7 votes');
-    expect(within(result).getByRole('meter')).toHaveAttribute('aria-valuenow', '71');
-    expect(screen.getAllByRole('meter')).toHaveLength(1);
+    expect(result).toHaveTextContent('71%agree·7 votes');
+    const percent = within(result).getByText('71%');
+    expect(percent).toHaveClass('text-[40px]', 'font-bold');
+    expect(within(result).getByText('7 votes')).toHaveClass('text-grey-04');
     expect(screen.queryByText('World affairs')).toBeNull();
-    // One line: the buttons and the result share a row, with no divider between halves.
-    expect(result.parentElement).toContainElement(screen.getByRole('group', { name: 'Do you agree?' }));
-    expect(screen.getByRole('region').querySelector('.border-l')).toBeNull();
     expect(screen.queryByText('Do you agree?')).toBeNull();
   });
 
-  it('leads with the overall row and lists the spaces under the button line', () => {
+  it('puts the buttons on the result line and the bar across the card, with both shares at its ends', () => {
+    render(<VoteBox split={lone} control={control} />);
+
+    const result = screen.getByTestId('vote-box-result');
+    const buttons = screen.getByRole('group', { name: 'Do you agree?' });
+    const meter = screen.getByRole('meter');
+    expect(screen.getAllByRole('meter')).toHaveLength(1);
+    expect(meter).toHaveAttribute('aria-valuenow', '71');
+    expect(meter).toHaveClass('w-full', 'bg-grey-02');
+    // One line on wide cards (buttons right of the result), the bar on its own line under both.
+    expect(result.parentElement).toContainElement(buttons);
+    expect(buttons).toHaveClass('@[680px]:order-2', 'order-3', 'w-full', '@[680px]:w-auto');
+    expect(meter.parentElement).toHaveClass('order-2', '@[680px]:order-3', '@[680px]:basis-full');
+    expect(screen.getByTestId('vote-box-bar-ends')).toHaveTextContent('Agree 71%Disagree 29%');
+  });
+
+  it('keeps the bar ends to agree votes', () => {
+    render(<VoteBox split={{ ...lone, rows: [{ ...lone.rows[0], unit: 'helpful' }] }} control={control} />);
+    expect(screen.getByTestId('vote-box-result')).toHaveTextContent('71%helpful');
+    expect(screen.queryByTestId('vote-box-bar-ends')).toBeNull();
+  });
+
+  it('leads with the overall row and lists the spaces under the bar', () => {
     render(<VoteBox split={CONTESTED_SPLIT} control={{ ...control, countSummary: '2,418 votes' }} />);
 
     const result = screen.getByTestId('vote-box-result');
-    expect(result).toHaveTextContent('52%·2,418 votes');
-    expect(within(result).getByRole('meter', { name: 'Everyone agree' })).toBeInTheDocument();
+    expect(result).toHaveTextContent('52%agree·2,418 votes');
     expect(within(result).queryByText('Community A')).toBeNull();
-    expect(screen.getByText('Community A')).toBeInTheDocument();
+    const overall = screen.getByRole('meter', { name: 'Everyone agree' });
+    const spaceA = screen.getByText('Community A');
+    expect(overall.compareDocumentPosition(spaceA) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByText('Community B')).toBeInTheDocument();
     expect(screen.getAllByRole('meter')).toHaveLength(3);
   });
 
-  it('lists every space when no row is the overall one, and shows only the count beside the buttons', () => {
+  it('lists every space when no row is the overall one, with the count as the headline', () => {
     render(
       <VoteBox
         split={{ ...CONTESTED_SPLIT, rows: CONTESTED_SPLIT.rows.filter(row => !row.isEveryone) }}
@@ -191,20 +208,41 @@ describe('VoteBox: one column in the claim-row style (GEO-3845)', () => {
     );
 
     const result = screen.getByTestId('vote-box-result');
-    expect(within(result).queryByRole('meter')).toBeNull();
     expect(result).toHaveTextContent('7 votes');
+    expect(screen.queryByTestId('vote-box-empty-bar')).toBeNull();
     expect(screen.getAllByRole('meter')).toHaveLength(2);
   });
 
-  it('says "No votes yet" beside the buttons with no split', () => {
+  it('keeps a prompt (the News story accuracy rating) above the result and the buttons', () => {
+    render(
+      <VoteBox
+        prompt="This is an accurate account of what happened"
+        split={CONTESTED_SPLIT}
+        control={{ ...control, countSummary: '2,418 people rated this account' }}
+      />
+    );
+    const box = screen.getByRole('region', { name: 'This is an accurate account of what happened' });
+    const prompt = within(box).getByText('This is an accurate account of what happened');
+    const result = within(box).getByTestId('vote-box-result');
+    expect(prompt.compareDocumentPosition(result) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(result).toHaveTextContent('52%agree·2,418 people rated this account');
+    expect(within(box).getByRole('button', { name: 'Agree' })).toBeInTheDocument();
+  });
+
+  it('says a large, quiet "No votes yet" over an empty bar, buttons still there', () => {
     render(
       <VoteBox
         split={{ rows: [], isSplit: false, totalVotes: 0 }}
         control={{ ...control, countSummary: 'No votes yet' }}
       />
     );
-    expect(screen.getByTestId('vote-box-result')).toHaveTextContent('No votes yet');
+    const result = screen.getByTestId('vote-box-result');
+    expect(result).toHaveTextContent('No votes yet');
+    expect(within(result).getByText('No votes yet')).toHaveClass('text-[28px]', 'text-grey-04');
     expect(screen.queryByRole('meter')).toBeNull();
+    expect(screen.getByTestId('vote-box-empty-bar')).toHaveClass('w-full', 'bg-grey-01');
+    expect(screen.queryByTestId('vote-box-bar-ends')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Agree' })).toBeEnabled();
   });
 });
 
