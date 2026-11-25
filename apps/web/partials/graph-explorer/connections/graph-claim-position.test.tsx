@@ -236,6 +236,8 @@ describe('the open claim’s Agree and Disagree', () => {
     ]);
     expect(screen.getByRole('button', { name: /^Disagree.*your response/ })).toHaveAttribute('aria-pressed', 'true');
     expect(openSaveVotesPrompt).toHaveBeenCalledTimes(1);
+    // The feed's first ask, as the panel's thumbs make: not the claim page's 'single_claim'.
+    expect(openSaveVotesPrompt).toHaveBeenCalledWith('threshold');
 
     // "Not counted yet · Save" under the pill pressed, and Save opens the sheet.
     const save = screen.getByRole('button', { name: 'Save' });
