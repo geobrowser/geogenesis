@@ -949,8 +949,8 @@ describe('ClaimExplorer one list (GEO-3854)', () => {
     // A claim listed twice shows once, at its first place.
     expect(text.split('Split B').length - 1).toBe(1);
     expect(['Settled A', 'Split A', 'Split B', 'Settled B'].map(rankOf)).toEqual(['1', '2', '3', '4']);
-    // Accepted claims keep their check mark where they sit.
-    expect(container.querySelectorAll('svg.text-ctaPrimary')).toHaveLength(2);
+    // No check mark next to accepted claims (Preston).
+    expect(container.querySelectorAll('svg.text-ctaPrimary')).toHaveLength(0);
   });
 
   it('puts an added claim at the top of the one list', () => {

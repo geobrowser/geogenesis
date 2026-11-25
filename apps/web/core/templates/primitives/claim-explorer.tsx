@@ -23,7 +23,6 @@ import {
   InlinePagination,
   useEntityActionContext,
 } from './entity-overflow-menu';
-import { CheckCircleIcon } from './icons';
 import { ListRankingHeaderControl, ListRankingWorkspace, type RankableListItem, useListRanking } from './list-ranking';
 import { SplitBars } from './split-bars';
 import { ClaimVoteBinding, ClaimVotePills, type TemplateVoteBinding, TemplateVoteRows } from './template-claim-vote';
@@ -40,7 +39,7 @@ const CLAIM_KIND_TONE: Record<ClaimKind, TemplateBadgeTone> = {
 export interface ClaimExplorerProps {
   /**
    * The claims in the order to show them, ranked 1..N as given (GEO-3868). The list never regroups
-   * them: an accepted claim keeps its place and only gains a check mark.
+   * them: an accepted claim keeps its place, with no mark of its own.
    */
   claims: readonly ClaimSummaryModel[];
   title?: string;
@@ -56,7 +55,7 @@ const PAGE_SIZE = 10;
 
 type ExplorerClaim = ClaimSummaryModel & { section: 'split' | 'agreed' };
 
-/** Accepted: at least two votes and not split (75% or more on one side). Draws the check mark. */
+/** Accepted: at least two votes and not split (75% or more on one side). Only labels the analytics section. */
 function isAcceptedClaim(claim: ClaimSummaryModel): boolean {
   return !claim.split.isSplit && (claim.split.totalVotes ?? 0) >= 2;
 }
@@ -186,12 +185,7 @@ export function ClaimExplorer({ claims, title = 'Claims', hideKindOnPhone = true
                   item_position: startIndex + index + 1,
                 }}
               >
-                <ClaimListRow
-                  rank={startIndex + index + 1}
-                  claim={claim}
-                  isAgreed={claim.section === 'agreed'}
-                  hideKindOnPhone={hideKindOnPhone}
-                />
+                <ClaimListRow rank={startIndex + index + 1} claim={claim} hideKindOnPhone={hideKindOnPhone} />
               </ActionContextProvider>
             ))}
           </div>
@@ -210,8 +204,6 @@ export function ClaimExplorer({ claims, title = 'Claims', hideKindOnPhone = true
 export interface ClaimListRowProps {
   rank: number;
   claim: ClaimSummaryModel;
-  /** Marks the title with a check, for a list's Accepted tab. */
-  isAgreed?: boolean;
   /** See {@link ClaimExplorerProps.hideKindOnPhone}. */
   hideKindOnPhone?: boolean;
   /** Extra lines under the vote controls, such as a sub-claim's note and source chips. */
@@ -227,7 +219,7 @@ export interface ClaimListRowProps {
  * result beside them on wide rows ("bar 71% · 7 votes · Judgment"), so nothing floats at the far
  * right. Phones keep the split as its own line under the buttons, as the Claim page's vote box draws it.
  */
-export function ClaimListRow({ rank, claim, isAgreed = false, hideKindOnPhone = true, details }: ClaimListRowProps) {
+export function ClaimListRow({ rank, claim, hideKindOnPhone = true, details }: ClaimListRowProps) {
   const voteMetaIndex = claim.meta?.findIndex(part => /\bvotes?\b/i.test(part)) ?? -1;
   // Debate counts aren't shown in claim lists (GEO-3845); a "N debates" meta part is dropped too.
   const debateMetaIndex = claim.meta?.findIndex(part => /\bdebates?\b/i.test(part)) ?? -1;
@@ -262,7 +254,6 @@ export function ClaimListRow({ rank, claim, isAgreed = false, hideKindOnPhone = 
         {rank}
       </span>
       {claim.title}
-      {isAgreed && <CheckCircleIcon className="ml-1.5 inline-block size-3.5 align-[-0.15em] text-ctaPrimary" />}
     </span>
   );
 
