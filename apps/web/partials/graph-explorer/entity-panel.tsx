@@ -6,7 +6,13 @@ import { type ClaimAbout, nodeClaimSpaceId } from '~/core/graph-explorer/claims-
 import type { GraphNode } from '~/core/graph-explorer/fetch-graph-neighbourhood';
 import type { GraphCentre } from '~/core/graph-explorer/graph-entity';
 import { useGraphAnalytics } from '~/core/graph-explorer/graph-explorer-analytics';
-import { type GraphKind, type RowCentre, graphKindOf } from '~/core/graph-explorer/graph-kinds';
+import {
+  GRAPH_KIND_TYPE_IDS,
+  type GraphKind,
+  type RowCentre,
+  graphKindOf,
+  typeDescribesKind,
+} from '~/core/graph-explorer/graph-kinds';
 import { groupByKind } from '~/core/graph-explorer/panel-sections';
 import type { Spoke } from '~/core/graph-explorer/spokes';
 import { normId } from '~/core/utils/norm-id';
@@ -14,14 +20,50 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
+import { nodeDateLabel, nodeTypeLabel } from './connections/node-card';
 import { EntityAvatar } from './entity-avatar';
 import { NeighbourGroups, type PanelClaim } from './panel-sections';
 
 /** `claims` null: claims aren't asked for here (a chip other than Claims), so there's nothing to report. */
-export type EntityPanelEmptyMessages = { relationships: string; claims: string | null; description: string };
+export type EntityPanelEmptyMessages = { relationships: string; claims: string | null };
 
 export function typeNames(entity: { types: Array<{ name: string | null }> }): string[] {
   return [...new Set(entity.types.map(type => type.name).filter((name): name is string => Boolean(name)))];
+}
+
+/** The kind's own word, first on the line above the title as in the prototype. People and groups have none: their type says it. */
+const KIND_EYEBROW: Partial<Record<GraphKind, string>> = {
+  topic: 'Topic',
+  claim: 'Claim',
+  story: 'News',
+  event: 'Event',
+  src: 'Source',
+  case: 'Court case',
+};
+
+export type PanelCentre = GraphCentre & Pick<GraphNode, 'kind' | 'date'>;
+
+/**
+ * The line above the centre's title, in the prototype's form: the kind, then its types (best first),
+ * then its date, joined with " · " ("Source · Dataset · Nov 15, 2026"). A type a kind is made of
+ * alone ("Claim", "News story") is the kind's word already, so it isn't said twice, and a type of
+ * another kind or a structural one is left out.
+ */
+export function centreEyebrow(centre: PanelCentre): string | null {
+  const kindWord = KIND_EYEBROW[centre.kind];
+  const kindTypeIds = GRAPH_KIND_TYPE_IDS[centre.kind];
+  const sole = kindTypeIds.length === 1 ? kindTypeIds[0] : null;
+  const names = centre.types
+    .filter(type => normId(type.id) !== sole)
+    // Another kind's type isn't what this is: the Topic tag on a person, Claim on a News event.
+    .filter(type => typeDescribesKind(type.id, centre.kind))
+    .map(type => type.name)
+    .filter((name): name is string => Boolean(name));
+  const best = nodeTypeLabel(centre);
+  const types = [...new Set([...(best && names.includes(best) ? [best] : []), ...names])].filter(
+    name => name.toLowerCase() !== kindWord?.toLowerCase()
+  );
+  return [kindWord, ...types, nodeDateLabel(centre)].filter(Boolean).join(' · ') || null;
 }
 
 /** What the panel's rows hang from: the centre's kind, as the map draws it, and the type names its header shows. */
@@ -43,7 +85,7 @@ export type ClaimsState = {
  */
 export function EntityPanel({
   centre,
-  centreSpaceId,
+  pageSpaceId,
   topicSpaceId,
   spokes,
   nodes,
@@ -53,10 +95,12 @@ export function EntityPanel({
   moreKinds,
   emptyMessages,
   summary,
+  summaryFirst = false,
   showClaims = true,
 }: {
-  centre: GraphCentre;
-  centreSpaceId: string | null;
+  centre: PanelCentre;
+  /** The space whose page for the centre its title links to; null, a plain title. */
+  pageSpaceId: string | null;
   topicSpaceId: string | null;
   spokes: Spoke[];
   /** Hop-1 nodes by id, for each spoke's kind and date. */
@@ -68,8 +112,10 @@ export function EntityPanel({
   /** Kinds with more around the centre than were loaded. */
   moreKinds: readonly GraphKind[];
   emptyMessages: EntityPanelEmptyMessages;
-  /** Shown under the description: the vote box, or a topic's summary and overview. */
+  /** The vote box (above the description, for a claim), or a topic's summary and overview (under it). */
   summary?: React.ReactNode;
+  /** True for a claim centre: its vote block goes above the description rather than under it. */
+  summaryFirst?: boolean;
   /** False for a claim centre, whose related claims are already among its relations. */
   showClaims?: boolean;
 }) {
@@ -84,27 +130,20 @@ export function EntityPanel({
     <section aria-label={`About ${centre.name ?? centre.id}`} className="flex min-h-0 flex-col gap-5">
       {/* On a phone the map right above already names the centre, so its space goes to the map. The
           switch is the map's own phone breakpoint (`graph-phone:`, GRAPH_PHONE_QUERY). */}
-      <div data-testid="entity-panel-header" className="flex items-start gap-3 graph-phone:hidden">
-        <EntityAvatar entity={centre} size={48} />
-        <div className="flex min-w-0 flex-col gap-1">
-          <h2 className="text-mediumTitle wrap-break-word text-text">{centre.name ?? centre.id}</h2>
-          <div className="flex flex-wrap gap-1">
-            {typeNames(centre).map(name => (
-              <span key={name} className="rounded border border-grey-02 px-1.5 text-footnote text-grey-04">
-                {name}
-              </span>
-            ))}
-          </div>
-        </div>
-      </div>
+      <CentreHeader centre={centre} pageSpaceId={pageSpaceId} />
 
-      <Details
-        centre={centre}
-        centreSpaceId={showClaims ? centreSpaceId : null}
-        emptyMessage={emptyMessages.description}
-      />
+      {/* A claim's vote block comes before its description, so Agree and Disagree are on screen
+          without scrolling however long the description runs (GEO-3841). Its own prop rather than
+          `!showClaims`: that one is about the claims list, and a filter hiding it must not lift a
+          topic's summary above its description. */}
+      {summaryFirst && summary}
 
-      {summary}
+      {/* No description, nothing: an empty-state line here only pushed the relations down. */}
+      {centre.description && (
+        <p className="text-[14px] leading-[1.45] whitespace-pre-line text-grey-05">{centre.description}</p>
+      )}
+
+      {!summaryFirst && summary}
 
       <NeighbourGroups
         groups={groups}
@@ -159,33 +198,42 @@ export function panelClaims(
   return [...byId.values()];
 }
 
-function Details({
-  centre,
-  centreSpaceId,
-  emptyMessage,
-}: {
-  centre: GraphCentre;
-  centreSpaceId: string | null;
-  emptyMessage: string;
-}) {
+/**
+ * The prototype's header for every kind: picture (when there is one), the kind and types line, then
+ * the title, which is the link to the centre's page with an arrow after it.
+ */
+function CentreHeader({ centre, pageSpaceId }: { centre: PanelCentre; pageSpaceId: string | null }) {
   const analytics = useGraphAnalytics();
+  const eyebrow = centreEyebrow(centre);
+  const name = centre.name ?? centre.id;
   return (
-    <div className="flex flex-col gap-3">
-      {centre.description ? (
-        <p className="text-body whitespace-pre-line text-text">{centre.description}</p>
-      ) : (
-        <p className="text-body text-grey-04">{emptyMessage}</p>
-      )}
-      {/* A claim's own link sits with its vote box. */}
-      {centreSpaceId && (
-        <Link
-          href={NavUtils.toEntity(centreSpaceId, centre.id)}
-          onClick={() => analytics?.interacted({ interaction: 'open_page', value: 'entity', target_id: centre.id })}
-          className="self-start text-metadataMedium text-text underline-offset-2 hover:underline"
-        >
-          Open page →
-        </Link>
-      )}
-    </div>
+    <header data-testid="entity-panel-header" className="flex items-center gap-3 graph-phone:hidden">
+      <EntityAvatar entity={centre} />
+      <div className="flex min-w-0 flex-col gap-0.5">
+        {eyebrow && <p className="text-[13px] leading-[1.35] text-grey-04">{eyebrow}</p>}
+        <h2 className="text-[20px] leading-[1.25] font-semibold tracking-[-0.03em] wrap-break-word text-text">
+          {pageSpaceId ? (
+            <Link
+              href={NavUtils.toEntity(pageSpaceId, centre.id)}
+              onClick={() =>
+                analytics?.interacted({
+                  interaction: 'open_page',
+                  value: centre.kind === 'claim' ? 'claim' : 'entity',
+                  target_id: centre.id,
+                })
+              }
+              className="rounded-[4px] decoration-grey-03 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text"
+            >
+              {name}
+              <span aria-hidden className="font-medium text-link">
+                {' →'}
+              </span>
+            </Link>
+          ) : (
+            name
+          )}
+        </h2>
+      </div>
+    </header>
   );
 }

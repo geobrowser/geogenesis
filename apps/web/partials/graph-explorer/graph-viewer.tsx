@@ -27,7 +27,7 @@ import { ClaimActions, TopicClaimsSummary } from './connections/centre-summary';
 import { ConnectionsStage } from './connections/connections-view';
 import { GraphSearch } from './connections/graph-search';
 import { GraphTopBar } from './connections/graph-top-bar';
-import { claimsEmptyMessage, descriptionEmptyMessage, relationshipsEmptyMessage } from './empty-states';
+import { claimsEmptyMessage, relationshipsEmptyMessage } from './empty-states';
 import { EntityPanel, NO_CLAIMS_ASKED } from './entity-panel';
 import { TopicOverview } from './panel-sections';
 import { PhonePanelSheet } from './phone-panel-sheet';
@@ -355,7 +355,9 @@ export function GraphViewer({
     return (
       <EntityPanel
         centre={centre}
-        centreSpaceId={centreSpaceId}
+        // A claim's page is in the claim's own space, where its vote is; any other kind's is where
+        // its text was read.
+        pageSpaceId={node.kind === 'claim' ? claimSpaceId : centreSpaceId}
         topicSpaceId={topicSpaceId}
         spokes={panelSpokes}
         nodes={hop1Nodes}
@@ -376,10 +378,10 @@ export function GraphViewer({
         emptyMessages={{
           relationships: relationshipsEmptyMessage(filter),
           claims: showsClaims ? claimsEmptyMessage(filter, topicName) : null,
-          description: descriptionEmptyMessage(centreSpaceId),
         }}
         showClaims={rawCentre.kind !== 'claim'}
         summary={summary}
+        summaryFirst={rawCentre.kind === 'claim'}
       />
     );
   }

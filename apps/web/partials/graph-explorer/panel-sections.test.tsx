@@ -489,6 +489,35 @@ describe('NeighbourGroups', () => {
     expect(own.querySelector('[data-publisher-icon]')).toBeNull();
   });
 
+  it('draws an image-less publisher as its initial in a 16px circle', () => {
+    const publisher = { id: id(9), name: 'BBC Verify', image: null };
+    const report = {
+      kind: 'src' as const,
+      spokes: [
+        {
+          spoke: {
+            entity: node(40, 'src'),
+            labels: ['Source'],
+            edgeSpaceIds: [],
+            nodeSpaceId: null,
+            hasOutgoing: true,
+          },
+          node: node(40, 'src', {
+            types: [{ id: 'f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0', name: 'Report' }],
+            date: '2025-03-01T00:00:00Z',
+            publisher,
+          }),
+        },
+      ],
+    };
+    groups({ groups: [report] });
+    const icon = screen
+      .getByRole('region', { name: 'Sources · 1' })
+      .querySelector<HTMLElement>('[data-publisher-icon] > span');
+    expect(icon?.textContent).toBe('B');
+    expect(icon?.style.width).toBe('16px');
+  });
+
   it('keeps the honest empty states', () => {
     groups({});
     expect(screen.getByText('No relationships.')).toBeTruthy();
