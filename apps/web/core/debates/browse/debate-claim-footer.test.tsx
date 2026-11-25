@@ -212,6 +212,17 @@ describe('DebateClaimFooter', () => {
   // video, then the claim, the vote row and the results once voted.
   const follows = (a: Node, b: Node) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
 
+  // The debates app's web fonts, over Geo's Calibre: the system stack, and Helvetica Neue for the claim.
+  it('sets the card in the debates app’s fonts', () => {
+    const { container } = renderFooter({ className: 'px-4' });
+    const root = container.firstElementChild!;
+    expect(root.className).toContain("[font-family:-apple-system,BlinkMacSystemFont,'Segoe_UI',Roboto,Helvetica,Arial,sans-serif]");
+    expect(root.className).toContain('px-4');
+    expect(screen.getByRole('heading', { name: claim.claim }).parentElement!.className).toContain(
+      "[&_h2]:[font-family:'Helvetica_Neue',Arial,sans-serif]!"
+    );
+  });
+
   it('puts the meta row above the claim, then the vote row', () => {
     renderFooter();
 

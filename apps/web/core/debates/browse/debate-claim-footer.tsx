@@ -19,6 +19,11 @@ import { useDebateClaimResponse } from './use-debate-claim-response';
  * frame with it, so the claim and the video read as one thing. The two differ only in their meta
  * row, their title link and the actions they carry, which the hosts pass in.
  *
+ * One look, the debates app's card (GEO-3833), on every surface that shows a debate card: Geo's meta
+ * row (space, Join, full screen) under the video, then the claim at the app's size, the vote row,
+ * the results once the viewer has voted and the "Not counted yet" note. The app has no meta row;
+ * Preston placed it above the claim. The host gives the padding.
+ *
  * Agree and Disagree publish the viewer's position on the debate's *claim* — the same response the
  * claim page, the claims panel and the end card record, through the same hook, so a side taken here
  * shows on all of them. They replace the up/down vote the debate used to carry. The comments and
@@ -31,7 +36,6 @@ export function DebateClaimFooter({
   title,
   actions,
   wideActions = false,
-  look = 'default',
   className,
 }: {
   /** The claim being debated, or null while the host has not resolved its debate. */
@@ -47,52 +51,13 @@ export function DebateClaimFooter({
   actions: React.ReactNode;
   /** `actions` carries a third control beside comments and share; see `PositionRow`'s `endSlotWraps`. */
   wideActions?: boolean;
-  /**
-   * `'app'` is the debates app's card (GEO-3833): Geo's meta row (space, Join, full screen) under the
-   * video, then the claim at the app's size, the vote row, the results once the viewer has voted and
-   * the "Not counted yet" note. The app has no meta row; Preston placed it above the claim. The host
-   * gives the padding.
-   */
-  look?: 'default' | 'app';
   /** On the footer's root. */
   className?: string;
 }) {
-  if (look === 'app') {
-    return (
-      <div className={className}>
-        <div className="mt-4">{meta}</div>
-        <div className={APP_TITLE_CLASS_NAME}>{title}</div>
-        {claim ? (
-          <ClaimPositions
-            key={`${claim.space_id}:${claim.claim_entity_id}`}
-            claim={claim}
-            enabled={enabled}
-            actions={actions}
-            wideActions={wideActions}
-            appLook
-          />
-        ) : (
-          <PositionRow
-            positions={[]}
-            responseKind={CLAIM_RESPONSE_KIND}
-            viewerPosition={null}
-            onRespond={IGNORE_RESPONSE}
-            disabled
-            showParticipants={false}
-            endSlot={actions}
-            look="app"
-          />
-        )}
-      </div>
-    );
-  }
-
   return (
-    <div>
-      <div className="flex flex-col gap-1.5 px-3 pt-3">
-        {meta}
-        {title}
-      </div>
+    <div className={className ? `${APP_FONT_CLASS_NAME} ${className}` : APP_FONT_CLASS_NAME}>
+      <div className="mt-4">{meta}</div>
+      <div className={APP_TITLE_CLASS_NAME}>{title}</div>
       {claim ? (
         <ClaimPositions
           key={`${claim.space_id}:${claim.claim_entity_id}`}
@@ -105,18 +70,16 @@ export function DebateClaimFooter({
         // Held at its finished size while the debate resolves, so the card does not grow under the
         // reader when it lands, and drawn in the disabled state the live pills open in until their
         // reads answer — so the row doesn't look pressable, then dim, then come back.
-        <div className="p-3">
-          <PositionRow
-            positions={[]}
-            responseKind={CLAIM_RESPONSE_KIND}
-            viewerPosition={null}
-            onRespond={IGNORE_RESPONSE}
-            disabled
-            showParticipants={false}
-            endSlot={actions}
-            endSlotWraps={wideActions ? 'wide' : 'compact'}
-          />
-        </div>
+        <PositionRow
+          positions={[]}
+          responseKind={CLAIM_RESPONSE_KIND}
+          viewerPosition={null}
+          onRespond={IGNORE_RESPONSE}
+          disabled
+          showParticipants={false}
+          endSlot={actions}
+          look="app"
+        />
       )}
     </div>
   );
@@ -131,20 +94,26 @@ const IGNORE_RESPONSE = () => {};
  * hosts' classes carry `!`, and these out-rank them by specificity.
  */
 const APP_TITLE_CLASS_NAME =
-  'mt-5 mb-5 [&_h2]:text-[23px]! [&_h2]:leading-[27px]! [&_h2]:font-medium! [&_h2]:tracking-[-0.65px]! [&_h2]:text-[#151515]!';
+  "mt-5 mb-5 [&_h2]:[font-family:'Helvetica_Neue',Arial,sans-serif]! [&_h2]:text-[23px]! [&_h2]:leading-[27px]! [&_h2]:font-medium! [&_h2]:tracking-[-0.65px]! [&_h2]:text-[#151515]!";
+
+/**
+ * The debates app on the web has no font of its own: its text is React Native Web's system stack, and
+ * its claim title is Helvetica Neue (`claimTitleLayout.web.ts`). The footer takes the same, over Geo's
+ * Calibre, so the meta row, the vote pills and the results read as they do there.
+ */
+const APP_FONT_CLASS_NAME =
+  "[font-family:-apple-system,BlinkMacSystemFont,'Segoe_UI',Roboto,Helvetica,Arial,sans-serif]";
 
 function ClaimPositions({
   claim,
   enabled,
   actions,
   wideActions,
-  appLook = false,
 }: {
   claim: Debate['claim'];
   enabled: boolean;
   actions: React.ReactNode;
   wideActions: boolean;
-  appLook?: boolean;
 }) {
   const [live, setLive] = React.useState(enabled);
   if (enabled && !live) setLive(true);
@@ -174,10 +143,8 @@ function ClaimPositions({
       endSlot={actions}
       wideEndSlot={wideActions}
       analyticsSurface="debate-card"
-      className={appLook ? undefined : 'p-3'}
-      summaryLayout={appLook ? 'results' : 'inline'}
-      summaryClassName={appLook ? undefined : 'claim-card-summary-band'}
-      look={appLook ? 'app' : 'default'}
+      summaryLayout="results"
+      look="app"
       // A card that has not asked yet, or whose read is in flight. Once the read settles without the
       // claim (an error, or nothing on the graph) the row says "Results unavailable".
       resultsPending={!response.isResponseKindResolved && (!live || claimRead.isLoading)}
