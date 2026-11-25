@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import { TopicFollowControl } from '~/core/follows/follow-control';
 import { useLiveTopicTemplate } from '~/core/templates/adapters/use-live-topic-template';
+import { useEntityTemplatePageOnScreen } from '~/core/templates/primitives/template-shell';
 import { TopicTemplate } from '~/core/templates/views/topic-template';
 
 import { Skeleton } from '~/design-system/skeleton';
@@ -30,6 +31,7 @@ export function LiveTopicTemplateView({
   compact = false,
   embedded = false,
 }: LiveTopicTemplateViewProps) {
+  useEntityTemplatePageOnScreen(!compact && !embedded);
   const { data, isLoading, isSectionsLoading, actionCallbacks } = useLiveTopicTemplate({
     entityId,
     spaceId,

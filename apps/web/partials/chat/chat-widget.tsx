@@ -5,7 +5,7 @@ import { useChat } from '@ai-sdk/react';
 import * as React from 'react';
 
 import { DefaultChatTransport, type UIMessage, isTextUIPart, isToolUIPart } from 'ai';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import { createPortal } from 'react-dom';
@@ -13,7 +13,6 @@ import { createPortal } from 'react-dom';
 import { snapshotActionContext } from '~/core/action-context';
 import { capture } from '~/core/analytics';
 import { recordAction } from '~/core/analytics-operations';
-import { BOTTOM_INSET_OFFSET_CLASS } from '~/core/app-bottom-inset';
 import { applyInjectOpsToStore } from '~/core/chat/apply-inject-ops';
 import { hasPendingClientToolCall, shouldResubmitAfterClientExecution } from '~/core/chat/client-tools';
 import { useEditDispatcher } from '~/core/chat/edit-dispatcher';
@@ -52,11 +51,9 @@ import { useReportError } from '~/core/state/status-bar-store';
 import { reportError as captureAssistantError } from '~/core/telemetry/logger';
 import { describeError } from '~/core/utils/error-diagnostics';
 import { NavUtils } from '~/core/utils/utils';
-import { Z_LAYER_CLASS } from '~/core/z-layers';
 
-import { AssistantSparkle } from '~/design-system/icons/assistant-sparkle';
-
-import { useHideAssistant, useHideAssistantLauncher } from './assistant-visibility';
+import { AssistantFab } from './assistant-fab';
+import { useHideAssistant } from './assistant-visibility';
 import { ChatPanel } from './chat-panel';
 
 type AssistantSuggestionSource = 'welcome' | 'follow_up';
@@ -206,7 +203,6 @@ export function ChatWidget({ openOnMount = null }: { openOnMount?: string | null
 
   const pathname = usePathname() ?? '';
   const hideAssistant = useHideAssistant();
-  const hideLauncher = useHideAssistantLauncher();
   const params = useParams();
 
   React.useLayoutEffect(() => {
@@ -1181,20 +1177,8 @@ export function ChatWidget({ openOnMount = null }: { openOnMount?: string | null
           onSwitchChat={handleSwitchChat}
           onClearHistory={handleClearHistory}
         />
-      ) : hideLauncher ? null : (
-        <motion.button
-          type="button"
-          key="fab"
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.8 }}
-          transition={{ duration: 0.15 }}
-          onClick={() => openAssistant('fab')}
-          aria-label="Open assistant"
-          className={`fixed right-4 ${BOTTOM_INSET_OFFSET_CLASS} ${Z_LAYER_CLASS.assistantLauncher} flex size-10 items-center justify-center rounded-full border border-grey-02 bg-white text-text shadow-lg transition-colors hover:border-text`}
-        >
-          <AssistantSparkle size={20} />
-        </motion.button>
+      ) : (
+        <AssistantFab key="fab" animated onOpen={() => openAssistant('fab')} />
       )}
     </AnimatePresence>
   );

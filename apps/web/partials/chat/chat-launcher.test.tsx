@@ -5,12 +5,19 @@ import { Provider, createStore } from 'jotai';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { TemplateShell } from '~/core/templates/primitives/template-shell';
+import { LiveClaimTemplateView } from '~/core/templates/views/live-claim-template-view';
 
+import { AssistantFab } from './assistant-fab';
 import { ChatLauncher } from './chat-launcher';
 
 const widget = vi.hoisted(() => vi.fn((_: { openOnMount?: string | null }) => <div data-testid="widget" />));
 
 vi.mock('next/dynamic', () => ({ default: () => widget }));
+// A claim page still loading: the live view draws its skeleton, not the template.
+vi.mock('~/core/templates/adapters/use-live-claim-template', () => ({
+  useLiveClaimTemplate: () => ({ data: null, isLoading: true, isSectionsLoading: true, actionCallbacks: {} }),
+}));
+vi.mock('~/partials/entity-page/entity-page-actions', () => ({ EntityPageActions: () => null }));
 // Only the full-screen-route check is stubbed; the template-page check runs for real.
 vi.mock('./assistant-visibility', async importOriginal => ({
   ...(await importOriginal<typeof import('./assistant-visibility')>()),
@@ -95,6 +102,49 @@ describe('ChatLauncher', () => {
         window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true, cancelable: true }));
       });
       expect(screen.getByTestId('widget')).toBeInTheDocument();
+    });
+
+    it('shows no floating button while a template page is still loading', () => {
+      renderWith(
+        <>
+          <LiveClaimTemplateView entityId="claim-1" spaceId="space-1" />
+          <ChatLauncher />
+        </>
+      );
+      expect(screen.queryByLabelText('Open assistant')).toBeNull();
+    });
+
+    it('still shows the button beside a loading template in the side panel', () => {
+      renderWith(
+        <>
+          <LiveClaimTemplateView entityId="claim-1" spaceId="space-1" compact />
+          <ChatLauncher />
+        </>
+      );
+      expect(screen.getByLabelText('Open assistant')).toBeInTheDocument();
+    });
+
+    // The widget's own button, which takes over once the assistant has been opened and closed.
+    it("keeps the widget's button off on a template page too", () => {
+      const onOpen = vi.fn();
+      const store = createStore();
+      const { rerender } = render(
+        <Provider store={store}>
+          <TemplateShell>
+            <h1>Gaza</h1>
+          </TemplateShell>
+          <AssistantFab animated onOpen={onOpen} />
+        </Provider>
+      );
+      expect(screen.queryByLabelText('Open assistant')).toBeNull();
+
+      rerender(
+        <Provider store={store}>
+          <AssistantFab animated onOpen={onOpen} />
+        </Provider>
+      );
+      fireEvent.click(screen.getByLabelText('Open assistant'));
+      expect(onOpen).toHaveBeenCalledOnce();
     });
   });
 });

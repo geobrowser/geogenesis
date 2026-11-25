@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import { useLiveClaimTemplate } from '~/core/templates/adapters/use-live-claim-template';
+import { useEntityTemplatePageOnScreen } from '~/core/templates/primitives/template-shell';
 import { ClaimTemplate } from '~/core/templates/views/claim-template';
 
 import { Skeleton } from '~/design-system/skeleton';
@@ -26,6 +27,7 @@ export function LiveClaimTemplateView({
   serverCoverUrl,
   compact = false,
 }: LiveClaimTemplateViewProps) {
+  useEntityTemplatePageOnScreen(!compact);
   const { data, isLoading, isSectionsLoading, actionCallbacks } = useLiveClaimTemplate({
     entityId,
     spaceId,

@@ -228,6 +228,21 @@ export function TemplateBreadcrumb({ items, className }: { items: readonly Bread
 }
 
 /**
+ * Tells the app a full entity page that uses a template is on screen (not the side panel or a Space
+ * embed), which keeps the assistant's floating button off (GEO-3846). `TemplateShell` calls it, and so
+ * does each live template view from its first render, so the button doesn't show while the page
+ * loads and then vanish once the template draws.
+ */
+export function useEntityTemplatePageOnScreen(active: boolean) {
+  const setTemplatePagesOnScreen = useSetAtom(entityTemplatePagesOnScreenAtom);
+  React.useEffect(() => {
+    if (!active) return;
+    setTemplatePagesOnScreen(count => count + 1);
+    return () => setTemplatePagesOnScreen(count => count - 1);
+  }, [active, setTemplatePagesOnScreen]);
+}
+
+/**
  * Container-query wrapper shared by every v2 entity template.
  */
 export function TemplateShell({
@@ -257,15 +272,7 @@ export function TemplateShell({
 }) {
   const resolvedCoverUrl = embedded ? null : resolveTemplateImageUrl(coverUrl);
 
-  // A full entity page (not the side panel or a Space embed) tells the app a template is on screen,
-  // which keeps the assistant's floating button off (GEO-3846).
-  const isFullPage = !compact && !embedded;
-  const setTemplatePagesOnScreen = useSetAtom(entityTemplatePagesOnScreenAtom);
-  React.useEffect(() => {
-    if (!isFullPage) return;
-    setTemplatePagesOnScreen(count => count + 1);
-    return () => setTemplatePagesOnScreen(count => count - 1);
-  }, [isFullPage, setTemplatePagesOnScreen]);
+  useEntityTemplatePageOnScreen(!compact && !embedded);
 
   return (
     <EntityActionProvider initialContextByTarget={contextByEntityId} callbacks={actionCallbacks}>
