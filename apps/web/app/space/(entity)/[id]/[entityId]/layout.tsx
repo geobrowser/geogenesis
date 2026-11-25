@@ -11,6 +11,7 @@ import { entityActionScope } from '~/core/action-entity-context';
 import { fetchShownPropertyEntitiesForBlocks } from '~/core/blocks/data/fetch-block-shown-properties';
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
 import { isDebateEntity } from '~/core/debates/is-debate-entity';
+import { topicCardMetadata } from '~/core/graph-explorer/topic-card-metadata';
 import { isHiddenEntity } from '~/core/moderation/hidden';
 import { firstLine } from '~/core/opengraph';
 import { RouteEditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
@@ -75,6 +76,12 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
 
   const title = entity?.name ?? 'Entity';
   const description = firstLine(Entities.description(entity?.values ?? []));
+
+  // A Topic unfurls as its own card. Set here, at the segment that owns `opengraph-image`, because
+  // Next lets a segment's own `images` win over its file-based image; every other type keeps that file.
+  if (entity && entityBrowseViewFromTypes(entity.types) === 'topic') {
+    return { title, description, ...topicCardMetadata({ topicId: entityId, spaceId, title, description }) };
+  }
 
   return {
     title,

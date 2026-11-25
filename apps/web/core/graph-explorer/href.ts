@@ -32,6 +32,19 @@ export function graphExplorerCardHref(ids: { entityId: string; topicId: string; 
   return `/explore/graph/${entityId}/card?${params.toString()}`;
 }
 
+/** Bumped when the Topic link preview's layout changes. Its own number: the two cards change apart. */
+export const TOPIC_CARD_VERSION = 1;
+
+/** A Topic page's link preview: the same route drawing the topic card, scoped to the page's space. */
+export function topicCardHref({ topicId, spaceId }: { topicId: string; spaceId: string }) {
+  const ids = normIds({ entityId: topicId, topicId, spaceId });
+  const params = new URLSearchParams({ topic: ids.topicId });
+  if (ids.spaceId) params.set('space', ids.spaceId);
+  params.set('variant', 'topic');
+  params.set('v', String(TOPIC_CARD_VERSION));
+  return `/explore/graph/${ids.entityId}/card?${params.toString()}`;
+}
+
 function normIds({ entityId, topicId, spaceId }: { entityId: string; topicId: string; spaceId?: string | null }) {
   return { entityId: normId(entityId), topicId: normId(topicId), spaceId: spaceId ? normId(spaceId) : undefined };
 }

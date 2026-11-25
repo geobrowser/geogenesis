@@ -2,6 +2,7 @@ import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 
 import type { Metadata } from 'next';
 
+import { AVATAR_PROPERTY_ID, COVER_PROPERTY_ID } from '~/core/io/subgraph/space-image';
 import { isHiddenMarker } from '~/core/moderation/hidden';
 import { firstLine } from '~/core/opengraph';
 import { normId } from '~/core/utils/norm-id';
@@ -19,6 +20,8 @@ export type GraphCardMeta = {
     types: Array<{ id: string; name: string | null }>;
     kind: GraphKind;
     image: string | null;
+    /** Cover first, then Avatar: what a Topic card's hub shows. */
+    cover?: string | null;
   };
   /** Null when the topic is unknown, unnamed or hidden: the card then drops "in {topic}". */
   topic: { id: string; name: string } | null;
@@ -40,6 +43,7 @@ export function decodeGraphCardMeta(response: GraphCardMetaResponse): GraphCardM
   const types = raw.types ?? [];
   const kind = graphKindOf(types.map(type => type.id));
   if (!kind) return null;
+  const asRawEntity = { ...raw, spaceIds: null, relationsList: raw.relationsList ?? null };
   const topicName = response.topic?.name?.trim();
   const topic =
     response.topic && topicName && !isHidden(response.topic)
@@ -52,7 +56,8 @@ export function decodeGraphCardMeta(response: GraphCardMetaResponse): GraphCardM
       description: raw.description?.trim() || null,
       types,
       kind,
-      image: imageOf({ ...raw, spaceIds: null, relationsList: raw.relationsList ?? null }),
+      image: imageOf(asRawEntity),
+      cover: imageOf(asRawEntity, [COVER_PROPERTY_ID, AVATAR_PROPERTY_ID]),
     },
     topic,
   };

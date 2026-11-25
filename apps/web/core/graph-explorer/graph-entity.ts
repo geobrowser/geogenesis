@@ -45,9 +45,13 @@ export type RawEntity = {
   relationsList: Array<{ typeId: string; toEntity: { valuesList: Array<{ text: string | null }> } | null }> | null;
 };
 
-export function imageOf(entity: RawEntity): string | null {
+/** The first image among `order`'s properties: Avatar before Cover unless the caller asks otherwise. */
+export function imageOf(
+  entity: RawEntity,
+  order: readonly string[] = [AVATAR_PROPERTY_ID, COVER_PROPERTY_ID]
+): string | null {
   const relations = entity.relationsList ?? [];
-  for (const propertyId of [AVATAR_PROPERTY_ID, COVER_PROPERTY_ID]) {
+  for (const propertyId of order) {
     for (const relation of relations) {
       if (normId(relation.typeId) !== propertyId) continue;
       const url = relation.toEntity?.valuesList.find(value => value.text)?.text;
