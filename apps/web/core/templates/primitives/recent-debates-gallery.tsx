@@ -382,7 +382,12 @@ function SpeakerVideoStill({
       />
       <div
         data-speaker-chip={tone}
-        className="pointer-events-none absolute right-2.5 bottom-2 left-2.5 z-[3] flex max-w-[calc(100%-20px)] items-center gap-1.5 self-start"
+        className={cx(
+          'pointer-events-none absolute right-2.5 left-2.5 z-[3] flex max-w-[calc(100%-20px)] items-center gap-1.5 self-start',
+          // The play button straddles the seam under the top chip. On one- and two-up cards the chip reaches
+          // it, so it rides just above the button; on three-up desktop cards it sits flush at the bottom.
+          tone === 'top' ? 'bottom-7 @[860px]:bottom-2' : 'bottom-2'
+        )}
       >
         <span className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-black/60 py-0.5 pr-2.5 pl-1 text-[12px] leading-[16px] text-white backdrop-blur-xs">
           <SpeakerProfileAvatar

@@ -499,7 +499,8 @@ describe('list attribution on template votes', () => {
     const topChip = container.querySelector('[data-speaker-chip="top"]');
     const bottomChip = container.querySelector('[data-speaker-chip="bottom"]');
     expect(topChip).toHaveTextContent('Ada');
-    expect(topChip).toHaveClass('bottom-2', 'left-2.5');
+    // It rides above the play button on narrow cards and sits flush at the bottom on three-up desktop cards.
+    expect(topChip).toHaveClass('bottom-7', '@[860px]:bottom-2', 'left-2.5');
     expect(topChip).not.toHaveClass('top-2');
     expect(bottomChip).toHaveTextContent('Bo');
     expect(bottomChip).toHaveClass('bottom-2', 'left-2.5');
