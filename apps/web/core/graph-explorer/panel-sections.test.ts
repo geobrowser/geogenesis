@@ -5,7 +5,8 @@ import { entityResponseCountsQueryKey } from '~/core/responses/entity-response';
 import { ARTICLE_TYPE_ID } from '~/core/topics/ontology';
 
 import type { GraphEdge, GraphNode } from './fetch-graph-neighbourhood';
-import { CONTENT_RELATION_LABELS, GRAPH_KINDS, type GraphKind } from './graph-kinds';
+import fallbacks from './fixtures/testnet-fallback-labels.json';
+import { CONTENT_RELATION_LABELS, GRAPH_KINDS, type GraphKind, type RowCentre } from './graph-kinds';
 import { RELATION_LABELS } from './ontology';
 import {
   agreementLine,
@@ -157,133 +158,198 @@ describe('one vote, every view', () => {
   });
 });
 
+const centreOf = (kind: GraphKind, ...typeNames: string[]): RowCentre => ({ kind, typeNames });
+const TOPIC = centreOf('topic', 'Topic');
+
 describe('row labels that repeat the group', () => {
   it.each<[string, Parameters<typeof rowLabels>[0], ReturnType<typeof rowLabels>]>([
     [
       'Topics drops Topic above and below',
-      { kind: 'topic', relations: ['Topic'], typeLabel: 'Topic' },
+      { kind: 'topic', relations: ['Topic'], typeLabel: 'Topic', centre: TOPIC },
       { relation: null, sub: null },
     ],
-    ['Topics drops a plural Topics', { kind: 'topic', relations: ['topics'] }, { relation: null, sub: null }],
+    [
+      'Topics drops a plural Topics',
+      { kind: 'topic', relations: ['topics'], centre: TOPIC },
+      { relation: null, sub: null },
+    ],
     [
       'Topics keeps the labels that say how a topic is linked',
-      { kind: 'topic', relations: ['Topic', 'On this topic', 'Subtopic', 'Broader topic'], typeLabel: 'Topic' },
+      {
+        kind: 'topic',
+        relations: ['Topic', 'On this topic', 'Subtopic', 'Broader topic'],
+        typeLabel: 'Topic',
+        centre: TOPIC,
+      },
       { relation: 'Subtopic · Broader topic', sub: null },
     ],
     [
-      'Topics drops a bare Topics (incoming) fallback',
-      { kind: 'topic', relations: ['Topics (incoming)'], typeLabel: 'Topic' },
+      'a Topics (incoming) fallback goes on a topic centre',
+      { kind: 'topic', relations: ['Topics (incoming)'], typeLabel: 'Topic', centre: TOPIC },
       { relation: null, sub: null },
     ],
     [
-      'Other drops Claims (incoming) on a debate and keeps Debate below',
-      { kind: 'other', relations: ['Claims (incoming)'], typeLabel: 'Debate' },
+      'a Claims (incoming) fallback goes on a claim centre, the debate type stays',
+      { kind: 'other', relations: ['Claims (incoming)'], typeLabel: 'Debate', centre: centreOf('claim', 'Claim') },
       { relation: null, sub: 'Debate' },
     ],
     [
-      'Events drops Source (incoming) on a case event that cites the article',
-      { kind: 'event', relations: ['Source (incoming)'], typeLabel: 'Case event' },
+      'a Source (incoming) fallback goes on a news article centre',
+      {
+        kind: 'event',
+        relations: ['Source (incoming)'],
+        typeLabel: 'Case event',
+        centre: centreOf('src', 'News article'),
+      },
       { relation: null, sub: 'Case event' },
     ],
     [
-      'Other drops Debates (incoming) on a vote and Events/Sources (incoming) fallbacks',
-      {
-        kind: 'other',
-        relations: ['Debates (incoming)', 'Events (incoming)', 'Sources (incoming)'],
-        typeLabel: 'Vote',
-      },
+      'a Debates (incoming) fallback goes on a debate centre',
+      { kind: 'other', relations: ['Debates (incoming)'], typeLabel: 'Vote', centre: centreOf('other', 'Debate') },
       { relation: null, sub: 'Vote' },
     ],
     [
-      'an incoming fallback named for a non-kind noun stays',
-      { kind: 'ent', relations: ['Countries (incoming)'], typeLabel: 'Person' },
+      'a Debates (incoming) fallback stays on a centre that is not a debate',
+      { kind: 'other', relations: ['Debates (incoming)'], typeLabel: 'Vote', centre: TOPIC },
+      { relation: 'Debates (incoming)', sub: 'Vote' },
+    ],
+    [
+      'a Skills (incoming) fallback goes on a skill centre',
+      { kind: 'other', relations: ['Skills (incoming)'], typeLabel: 'Person', centre: centreOf('other', 'Skill') },
+      { relation: null, sub: 'Person' },
+    ],
+    [
+      'an (incoming) fallback named for any of the centre types goes, a role noun too',
+      { kind: 'ent', relations: ['Investors (incoming)'], centre: centreOf('ent', 'Company', 'Investor') },
+      { relation: null, sub: null },
+    ],
+    [
+      'an incoming fallback named for a noun the centre is not stays',
+      { kind: 'ent', relations: ['Countries (incoming)'], typeLabel: 'Person', centre: TOPIC },
       { relation: 'Countries (incoming)', sub: 'Person' },
     ],
     [
-      'an incoming fallback that says how stays',
-      { kind: 'claim', relations: ['Claims (incoming)', 'Addresses (incoming)'] },
+      'an incoming fallback that says how stays on a claim centre',
+      { kind: 'claim', relations: ['Claims (incoming)', 'Addresses (incoming)'], centre: centreOf('claim', 'Claim') },
       { relation: 'Addresses (incoming)', sub: null },
     ],
     [
+      'Addresses (incoming) stays on a topic centre',
+      { kind: 'claim', relations: ['Addresses (incoming)'], centre: TOPIC },
+      { relation: 'Addresses (incoming)', sub: null },
+    ],
+    [
+      // labelKey strips only "s"/"ies": an "-es" rule would read the verb Addresses as the type Address.
+      'Addresses (incoming) stays even on an address centre',
+      { kind: 'claim', relations: ['Addresses (incoming)'], centre: centreOf('other', 'Address') },
+      { relation: 'Addresses (incoming)', sub: null },
+    ],
+    [
+      'an out label naming the row second type goes',
+      {
+        kind: 'ent',
+        relations: ['Investors', 'Founder'],
+        typeLabel: 'Company',
+        typeNames: ['Company', 'Investor'],
+        centre: TOPIC,
+      },
+      { relation: 'Founder', sub: 'Company' },
+    ],
+    [
+      'an out label naming the centre type stays: it names the row, not the centre',
+      { kind: 'ent', relations: ['Topics'], typeLabel: 'Person', centre: TOPIC },
+      { relation: 'Topics', sub: 'Person' },
+    ],
+    [
       'a -ies plural relation that repeats the row type goes',
-      { kind: 'ent', relations: ['Countries'], typeLabel: 'Country' },
+      { kind: 'ent', relations: ['Countries'], typeLabel: 'Country', centre: TOPIC },
       { relation: null, sub: 'Country' },
     ],
     [
       'News drops a fallback Stories',
-      { kind: 'story', relations: ['Stories'], typeLabel: 'News story' },
+      { kind: 'story', relations: ['Stories'], typeLabel: 'News story', centre: TOPIC },
       { relation: null, sub: null },
     ],
-    ['Claims drops Claims', { kind: 'claim', relations: ['Claims'] }, { relation: null, sub: null }],
+    ['Claims drops Claims', { kind: 'claim', relations: ['Claims'], centre: TOPIC }, { relation: null, sub: null }],
     [
       'Claims keeps Opposed by beside a dropped label',
-      { kind: 'claim', relations: ['Claims', 'Opposed by'] },
+      { kind: 'claim', relations: ['Claims', 'Opposed by'], centre: TOPIC },
       { relation: 'Opposed by', sub: null },
     ],
     [
       'News drops Story, Story in and News story, and keeps the date',
-      { kind: 'story', relations: ['Story', 'Story in'], typeLabel: 'News story', date: 'Nov 3, 2026' },
+      { kind: 'story', relations: ['Story', 'Story in'], typeLabel: 'News story', date: 'Nov 3, 2026', centre: TOPIC },
       { relation: null, sub: 'Nov 3, 2026' },
     ],
     [
       'Sources keeps Cited by and a type that differs',
-      { kind: 'src', relations: ['Source', 'Cited by'], typeLabel: 'Article', date: 'Oct 1, 2026' },
+      {
+        kind: 'src',
+        relations: ['Source', 'Cited by'],
+        typeLabel: 'Article',
+        date: 'Oct 1, 2026',
+        centre: TOPIC,
+      },
       { relation: 'Cited by', sub: 'Article · Oct 1, 2026' },
     ],
     [
       'Court cases drops Legal case',
-      { kind: 'case', relations: ['Defendant'], typeLabel: 'Legal case' },
+      { kind: 'case', relations: ['Defendant'], typeLabel: 'Legal case', centre: TOPIC },
       { relation: 'Defendant', sub: null },
     ],
     [
       'People and groups keeps Person',
-      { kind: 'ent', relations: ['Actor'], typeLabel: 'Person' },
+      { kind: 'ent', relations: ['Actor'], typeLabel: 'Person', centre: TOPIC },
       { relation: 'Actor', sub: 'Person' },
     ],
     [
       'Other keeps every type, even Topic',
-      { kind: 'other', relations: ['Mentions'], typeLabel: 'Topic' },
+      { kind: 'other', relations: ['Mentions'], typeLabel: 'Topic', centre: TOPIC },
       { relation: 'Mentions', sub: 'Topic' },
     ],
     // The rows in Preston's screenshot of the Israel-Gaza war map (GEO-3840).
     [
       'People and groups drops Related entity and keeps Organization',
-      { kind: 'ent', relations: ['Related entity'], typeLabel: 'Organization' },
+      { kind: 'ent', relations: ['Related entity'], typeLabel: 'Organization', centre: TOPIC },
       { relation: null, sub: 'Organization' },
     ],
     [
       'People and groups drops Related person and keeps Person',
-      { kind: 'ent', relations: ['Related person'], typeLabel: 'Person' },
+      { kind: 'ent', relations: ['Related person'], typeLabel: 'Person', centre: TOPIC },
       { relation: null, sub: 'Person' },
     ],
     [
       'News drops On this topic and keeps the date',
-      { kind: 'story', relations: ['On this topic'], typeLabel: 'News story', date: 'Jan 26, 2024' },
+      { kind: 'story', relations: ['On this topic'], typeLabel: 'News story', date: 'Jan 26, 2024', centre: TOPIC },
       { relation: null, sub: 'Jan 26, 2024' },
     ],
     [
       'Sources drops On this topic and keeps Article',
-      { kind: 'src', relations: ['On this topic'], typeLabel: 'Article' },
+      { kind: 'src', relations: ['On this topic'], typeLabel: 'Article', centre: TOPIC },
       { relation: null, sub: 'Article' },
     ],
     [
       'a generic label goes beside a specific one',
-      { kind: 'ent', relations: ['Related to', 'Plaintiff'], typeLabel: 'Country' },
+      { kind: 'ent', relations: ['Related to', 'Plaintiff'], typeLabel: 'Country', centre: TOPIC },
       { relation: 'Plaintiff', sub: 'Country' },
     ],
     [
       'Claims drops Related claim and Related to, keeps Supports',
-      { kind: 'claim', relations: ['Related claim', 'Related to', 'Supports'] },
+      { kind: 'claim', relations: ['Related claim', 'Related to', 'Supports'], centre: TOPIC },
       { relation: 'Supports', sub: null },
     ],
     [
       'generic fallback labels go: Relation and any Related …',
-      { kind: 'other', relations: ['Relation (incoming)', 'Related topics (incoming)', 'Related spaces'] },
+      {
+        kind: 'other',
+        relations: ['Relation (incoming)', 'Related topics (incoming)', 'Related spaces'],
+        centre: TOPIC,
+      },
       { relation: null, sub: null },
     ],
     [
       'a relation that only repeats the row type goes, the type stays',
-      { kind: 'ent', relations: ['Publisher'], typeLabel: 'Publisher' },
+      { kind: 'ent', relations: ['Publisher'], typeLabel: 'Publisher', centre: TOPIC },
       { relation: null, sub: 'Publisher' },
     ],
   ])('%s', (_, input, expected) => {
@@ -304,10 +370,41 @@ describe('row labels that repeat the group', () => {
     ]);
     for (const kind of GRAPH_KINDS)
       for (const label of new Set(labels))
-        expect([kind, label, rowLabels({ kind, relations: [label] }).relation]).toEqual([
+        expect([kind, label, rowLabels({ kind, relations: [label], centre: centreOf('other') }).relation]).toEqual([
           kind,
           label,
           generic.includes(label) || dropped[kind]?.includes(label) ? null : label,
         ]);
+  });
+});
+
+/**
+ * The 100 most used testnet relation properties with no label of their own, as a row reads them
+ * (the property's name, or "<name> (incoming)" from its target). `type` is the testnet Type whose
+ * name matches by labelKey, if any: that fallback only names an end, so it goes there and only there.
+ */
+describe('testnet fallback labels', () => {
+  const unrelated = centreOf('other', 'Thing');
+  const out = (name: string, typeNames: string[]) =>
+    rowLabels({ kind: 'other', relations: [name], typeNames, centre: unrelated }).relation;
+  const incoming = (name: string, centre: RowCentre) =>
+    rowLabels({ kind: 'other', relations: [`${name} (incoming)`], centre }).relation;
+
+  it.each(fallbacks)('$name', ({ name, type }) => {
+    const generic = /^related\b/i.test(name);
+    expect(out(name, ['Thing'])).toBe(generic ? null : name);
+    expect(incoming(name, unrelated)).toBe(generic ? null : `${name} (incoming)`);
+    if (type) {
+      expect(out(name, ['Thing', type])).toBeNull();
+      expect(incoming(name, centreOf('other', 'Thing', type))).toBeNull();
+    }
+  });
+
+  it('covers the type-named fallbacks the old kind-noun list missed', () => {
+    const typed = new Set(fallbacks.filter(f => f.type).map(f => f.name));
+    for (const name of ['Skills', 'City', 'Podcast', 'Books', 'Investors', 'Political party'])
+      expect(typed).toContain(name);
+    expect(typed).not.toContain('Addresses');
+    expect(typed).not.toContain('Lives in');
   });
 });

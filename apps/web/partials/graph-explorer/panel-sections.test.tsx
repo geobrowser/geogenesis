@@ -230,6 +230,7 @@ describe('NeighbourGroups', () => {
     wrap(
       <NeighbourGroups
         groups={[]}
+        centre={{ kind: 'topic', typeNames: ['Topic'] }}
         claims={[]}
         claimsState={idle}
         moreKinds={[]}
@@ -307,6 +308,7 @@ describe('NeighbourGroups', () => {
       <QueryClientProvider client={client}>
         <NeighbourGroups
           groups={[]}
+          centre={{ kind: 'topic', typeNames: ['Topic'] }}
           claims={list}
           claimsState={{ ...idle, hasNextPage: true, fetchNextPage }}
           moreKinds={[]}

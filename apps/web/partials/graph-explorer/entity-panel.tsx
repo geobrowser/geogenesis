@@ -6,7 +6,7 @@ import { type ClaimAbout, nodeClaimSpaceId } from '~/core/graph-explorer/claims-
 import { type GraphNode, HOP1_PER_KIND } from '~/core/graph-explorer/fetch-graph-neighbourhood';
 import type { GraphCentre } from '~/core/graph-explorer/graph-entity';
 import { useGraphAnalytics } from '~/core/graph-explorer/graph-explorer-analytics';
-import type { GraphKind } from '~/core/graph-explorer/graph-kinds';
+import { type GraphKind, type RowCentre, graphKindOf } from '~/core/graph-explorer/graph-kinds';
 import { groupByKind } from '~/core/graph-explorer/panel-sections';
 import type { Spoke } from '~/core/graph-explorer/spokes';
 import { normId } from '~/core/utils/norm-id';
@@ -69,6 +69,10 @@ export function EntityPanel({
   showClaims?: boolean;
 }) {
   const groups = React.useMemo(() => groupByKind(spokes, nodes), [spokes, nodes]);
+  const rowCentre = React.useMemo<RowCentre>(
+    () => ({ kind: graphKindOf(centre.types.map(type => type.id)) ?? 'other', typeNames: typeNames(centre) }),
+    [centre]
+  );
   const claims = React.useMemo(
     () => panelClaims(showClaims ? claimPages : [], groups, nodes, topicSpaceId),
     [showClaims, claimPages, groups, nodes, topicSpaceId]
@@ -100,6 +104,7 @@ export function EntityPanel({
 
       <NeighbourGroups
         groups={groups}
+        centre={rowCentre}
         claims={claims}
         claimsState={showClaims ? claimsState : NO_CLAIMS_ASKED}
         moreKinds={moreKinds}
