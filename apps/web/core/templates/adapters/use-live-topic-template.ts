@@ -57,7 +57,12 @@ import {
   resolveTemplateImageUrl,
 } from '../ontology';
 import { debateParticipantsKey, formatUnixSecDate, toDebateGalleryModel } from './debate-gallery-model';
-import { agendaClaimsForTopic, pinAgendaClaims, useRecentAgendaClaims } from './recent-agenda-claims';
+import {
+  agendaClaimSpaceId,
+  agendaClaimsForTopic,
+  pinAgendaClaims,
+  useRecentAgendaClaims,
+} from './recent-agenda-claims';
 import { topicCoverageIngestionLink } from './source-ingestion-links';
 import {
   activeStanceVotes,
@@ -385,8 +390,8 @@ export function useLiveTopicTemplate({
   // Claims from any Debate agenda in the last 21 days lead the list (GEO-3873), read once for every Topic.
   const recentAgendaClaimsQuery = useRecentAgendaClaims();
   const agendaClaims = React.useMemo(
-    () => agendaClaimsForTopic(recentAgendaClaimsQuery.data ?? [], entityId, spaceId),
-    [entityId, recentAgendaClaimsQuery.data, spaceId]
+    () => agendaClaimsForTopic(recentAgendaClaimsQuery.data ?? [], entityId, spaceIds),
+    [entityId, recentAgendaClaimsQuery.data, spaceIds]
   );
 
   const directClaimRels = React.useMemo(
@@ -461,7 +466,7 @@ export function useLiveTopicTemplate({
       makeSeed: claim => ({
         id: claim.id,
         title: claim.name,
-        spaceId: claim.spaceIds.includes(ID.uuidToHex(spaceId)) ? spaceId : (claim.spaceIds[0] ?? spaceId),
+        spaceId: agendaClaimSpaceId(claim, spaceId),
       }),
     });
     // Every agenda claim stays, even past the cap. After the cap, so the page's own claims never

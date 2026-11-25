@@ -4,6 +4,7 @@ import {
   AGENDA_PIN_DAYS,
   type AgendaClaimsIo,
   type RecentAgendaClaim,
+  agendaClaimSpaceId,
   agendaClaimsForTopic,
   fetchRecentAgendaClaims,
   pinAgendaClaims,
@@ -14,6 +15,7 @@ const NOW_S = 1_795_600_000;
 const TOPIC = '90ff85ca38574b39ad441fe5f01b34ac';
 const SPACE = '89bd89bf28ff8a0963faf92a8c905e20';
 const OTHER_SPACE = '4582fbbee28a16589154f7e36f1ee3c5';
+const STRAY_SPACE = '00000000000000000000000000000001';
 
 const hex = (n: number) => n.toString(16).padStart(32, '0');
 
@@ -166,11 +168,26 @@ describe('fetchRecentAgendaClaims', () => {
 });
 
 describe('agendaClaimsForTopic', () => {
-  it('keeps only claims the page space tagged with this topic', () => {
+  it('keeps claims any scope space tagged with this topic, and no others', () => {
     const mine = agendaClaim(1, NOW_S);
     const otherSpace = agendaClaim(2, NOW_S, { topicSpaces: new Map([[TOPIC, new Set([OTHER_SPACE])]]) });
     const otherTopic = agendaClaim(3, NOW_S, { topicSpaces: new Map([[hex(99), new Set([SPACE])]]) });
-    expect(agendaClaimsForTopic([mine, otherSpace, otherTopic], TOPIC, SPACE)).toEqual([mine]);
+    const stray = agendaClaim(4, NOW_S, { topicSpaces: new Map([[TOPIC, new Set([STRAY_SPACE])]]) });
+    const claims = [mine, otherSpace, otherTopic, stray];
+    expect(agendaClaimsForTopic(claims, TOPIC, [SPACE, OTHER_SPACE])).toEqual([mine, otherSpace]);
+    expect(agendaClaimsForTopic(claims, TOPIC, [SPACE])).toEqual([mine]);
+  });
+});
+
+describe('agendaClaimSpaceId', () => {
+  it('opens the page space when the claim lives there', () => {
+    expect(agendaClaimSpaceId(agendaClaim(1, NOW_S, { spaceIds: [OTHER_SPACE, SPACE] }), SPACE)).toBe(SPACE);
+  });
+
+  it('otherwise opens the best-ranked space, not the first listed', () => {
+    // World Affairs is a ranked space; the stray one is not, and is listed first.
+    const claim = agendaClaim(1, NOW_S, { spaceIds: [STRAY_SPACE, SPACE] });
+    expect(agendaClaimSpaceId(claim, OTHER_SPACE)).toBe(SPACE);
   });
 });
 
