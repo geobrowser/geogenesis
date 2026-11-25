@@ -1,8 +1,9 @@
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
-import { CLAIM_ACTIVITY_COUNT_FIELDS } from '~/core/claims/browse/claim-activity-fields';
 import { EVENT_SCHEMA } from '~/core/community-calls/constants';
 import { DEBATE_CLAIMS_PROPERTY_ID, DEBATE_VIDEOS_PROPERTY_ID } from '~/core/debates/ontology';
+
+import { CLAIM_ACTIVITY_COUNT_FIELDS } from '~/core/claims/browse/claim-activity-fields';
 
 import { COMMENT_RELATION_TYPE_ID } from './explore-card-item';
 import {
@@ -100,11 +101,9 @@ export function exploreCardNodeFields(fragmentName: string, options: ExploreCard
       totalCount
     }
 
-    ${
-      '' /* Activity totals for a claim card. Measured against testnet on 2026-09-24: +0.02s and
+    ${'' /* Activity totals for a claim card. Measured against testnet on 2026-09-24: +0.02s and
            +1 KB over a 20-card page, because for anything that is not a claim these relation
-           lookups come back empty immediately. Cheap enough not to need a claim-only selection. */
-    }
+           lookups come back empty immediately. Cheap enough not to need a claim-only selection. */}
     ${CLAIM_ACTIVITY_COUNT_FIELDS}
 
     types {
