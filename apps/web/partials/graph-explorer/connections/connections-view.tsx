@@ -54,6 +54,7 @@ export function ConnectionsStage({
   const { status, batches } = useClaimSpaceBatches(claimTargets);
 
   const reduceMotion = useReducedMotion() ?? false;
+  const centreId = selection.nodes[0]?.node.id ?? null;
   const renderNode = React.useCallback(
     (entry: SelectedNode, isCentre: boolean) => {
       if (isSkeletonNode(entry.node))
@@ -67,11 +68,18 @@ export function ConnectionsStage({
         );
       const spaceId = claimSpaces.get(entry.node.id) ?? null;
       const card = (
-        <NodeCard node={entry.node} hop={entry.hop} isCentre={isCentre} phone={phone} claimSpaceId={spaceId} />
+        <NodeCard
+          node={entry.node}
+          hop={entry.hop}
+          isCentre={isCentre}
+          phone={phone}
+          claimSpaceId={spaceId}
+          centreId={centreId}
+        />
       );
       return spaceId ? <ClaimBatchRow status={status[spaceId] ?? 'pending'}>{card}</ClaimBatchRow> : card;
     },
-    [claimSpaces, phone, reduceMotion, status]
+    [centreId, claimSpaces, phone, reduceMotion, status]
   );
 
   const labelFor = React.useCallback(
