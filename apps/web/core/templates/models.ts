@@ -575,8 +575,11 @@ export interface TopicTemplateModel {
   communities?: readonly CommunityDefinition[];
   activeCommunityId?: string | 'all';
   onSelectCommunity?: (communityId: string | 'all') => void;
-  contestedClaims?: readonly ClaimSummaryModel[];
-  agreedClaims?: readonly ClaimSummaryModel[];
+  /**
+   * The topic's claims as one ranked list, in the topic's Best order (GEO-3868). The list shows them
+   * in this order; an accepted claim keeps its place and only gains a check mark.
+   */
+  claims?: readonly ClaimSummaryModel[];
   /**
    * Optional rich per-claim detail models powering the inline master–detail Claim Explorer
    * (allowing voting, fact inspection, strongest cases, and source verification without leaving the topic).

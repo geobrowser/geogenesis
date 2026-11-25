@@ -60,8 +60,6 @@ export function SourceTemplate({
     () => [...addedClaims, ...model.supportedClaims],
     [addedClaims, model.supportedClaims]
   );
-  const contestedClaims = React.useMemo(() => allClaims.filter(c => c.split.isSplit), [allClaims]);
-  const agreedClaims = React.useMemo(() => allClaims.filter(c => !c.split.isSplit), [allClaims]);
 
   return (
     <TemplateShell
@@ -153,7 +151,7 @@ export function SourceTemplate({
       ) : (
         <div className="flex animate-fade-in flex-col gap-8">
           {allClaims.length > 0 ? (
-            <ClaimExplorer contestedClaims={contestedClaims} agreedClaims={agreedClaims} title="Claims" />
+            <ClaimExplorer claims={allClaims} title="Claims" />
           ) : (
             <section aria-label="Claims" className="flex flex-col gap-3.5">
               <div className="flex items-center justify-between gap-3">

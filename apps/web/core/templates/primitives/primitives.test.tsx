@@ -305,7 +305,7 @@ describe('ClaimExplorer rows carry no debate count', () => {
     ];
     render(
       <EntityActionProvider>
-        <ClaimExplorer contestedClaims={claims} agreedClaims={[]} />
+        <ClaimExplorer claims={claims} />
       </EntityActionProvider>
     );
 
@@ -332,7 +332,7 @@ describe('ClaimExplorer row layout (GEO-3845)', () => {
     ];
     render(
       <EntityActionProvider>
-        <ClaimExplorer contestedClaims={claims} agreedClaims={[]} />
+        <ClaimExplorer claims={claims} />
       </EntityActionProvider>
     );
 
@@ -380,7 +380,7 @@ describe('ClaimExplorer row layout (GEO-3845)', () => {
     render(
       <EntityActionProvider>
         <ClaimExplorer
-          contestedClaims={[
+          claims={[
             {
               id: 'kind-2',
               title: 'A fresh claim',
@@ -389,7 +389,6 @@ describe('ClaimExplorer row layout (GEO-3845)', () => {
               onVote: vi.fn(),
             },
           ]}
-          agreedClaims={[]}
         />
       </EntityActionProvider>
     );
@@ -817,7 +816,7 @@ describe('ListRanking header control & workspace', () => {
     // Save a personal ranking with the flag on, so this browser holds one.
     render(
       <EntityActionProvider>
-        <ClaimExplorer contestedClaims={RANKING_CLAIMS} agreedClaims={[]} />
+        <ClaimExplorer claims={RANKING_CLAIMS} />
       </EntityActionProvider>
     );
     fireEvent.click(screen.getByRole('button', { name: 'Rank Claims' }));
@@ -834,7 +833,7 @@ describe('ListRanking header control & workspace', () => {
     flagMocks.templateListRanking = false;
     render(
       <EntityActionProvider>
-        <ClaimExplorer contestedClaims={RANKING_CLAIMS} agreedClaims={[]} />
+        <ClaimExplorer claims={RANKING_CLAIMS} />
       </EntityActionProvider>
     );
 
@@ -871,7 +870,7 @@ describe('ListRanking header control & workspace', () => {
 
     render(
       <EntityActionProvider>
-        <ClaimExplorer contestedClaims={claims} agreedClaims={[]} />
+        <ClaimExplorer claims={claims} />
       </EntityActionProvider>
     );
 
@@ -920,35 +919,44 @@ describe('ClaimExplorer one list (GEO-3854)', () => {
     kind: 'fact',
     split: { rows: [], isSplit, totalVotes: 5 },
   });
-  const contested = [claim('s-a', 'Split A', true), claim('s-b', 'Split B', true)];
-  const agreed = [claim('a-a', 'Settled A', false), claim('s-b', 'Split B', false), claim('a-b', 'Settled B', false)];
+  // In the order given, as a ranked feed hands it over: accepted and disputed mixed, one repeat.
+  const listed = [
+    claim('a-a', 'Settled A', false),
+    claim('s-a', 'Split A', true),
+    claim('s-b', 'Split B', true),
+    claim('a-b', 'Settled B', false),
+    claim('s-b', 'Split B', false),
+  ];
   /** The phone rank that leads a title, e.g. `3` for the third row. */
   const rankOf = (title: string) =>
     screen.getByText((_, el) => el?.tagName === 'SPAN' && el.textContent === `${el.firstChild?.textContent}${title}`)
       .firstChild?.textContent;
 
-  it('shows disputed then accepted claims in one list, ranked 1..N, with no Disputed / Accepted toggle', () => {
+  it('keeps the order given, ranked 1..N, with no Disputed / Accepted regrouping or toggle (GEO-3868)', () => {
     const { container } = render(
       <EntityActionProvider>
-        <ClaimExplorer contestedClaims={contested} agreedClaims={agreed} />
+        <ClaimExplorer claims={listed} />
       </EntityActionProvider>
     );
 
     expect(screen.queryByRole('tablist')).toBeNull();
     expect(screen.queryByRole('tab')).toBeNull();
     const text = container.textContent ?? '';
-    const order = ['Split A', 'Split B', 'Settled A', 'Settled B'].map(title => text.indexOf(title));
+    const order = ['Settled A', 'Split A', 'Split B', 'Settled B'].map(title => text.indexOf(title));
     expect(order.every(at => at >= 0)).toBe(true);
+    // An accepted claim given above a disputed one stays above it.
     expect([...order].sort((a, b) => a - b)).toEqual(order);
-    // A claim in both groups shows once, where it is disputed.
+    // A claim listed twice shows once, at its first place.
     expect(text.split('Split B').length - 1).toBe(1);
-    expect(['Split A', 'Split B', 'Settled A', 'Settled B'].map(rankOf)).toEqual(['1', '2', '3', '4']);
+    expect(['Settled A', 'Split A', 'Split B', 'Settled B'].map(rankOf)).toEqual(['1', '2', '3', '4']);
+    // Accepted claims keep their check mark where they sit.
+    expect(container.querySelectorAll('svg.text-ctaPrimary')).toHaveLength(2);
   });
 
   it('puts an added claim at the top of the one list', () => {
     const { container } = render(
       <EntityActionProvider callbacks={{ onAddClaim: () => new Promise<never>(() => {}) }}>
-        <ClaimExplorer contestedClaims={contested} agreedClaims={agreed} />
+        <ClaimExplorer claims={listed} />
       </EntityActionProvider>
     );
 
@@ -959,7 +967,7 @@ describe('ClaimExplorer one list (GEO-3854)', () => {
 
     const text = container.textContent ?? '';
     expect(text.indexOf('Brand new claim')).toBeGreaterThanOrEqual(0);
-    expect(text.indexOf('Brand new claim')).toBeLessThan(text.indexOf('Split A'));
+    expect(text.indexOf('Brand new claim')).toBeLessThan(text.indexOf('Settled A'));
     expect(rankOf('Brand new claim')).toBe('1');
     expect(rankOf('Settled B')).toBe('5');
   });
@@ -968,7 +976,7 @@ describe('ClaimExplorer one list (GEO-3854)', () => {
     const many = Array.from({ length: 12 }, (_, i) => claim(`m-${i}`, `Many ${i + 1}`, true));
     const { container } = render(
       <EntityActionProvider callbacks={{ onAddClaim: () => new Promise<never>(() => {}) }}>
-        <ClaimExplorer contestedClaims={many} agreedClaims={[]} />
+        <ClaimExplorer claims={many} />
       </EntityActionProvider>
     );
 
@@ -1103,7 +1111,7 @@ describe('Add claim on a live page (GEO-3836)', () => {
     const holdAddDraft = vi.fn();
     render(
       <EntityActionProvider callbacks={{ holdAddDraft, onAddClaim: vi.fn(() => new Promise<never>(() => {})) }}>
-        <ClaimExplorer contestedClaims={listed} agreedClaims={[]} />
+        <ClaimExplorer claims={listed} />
       </EntityActionProvider>
     );
 
@@ -1119,7 +1127,7 @@ describe('Add claim on a live page (GEO-3836)', () => {
     const onAddClaim = vi.fn(() => new Promise<never>(resolve => (settle = resolve as never)));
     render(
       <EntityActionProvider callbacks={{ holdAddDraft, onAddClaim }}>
-        <ClaimExplorer contestedClaims={listed} agreedClaims={[]} />
+        <ClaimExplorer claims={listed} />
       </EntityActionProvider>
     );
 
@@ -1141,7 +1149,7 @@ describe('Add claim on a live page (GEO-3836)', () => {
     const onAddClaim = vi.fn(() => new Promise<never>(resolve => (settle = resolve as never)));
     render(
       <EntityActionProvider callbacks={{ onAddClaim }}>
-        <ClaimExplorer contestedClaims={listed} agreedClaims={[]} />
+        <ClaimExplorer claims={listed} />
       </EntityActionProvider>
     );
 

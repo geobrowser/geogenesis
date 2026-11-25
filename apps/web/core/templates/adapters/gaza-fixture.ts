@@ -1010,6 +1010,8 @@ const SEED_CLAIMS: readonly SeedClaim[] = [
 
 const CLAIM_BY_ID: Readonly<Record<string, SeedClaim>> = Object.fromEntries(SEED_CLAIMS.map(c => [c.id, c]));
 
+const ACCEPTED_CLAIM_IDS: readonly string[] = ['hostages', 'build', 'oct7', 'k70'];
+
 const PIN_ORDER: Record<string, readonly string[]> = {
   all: ['gen', 'aid', 'shields', 'two-state', 'icc', 'civ', 'us-arms', 'gov', 'unrwa', 'cf'],
   pp: ['gen', 'aid', 'civ', 'icc', 'us-arms', 'two-state', 'cf', 'gov', 'shields', 'unrwa'],
@@ -2058,8 +2060,9 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
       ...toSummary(claim),
       onSelect: () => pushPeek({ kind: 'claim', id: claim.id }),
     });
-    const contestedClaims = order.map(id => toTopicClaimRow(CLAIM_BY_ID[id]));
-    const agreedClaims = ['hostages', 'build', 'oct7', 'k70'].map(id => toTopicClaimRow(CLAIM_BY_ID[id]));
+    // One list in the order shown: the community's pinned claims, then the settled ones.
+    const claimIds = [...order, ...ACCEPTED_CLAIM_IDS];
+    const claims = claimIds.map(id => toTopicClaimRow(CLAIM_BY_ID[id]));
 
     return {
       id: 'israel-gaza-war',
@@ -2068,8 +2071,8 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
       lede: TOPIC_LEDE_BY_COMMUNITY[activeCommunityId] ?? TOPIC_LEDE_BY_COMMUNITY.all,
       tags: ['Prototype sample data'],
       stats: [
-        { label: 'Disputed claims', value: String(contestedClaims.length) },
-        { label: 'Accepted', value: String(agreedClaims.length) },
+        { label: 'Disputed claims', value: String(order.length) },
+        { label: 'Accepted', value: String(ACCEPTED_CLAIM_IDS.length) },
         { label: 'Members in communities', value: (9189 + (joinedCommunityId ? 1 : 0)).toLocaleString('en-US') },
         { label: 'Sources linked', value: String(SEED_SOURCES.length) },
       ],
@@ -2079,8 +2082,7 @@ export function useGazaFixtureTemplates(): GazaFixtureController {
       })),
       activeCommunityId,
       onSelectCommunity: setActiveCommunityId,
-      contestedClaims,
-      agreedClaims,
+      claims,
       claimDetailsById,
       recentDebates: SEED_DEBATES.map(debate => {
         const claim = CLAIM_BY_ID[debate.claimId] ?? SEED_CLAIMS[0];

@@ -423,7 +423,9 @@ export function useLiveTopicTemplate({
     [entity]
   );
 
-  // Merge all claim IDs (Best-ranked first, then linkedClaims, then direct relations, plus debate claims)
+  // The Claims list is the topic's Best order (GEO-3868): Best claims first, in Best's order. Only when
+  // Best has fewer than the cap do the other sources fill the rest, after it and in this order: Top,
+  // the best debates' claims, linked claims, then the topic's own claim relations.
   const orderedClaimSeeds = React.useMemo(() => {
     const seen = new Set<string>();
     const seeds: {
@@ -441,6 +443,13 @@ export function useLiveTopicTemplate({
       seeds.push(item);
     };
 
+    for (const item of bestClaims) {
+      add({
+        id: item.entityId,
+        title: item.title,
+        spaceId: item.spaceId || spaceId,
+      });
+    }
     for (const item of topClaims) {
       add({
         id: item.entityId,
@@ -454,13 +463,6 @@ export function useLiveTopicTemplate({
         id: debateItem.debateClaim.entityId,
         title: debateItem.debateClaim.name,
         spaceId: debateItem.spaceId || spaceId,
-      });
-    }
-    for (const item of bestClaims) {
-      add({
-        id: item.entityId,
-        title: item.title,
-        spaceId: item.spaceId || spaceId,
       });
     }
     for (const claim of linkedClaims) {
@@ -636,8 +638,9 @@ export function useLiveTopicTemplate({
       debateCountByClaimHex.set(hex, (debateCountByClaimHex.get(hex) ?? 0) + 1);
     }
 
-    const contestedClaims: ClaimSummaryModel[] = [];
-    const agreedClaims: ClaimSummaryModel[] = [];
+    // One list in seed order (GEO-3868): no disputed / accepted split and no re-sort, so a row's
+    // rank is its Best position.
+    const claims: ClaimSummaryModel[] = [];
 
     for (const seed of orderedClaimSeeds) {
       const hex = ID.uuidToHex(seed.id);
@@ -665,21 +668,8 @@ export function useLiveTopicTemplate({
         href: claimHref,
       };
 
-      if (isAccepted) {
-        agreedClaims.push(summary);
-      } else {
-        contestedClaims.push(summary);
-      }
+      claims.push(summary);
     }
-
-    // Sort so claims with live votes/debates lead cleanly ahead of unvoted claims
-    const byEngagement = (a: ClaimSummaryModel, b: ClaimSummaryModel) => {
-      const scoreA = (a.split.totalVotes ?? 0) * 10 + (a.debateCount ?? 0) * 5;
-      const scoreB = (b.split.totalVotes ?? 0) * 10 + (b.debateCount ?? 0) * 5;
-      return scoreB - scoreA;
-    };
-    contestedClaims.sort(byEngagement);
-    agreedClaims.sort(byEngagement);
 
     // 2. Live Recent Debates gallery
     const debateParticipantsByHex = debateParticipantsQuery.data;
@@ -892,8 +882,7 @@ export function useLiveTopicTemplate({
       tags: [...extraTypeLabels, ...(isCurated ? ['Curated'] : [])],
       stats: stats.length > 0 ? stats : undefined,
       subtopics: subtopics.length > 0 ? subtopics : undefined,
-      contestedClaims: contestedClaims.length > 0 ? contestedClaims : undefined,
-      agreedClaims: agreedClaims.length > 0 ? agreedClaims : undefined,
+      claims: claims.length > 0 ? claims : undefined,
       recentDebates: recentDebates.length > 0 ? recentDebates : undefined,
       timelineHighlights: timelineHighlights.length > 0 ? timelineHighlights : undefined,
       graphConnections: graphConnections.length > 0 ? graphConnections : undefined,
