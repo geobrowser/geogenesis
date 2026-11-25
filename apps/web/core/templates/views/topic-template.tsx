@@ -29,8 +29,12 @@ import {
 } from '../primitives';
 import { PUBLISHING_LABEL, usePendingAdds } from '../primitives/use-pending-adds';
 
-/** `Event date` is a DATETIME property; the Add event form edits it with the entity page's date input. */
-const EVENT_DATE_INPUT = { propertyId: TEMPLATE_ONTOLOGY.EVENT_DATE_PROPERTY_ID, dataType: 'DATETIME' } as const;
+/**
+ * The Add event form edits `Event date` with the entity page's date input in its date-only (DATE) mode: no
+ * time fields. That mode writes the same midnight-UTC ISO string (`2026-11-18T00:00:00.000Z`) as a DATETIME
+ * date with no time, and `buildEventEdits` still stages it as DATETIME, so the property type doesn't change.
+ */
+const EVENT_DATE_INPUT = { propertyId: TEMPLATE_ONTOLOGY.EVENT_DATE_PROPERTY_ID, dataType: 'DATE' } as const;
 
 export interface TopicTemplateProps {
   model: TopicTemplateModel;

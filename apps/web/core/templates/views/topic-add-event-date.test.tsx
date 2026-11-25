@@ -77,6 +77,9 @@ describe('Topic timeline Add event date', () => {
     expect(within(group).getByPlaceholderText('YYYY')).toBeInTheDocument();
     expect(within(group).getByPlaceholderText('MM')).toBeInTheDocument();
     expect(within(group).getByPlaceholderText('DD')).toBeInTheDocument();
+    // Date only: no hour, minute or AM/PM.
+    expect(within(group).queryAllByPlaceholderText('00')).toHaveLength(0);
+    expect(within(group).queryByRole('button', { name: /^(am|pm)$/i })).toBeNull();
     expect(screen.queryByPlaceholderText('e.g. 18 Nov 2026')).toBeNull();
   });
 
@@ -84,7 +87,7 @@ describe('Topic timeline Add event date', () => {
     const { onAddEvent } = renderTopic();
     typeTitle('Ceasefire signed');
     typeDate('2026', '11', '18');
-    expect(screen.getByText('Browse format · Nov 18, 2026 - 12:00 am')).toBeInTheDocument();
+    expect(screen.getByText('Browse format · Nov 18, 2026')).toBeInTheDocument();
 
     await act(async () => submit());
 
