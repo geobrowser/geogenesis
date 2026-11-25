@@ -12,7 +12,15 @@ import type { GraphSelection } from '~/core/graph-explorer/select-graph';
 import type { SelectedNode } from '~/core/graph-explorer/select-graph';
 import { SKELETON_SELECTION, isSkeletonNode } from '~/core/graph-explorer/skeleton-graph';
 
-import { ConnectionsCanvas, clearance, nodeScale, overlapShare, overlaps } from './connections-canvas';
+import {
+  ConnectionsCanvas,
+  clearance,
+  coveredLabels,
+  nodeScale,
+  overlapShare,
+  overlaps,
+  tooSmallToRead,
+} from './connections-canvas';
 import { BandLegend } from './connections-view';
 import { GraphSearch, searchNodes } from './graph-search';
 import { GraphTopBar } from './graph-top-bar';
@@ -277,6 +285,48 @@ describe('ConnectionsCanvas', () => {
     const zoomed = view.distance;
     resizeStage(390, 600);
     expect(view.distance).toBe(zoomed);
+  });
+
+  it('marks a hop-1 card far while zoomed out past reading size, never the centre, and drops it zoomed back in', () => {
+    motion.reduce = true;
+    render(<Canvas />);
+    runFrames(100);
+    const isaac = () => screen.getByRole('button', { name: 'Isaac Herzog' });
+    const centreButton = screen.getByRole('button', { name: 'Centre' });
+    const zoom = (name: 'Zoom in' | 'Zoom out', times: number) => {
+      for (let i = 0; i < times; i++) {
+        fireEvent.click(screen.getByRole('button', { name }));
+        runFrames(now + 100);
+      }
+    };
+    expect(isaac().dataset.far).toBeUndefined();
+    zoom('Zoom out', 8);
+    expect(isaac().dataset.far).toBe('');
+    expect(centreButton.dataset.far).toBeUndefined();
+
+    zoom('Zoom in', 8);
+    expect(isaac().dataset.far).toBeUndefined();
+  });
+
+  it('clears a `data-far` its button carries from before, once the card is drawn readable', () => {
+    // A node picked again while its button is still fading out keeps that button, and its
+    // `data-far`, but gets a fresh view; the frame must go by the button.
+    motion.reduce = true;
+    render(<Canvas />);
+    runFrames(100);
+    const isaac = screen.getByRole('button', { name: 'Isaac Herzog' });
+    isaac.dataset.far = '';
+    // Wakes the settled loop for a frame.
+    fireEvent.mouseEnter(isaac);
+    runFrames(now + 100);
+    expect(isaac.dataset.far).toBeUndefined();
+  });
+
+  it('draws the centre focus ring clear of its white ring', () => {
+    render(<Canvas />);
+    expect(screen.getByRole('button', { name: 'Centre' }).className).toContain('focus-visible:outline-offset-[9px]');
+    expect(screen.getByRole('button', { name: 'Centre' }).className).not.toContain('focus-visible:outline-offset-4');
+    expect(screen.getByRole('button', { name: 'Isaac Herzog' }).className).toContain('focus-visible:outline-offset-4');
   });
 
   it('sleeps after the idle spin has run its course', () => {
@@ -705,6 +755,51 @@ describe('nodeScale', () => {
     expect(nodeScale(true, 0, 2, true)).toBe(1);
     expect(nodeScale(false, 2, 1, false)).toBeCloseTo(0.95);
     expect(nodeScale(false, 1, 0.1, true)).toBe(0.3);
+  });
+});
+
+describe('coveredLabels', () => {
+  const box = (left: number, top = 0) => ({ left, right: left + 100, top, bottom: top + 40 });
+  const slot = (left: number, depth: number, extra: { keep?: boolean; shown?: boolean; top?: number } = {}) => ({
+    rect: box(left, extra.top),
+    depth,
+    keep: extra.keep ?? false,
+    shown: extra.shown ?? true,
+  });
+
+  it('fades the farther of two touching labels and leaves apart ones alone', () => {
+    expect(coveredLabels([slot(0, 50), slot(60, -20), slot(400, 90)])).toEqual([true, false, false]);
+    // Edges that only meet do not overlap.
+    expect(coveredLabels([slot(0, 50), slot(100, -20)])).toEqual([false, false]);
+  });
+
+  it('lets a label a faded one would have covered show, so a chain keeps every other card', () => {
+    expect(coveredLabels([slot(0, 0), slot(60, 10), slot(120, 20)])).toEqual([false, true, false]);
+  });
+
+  it('never fades the hovered card or its neighbours, and fades what they cover instead', () => {
+    expect(coveredLabels([slot(0, 100, { keep: true }), slot(60, -50)])).toEqual([false, true]);
+    expect(coveredLabels([slot(0, 100, { keep: true }), slot(60, -50, { keep: true })])).toEqual([false, false]);
+  });
+
+  it('keeps the one already showing when depths cross, so the pair does not flicker', () => {
+    expect(coveredLabels([slot(0, 10, { shown: true }), slot(60, 9, { shown: false })])).toEqual([false, true]);
+  });
+});
+
+describe('tooSmallToRead', () => {
+  it('turns a card into its marker below 0.6 and back only above 0.7, so it does not flap', () => {
+    expect(tooSmallToRead(0.59, false, false)).toBe(true);
+    expect(tooSmallToRead(0.65, false, false)).toBe(false);
+    expect(tooSmallToRead(0.65, true, false)).toBe(true);
+    expect(tooSmallToRead(0.71, true, false)).toBe(false);
+  });
+
+  it('cuts lower on phone, whose whole map is drawn smaller', () => {
+    expect(tooSmallToRead(0.55, false, true)).toBe(false);
+    expect(tooSmallToRead(0.49, false, true)).toBe(true);
+    expect(tooSmallToRead(0.55, true, true)).toBe(true);
+    expect(tooSmallToRead(0.59, true, true)).toBe(false);
   });
 });
 
