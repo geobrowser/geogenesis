@@ -289,6 +289,27 @@ describe('useTemplateAddPublish', () => {
     });
   });
 
+  it('a second draft turned away while the first waits goes back into its form, after the submit', async () => {
+    Object.assign(account, { personalSpaceId: null, isRegistered: false, isSetupPending: true });
+    const { result } = renderPublisher();
+    act(() => {
+      void result.current.add(CLAIM);
+    });
+
+    const restore = vi.fn();
+    let second!: Promise<TemplateAddResult>;
+    act(() => {
+      result.current.holdAddDraft(restore);
+      second = result.current.add(CLAIM);
+      // Not inside the submit: the form clears itself right after `onSubmit`, and that would win.
+      expect(restore).not.toHaveBeenCalled();
+    });
+
+    await expect(second).resolves.toMatchObject({ ok: false });
+    expect(restore).toHaveBeenCalledTimes(1);
+    expect(mocks.makeProposal).not.toHaveBeenCalled();
+  });
+
   it('a published draft never puts itself back in the form', async () => {
     const { result } = renderPublisher();
     const restore = vi.fn();

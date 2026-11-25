@@ -10,6 +10,7 @@ import type { IngestionLink } from '~/core/chat/ingestion-link';
 import { pickIngestionSpace } from '~/core/chat/ingestion-space';
 import { ROOT_SPACE } from '~/core/constants';
 import { readAccountAddress, readRegisteredPersonalSpaceId } from '~/core/hooks/cached-write-identity';
+import { useAuthResolving } from '~/core/hooks/use-auth-resolving';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
@@ -141,16 +142,18 @@ export function SourceIngestionPopover({
   // The link the form opens with: one held through a sign-in, submitted on its own once the
   // account is ready, or put back for another try when the sign-in was dismissed.
   const [held, setHeld] = React.useState<{ url: string; submit: boolean } | null>(null);
-  const promptSignIn = usePrivySignIn(undefined, {
-    analytics: {
+  const signInAnalytics = React.useMemo(
+    () => ({
       component: 'template_sources_section',
       target_type: 'entity',
       target_id: link?.targetEntityId,
       auth_control: 'add_source',
       auth_intent: 'add_source',
       auth_continuation: 'queued',
-    },
-  });
+    }),
+    [link?.targetEntityId]
+  );
+  const promptSignIn = usePrivySignIn(undefined, { analytics: signInAnalytics });
 
   // Held here rather than in the form, which is mounted only while open and closes at submit.
   const { queue, cancel } = useQueuedAction({
@@ -167,9 +170,12 @@ export function SourceIngestionPopover({
     },
   });
 
-  const submitSignedOut = (url: string) => {
+  const submitSignedOut = (url: string, authResolving: boolean) => {
     setHeld(null);
     setOpen(false);
+    // Still starting up, the viewer may well be signed in: the runner asks only if the session
+    // resolves signed out, and otherwise imports the link (`PendingActionsRunner`).
+    if (authResolving) return queue(url, { onSignedOut: { prompt: signInAnalytics } });
     queue(url);
     promptSignIn(undefined, {
       // A dismissed sign-in withdraws the link, so walking away never imports it later.
@@ -227,11 +233,15 @@ function SourceIngestionForm({
   initialUrl?: string;
   /** Submits `initialUrl` as the form mounts: a link held through the sign-in, now able to post. */
   autoSubmit: boolean;
-  /** Set while signed out: takes the link to hold through a sign-up instead of importing it. */
-  onSignedOutSubmit?: (url: string) => void;
+  /**
+   * Set while signed out: takes the link to hold through a sign-up instead of importing it, and
+   * whether auth is still resolving (read here, where the app's query client is in reach).
+   */
+  onSignedOutSubmit?: (url: string, authResolving: boolean) => void;
   onClose: () => void;
 }) {
   const [needsAccount, setNeedsAccount] = React.useState(false);
+  const authResolving = useAuthResolving();
   const autoFocus = useAddFormAutoFocus();
   const resolveSpace = useIngestionSpace({
     pageSpaceId: usePageSpaceId(link),
@@ -256,7 +266,7 @@ function SourceIngestionForm({
   const onSubmit = (event: React.FormEvent) => {
     if (!onSignedOutSubmit) return void handleSubmit(event);
     event.preventDefault();
-    if (canSubmit) onSignedOutSubmit(url);
+    if (canSubmit) onSignedOutSubmit(url, authResolving);
   };
 
   return (

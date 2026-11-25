@@ -15,7 +15,7 @@ import { pendingActionsAtom } from '~/core/state/pending-actions';
 import type { EntityListSectionModel } from '../models';
 import { RelatedListSection } from './related-list-section';
 
-const auth = vi.hoisted(() => ({ authenticated: false, promptSignIn: vi.fn() }));
+const auth = vi.hoisted(() => ({ authenticated: false, resolving: false, promptSignIn: vi.fn() }));
 const resolveSeed = vi.hoisted(() => vi.fn());
 const membership = vi.hoisted(() => ({ ensure: vi.fn(), access: vi.fn(), tx: vi.fn() }));
 const account = vi.hoisted(() => ({
@@ -41,6 +41,9 @@ vi.mock('~/core/wallet/account-readiness', () => ({
   waitForSigningAccount: vi.fn(),
   SignedOutBeforeWriteError: class extends Error {},
   SigningAccountFailedError: class extends Error {},
+}));
+vi.mock('~/core/hooks/use-auth-resolving', () => ({
+  useAuthResolving: () => auth.resolving,
 }));
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({
   usePrivySignIn: () => auth.promptSignIn,
@@ -110,6 +113,7 @@ function canEditPageSpace(canEdit: boolean) {
 
 beforeEach(() => {
   auth.authenticated = false;
+  auth.resolving = false;
   auth.promptSignIn.mockReset();
   resolveSeed.mockReset();
   membership.ensure.mockReset().mockResolvedValue(false);
@@ -156,6 +160,21 @@ describe('Sources section +', () => {
     expect(resolveSeed).not.toHaveBeenCalled();
     expect(membership.access).not.toHaveBeenCalled();
     expect(membership.ensure).not.toHaveBeenCalled();
+  });
+
+  it('still resolving, submitting holds the link and leaves the prompt to the runner', async () => {
+    auth.resolving = true;
+    const store = renderSection();
+    await submitLink();
+
+    expect(auth.promptSignIn).not.toHaveBeenCalled();
+    const queued = store.get(pendingActionsAtom);
+    expect(queued).toHaveLength(1);
+    expect(queued[0]).toMatchObject({
+      intent: 'example.com/story',
+      onSignedOut: { prompt: { component: 'template_sources_section', auth_continuation: 'queued' } },
+    });
+    expect(resolveSeed).not.toHaveBeenCalled();
   });
 
   it('signed out, a dismissed sign-in withdraws the link and puts it back in the form', async () => {

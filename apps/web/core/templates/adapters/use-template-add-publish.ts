@@ -206,11 +206,18 @@ export function useTemplateAddPublish({ owner, pageSpaceId }: { owner: TemplateA
       heldRestoreRef.current = null;
       if (authenticated && isRegistered && personalSpaceId) return publishNow(action, personalSpaceId);
 
+      // A draft turned away here goes back into its form, which cleared itself as it submitted. After
+      // the submit handler, so the form's own reset does not win over it.
+      const turnAway = (error: string) => {
+        if (restore) queueMicrotask(restore);
+        return fail(error);
+      };
+
       const signedOut = !authenticated;
       if (signedOut || isAccountSetupPending || isPersonalSpaceLoading) {
         // One draft waits per page; a second would replace the first unseen.
         if (isQueued || waitingRef.current) {
-          return fail(`Your last addition is still waiting for your account. Try again in a moment.`);
+          return turnAway(`Your last addition is still waiting for your account. Try again in a moment.`);
         }
         return new Promise<TemplateAddResult>(resolve => {
           waitingRef.current = resolve;
@@ -226,7 +233,7 @@ export function useTemplateAddPublish({ owner, pageSpaceId }: { owner: TemplateA
           promptSignIn(undefined, { onCancel: cancel });
         });
       }
-      return fail(`Finish setting up your account to add a ${noun}.`);
+      return turnAway(`Finish setting up your account to add a ${noun}.`);
     },
     [
       authResolving,
