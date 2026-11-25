@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   DESKTOP_LAYOUT,
+  FOCAL_LENGTH,
+  PHONE_CARD_HALF_WIDTH,
   PHONE_LAYOUT,
   type Vec3,
   easeInOutCubic,
@@ -98,6 +100,49 @@ describe('helpers', () => {
   it('fits distance within the design’s bounds', () => {
     expect(fitDistance([[0, 0, 0]], 1280, 860, false)).toBe(700);
     expect(fitDistance([[5000, 5000, 0]], 390, 844, true)).toBe(2600);
+  });
+
+  it('keeps desktop and tablet fits as they were', () => {
+    const points: Vec3[] = [
+      [0, 0, 0],
+      [300, 40, 80],
+      [-260, -90, 120],
+      [120, 200, -200],
+      [-50, 310, 60],
+    ];
+    for (const [w, h] of [
+      [1440, 900],
+      [1024, 768],
+      [600, 900],
+    ]) {
+      const stretch = h > w * 1.1 ? 1.45 : 1;
+      const p85 = (values: number[]) => values.sort((a, b) => a - b)[Math.floor(values.length * 0.85)];
+      const fx = p85(points.map(p => Math.hypot(p[0], p[2]) + 100));
+      const fy = p85(points.map(p => Math.hypot(p[1], p[2]) * stretch + 50));
+      const expected = Math.max(
+        700,
+        Math.min(2600, Math.max((fx * 900) / Math.max(140, w / 2 - 8), (fy * 900) / Math.max(140, h / 2 - 16)))
+      );
+      expect(fitDistance(points, w, h, false)).toBeCloseTo(expected);
+    }
+  });
+
+  it('on phone, keeps a full card on screen beside the 85th-percentile neighbour at the fit zoom', () => {
+    const points: Vec3[] = [
+      [0, 0, 0],
+      [250, 0, 0],
+      [-240, 0, 0],
+      [0, 0, 230],
+      [180, 0, -170],
+    ];
+    for (const [w, h] of [
+      [390, 844],
+      [360, 780],
+    ]) {
+      const fit = fitDistance(points, w, h, true);
+      const x = (250 * FOCAL_LENGTH) / fit;
+      expect(w / 2 + x + PHONE_CARD_HALF_WIDTH).toBeLessThanOrEqual(w);
+    }
   });
 
   it('hashes to [0, 1) and eases from 0 to 1', () => {

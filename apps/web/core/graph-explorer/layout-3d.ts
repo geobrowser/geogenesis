@@ -151,20 +151,28 @@ export function project(point: Vec3, view: View): { x: number; y: number; scale:
   };
 }
 
+/**
+ * Room a phone card needs either side of its anchor, in screen pixels: half a 120px card, drawn a
+ * little over full size at the default zoom (GEO-3864). Phone cards don't shrink as the camera pulls
+ * back, so their margin is kept in screen pixels rather than in world units.
+ */
+export const PHONE_CARD_HALF_WIDTH = 64;
+
 /** Camera distance that fits the 85th-percentile spread of the centre and hop-1 nodes. */
 export function fitDistance(points: readonly Vec3[], width: number, height: number, phone: boolean): number {
   const percentile = (values: number[], fallback: number) =>
     values.sort((a, b) => a - b)[Math.floor(values.length * 0.85)] ?? fallback;
   const stretch = verticalStretch(width, height);
   const fx = percentile(
-    points.map(p => Math.hypot(p[0], p[2]) + (phone ? 64 : 100)),
+    points.map(p => Math.hypot(p[0], p[2]) + (phone ? 0 : 100)),
     300
   );
   const fy = percentile(
     points.map(p => Math.hypot(p[1], p[2]) * stretch + 50),
     300
   );
-  const fit = Math.max((fx * 900) / Math.max(140, width / 2 - 8), (fy * 900) / Math.max(140, height / 2 - 16));
+  const halfWidth = phone ? Math.max(80, width / 2 - 8 - PHONE_CARD_HALF_WIDTH) : Math.max(140, width / 2 - 8);
+  const fit = Math.max((fx * FOCAL_LENGTH) / halfWidth, (fy * FOCAL_LENGTH) / Math.max(140, height / 2 - 16));
   return Math.max(700, Math.min(2600, fit));
 }
 
