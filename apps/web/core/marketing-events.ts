@@ -35,6 +35,10 @@ export type MarketingEventName =
 export type MarketingEventParams = {
   /** The Privy user id (`did:privy:…`). Only on `geo_account_created`. */
   user_id?: string;
+  /** Meta click id (`fb.1.<ms>.<fbclid>`), the `_fbp` cookie and the raw fbclid. Only on `geo_account_created`. */
+  fbc?: string;
+  fbp?: string;
+  fbclid?: string;
   debate_id?: string;
   space_id?: string;
   /** The space's display name, when the control knows it. Only on `geo_join_space`. */
@@ -69,6 +73,9 @@ export const WATCH_DEBATE_MS = 30_000;
 // debate id of the last watch.
 const EMPTY_PARAMS: { [K in keyof Required<MarketingEventParams>]: undefined } = {
   user_id: undefined,
+  fbc: undefined,
+  fbp: undefined,
+  fbclid: undefined,
   debate_id: undefined,
   space_id: undefined,
   space_name: undefined,

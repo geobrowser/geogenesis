@@ -6,6 +6,7 @@ import { isPendingPersonalSpaceId } from '~/core/state/pending-personal-space';
 import { notifyActionPageView, pageContext } from './action-context';
 import { analyticsRuntime, isAnalyticsEnabled } from './analytics-context';
 import type { AnalyticsEventName } from './analytics-events';
+import { adAttributionMarketingParams, adAttributionProperties, captureAdAttribution } from './auth/ad-attribution';
 import { privyUserEmail } from './auth/privy-email';
 import { withSignupVisitor } from './auth/signup-visitor';
 import { pushMarketingEvent } from './marketing-events';
@@ -197,6 +198,8 @@ export function initAnalytics() {
   if (typeof window === 'undefined' || typeof document === 'undefined' || !isAnalyticsEnabled) {
     return;
   }
+
+  captureAdAttribution();
 
   const hostname = window.location.hostname.toLowerCase();
   const shouldUseCollector = shouldUseAnalyticsCollector(hostname);
@@ -660,6 +663,7 @@ export function trackPrivyAuth(params: PrivyAuthComplete, properties: AnalyticsP
     login_wallet_client_type: loginAccount?.walletClientType,
     login_wallet_chain_type: loginAccount?.chainType,
     login_wallet_connector_type: loginAccount?.connectorType,
+    ...(params.isNewUser && !params.wasAlreadyAuthenticated ? adAttributionProperties() : {}),
     ...properties,
     auth_flow: params.wasAlreadyAuthenticated ? 'session_restore' : 'manual_login',
   });
@@ -668,7 +672,10 @@ export function trackPrivyAuth(params: PrivyAuthComplete, properties: AnalyticsP
     sessionRestored(identity, authProperties);
   } else if (params.isNewUser) {
     signedUp(identity, authProperties);
-    pushMarketingEvent('geo_account_created', { user_id: identity.user_id as string });
+    pushMarketingEvent('geo_account_created', {
+      user_id: identity.user_id as string,
+      ...adAttributionMarketingParams(),
+    });
   } else {
     loggedIn(identity, authProperties);
   }
