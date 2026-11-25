@@ -399,6 +399,14 @@ describe('DebatesBrowseFeed header links', () => {
     }
   );
 
+  // The debate's own page is already in its space: no space line above the claim there, as there is
+  // on the space's Debates tab.
+  it('leaves the space out above the claim on the debate page', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-1" fallback={<div>Entity page</div>} />);
+    expect(screen.getByRole('heading', { name: 'Debates are useful' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Fashion' })).not.toBeInTheDocument();
+  });
+
   // Truncation runs parent -> anchor -> text, and an anchor at its default `min-width: auto` would
   // refuse to shrink, overflowing the row instead of ellipsing the name.
   it('keeps the space link shrinkable so the name still truncates', () => {

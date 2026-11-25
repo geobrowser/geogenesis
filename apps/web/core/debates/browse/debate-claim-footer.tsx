@@ -60,8 +60,9 @@ export function DebateClaimFooter({
   if (look === 'app') {
     return (
       <div className={className ? `${APP_FONT_CLASS_NAME} ${className}` : APP_FONT_CLASS_NAME}>
-        <div className="mt-4">{meta}</div>
-        <div className={APP_TITLE_CLASS_NAME}>{title}</div>
+        {meta != null ? <div className="mt-4">{meta}</div> : null}
+        {/* Without the meta row the claim takes the app's own 24px under the video. */}
+        <div className={`${meta != null ? 'mt-5' : 'mt-6'} ${APP_TITLE_CLASS_NAME}`}>{title}</div>
         {claim ? (
           <ClaimPositions
             key={`${claim.space_id}:${claim.claim_entity_id}`}
@@ -126,12 +127,13 @@ const IGNORE_RESPONSE = () => {};
 
 /**
  * The debates app's claim (`LiveMomentCard.tsx`): 23/27 medium at -0.65px, 20px below. 20px above
- * rather than the app's 24, since Geo's meta row sits between it and the video. Set from here, over
+ * rather than the app's 24 where Geo's meta row sits between it and the video, and the app's 24
+ * where a host leaves the row out (the debate's own page). Set from here, over
  * whichever heading the host passes, so the explore card's and the full screen's titles — two components with their own links and clamps — take the same metrics. The
  * hosts' classes carry `!`, and these out-rank them by specificity.
  */
 const APP_TITLE_CLASS_NAME =
-  "mt-5 mb-5 [&_h2]:[font-family:'Helvetica_Neue',Arial,sans-serif]! [&_h2]:text-[23px]! [&_h2]:leading-[27px]! [&_h2]:font-medium! [&_h2]:tracking-[-0.65px]! [&_h2]:text-[#151515]!";
+  "mb-5 [&_h2]:[font-family:'Helvetica_Neue',Arial,sans-serif]! [&_h2]:text-[23px]! [&_h2]:leading-[27px]! [&_h2]:font-medium! [&_h2]:tracking-[-0.65px]! [&_h2]:text-[#151515]!";
 
 /**
  * The debates app on the web has no font of its own: its text is React Native Web's system stack, and

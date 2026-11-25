@@ -522,6 +522,8 @@ export function DebatesBrowseFeed({
           spaceId={spaceId}
           spaceName={space?.entity.name ?? 'Space'}
           spaceImage={space?.entity.image}
+          // The debate's own page is already in its space, so the line naming it says nothing there.
+          showSpace={surface !== 'debate-page'}
           active={activeId === debate.id}
           initialSeekSeconds={
             initialDebateId != null && ID.equals(debate.id, initialDebateId) ? initialSeekSeconds : null
@@ -627,6 +629,7 @@ function DebateFeedItem({
   spaceId,
   spaceName,
   spaceImage,
+  showSpace,
   active,
   initialSeekSeconds,
   preload,
@@ -646,6 +649,8 @@ function DebateFeedItem({
   spaceId: string;
   spaceName: string;
   spaceImage?: string | null;
+  /** Draw the space's line above the claim. Off on the debate's own page. */
+  showSpace: boolean;
   active: boolean;
   initialSeekSeconds: number | null;
   preload: boolean;
@@ -749,7 +754,7 @@ function DebateFeedItem({
             // The cards the feed is about to reach read theirs too, so a side is there to take
             // the moment one arrives.
             enabled={active || preload}
-            meta={<DebateMeta spaceId={spaceId} spaceName={spaceName} spaceImage={spaceImage} />}
+            meta={showSpace ? <DebateMeta spaceId={spaceId} spaceName={spaceName} spaceImage={spaceImage} /> : null}
             title={<DebateClaimTitle claim={debate.claim} />}
             actions={
               <DebateInteractionBar
