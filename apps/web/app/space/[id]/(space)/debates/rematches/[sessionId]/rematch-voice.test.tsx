@@ -31,6 +31,8 @@ import { PAIR_PILL } from './rematch-pair-header';
 import { RematchVoiceHeader } from './rematch-voice';
 
 const mocks = vi.hoisted(() => ({
+  /** GEO-3340. Covered on its own in `use-voice-call-telemetry.test`; here only that the picker wires it. */
+  useVoiceCallTelemetry: vi.fn(),
   joinData: null as { token: string; url: string; room_name: string; participant_slot: 1 | 2 } | null,
   joinError: null as Error | null,
   joinLoading: false,
@@ -110,6 +112,8 @@ const mocks = vi.hoisted(() => ({
     entity: { id: string };
   } | null,
 }));
+
+vi.mock('~/core/debates/use-voice-call-telemetry', () => ({ useVoiceCallTelemetry: mocks.useVoiceCallTelemetry }));
 
 vi.mock('@livekit/components-react', () => ({
   LiveKitRoom: (props: Record<string, unknown>) => {
@@ -555,6 +559,19 @@ describe('RematchVoiceHeader', () => {
     await flushOwnership();
     expect(screen.getByText('Voice is unavailable')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+  });
+
+  // GEO-3340: a choppy-audio report from the picker has call quality to be checked against.
+  it('reports call quality for the picker room under its session', async () => {
+    mocks.useVoiceCallTelemetry.mockClear();
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+    // The picker's own connected room, not some other.
+    expect(mocks.useVoiceCallTelemetry).toHaveBeenLastCalledWith(
+      expect.objectContaining({ disconnect: mocks.disconnect }),
+      'picker',
+      'session-1'
+    );
   });
 
   it('connects the room and waits for the opponent when they have not joined yet', async () => {

@@ -25,6 +25,8 @@ import {
 
 const mocks = vi.hoisted(() => ({
   getDebateLobbyVoiceToken: vi.fn(),
+  /** GEO-3340. Covered on its own in `use-voice-call-telemetry.test`; here only how each room wires it. */
+  useVoiceCallTelemetry: vi.fn(),
   acquired: true,
   requestTakeover: false,
   /** The surface the owning tab says holds voice when it refuses. */
@@ -155,6 +157,8 @@ vi.mock('../debate-room-ownership', async importOriginal => ({
     };
   },
 }));
+
+vi.mock('../use-voice-call-telemetry', () => ({ useVoiceCallTelemetry: mocks.useVoiceCallTelemetry }));
 
 vi.mock('@livekit/components-react', () => ({
   LiveKitRoom: (props: Record<string, unknown> & { children: React.ReactNode }) => {
@@ -291,6 +295,27 @@ describe('LobbyVoice', () => {
       'acct'
     );
     expect(mocks.roomProps).toMatchObject({ token: 'jwt', serverUrl: 'wss://livekit.test', audio: true });
+  });
+
+  // GEO-3340: a choppy-audio report from a lobby has call quality to be checked against.
+  it('reports call quality for a debate lobby under the lobby', async () => {
+    renderVoice();
+    await screen.findByRole('button', { name: /Unmute|Mute/ });
+    expect(mocks.useVoiceCallTelemetry).toHaveBeenLastCalledWith(fakeRoom, 'lobby', 'lobby1', { role: 'member' });
+  });
+
+  // Lobby analytics write the id dashless; call quality must join them however the id arrives.
+  it('reports a hyphenated lobby id dashless', async () => {
+    renderVoice({ ...lobby(), lobby_id: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee' });
+    await screen.findByRole('button', { name: /Unmute|Mute/ });
+    expect(mocks.useVoiceCallTelemetry).toHaveBeenLastCalledWith(
+      fakeRoom,
+      'lobby',
+      'aaaaaaaabbbb4ccc8dddeeeeeeeeeeee',
+      {
+        role: 'member',
+      }
+    );
   });
 
   it('honours start_muted and unmutes on the button', async () => {
@@ -924,6 +949,7 @@ describe('LobbyGuestVoice', () => {
   it('listens only: no mic, and says so', () => {
     render(
       <LobbyGuestVoice
+        lobbyId="lobby1"
         token={guestToken}
         onStates={vi.fn()}
         onReconnect={vi.fn()}
@@ -936,11 +962,67 @@ describe('LobbyGuestVoice', () => {
     expect(screen.queryByRole('button', { name: /Mute|Unmute/ })).not.toBeInTheDocument();
   });
 
+  // GEO-3340: what a signed-out listener hears is half of what a choppy room is.
+  it('reports a listener’s call quality under the lobby', () => {
+    render(
+      <LobbyGuestVoice
+        lobbyId="lobby1"
+        token={guestToken}
+        onStates={vi.fn()}
+        onReconnect={vi.fn()}
+        onAutoReconnect={() => false}
+        onRemoved={vi.fn()}
+      />
+    );
+    expect(mocks.useVoiceCallTelemetry).toHaveBeenLastCalledWith(fakeRoom, 'lobby', 'lobby1', { role: 'guest' });
+  });
+
+  // The shell knows why the guest room went (a handover, a failed one, or neither); the room only
+  // passes its answer through to the telemetry.
+  it('passes the shell’s account of why the listener room went through to call quality', () => {
+    const endsAs = () => 'handed_over' as const;
+    render(
+      <LobbyGuestVoice
+        lobbyId="lobby1"
+        token={guestToken}
+        onStates={vi.fn()}
+        onReconnect={vi.fn()}
+        onAutoReconnect={() => false}
+        onRemoved={vi.fn()}
+        endsAs={endsAs}
+      />
+    );
+    expect(mocks.useVoiceCallTelemetry).toHaveBeenLastCalledWith(fakeRoom, 'lobby', 'lobby1', {
+      role: 'guest',
+      endsAs,
+    });
+  });
+
+  it('reports a listener under the dashless lobby id', () => {
+    render(
+      <LobbyGuestVoice
+        lobbyId="aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
+        token={guestToken}
+        onStates={vi.fn()}
+        onReconnect={vi.fn()}
+        onAutoReconnect={() => false}
+        onRemoved={vi.fn()}
+      />
+    );
+    expect(mocks.useVoiceCallTelemetry).toHaveBeenLastCalledWith(
+      fakeRoom,
+      'lobby',
+      'aaaaaaaabbbb4ccc8dddeeeeeeeeeeee',
+      { role: 'guest' }
+    );
+  });
+
   // iOS: one tap to start audio.
   it('asks for a tap when playback is blocked', () => {
     mocks.canPlayAudio = false;
     render(
       <LobbyGuestVoice
+        lobbyId="lobby1"
         token={guestToken}
         onStates={vi.fn()}
         onReconnect={vi.fn()}
@@ -957,6 +1039,7 @@ describe('LobbyGuestVoice', () => {
     const onStates = vi.fn();
     const { unmount } = render(
       <LobbyGuestVoice
+        lobbyId="lobby1"
         token={guestToken}
         onStates={onStates}
         onReconnect={vi.fn()}
@@ -976,6 +1059,7 @@ describe('LobbyGuestVoice', () => {
     const onStates = vi.fn();
     render(
       <LobbyGuestVoice
+        lobbyId="lobby1"
         token={guestToken}
         onStates={onStates}
         onReconnect={vi.fn()}
@@ -989,6 +1073,7 @@ describe('LobbyGuestVoice', () => {
   it('draws no bar while the member room takes over', () => {
     render(
       <LobbyGuestVoice
+        lobbyId="lobby1"
         token={guestToken}
         onStates={vi.fn()}
         onReconnect={vi.fn()}
@@ -1005,6 +1090,7 @@ describe('LobbyGuestVoice', () => {
     const onReconnect = vi.fn();
     const { rerender } = render(
       <LobbyGuestVoice
+        lobbyId="lobby1"
         token={guestToken}
         onStates={vi.fn()}
         onReconnect={onReconnect}
@@ -1015,6 +1101,7 @@ describe('LobbyGuestVoice', () => {
     mocks.connectionState = ConnectionState.Disconnected;
     rerender(
       <LobbyGuestVoice
+        lobbyId="lobby1"
         token={guestToken}
         onStates={vi.fn()}
         onReconnect={onReconnect}
@@ -1036,6 +1123,7 @@ describe('a join that never connects', () => {
     const onAutoReconnect = vi.fn(() => true);
     render(
       <LobbyGuestVoice
+        lobbyId="lobby1"
         token={guestToken}
         onStates={vi.fn()}
         onReconnect={vi.fn()}
@@ -1052,6 +1140,7 @@ describe('a join that never connects', () => {
     const onReconnect = vi.fn();
     render(
       <LobbyGuestVoice
+        lobbyId="lobby1"
         token={guestToken}
         onStates={vi.fn()}
         onReconnect={onReconnect}
@@ -1069,6 +1158,7 @@ describe('a join that never connects', () => {
     const onAutoReconnect = vi.fn(() => true);
     render(
       <LobbyGuestVoice
+        lobbyId="lobby1"
         token={guestToken}
         onStates={vi.fn()}
         onReconnect={vi.fn()}
@@ -1106,6 +1196,7 @@ describe('a room the server removed', () => {
     const onReconnect = vi.fn();
     render(
       <LobbyGuestVoice
+        lobbyId="lobby1"
         token={guestToken}
         onStates={vi.fn()}
         onReconnect={onReconnect}
@@ -1129,6 +1220,7 @@ describe('a room the server removed', () => {
     const onAutoReconnect = vi.fn(() => true);
     render(
       <LobbyGuestVoice
+        lobbyId="lobby1"
         token={guestToken}
         onStates={vi.fn()}
         onReconnect={vi.fn()}
@@ -1146,6 +1238,7 @@ describe('a room the server removed', () => {
     const onAutoReconnect = vi.fn(() => true);
     render(
       <LobbyGuestVoice
+        lobbyId="lobby1"
         token={guestToken}
         onStates={vi.fn()}
         onReconnect={vi.fn()}
@@ -1176,6 +1269,7 @@ describe('a room another tab or device took over', () => {
     const onAutoReconnect = vi.fn(() => true);
     render(
       <LobbyGuestVoice
+        lobbyId="lobby1"
         token={guestToken}
         onStates={vi.fn()}
         onReconnect={vi.fn()}
@@ -1260,6 +1354,13 @@ describe('LobbyVoice in a space call', () => {
       </QueryClientProvider>
     );
   }
+
+  // GEO-3340: a space call runs on the lobby stack but is its own kind of call in the data.
+  it('reports a space call’s quality as a space call', async () => {
+    renderCall();
+    await screen.findByRole('button', { name: /Unmute|Mute/ });
+    expect(mocks.useVoiceCallTelemetry).toHaveBeenLastCalledWith(fakeRoom, 'space_call', 'lobby1', { role: 'member' });
+  });
 
   it('offers no screen share without the option, whatever the token says', async () => {
     mocks.getDebateLobbyVoiceToken.mockResolvedValue(token({ can_share_screen: true }));
